@@ -95,4 +95,4 @@ def delete_cong_doan(id_):
     """, (id_,))
 
     conn.commit()
-    conn.close()
+    conn.close()git push -u origin
