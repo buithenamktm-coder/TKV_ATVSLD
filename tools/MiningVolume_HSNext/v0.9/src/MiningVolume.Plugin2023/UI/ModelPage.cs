@@ -279,7 +279,7 @@ namespace MiningVolume2023.UI
             }
             catch (SurfaceValidationException ex)
             {
-                ShowValidation(ex.Issues);
+                ShowValidation(ex.ModelName, ex.Issues);
             }
             catch (Exception ex)
             {
@@ -338,7 +338,7 @@ namespace MiningVolume2023.UI
             }
             catch (SurfaceValidationException ex)
             {
-                ShowValidation(ex.Issues);
+                ShowValidation(ex.ModelName, ex.Issues);
             }
             catch (Exception ex)
             {
@@ -347,14 +347,18 @@ namespace MiningVolume2023.UI
             finally { SetBusy(false, null); }
         }
 
-        private void ShowValidation(IReadOnlyList<ValidationIssue> issues)
+        private void ShowValidation(string modelName, IReadOnlyList<ValidationIssue> issues)
         {
             int errors = issues.Count(x => x.Severity == ValidationSeverity.Error);
             int warnings = issues.Count(x => x.Severity == ValidationSeverity.Warning);
             var lines = issues.Take(30).Select(x => $"[{x.Severity}] {x.Code}: {x.Message}");
             string suffix = issues.Count > 30 ? $"\r\n... còn {issues.Count - 30:n0} cảnh báo/lỗi khác." : string.Empty;
-            MessageBox.Show($"Không dựng TIN. Có {errors:n0} lỗi, {warnings:n0} cảnh báo.\r\n\r\n" + string.Join("\r\n", lines) + suffix,
-                "Kiểm tra dữ liệu mô hình", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            MessageBox.Show(
+                $"Không dựng TIN {modelName}. Có {errors:n0} lỗi, {warnings:n0} cảnh báo.\r\n\r\n" +
+                string.Join("\r\n", lines) + suffix,
+                $"Kiểm tra dữ liệu {modelName}",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
         }
 
         private void ToggleTin()
