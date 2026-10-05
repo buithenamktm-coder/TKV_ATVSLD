@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ApplicationPackage SchemaVersion="1.0" AutodeskProduct="AutoCAD" ProductType="Application"
-  Name="MiningVolume 2023" AppVersion="0.10.0"
-  Description="HS-Next Mine Survey &amp; Earthwork for AutoCAD 2023 - GUI-first 0.10"
+  Name="MiningVolume 2023" AppVersion="0.10.1"
+  Description="HS-Next Mine Survey &amp; Earthwork for AutoCAD 2023 - GUI-first 0.10.1"
   Author="MiningVolume Development">
   <CompanyDetails Name="MiningVolume Development" />
   <RuntimeRequirements OS="Win64" Platform="AutoCAD*" SeriesMin="R24.2" SeriesMax="R24.2" />
   <Components>
     <RuntimeRequirements OS="Win64" Platform="AutoCAD*" SeriesMin="R24.2" SeriesMax="R24.2" />
-    <ComponentEntry AppName="MiningVolume2023" Version="0.10.0"
+    <ComponentEntry AppName="MiningVolume2023" Version="0.10.1"
       ModuleName="./Contents/Windows/MiningVolume2023.dll"
       LoadOnAutoCADStartup="True" />
   </Components>

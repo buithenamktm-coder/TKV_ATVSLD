@@ -10,7 +10,7 @@ def read(rel):
 
 def test_package_is_v010_autocad2023_only():
     p = read('bundle/MiningVolume2023.bundle/PackageContents.xml')
-    assert 'AppVersion="0.10.0"' in p
+    assert 'AppVersion="0.10.1"' in p
     assert 'SeriesMin="R24.2"' in p and 'SeriesMax="R24.2"' in p
     assert 'LoadOnAutoCADStartup="True"' in p
 
@@ -67,4 +67,4 @@ def test_release_pipeline_generates_payload_and_setup():
     assert 'UseAutoCADNuGet=true' in w
     assert 'AutoCAD.NET' not in w  # dependency is pinned in csproj, not shell-downloaded
     assert 'Compress-Archive -Path bundle -DestinationPath installer/payload.zip' in w
-    assert 'MiningVolume_HSNext_AutoCAD2023_Setup_v0.10.exe' in w
+    assert 'MiningVolume_HSNext_AutoCAD2023_Setup_v0.10.1.exe' in w
