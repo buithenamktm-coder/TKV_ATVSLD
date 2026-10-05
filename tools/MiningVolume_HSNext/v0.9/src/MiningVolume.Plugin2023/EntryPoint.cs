@@ -17,6 +17,7 @@ namespace MiningVolume2023
         internal static MainPaletteControl MainControl;
         private static bool _idleHooked;
         private static bool _startupUiOpened;
+        internal static string StartupUiError { get; private set; }
         private static string _loadedDrawingFingerprint;
 
         public void Initialize()
@@ -40,20 +41,28 @@ namespace MiningVolume2023
                 try
                 {
                     Open(AppPage.Project);
+                    StartupUiError = null;
                     _startupUiOpened = true;
                     StartupLog("Startup palette opened successfully. Ribbon=" +
                         (Autodesk.Windows.ComponentManager.Ribbon == null ? "OFF/Unavailable" : "Available"));
                 }
                 catch (System.Exception ex)
                 {
+                    StartupUiError = ex.ToString();
                     StartupLog("Startup palette FAILED: " + ex);
                     _startupUiOpened = true;
-                    try
+
+                    // During installer self-test, do not block AutoCAD with a modal dialog.
+                    // MVSELFTEST will report this startup error as FAIL and the installer rolls back.
+                    if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("MININGVOLUME_SELFTEST_FILE")))
                     {
-                        AcApp.ShowAlertDialog("MiningVolume đã được nạp nhưng không mở được giao diện.\n\n" +
-                            ex.Message + "\n\nXem log tại: " + StartupLogPath());
+                        try
+                        {
+                            AcApp.ShowAlertDialog("MiningVolume đã được nạp nhưng không mở được giao diện.\n\n" +
+                                ex.Message + "\n\nXem log tại: " + StartupLogPath());
+                        }
+                        catch { }
                     }
-                    catch { }
                 }
             }
 
