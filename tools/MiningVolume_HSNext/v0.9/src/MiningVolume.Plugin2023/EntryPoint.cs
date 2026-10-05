@@ -127,15 +127,15 @@ namespace MiningVolume2023
             var r = Services.SelfTestService.Run();
             var ed = AcApp.DocumentManager.MdiActiveDocument?.Editor;
             if (r.Passed)
-                ed?.WriteMessage("\nMiningVolume v0.9 SELFTEST: PASS (" + r.Checks.Count + " checks). Log: " + r.OutputFile);
+                ed?.WriteMessage("\nMiningVolume v0.10 SELFTEST: PASS (" + r.Checks.Count + " checks). Log: " + r.OutputFile);
             else
-                ed?.WriteMessage("\nMiningVolume v0.8 SELFTEST: FAIL (" + r.Errors.Count + " errors). Log: " + r.OutputFile);
+                ed?.WriteMessage("\nMiningVolume v0.10 SELFTEST: FAIL (" + r.Errors.Count + " errors). Log: " + r.OutputFile);
         }
 
         [CommandMethod("MVABOUT")]
         public void About()
         {
-            AcApp.ShowAlertDialog("MiningVolume 2023\nHS-Next • Mine Survey & Earthwork\nPre-Release v0.9");
+            AcApp.ShowAlertDialog("MiningVolume 2023\nHS-Next • Mine Survey & Earthwork\nGUI-first v0.10");
         }
     }
 }

@@ -1,4 +1,4 @@
-# QA REPORT — MiningVolume HS-Next v0.9
+# QA REPORT — MiningVolume HS-Next v0.10
 
 ## Kết luận hiện tại
 
@@ -13,7 +13,7 @@ Không gọi đây là Release 1.0 cho đến khi binary build trên Windows đ�
 - Cross-build installer shell `GOOS=windows GOARCH=amd64`: PASS.
 - Kết quả PE: `PE32+ GUI x86-64`.
 
-## Các hạng mục v0.9 đã khép kín ở mức mã nguồn
+## Các hạng mục v0.10 đã khép kín ở mức mã nguồn
 
 ### TIN
 - Bỏ `NetTopologySuite` khỏi source và csproj.

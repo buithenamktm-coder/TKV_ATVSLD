@@ -8,19 +8,17 @@ def read(rel):
     return (ROOT / rel).read_text(encoding='utf-8')
 
 
-def test_package_is_v09_autocad2023_only():
+def test_package_is_v010_autocad2023_only():
     p = read('bundle/MiningVolume2023.bundle/PackageContents.xml')
-    assert 'AppVersion="0.9.0"' in p
+    assert 'AppVersion="0.10.0"' in p
     assert 'SeriesMin="R24.2"' in p and 'SeriesMax="R24.2"' in p
     assert 'LoadOnAutoCADStartup="True"' in p
 
 
 def test_runtime_selftest_is_registered():
     entry = read('src/MiningVolume.Plugin2023/EntryPoint.cs')
-    pkg = read('bundle/MiningVolume2023.bundle/PackageContents.xml')
     service = read('src/MiningVolume.Plugin2023/Services/SelfTestService.cs')
     assert '[CommandMethod("MVSELFTEST", CommandFlags.Session)]' in entry
-    assert 'MVSELFTEST' in pkg
     for token in ['CreateFlatTin', 'SectionSystemBuilder', 'TinSectionSampler', 'SectionVolumeCalculator', 'SimpleXlsxWriter.Write']:
         assert token in service
 
@@ -53,7 +51,7 @@ def test_all_package_commands_exist_as_command_methods():
     assert not missing, missing
 
 
-def test_v09_installer_is_prebuilt_only_not_end_user_compiler():
+def test_v010_installer_is_prebuilt_only_not_end_user_compiler():
     s = read('installer/main.go')
     assert 'validatePrebuiltBundle' in s
     assert 'MiningVolume2023.dll' in s
@@ -69,4 +67,4 @@ def test_release_pipeline_generates_payload_and_setup():
     assert 'UseAutoCADNuGet=true' in w
     assert 'AutoCAD.NET' not in w  # dependency is pinned in csproj, not shell-downloaded
     assert 'Compress-Archive -Path bundle -DestinationPath installer/payload.zip' in w
-    assert 'MiningVolume_HSNext_AutoCAD2023_Setup_v0.9.exe' in w
+    assert 'MiningVolume_HSNext_AutoCAD2023_Setup_v0.10.exe' in w

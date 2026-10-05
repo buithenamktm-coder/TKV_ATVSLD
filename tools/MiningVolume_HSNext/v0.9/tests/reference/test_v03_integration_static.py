@@ -34,8 +34,14 @@ def test_autocad_2023_bundle_is_strictly_r242():
 
 def test_ui_ribbon_opens_specific_pages():
     s=text('src/MiningVolume.Plugin2023/RibbonBuilder.cs')
-    for cmd in ['MV_DATA','MV_MODEL','MV_SECTION','MV_VOLUME','MV_EXPORT']:
-        assert cmd in s
+    for token in [
+        'EntryPoint.Open(AppPage.Data)',
+        'EntryPoint.Open(AppPage.Model)',
+        'EntryPoint.Open(AppPage.Section)',
+        'EntryPoint.Open(AppPage.Volume)',
+        'EntryPoint.Open(AppPage.Export)'
+    ]:
+        assert token in s
 
 def test_surface_preprocessor_uses_spatial_indexes():
     s=text('src/MiningVolume.Core/Surface/SurfaceInputPreparer.cs')
