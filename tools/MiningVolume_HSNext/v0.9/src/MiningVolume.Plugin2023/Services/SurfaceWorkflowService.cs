@@ -39,6 +39,15 @@ namespace MiningVolume2023.Services
     {
         public static SurfaceLoadResult LoadLayer(ModelRole role, string layer, ISet<SourceEntityType> allowedTypes)
         {
+            if (string.IsNullOrWhiteSpace(layer))
+                throw new InvalidOperationException("Chưa chọn layer dữ liệu nguồn.");
+
+            var state = ProjectState.Current;
+            if (string.Equals(layer, state.Existing.TinLayer, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(layer, state.Design.TinLayer, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException(
+                    "Không được dùng layer TIN đầu ra làm dữ liệu nguồn. Hãy chọn layer POINT/LINE/POLYLINE/đồng mức gốc.");
+
             var doc = Application.DocumentManager.MdiActiveDocument ??
                       throw new InvalidOperationException("Không có bản vẽ AutoCAD đang hoạt động.");
             IReadOnlyList<SourceEntity> entities;
@@ -49,6 +58,10 @@ namespace MiningVolume2023.Services
                     .Where(e => allowedTypes == null || allowedTypes.Count == 0 || allowedTypes.Contains(e.Type))
                     .ToList();
             }
+
+            if (entities.Count == 0)
+                throw new InvalidOperationException(
+                    $"Layer '{layer}' không có đối tượng POINT/LINE/POLYLINE hợp lệ theo loại dữ liệu đang chọn.");
 
             var model = new SurfaceModel(role == ModelRole.Existing ? "Hiện trạng" : "Thiết kế");
             model.Entities.AddRange(entities);
@@ -117,6 +130,44 @@ namespace MiningVolume2023.Services
 
         // Backward-compatible core entry used by project restore.
         public static TinSurface BuildCore(ModelRole role) => BuildCoreDetailed(role).Tin;
+
+        public static SurfaceBuildResult[] BuildPairCoreDetailed()
+        {
+            // Build both pure-core surfaces before touching the DWG. If either fails,
+            // neither CAD TIN is replaced.
+            return new[]
+            {
+                BuildCoreDetailed(ModelRole.Existing),
+                BuildCoreDetailed(ModelRole.Design)
+            };
+        }
+
+        public static void DrawTinPair(SurfaceBuildResult[] builds)
+        {
+            if (builds == null || builds.Length != 2)
+                throw new ArgumentException("Cặp kết quả TIN không hợp lệ.", nameof(builds));
+
+            var existing = builds.FirstOrDefault(x => x.Role == ModelRole.Existing);
+            var design = builds.FirstOrDefault(x => x.Role == ModelRole.Design);
+            if (existing == null || design == null)
+                throw new InvalidOperationException("Thiếu kết quả TIN hiện trạng hoặc TIN thiết kế.");
+
+            try
+            {
+                DrawTin(ModelRole.Existing, existing);
+                DrawTin(ModelRole.Design, design);
+                EnsureBothTinsReady(synchronizeCadLayers: true);
+            }
+            catch
+            {
+                // A pair is an atomic calculation prerequisite. Never leave one new TIN
+                // paired with an old/missing counterpart after a write failure.
+                InvalidateTin(ModelRole.Existing, clearCadLayer: true, notify: false);
+                InvalidateTin(ModelRole.Design, clearCadLayer: true, notify: false);
+                ProjectState.Current.NotifyChanged();
+                throw;
+            }
+        }
 
         public static void DrawTin(ModelRole role, SurfaceBuildResult build)
         {
