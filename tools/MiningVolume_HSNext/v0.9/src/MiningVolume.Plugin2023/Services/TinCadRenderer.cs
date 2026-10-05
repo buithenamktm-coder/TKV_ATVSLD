@@ -183,7 +183,12 @@ namespace MiningVolume2023.Services
                 tr.AddNewlyCreatedDBObject(ltr, true);
             }
 
-            // A dedicated TIN output layer must always be writable and visible after build.
+            // Never leave a calculation-output layer as the current drawing layer.
+            // This avoids accidental drafting into TIN layers and lets us lock them safely.
+            if (db.Clayer == id && lt.Has("0"))
+                db.Clayer = lt["0"];
+
+            // A dedicated TIN output layer must always be writable and visible during build.
             ltr.Color = Color.FromColorIndex(ColorMethod.ByAci, color);
             ltr.IsLocked = false;
             if (ltr.IsFrozen) ltr.IsFrozen = false;
