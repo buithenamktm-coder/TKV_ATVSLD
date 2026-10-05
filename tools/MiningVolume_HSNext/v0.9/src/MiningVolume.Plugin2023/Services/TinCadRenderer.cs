@@ -58,6 +58,9 @@ namespace MiningVolume2023.Services
                     written++;
                 }
 
+                var outLayer = (LayerTableRecord)tr.GetObject(layerId, OpenMode.ForWrite);
+                outLayer.IsLocked = true;
+                outLayer.IsOff = false;
                 tr.Commit();
             }
             return written;
@@ -87,6 +90,7 @@ namespace MiningVolume2023.Services
                         erased++;
                     }
                 }
+                ltr.IsLocked = true;
                 tr.Commit();
             }
             return erased;
@@ -127,9 +131,9 @@ namespace MiningVolume2023.Services
                 var lt = (LayerTable)tr.GetObject(db.LayerTableId, OpenMode.ForRead);
                 if (!lt.Has(layerName)) { tr.Commit(); return; }
                 var ltr = (LayerTableRecord)tr.GetObject(lt[layerName], OpenMode.ForWrite);
-                ltr.IsLocked = false;
                 if (visible && ltr.IsFrozen) ltr.IsFrozen = false;
                 ltr.IsOff = !visible;
+                ltr.IsLocked = true;
                 tr.Commit();
             }
         }
