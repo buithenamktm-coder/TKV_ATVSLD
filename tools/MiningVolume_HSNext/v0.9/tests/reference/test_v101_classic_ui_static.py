@@ -25,11 +25,11 @@ def test_ribbon_failure_is_not_silently_swallowed():
 
 def test_package_autoloads_without_user_commands():
     xml = read("bundle/MiningVolume2023.bundle/PackageContents.xml")
-    assert 'AppVersion="0.10.2"' in xml
+    assert 'AppVersion="0.10.3"' in xml
     assert 'LoadOnAutoCADStartup="True"' in xml
     assert "<Commands" not in xml
 
 def test_installer_message_matches_classic_ui_behavior():
     s = read("installer/main.go")
-    assert 'version = "0.10.2"' in s
+    assert 'version = "0.10.3"' in s
     assert "bảng MiningVolume sẽ tự hiện" in s

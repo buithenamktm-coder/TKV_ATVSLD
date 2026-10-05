@@ -24,13 +24,68 @@ namespace MiningVolume2023.UI
 
         public SectionPage()
         {
-            Font = new Font("Arial", 9F); BackColor = Color.White;
-            Controls.Add(new Label { Text = "HỆ MẶT CẮT", Dock = DockStyle.Top, Height = 32, Font = new Font("Arial", 11F, FontStyle.Bold) });
+            Font = new Font("Arial", 9F);
+            BackColor = Color.White;
 
-            var top = new TableLayoutPanel { Dock = DockStyle.Top, Height = 285, ColumnCount = 3, RowCount = 9, Padding = new Padding(4) };
-            top.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150)); top.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); top.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120));
-            _boundary = new Label { Text = "Chưa chọn", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft };
-            _direction = new Label { Text = "Chưa chọn", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft };
+            // Use one explicit vertical layout. Do not stack Top-docked controls with
+            // BringToFront: on a narrow/short AutoCAD palette that can overlap rows and
+            // hide the primary section-output button.
+            var root = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 1,
+                RowCount = 6,
+                Margin = Padding.Empty,
+                Padding = Padding.Empty,
+                BackColor = Color.White
+            };
+            root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 32F));   // title
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 258F));  // parameters
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 42F));   // primary actions
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 38F));   // edit tools
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 28F));   // status
+            root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));   // grid
+            Controls.Add(root);
+
+            var title = new Label
+            {
+                Text = "HỆ MẶT CẮT",
+                Dock = DockStyle.Fill,
+                Font = new Font("Arial", 11F, FontStyle.Bold),
+                TextAlign = ContentAlignment.MiddleLeft
+            };
+            root.Controls.Add(title, 0, 0);
+
+            var top = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 3,
+                RowCount = 8,
+                Padding = new Padding(4, 2, 4, 2),
+                Margin = Padding.Empty,
+                BackColor = Color.White
+            };
+            top.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150F));
+            top.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+            top.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 118F));
+            for (int i = 0; i < 8; i++)
+                top.RowStyles.Add(new RowStyle(SizeType.Percent, 12.5F));
+
+            _boundary = new Label
+            {
+                Text = "Chưa chọn",
+                Dock = DockStyle.Fill,
+                AutoEllipsis = true,
+                TextAlign = ContentAlignment.MiddleLeft
+            };
+            _direction = new Label
+            {
+                Text = "Chưa chọn",
+                Dock = DockStyle.Fill,
+                AutoEllipsis = true,
+                TextAlign = ContentAlignment.MiddleLeft
+            };
             _spacing = Num(20, 0.1M, 10000);
             _levelStep = Num(5, 0.1M, 1000);
             _fromLevel = Num(0, -10000, 10000);
@@ -46,33 +101,71 @@ namespace MiningVolume2023.UI
             Add(top, 5, "Đến mức", _toLevel, new Panel());
             Add(top, 6, "Tỷ lệ ngang 1/", _hScale, new Panel());
             Add(top, 7, "Tỷ lệ đứng 1/", _vScale, new Panel());
-            var preview = Button("XEM TRƯỚC TUYẾN", Preview);
-            preview.Font = new Font("Arial", 9F, FontStyle.Bold);
-            top.Controls.Add(preview, 1, 8);
-            top.SetColumnSpan(preview, 2);
-            Controls.Add(top); top.BringToFront();
+            root.Controls.Add(top, 0, 1);
 
-            var tools = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 38, FlowDirection = FlowDirection.LeftToRight, Padding = new Padding(4, 2, 4, 2) };
+            // Primary workflow actions must always remain visible.
+            var primary = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 2,
+                RowCount = 1,
+                Padding = new Padding(4, 3, 4, 3),
+                Margin = Padding.Empty
+            };
+            primary.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+            primary.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+            var preview = Button("XEM TRƯỚC TUYẾN", Preview);
+            preview.Dock = DockStyle.Fill;
+            preview.AutoSize = false;
+            preview.Font = new Font("Arial", 9F, FontStyle.Bold);
+            var draw = Button("XUẤT / VẼ MẶT CẮT", BuildProfiles);
+            draw.Name = "btnDrawSections";
+            draw.Dock = DockStyle.Fill;
+            draw.AutoSize = false;
+            draw.Font = new Font("Arial", 9F, FontStyle.Bold);
+            primary.Controls.Add(preview, 0, 0);
+            primary.Controls.Add(draw, 1, 0);
+            root.Controls.Add(primary, 0, 2);
+
+            var tools = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = false,
+                Padding = new Padding(4, 2, 4, 2),
+                Margin = Padding.Empty
+            };
             tools.Controls.Add(Button("Thêm tuyến", AddLine));
             tools.Controls.Add(Button("Dịch tuyến", MoveLine));
             tools.Controls.Add(Button("Xóa tuyến", DeleteLine));
             tools.Controls.Add(Button("Xóa preview", (s, e) => SectionWorkflowService.ClearPreview()));
-            var build = Button("THÀNH LẬP MẶT CẮT", BuildProfiles);
-            build.Font = new Font("Arial", 9F, FontStyle.Bold); build.Width = 190;
-            tools.Controls.Add(build);
-            Controls.Add(tools); tools.BringToFront();
+            root.Controls.Add(tools, 0, 3);
 
-            _status = new Label { Dock = DockStyle.Top, Height = 28, Text = "Chưa tạo hệ mặt cắt.", ForeColor = Color.DimGray, TextAlign = ContentAlignment.MiddleLeft, Padding = new Padding(7, 0, 0, 0) };
-            Controls.Add(_status); _status.BringToFront();
+            _status = new Label
+            {
+                Dock = DockStyle.Fill,
+                Text = "Chưa tạo hệ mặt cắt.",
+                ForeColor = Color.DimGray,
+                TextAlign = ContentAlignment.MiddleLeft,
+                Padding = new Padding(7, 0, 0, 0)
+            };
+            root.Controls.Add(_status, 0, 4);
 
             _grid = new DataGridView
             {
-                Dock = DockStyle.Fill, ReadOnly = true, AllowUserToAddRows = false, AllowUserToDeleteRows = false,
-                RowHeadersVisible = false, SelectionMode = DataGridViewSelectionMode.FullRowSelect, MultiSelect = false,
-                AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill
+                Dock = DockStyle.Fill,
+                ReadOnly = true,
+                AllowUserToAddRows = false,
+                AllowUserToDeleteRows = false,
+                RowHeadersVisible = false,
+                SelectionMode = DataGridViewSelectionMode.FullRowSelect,
+                MultiSelect = false,
+                AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
+                Margin = new Padding(0)
             };
-            foreach (var c in new[] { "Tên", "Offset", "Chiều dài", "F đào", "F đắp", "Trạng thái" }) _grid.Columns.Add(c, c);
-            Controls.Add(_grid); _grid.BringToFront();
+            foreach (var col in new[] { "Tên", "Offset", "Chiều dài", "F đào", "F đắp", "Trạng thái" })
+                _grid.Columns.Add(col, col);
+            root.Controls.Add(_grid, 0, 5);
 
             ProjectState.Current.Changed += OnStateChanged;
             RestoreState();
@@ -83,7 +176,6 @@ namespace MiningVolume2023.UI
             _hScale.ValueChanged += GeneralParameterChanged;
             _vScale.ValueChanged += GeneralParameterChanged;
         }
-
         protected override void Dispose(bool disposing)
         {
             if (disposing) ProjectState.Current.Changed -= OnStateChanged;

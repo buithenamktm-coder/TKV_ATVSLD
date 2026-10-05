@@ -68,7 +68,7 @@ namespace MiningVolume2023.Services
                 Check(r, volume.Levels.Count == 2 && Near(volume.Levels.Sum(x => x.CutVolume), 100000.0, 1e-3),
                     "Tổng theo 2 tầng bằng tổng khối chi tiết");
 
-                string xlsx = Path.Combine(Path.GetTempPath(), "MiningVolume_v0102_selftest.xlsx");
+                string xlsx = Path.Combine(Path.GetTempPath(), "MiningVolume_v0103_selftest.xlsx");
                 WriteSmokeWorkbook(xlsx, profiles, volume);
                 Check(r, File.Exists(xlsx) && new FileInfo(xlsx).Length > 1000, "Sinh được XLSX độc lập Excel/COM");
                 try { File.Delete(xlsx); } catch { }
@@ -78,7 +78,22 @@ namespace MiningVolume2023.Services
                 // such as invalid NumericUpDown min/max/value ordering before Setup can PASS.
                 using (var ui = new MainPaletteControl())
                 {
+                    ui.Size = new System.Drawing.Size(580, 620);
+                    ui.CreateControl();
+                    ui.ShowPage(AppPage.Section);
+                    ui.PerformLayout();
+
                     Check(r, ui.Controls.Count > 0, "Khởi tạo đầy đủ giao diện MiningVolume");
+
+                    var drawSections = FindByName(ui, "btnDrawSections");
+                    Check(r,
+                        drawSections != null &&
+                        drawSections.Visible &&
+                        drawSections.Width > 80 &&
+                        drawSections.Height > 20 &&
+                        drawSections.Bounds.Right <= drawSections.Parent.ClientSize.Width &&
+                        drawSections.Bounds.Bottom <= drawSections.Parent.ClientSize.Height,
+                        "Nút XUẤT / VẼ MẶT CẮT hiển thị trong palette tối thiểu");
                 }
                 Check(r, string.IsNullOrWhiteSpace(EntryPoint.StartupUiError),
                     "Giao diện startup không phát sinh exception");
@@ -88,10 +103,22 @@ namespace MiningVolume2023.Services
                 r.Errors.Add(ex.ToString());
             }
 
-            r.Passed = r.Errors.Count == 0 && r.Checks.Count >= 11;
+            r.Passed = r.Errors.Count == 0 && r.Checks.Count >= 12;
             r.OutputFile = ResolveOutputPath();
             WriteResultFile(r);
             return r;
+        }
+
+        private static System.Windows.Forms.Control FindByName(System.Windows.Forms.Control root, string name)
+        {
+            if (root == null) return null;
+            if (string.Equals(root.Name, name, StringComparison.Ordinal)) return root;
+            foreach (System.Windows.Forms.Control child in root.Controls)
+            {
+                var found = FindByName(child, name);
+                if (found != null) return found;
+            }
+            return null;
         }
 
         private static TinSurface CreateFlatTin(string name, double z)
@@ -105,7 +132,7 @@ namespace MiningVolume2023.Services
 
         private static void WriteSmokeWorkbook(string path, IReadOnlyList<SectionProfile> profiles, VolumeResult volume)
         {
-            var report = new SpreadsheetReport { Title = "MiningVolume v0.10.2 Self-test", Creator = "MiningVolume HS-Next" };
+            var report = new SpreadsheetReport { Title = "MiningVolume v0.10.3 Self-test", Creator = "MiningVolume HS-Next" };
             var sheet = new ReportSheet { Name = "SelfTest", Title = "MININGVOLUME V0.10.2 - SELF TEST" };
             sheet.Headers.AddRange(new[] { "Mục", "Giá trị" });
             sheet.Rows.Add(new[] { ReportCell.Text("Số mặt cắt"), ReportCell.Int(profiles.Count) });
@@ -129,7 +156,7 @@ namespace MiningVolume2023.Services
         private static string ResolveOutputPath()
         {
             string p = Environment.GetEnvironmentVariable("MININGVOLUME_SELFTEST_FILE");
-            if (string.IsNullOrWhiteSpace(p)) p = Path.Combine(Path.GetTempPath(), "MiningVolume_v0102_selftest.txt");
+            if (string.IsNullOrWhiteSpace(p)) p = Path.Combine(Path.GetTempPath(), "MiningVolume_v0103_selftest.txt");
             return p;
         }
 
@@ -139,7 +166,7 @@ namespace MiningVolume2023.Services
             {
                 var lines = new List<string>
                 {
-                    "MiningVolume HS-Next v0.10.2 runtime self-test",
+                    "MiningVolume HS-Next v0.10.3 runtime self-test",
                     "Timestamp=" + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture),
                     "Status=" + (r.Passed ? "PASS" : "FAIL")
                 };

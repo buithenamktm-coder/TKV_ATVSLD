@@ -1,6 +1,6 @@
-# MiningVolume HS-Next v0.10.2 — AutoCAD 2023 GUI-first Release Candidate
+# MiningVolume HS-Next v0.10.3 — AutoCAD 2023 GUI-first Release Candidate
 
-Mốc v0.10.2 tập trung biến bộ mã v0.8 thành **Release cài như phần mềm bình thường**: binary add-in được build sẵn trên Windows CI, Setup chỉ cài bundle và tự kiểm tra trong AutoCAD 2023. Máy người dùng **không cần Visual Studio, MSBuild hoặc Build Tools**.
+Mốc v0.10.3 tập trung biến bộ mã v0.8 thành **Release cài như phần mềm bình thường**: binary add-in được build sẵn trên Windows CI, Setup chỉ cài bundle và tự kiểm tra trong AutoCAD 2023. Máy người dùng **không cần Visual Studio, MSBuild hoặc Build Tools**.
 
 ## Các thay đổi chính so với v0.8
 
@@ -15,7 +15,7 @@ Mốc v0.10.2 tập trung biến bộ mã v0.8 thành **Release cài như phần
    - Bundle khóa `SeriesMin=R24.2`, `SeriesMax=R24.2`.
    - Các DLL API của Autodesk chỉ dùng lúc compile, không đóng vào bộ cài.
 
-3. **Setup v0.10.2 không biên dịch trên máy người dùng**
+3. **Setup v0.10.3 không biên dịch trên máy người dùng**
    - Release pipeline build sẵn 4 DLL MiningVolume.
    - Setup chỉ copy `.bundle` vào `C:\ProgramData\Autodesk\ApplicationPlugins`.
    - Sau cài, Setup tự mở AutoCAD 2023 và chạy `MVSELFTEST`.
@@ -42,7 +42,7 @@ Dữ liệu nguồn hỗ trợ `POINT`, `LINE`, `LWPOLYLINE`, `POLYLINE`, `3D PO
 
 ### Chưa được ghi là PASS
 
-Môi trường làm việc hiện tại không có Windows + AutoCAD 2023, vì vậy **chưa có quyền ghi PASS cho runtime AutoCAD 2023** và chưa gọi v0.10.2 là Release 1.0. File Setup chính thức chỉ được tạo bởi Windows release pipeline sau khi DLL compile thật.
+Môi trường làm việc hiện tại không có Windows + AutoCAD 2023, vì vậy **chưa có quyền ghi PASS cho runtime AutoCAD 2023** và chưa gọi v0.10.3 là Release 1.0. File Setup chính thức chỉ được tạo bởi Windows release pipeline sau khi DLL compile thật.
 
 ## Build Release
 
@@ -54,17 +54,17 @@ Workflow chạy trên `windows-2022`:
 3. đóng 4 DLL MiningVolume vào bundle;
 4. chạy `release/verify_release.ps1`;
 5. tạo `installer/payload.zip`;
-6. build `MiningVolume_HSNext_AutoCAD2023_Setup_v0.10.2.exe`;
+6. build `MiningVolume_HSNext_AutoCAD2023_Setup_v0.10.3.exe`;
 7. tạo SHA-256 và upload artifact.
 
 ## Nguyên tắc phát hành
 
-Không giao cho người dùng một Setup chỉ chứa source hoặc yêu cầu compile tại máy cài. Setup v0.10.2 hợp lệ phải mang sẵn các DLL Release và phải qua `MVSELFTEST` trong AutoCAD 2023.
+Không giao cho người dùng một Setup chỉ chứa source hoặc yêu cầu compile tại máy cài. Setup v0.10.3 hợp lệ phải mang sẵn các DLL Release và phải qua `MVSELFTEST` trong AutoCAD 2023.
 
 CI trigger marker: AutoCAD 2023 Windows release candidate.
 
 
-## Kiến trúc GUI-first v0.10.2
+## Kiến trúc GUI-first v0.10.3
 
 - Ribbon gọi trực tiếp C# và mở các trang Project / Dữ liệu / Mô hình / Mặt cắt / Khối lượng / Excel.
 - Luồng người dùng không gửi chuỗi lệnh xuống Command Line.
@@ -72,7 +72,7 @@ CI trigger marker: AutoCAD 2023 Windows release candidate.
 - Các CommandMethod kỹ thuật chỉ giữ cho tự kiểm tra/chẩn đoán và tương thích nội bộ, không phải giao diện sử dụng chính.
 
 
-## Classic workspace / Ribbon tắt — v0.10.2
+## Classic workspace / Ribbon tắt — v0.10.3
 
 MiningVolume không phụ thuộc Ribbon để xuất hiện. Khi add-in được AutoCAD 2023 nạp và có bản vẽ hoạt động, palette `MINING VOLUME` tự mở từ sự kiện Idle. Ribbon chỉ là điểm truy cập bổ sung nếu workspace có Ribbon.
 
@@ -81,12 +81,27 @@ Nếu giao diện khởi động thất bại, add-in không bỏ qua lỗi im l
 `C:\ProgramData\MiningVolume2023\Logs\startup.log`
 
 
-## Sửa lỗi khởi tạo giao diện — v0.10.2
+## Sửa lỗi khởi tạo giao diện — v0.10.3
 
-Trên AutoCAD 2023 thật, v0.10.1 đã phát hiện lỗi WinForms khi tạo ô tỷ lệ ngang mặc định 1/1000: `NumericUpDown.Value` được gán trước khi `Maximum` được nâng từ mặc định 100 lên 100000. v0.10.2 sửa theo thứ tự bắt buộc: `Minimum/Maximum` trước, sau đó mới gán `Value` đã clamp.
+Trên AutoCAD 2023 thật, v0.10.1 đã phát hiện lỗi WinForms khi tạo ô tỷ lệ ngang mặc định 1/1000: `NumericUpDown.Value` được gán trước khi `Maximum` được nâng từ mặc định 100 lên 100000. v0.10.3 sửa theo thứ tự bắt buộc: `Minimum/Maximum` trước, sau đó mới gán `Value` đã clamp.
 
 Cổng phát hành mới:
 - quét toàn bộ plugin để chặn mẫu khởi tạo `NumericUpDown` theo kiểu Value-first;
 - `MVSELFTEST` khởi tạo thật toàn bộ `MainPaletteControl` và tất cả trang;
 - nếu startup palette từng phát sinh exception thì self-test phải FAIL;
 - khi Setup chạy self-test, thông báo modal bị tắt để không treo kiểm thử; kết quả lỗi được trả về log và Setup rollback.
+
+
+## Sửa giao diện mặt cắt — v0.10.3
+
+Ảnh chạy thực tế trên AutoCAD 2023 cho thấy trang Mặt cắt bị chồng các control do nhiều vùng `Dock=Top` kết hợp `BringToFront()`. Hậu quả: các hàng Tính từ mức / Đến mức / Tỷ lệ bị che và nút thành lập mặt cắt không nhìn thấy.
+
+v0.10.3 thay trang Mặt cắt bằng một `TableLayoutPanel` dọc duy nhất, chia hàng cố định:
+1. Tiêu đề;
+2. 8 hàng tham số;
+3. hai thao tác chính `XEM TRƯỚC TUYẾN` và `XUẤT / VẼ MẶT CẮT`;
+4. công cụ thêm/dịch/xóa tuyến;
+5. trạng thái;
+6. bảng mặt cắt.
+
+Runtime self-test kiểm tra nút `btnDrawSections` ở kích thước palette tối thiểu 580x620.

@@ -25,7 +25,7 @@ var payloadFS embed.FS
 
 const (
     productName = "MiningVolume HS-Next for AutoCAD 2023"
-    version = "0.10.2"
+    version = "0.10.3"
     uninstallKey = `HKLM\Software\Microsoft\Windows\CurrentVersion\Uninstall\MiningVolume2023`
 )
 
@@ -47,7 +47,7 @@ func install() {
     cad, err := findAutoCAD2023()
     if err != nil { msg(err.Error(), 0x10); return }
 
-    temp := filepath.Join(os.TempDir(), fmt.Sprintf("MiningVolume_v0102_%d", os.Getpid()))
+    temp := filepath.Join(os.TempDir(), fmt.Sprintf("MiningVolume_v0103_%d", os.Getpid()))
     os.RemoveAll(temp)
     if err := os.MkdirAll(temp, 0755); err != nil { msg(err.Error(), 0x10); return }
     defer os.RemoveAll(temp)
@@ -61,7 +61,7 @@ func install() {
     programData := os.Getenv("ProgramData"); if programData == "" { programData = `C:\ProgramData` }
     appPlugins := filepath.Join(programData, "Autodesk", "ApplicationPlugins")
     target := filepath.Join(appPlugins, "MiningVolume2023.bundle")
-    backup := target + ".v0102bak"
+    backup := target + ".v0103bak"
     os.MkdirAll(appPlugins, 0755)
     os.RemoveAll(backup)
     if exists(target) {
@@ -82,7 +82,7 @@ func install() {
     if err := registerUninstall(target); err != nil {
         msg("Add-in đã PASS trong AutoCAD nhưng chưa ghi được mục gỡ cài đặt: "+err.Error(), 0x30); return
     }
-    msg("Cài đặt MiningVolume v0.10.2 thành công.\n\nAutoCAD 2023 runtime self-test: PASS.\nMáy không cần Visual Studio/Build Tools.\nMở AutoCAD: bảng MiningVolume sẽ tự hiện, kể cả khi Ribbon đang tắt.", 0x40)
+    msg("Cài đặt MiningVolume v0.10.3 thành công.\n\nAutoCAD 2023 runtime self-test: PASS.\nMáy không cần Visual Studio/Build Tools.\nMở AutoCAD: bảng MiningVolume sẽ tự hiện, kể cả khi Ribbon đang tắt.", 0x40)
 }
 
 func validatePrebuiltBundle(root string) error {
@@ -95,7 +95,7 @@ func validatePrebuiltBundle(root string) error {
     }
     for _, p := range required { if !exists(p) { return fmt.Errorf("Thiếu file Release: %s", filepath.Base(p)) } }
     if exists(filepath.Join(root, "Contents", "Windows", "NetTopologySuite.dll")) {
-        return fmt.Errorf("Release v0.10.2 không được phụ thuộc NetTopologySuite.dll")
+        return fmt.Errorf("Release v0.10.3 không được phụ thuộc NetTopologySuite.dll")
     }
     return nil
 }
@@ -112,8 +112,8 @@ func uninstall() {
 func runAutoCADSelfTest(cad string) (bool, string) {
     acad := filepath.Join(cad, "acad.exe")
     if !exists(acad) { return false, "Không tìm thấy acad.exe" }
-    log := filepath.Join(os.TempDir(), "MiningVolume_v0102_selftest.txt"); os.Remove(log)
-    scr := filepath.Join(os.TempDir(), "MiningVolume_v0102_selftest.scr")
+    log := filepath.Join(os.TempDir(), "MiningVolume_v0103_selftest.txt"); os.Remove(log)
+    scr := filepath.Join(os.TempDir(), "MiningVolume_v0103_selftest.scr")
     os.WriteFile(scr, []byte("FILEDIA\r\n0\r\nCMDDIA\r\n0\r\nMVSELFTEST\r\n_.QUIT\r\n"), 0644)
     defer os.Remove(scr)
 
@@ -140,7 +140,7 @@ func registerUninstall(bundlePath string) error {
     programData := os.Getenv("ProgramData"); if programData=="" { programData=`C:\ProgramData` }
     dir := filepath.Join(programData, "MiningVolume2023")
     if err := os.MkdirAll(dir,0755); err != nil { return err }
-    exe, _ := os.Executable(); stored := filepath.Join(dir,"MiningVolume_Setup_v0.10.2.exe")
+    exe, _ := os.Executable(); stored := filepath.Join(dir,"MiningVolume_Setup_v0.10.3.exe")
     if err := copyFile(exe,stored); err != nil { return err }
     vals := [][]string{
         {"/v","DisplayName","/t","REG_SZ","/d",productName,"/f"},
