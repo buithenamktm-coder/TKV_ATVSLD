@@ -39,6 +39,10 @@ namespace MiningVolume2023.Services
                     var ent = tr.GetObject(id, OpenMode.ForRead) as Entity;
                     if (ent != null && ent.LayerId == layerId)
                     {
+                        if (!(ent is Face))
+                            throw new System.InvalidOperationException(
+                                $"Layer '{layerName}' chứa đối tượng không phải 3DFACE. " +
+                                "MiningVolume không xóa tự động để tránh mất dữ liệu CAD.");
                         ent.UpgradeOpen();
                         ent.Erase();
                     }
@@ -87,6 +91,10 @@ namespace MiningVolume2023.Services
                     var ent = tr.GetObject(id, OpenMode.ForRead) as Entity;
                     if (ent != null && ent.LayerId == layerId)
                     {
+                        if (!(ent is Face))
+                            throw new System.InvalidOperationException(
+                                $"Layer '{layerName}' chứa đối tượng không phải 3DFACE. " +
+                                "MiningVolume không xóa tự động để tránh mất dữ liệu CAD.");
                         ent.UpgradeOpen();
                         ent.Erase();
                         erased++;
