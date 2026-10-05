@@ -32,7 +32,7 @@ namespace MiningVolume2023.UI
         {
             Font = new Font("Arial", 9F);
             BackColor = Color.White;
-            Controls.Add(new Label { Text = "QUẢN LÝ MÔ HÌNH X - Y - Z", Dock = DockStyle.Top, Height = 32, Font = new Font("Arial", 11F, FontStyle.Bold) });
+            Controls.Add(new Label { Text = "MÔ HÌNH TIN HIỆN TRẠNG / THIẾT KẾ", Dock = DockStyle.Top, Height = 32, Font = new Font("Arial", 11F, FontStyle.Bold) });
 
             var top = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 36, WrapContents = false, Padding = new Padding(0, 2, 0, 2) };
             top.Controls.Add(new Label { Text = "Mô hình:", AutoSize = true, Padding = new Padding(0, 7, 0, 0) });
