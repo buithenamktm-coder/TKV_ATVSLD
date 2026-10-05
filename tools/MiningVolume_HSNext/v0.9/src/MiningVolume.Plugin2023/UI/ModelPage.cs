@@ -32,7 +32,7 @@ namespace MiningVolume2023.UI
         {
             Font = new Font("Arial", 9F);
             BackColor = Color.White;
-            Controls.Add(new Label { Text = "QUẢN LÝ MÔ HÌNH X - Y - Z", Dock = DockStyle.Top, Height = 32, Font = new Font("Arial", 11F, FontStyle.Bold) });
+            Controls.Add(new Label { Text = "MÔ HÌNH TIN HIỆN TRẠNG / THIẾT KẾ", Dock = DockStyle.Top, Height = 32, Font = new Font("Arial", 11F, FontStyle.Bold) });
 
             var top = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 36, WrapContents = false, Padding = new Padding(0, 2, 0, 2) };
             top.Controls.Add(new Label { Text = "Mô hình:", AutoSize = true, Padding = new Padding(0, 7, 0, 0) });
@@ -306,28 +306,8 @@ namespace MiningVolume2023.UI
             try
             {
                 SetBusy(true, "Đang dựng đồng thời cặp TIN hiện trạng / thiết kế...");
-                var builds = await Task.Run(() => new[]
-                {
-                    SurfaceWorkflowService.BuildCoreDetailed(ModelRole.Existing),
-                    SurfaceWorkflowService.BuildCoreDetailed(ModelRole.Design)
-                });
-
-                // Only write to CAD after BOTH core surfaces have built successfully.
-                try
-                {
-                    SurfaceWorkflowService.DrawTin(ModelRole.Existing, builds[0]);
-                    SurfaceWorkflowService.DrawTin(ModelRole.Design, builds[1]);
-                }
-                catch
-                {
-                    // Never leave a half-updated pair of TINs as calculation input.
-                    SurfaceWorkflowService.InvalidateTin(ModelRole.Existing, clearCadLayer: true, notify: false);
-                    SurfaceWorkflowService.InvalidateTin(ModelRole.Design, clearCadLayer: true, notify: false);
-                    ProjectState.Current.NotifyChanged();
-                    throw;
-                }
-
-                SurfaceWorkflowService.EnsureBothTinsReady(synchronizeCadLayers: true);
+                var builds = await Task.Run(() => SurfaceWorkflowService.BuildPairCoreDetailed());
+                SurfaceWorkflowService.DrawTinPair(builds);
                 MessageBox.Show(
                     "ĐÃ TẠO ĐỦ 2 TIN DÙNG CHO TÍNH KHỐI LƯỢNG\r\n\r\n" +
                     $"Hiện trạng → {st.Existing.TinLayer}: {builds[0].Summary}\r\n" +

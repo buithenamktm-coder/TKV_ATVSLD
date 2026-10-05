@@ -11,7 +11,9 @@ namespace MiningVolume2023.Services
         {
             using (var tr = db.TransactionManager.StartTransaction())
             {
-                EnsureLayer(db, tr, layerName, aciColor);
+                var id = EnsureLayer(db, tr, layerName, aciColor);
+                var ltr = (LayerTableRecord)tr.GetObject(id, OpenMode.ForWrite);
+                ltr.IsLocked = true;
                 tr.Commit();
             }
         }
@@ -37,6 +39,10 @@ namespace MiningVolume2023.Services
                     var ent = tr.GetObject(id, OpenMode.ForRead) as Entity;
                     if (ent != null && ent.LayerId == layerId)
                     {
+                        if (!(ent is Face))
+                            throw new System.InvalidOperationException(
+                                $"Layer '{layerName}' chứa đối tượng không phải 3DFACE. " +
+                                "MiningVolume không xóa tự động để tránh mất dữ liệu CAD.");
                         ent.UpgradeOpen();
                         ent.Erase();
                     }
@@ -58,6 +64,9 @@ namespace MiningVolume2023.Services
                     written++;
                 }
 
+                var outLayer = (LayerTableRecord)tr.GetObject(layerId, OpenMode.ForWrite);
+                outLayer.IsLocked = true;
+                outLayer.IsOff = false;
                 tr.Commit();
             }
             return written;
@@ -82,11 +91,16 @@ namespace MiningVolume2023.Services
                     var ent = tr.GetObject(id, OpenMode.ForRead) as Entity;
                     if (ent != null && ent.LayerId == layerId)
                     {
+                        if (!(ent is Face))
+                            throw new System.InvalidOperationException(
+                                $"Layer '{layerName}' chứa đối tượng không phải 3DFACE. " +
+                                "MiningVolume không xóa tự động để tránh mất dữ liệu CAD.");
                         ent.UpgradeOpen();
                         ent.Erase();
                         erased++;
                     }
                 }
+                ltr.IsLocked = true;
                 tr.Commit();
             }
             return erased;
@@ -127,9 +141,9 @@ namespace MiningVolume2023.Services
                 var lt = (LayerTable)tr.GetObject(db.LayerTableId, OpenMode.ForRead);
                 if (!lt.Has(layerName)) { tr.Commit(); return; }
                 var ltr = (LayerTableRecord)tr.GetObject(lt[layerName], OpenMode.ForWrite);
-                ltr.IsLocked = false;
                 if (visible && ltr.IsFrozen) ltr.IsFrozen = false;
                 ltr.IsOff = !visible;
+                ltr.IsLocked = true;
                 tr.Commit();
             }
         }
@@ -152,6 +166,7 @@ namespace MiningVolume2023.Services
                 }
 
                 var ltr = (LayerTableRecord)tr.GetObject(layerId, OpenMode.ForWrite);
+                ltr.IsLocked = false;
                 ltr.Erase();
                 tr.Commit();
                 return true;
@@ -176,7 +191,12 @@ namespace MiningVolume2023.Services
                 tr.AddNewlyCreatedDBObject(ltr, true);
             }
 
-            // A dedicated TIN output layer must always be writable and visible after build.
+            // Never leave a calculation-output layer as the current drawing layer.
+            // This avoids accidental drafting into TIN layers and lets us lock them safely.
+            if (db.Clayer == id && lt.Has("0"))
+                db.Clayer = lt["0"];
+
+            // A dedicated TIN output layer must always be writable and visible during build.
             ltr.Color = Color.FromColorIndex(ColorMethod.ByAci, color);
             ltr.IsLocked = false;
             if (ltr.IsFrozen) ltr.IsFrozen = false;

@@ -40,9 +40,17 @@ namespace MiningVolume2023
             {
                 try
                 {
+                    // TIN layers are part of the calculation contract, not a cosmetic
+                    // by-product. Create both dedicated layers as soon as a DWG is active.
+                    SurfaceWorkflowService.EnsureOutputLayer(ModelRole.Existing);
+                    SurfaceWorkflowService.EnsureOutputLayer(ModelRole.Design);
+
                     Open(AppPage.Project);
                     StartupUiError = null;
                     _startupUiOpened = true;
+                    StartupLog("TIN output layers ready: " +
+                        ProjectState.Current.Existing.TinLayer + " / " +
+                        ProjectState.Current.Design.TinLayer);
                     StartupLog("Startup palette opened successfully. Ribbon=" +
                         (Autodesk.Windows.ComponentManager.Ribbon == null ? "OFF/Unavailable" : "Available"));
                 }

@@ -41,7 +41,7 @@ namespace MiningVolume2023.UI
 
             AddNav(nav, AppPage.Project, "0. Dự án");
             AddNav(nav, AppPage.Data, "1. Dữ liệu");
-            AddNav(nav, AppPage.Model, "2. Mô hình");
+            AddNav(nav, AppPage.Model, "2. TIN / Mô hình");
             AddNav(nav, AppPage.Section, "3. Mặt cắt");
             AddNav(nav, AppPage.Volume, "4. Khối lượng");
             AddNav(nav, AppPage.Export, "5. Xuất Excel");

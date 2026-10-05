@@ -4,10 +4,12 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using MiningVolume.Core.Geometry;
+using MiningVolume.Core.Model;
 using MiningVolume.Core.Reporting;
 using MiningVolume.Core.Sections;
 using MiningVolume.Core.Surface;
 using MiningVolume.Core.Volumes;
+using MiningVolume.Surface;
 using MiningVolume2023.UI;
 
 namespace MiningVolume2023.Services
@@ -101,6 +103,22 @@ namespace MiningVolume2023.Services
                 // AutoCAD-host smoke test: the release is not allowed to PASS unless
                 // MiningVolume can create real dedicated TIN layers and write/verify
                 // the expected number of 3DFACE triangles in the active database.
+                SurfaceWorkflowService.EnsureOutputLayer(ModelRole.Existing);
+                SurfaceWorkflowService.EnsureOutputLayer(ModelRole.Design);
+                var activeDoc = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument;
+                if (activeDoc != null)
+                {
+                    using (activeDoc.LockDocument())
+                    {
+                        Check(r,
+                            TinCadRenderer.LayerExists(activeDoc.Database, ProjectState.Current.Existing.TinLayer),
+                            "Layer TIN hiện trạng chính thức tồn tại trong DWG");
+                        Check(r,
+                            TinCadRenderer.LayerExists(activeDoc.Database, ProjectState.Current.Design.TinLayer),
+                            "Layer TIN thiết kế chính thức tồn tại trong DWG");
+                    }
+                }
+
                 RunCadTinLayerSmoke(r, existing, design);
             }
             catch (Exception ex)
@@ -108,7 +126,7 @@ namespace MiningVolume2023.Services
                 r.Errors.Add(ex.ToString());
             }
 
-            r.Passed = r.Errors.Count == 0 && r.Checks.Count >= 14;
+            r.Passed = r.Errors.Count == 0 && r.Checks.Count >= 16;
             r.OutputFile = ResolveOutputPath();
             WriteResultFile(r);
             return r;
@@ -175,11 +193,33 @@ namespace MiningVolume2023.Services
 
         private static TinSurface CreateFlatTin(string name, double z)
         {
+            // Use the same production preprocessing + constrained TIN builder as a real
+            // project. Four corner points plus a diagonal breakline produce two triangles.
             var a = new Vec3(0, 0, z);
             var b = new Vec3(100, 0, z);
             var c = new Vec3(100, 100, z);
             var d = new Vec3(0, 100, z);
-            return new TinSurface(name, new[] { new Triangle3(a, b, c), new Triangle3(a, c, d) }, new ValidationIssue[0]);
+
+            var model = new SurfaceModel(name);
+            model.Entities.Add(new SourceEntity("P1", "P1", "SELFTEST", SourceEntityType.Point, new[] { a }));
+            model.Entities.Add(new SourceEntity("P2", "P2", "SELFTEST", SourceEntityType.Point, new[] { b }));
+            model.Entities.Add(new SourceEntity("P3", "P3", "SELFTEST", SourceEntityType.Point, new[] { c }));
+            model.Entities.Add(new SourceEntity("P4", "P4", "SELFTEST", SourceEntityType.Point, new[] { d }));
+            model.Entities.Add(new SourceEntity("BL1", "BL1", "SELFTEST", SourceEntityType.Line, new[] { a, c }));
+
+            var options = new SurfaceBuildOptions
+            {
+                XyTolerance = 1e-6,
+                ZConflictTolerance = 1e-4,
+                MinimumTriangleArea = 1e-10
+            };
+            var prepared = new SurfaceInputPreparer().Prepare(model, options);
+            if (prepared.HasErrors)
+                throw new InvalidOperationException(
+                    "Self-test TIN preprocessing failed: " +
+                    string.Join("; ", prepared.Issues.Select(x => x.Code + ": " + x.Message)));
+
+            return new ConformingTinBuilder().Build(name, prepared, options);
         }
 
         private static void WriteSmokeWorkbook(string path, IReadOnlyList<SectionProfile> profiles, VolumeResult volume)
