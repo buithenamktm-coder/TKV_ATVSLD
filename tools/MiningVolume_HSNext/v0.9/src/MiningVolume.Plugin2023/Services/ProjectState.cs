@@ -26,7 +26,20 @@ namespace MiningVolume2023.Services
         public string TinLayer { get; }
         public SurfaceModel Source { get; set; }
         public TinSurface Tin { get; set; }
+        public DateTime? TinBuiltFromSourceUtc { get; set; }
         public bool TinVisible { get; set; } = true;
+        public bool IsTinCurrent
+        {
+            get
+            {
+                return Tin != null &&
+                       Tin.Triangles != null &&
+                       Tin.Triangles.Count > 0 &&
+                       TinBuiltFromSourceUtc.HasValue &&
+                       Source != null &&
+                       TinBuiltFromSourceUtc.Value >= Source.LastModifiedUtc;
+            }
+        }
         public HashSet<SourceEntityType> AllowedTypes { get; } = new HashSet<SourceEntityType>();
         public DateTime? LastBuiltUtc { get; set; }
         public int EntityCount => Source?.Entities?.Count ?? 0;
@@ -107,6 +120,7 @@ namespace MiningVolume2023.Services
             s.Layer = null;
             s.Source = new SurfaceModel(s.Name);
             s.Tin = null;
+            s.TinBuiltFromSourceUtc = null;
             s.TinVisible = true;
             s.LastBuiltUtc = null;
             s.AllowedTypes.Clear();
