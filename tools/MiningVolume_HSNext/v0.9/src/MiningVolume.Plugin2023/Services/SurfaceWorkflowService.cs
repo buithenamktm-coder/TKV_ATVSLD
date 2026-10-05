@@ -24,11 +24,14 @@ namespace MiningVolume2023.Services
         public int SiteCount { get; set; }
         public int BreaklineCount { get; set; }
         public int WarningCount { get; set; }
+        public double MinZ { get; set; }
+        public double MaxZ { get; set; }
         public DateTime SourceModifiedUtc { get; set; }
         public int TriangleCount => Tin?.Triangles?.Count ?? 0;
 
         public string Summary =>
             $"{SiteCount:n0} điểm TIN • {BreaklineCount:n0} đoạn breakline • {TriangleCount:n0} tam giác" +
+            $" • Z: {MinZ:0.###} → {MaxZ:0.###}" +
             (WarningCount > 0 ? $" • {WarningCount:n0} cảnh báo" : string.Empty);
     }
 
@@ -106,6 +109,8 @@ namespace MiningVolume2023.Services
                 SiteCount = prepared.Sites.Count,
                 BreaklineCount = prepared.Breaklines.Count,
                 WarningCount = prepared.Issues.Count(x => x.Severity == ValidationSeverity.Warning),
+                MinZ = prepared.Sites.Min(p => p.Z),
+                MaxZ = prepared.Sites.Max(p => p.Z),
                 SourceModifiedUtc = sourceModified
             };
         }
