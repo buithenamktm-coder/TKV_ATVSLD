@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using Autodesk.AutoCAD.Runtime;
 using Autodesk.AutoCAD.Windows;
 using AcApp = Autodesk.AutoCAD.ApplicationServices.Application;
@@ -15,16 +16,14 @@ namespace MiningVolume2023
         internal static PaletteSet Palette;
         internal static MainPaletteControl MainControl;
         private static bool _idleHooked;
+        private static bool _startupUiOpened;
         private static string _loadedDrawingFingerprint;
 
         public void Initialize()
         {
+            StartupLog("Initialize: MiningVolume v0.10.1");
             TryRibbon();
-            if (Autodesk.Windows.ComponentManager.Ribbon == null && !_idleHooked)
-            {
-                AcApp.Idle += OnIdle;
-                _idleHooked = true;
-            }
+            HookIdle();
         }
 
         public void Terminate()
@@ -35,16 +34,72 @@ namespace MiningVolume2023
         private static void OnIdle(object sender, EventArgs e)
         {
             TryRibbon();
-            if (Autodesk.Windows.ComponentManager.Ribbon != null && _idleHooked)
+
+            if (!_startupUiOpened && AcApp.DocumentManager.MdiActiveDocument != null)
+            {
+                try
+                {
+                    Open(AppPage.Project);
+                    _startupUiOpened = true;
+                    StartupLog("Startup palette opened successfully. Ribbon=" +
+                        (Autodesk.Windows.ComponentManager.Ribbon == null ? "OFF/Unavailable" : "Available"));
+                }
+                catch (System.Exception ex)
+                {
+                    StartupLog("Startup palette FAILED: " + ex);
+                    _startupUiOpened = true;
+                    try
+                    {
+                        AcApp.ShowAlertDialog("MiningVolume đã được nạp nhưng không mở được giao diện.\n\n" +
+                            ex.Message + "\n\nXem log tại: " + StartupLogPath());
+                    }
+                    catch { }
+                }
+            }
+
+            if (_startupUiOpened && _idleHooked)
             {
                 AcApp.Idle -= OnIdle;
                 _idleHooked = false;
             }
         }
 
+        private static void HookIdle()
+        {
+            if (_idleHooked) return;
+            AcApp.Idle += OnIdle;
+            _idleHooked = true;
+        }
+
         private static void TryRibbon()
         {
-            try { RibbonBuilder.EnsureRibbon(); } catch { }
+            try
+            {
+                RibbonBuilder.EnsureRibbon();
+            }
+            catch (System.Exception ex)
+            {
+                StartupLog("Ribbon unavailable/failed: " + ex.Message);
+            }
+        }
+
+        private static string StartupLogPath()
+        {
+            string root = Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);
+            if (string.IsNullOrWhiteSpace(root)) root = @"C:\ProgramData";
+            return Path.Combine(root, "MiningVolume2023", "Logs", "startup.log");
+        }
+
+        private static void StartupLog(string message)
+        {
+            try
+            {
+                string file = StartupLogPath();
+                Directory.CreateDirectory(Path.GetDirectoryName(file));
+                File.AppendAllText(file,
+                    DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + " | " + message + Environment.NewLine);
+            }
+            catch { }
         }
 
         internal static void Open(AppPage page)
@@ -127,15 +182,15 @@ namespace MiningVolume2023
             var r = Services.SelfTestService.Run();
             var ed = AcApp.DocumentManager.MdiActiveDocument?.Editor;
             if (r.Passed)
-                ed?.WriteMessage("\nMiningVolume v0.10 SELFTEST: PASS (" + r.Checks.Count + " checks). Log: " + r.OutputFile);
+                ed?.WriteMessage("\nMiningVolume v0.10.1 SELFTEST: PASS (" + r.Checks.Count + " checks). Log: " + r.OutputFile);
             else
-                ed?.WriteMessage("\nMiningVolume v0.10 SELFTEST: FAIL (" + r.Errors.Count + " errors). Log: " + r.OutputFile);
+                ed?.WriteMessage("\nMiningVolume v0.10.1 SELFTEST: FAIL (" + r.Errors.Count + " errors). Log: " + r.OutputFile);
         }
 
         [CommandMethod("MVABOUT")]
         public void About()
         {
-            AcApp.ShowAlertDialog("MiningVolume 2023\nHS-Next • Mine Survey & Earthwork\nGUI-first v0.10");
+            AcApp.ShowAlertDialog("MiningVolume 2023\nHS-Next • Mine Survey & Earthwork\nGUI-first v0.10.1");
         }
     }
 }
