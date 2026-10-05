@@ -1,0 +1,96 @@
+name: Build MiningVolume AutoCAD 2023 Release
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v0.9.*'
+
+jobs:
+  build:
+    runs-on: windows-2022
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.x'
+
+      - name: Run independent QA
+        shell: pwsh
+        run: |
+          python -m pip install --disable-pip-version-check pytest shapely
+          python -m pytest -q tests/reference
+
+      - name: Restore .NET Framework solution
+        shell: pwsh
+        run: dotnet restore MiningVolume.HSNext.sln -p:UseAutoCADNuGet=true
+
+      - name: Build AutoCAD 2023 add-in
+        shell: pwsh
+        run: dotnet build MiningVolume.HSNext.sln -c Release --no-restore -p:UseAutoCADNuGet=true
+
+      - name: Assemble prebuilt bundle
+        shell: pwsh
+        run: |
+          $out = 'bundle/MiningVolume2023.bundle/Contents/Windows'
+          New-Item -ItemType Directory -Force $out | Out-Null
+          Remove-Item "$out/*" -Force -ErrorAction SilentlyContinue
+          Copy-Item 'src/MiningVolume.Plugin2023/bin/Release/net48/MiningVolume2023.dll' $out
+          Copy-Item 'src/MiningVolume.Core/bin/Release/net48/MiningVolume.Core.dll' $out
+          Copy-Item 'src/MiningVolume.Surface/bin/Release/net48/MiningVolume.Surface.dll' $out
+          Copy-Item 'src/MiningVolume.Cad2023/bin/Release/net48/MiningVolume.Cad2023.dll' $out
+
+      - name: Verify release bundle policy
+        shell: pwsh
+        run: ./release/verify_release.ps1
+
+      - name: Create installer payload
+        shell: pwsh
+        run: |
+          Remove-Item installer/payload.zip -Force -ErrorAction SilentlyContinue
+          Compress-Archive -Path bundle -DestinationPath installer/payload.zip -CompressionLevel Optimal
+
+      - name: Build native Windows installer
+        shell: pwsh
+        working-directory: installer
+        env:
+          GOOS: windows
+          GOARCH: amd64
+          CGO_ENABLED: '0'
+        run: |
+          New-Item -ItemType Directory -Force ../dist | Out-Null
+          go build -trimpath -ldflags '-s -w -H=windowsgui' -o ../dist/MiningVolume_HSNext_AutoCAD2023_Setup_v0.9.exe main.go
+
+      - name: Create checksums and source archive
+        shell: pwsh
+        run: |
+          $setup = 'dist/MiningVolume_HSNext_AutoCAD2023_Setup_v0.9.exe'
+          $hash = (Get-FileHash $setup -Algorithm SHA256).Hash.ToLowerInvariant()
+          "SHA256  $hash  $(Split-Path $setup -Leaf)" | Set-Content -Encoding ascii dist/SHA256SUMS.txt
+          Compress-Archive -Path src,bundle,release,README.md,QA_REPORT.md,MiningVolume.HSNext.sln -DestinationPath dist/MiningVolume_HSNext_Source_v0.9.zip -CompressionLevel Optimal
+
+      - name: Upload release candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: MiningVolume-HSNext-AutoCAD2023-v0.9
+          if-no-files-found: error
+          path: |
+            dist/MiningVolume_HSNext_AutoCAD2023_Setup_v0.9.exe
+            dist/MiningVolume_HSNext_Source_v0.9.zip
+            dist/SHA256SUMS.txt
+            bundle/MiningVolume2023.bundle/**

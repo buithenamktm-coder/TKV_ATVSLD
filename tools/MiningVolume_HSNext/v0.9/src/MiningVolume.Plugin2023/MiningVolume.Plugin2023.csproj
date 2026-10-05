@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <AssemblyName>MiningVolume2023</AssemblyName>
+    <RootNamespace>MiningVolume2023</RootNamespace>
+    <AutoCAD2023Dir Condition="'$(AutoCAD2023Dir)'==''">C:\Program Files\Autodesk\AutoCAD 2023</AutoCAD2023Dir>
+    <UseAutoCADNuGet Condition="'$(UseAutoCADNuGet)'==''">false</UseAutoCADNuGet>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\MiningVolume.Core\MiningVolume.Core.csproj" />
+    <ProjectReference Include="..\MiningVolume.Surface\MiningVolume.Surface.csproj" />
+    <ProjectReference Include="..\MiningVolume.Cad2023\MiningVolume.Cad2023.csproj" />
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies.net48" Version="1.0.3" PrivateAssets="all" />
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Runtime.Serialization" />
+    <Reference Include="System.IO.Compression" />
+    <Reference Include="System.IO.Compression.FileSystem" />
+    <Reference Include="PresentationCore" />
+    <Reference Include="PresentationFramework" />
+    <Reference Include="WindowsBase" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(UseAutoCADNuGet)'=='true'">
+    <PackageReference Include="AutoCAD.NET" Version="24.2.0" PrivateAssets="all" ExcludeAssets="runtime" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(UseAutoCADNuGet)'!='true'">
+    <Reference Include="AcCoreMgd"><HintPath>$(AutoCAD2023Dir)\AcCoreMgd.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="AcDbMgd"><HintPath>$(AutoCAD2023Dir)\AcDbMgd.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="AcMgd"><HintPath>$(AutoCAD2023Dir)\AcMgd.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="AcWindows"><HintPath>$(AutoCAD2023Dir)\AcWindows.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="AdWindows"><HintPath>$(AutoCAD2023Dir)\AdWindows.dll</HintPath><Private>false</Private></Reference>
+  </ItemGroup>
+</Project>
