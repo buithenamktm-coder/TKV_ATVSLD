@@ -98,3 +98,15 @@ Các mục này phải do Windows release runner + AutoCAD 2023 runtime gate xá
 - Build succeeded, 0 compile errors.
 - Release bundle policy PASS.
 - CAD-host TIN layer smoke test được thực thi bởi `MVSELFTEST` sau khi cài trên AutoCAD 2023 thật; CI không giả lập kết quả runtime này.
+
+
+## QA gate v0.10.4 — TIN calculation input
+
+- Hai layer TIN chính thức phải tồn tại trong DWG.
+- Dữ liệu nguồn không được lấy từ chính layer TIN đầu ra.
+- TIN phải có tam giác hợp lệ, không NaN/Infinity và không tam giác suy biến.
+- Số tam giác trong lõi phải bằng số 3DFACE đã ghi và đếm lại trên layer.
+- Chỉnh sửa nguồn X-Y-Z phải invalidate TIN cũ.
+- Mặt cắt và khối lượng phải gọi cổng `EnsureBothTinsReady`.
+- TIN layer khóa sau build; update do phần mềm kiểm soát.
+- Self-test runtime dựng TIN bằng production builder và smoke-test layer AutoCAD thật.
