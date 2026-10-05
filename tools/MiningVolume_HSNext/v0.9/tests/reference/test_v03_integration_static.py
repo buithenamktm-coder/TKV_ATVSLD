@@ -12,13 +12,13 @@ def test_data_page_loads_real_cad_reader():
 def test_model_grid_is_virtualized_and_xyz_present():
     s=text('src/MiningVolume.Plugin2023/UI/ModelPage.cs')
     assert 'VirtualMode = true' in s
-    for token in ['"X"','"Y"','"Z"','Loại điểm','Loại đối tượng','LƯU / CẬP NHẬT MÔ HÌNH']:
+    for token in ['"X"','"Y"','"Z"','Loại điểm','Loại đối tượng','TẠO / CẬP NHẬT TIN']:
         assert token in s
 
 def test_model_build_runs_core_off_ui_thread():
     s=text('src/MiningVolume.Plugin2023/UI/ModelPage.cs')
-    assert 'Task.Run(() => SurfaceWorkflowService.BuildCore(role))' in s
-    assert 'SurfaceWorkflowService.DrawTin(role, tin)' in s
+    assert 'Task.Run(() => SurfaceWorkflowService.BuildCoreDetailed(role))' in s
+    assert 'SurfaceWorkflowService.DrawTin(role, build)' in s
 
 def test_tin_renderer_replaces_faces_on_dedicated_layer():
     s=text('src/MiningVolume.Plugin2023/Services/TinCadRenderer.cs')
