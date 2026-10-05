@@ -306,28 +306,8 @@ namespace MiningVolume2023.UI
             try
             {
                 SetBusy(true, "Đang dựng đồng thời cặp TIN hiện trạng / thiết kế...");
-                var builds = await Task.Run(() => new[]
-                {
-                    SurfaceWorkflowService.BuildCoreDetailed(ModelRole.Existing),
-                    SurfaceWorkflowService.BuildCoreDetailed(ModelRole.Design)
-                });
-
-                // Only write to CAD after BOTH core surfaces have built successfully.
-                try
-                {
-                    SurfaceWorkflowService.DrawTin(ModelRole.Existing, builds[0]);
-                    SurfaceWorkflowService.DrawTin(ModelRole.Design, builds[1]);
-                }
-                catch
-                {
-                    // Never leave a half-updated pair of TINs as calculation input.
-                    SurfaceWorkflowService.InvalidateTin(ModelRole.Existing, clearCadLayer: true, notify: false);
-                    SurfaceWorkflowService.InvalidateTin(ModelRole.Design, clearCadLayer: true, notify: false);
-                    ProjectState.Current.NotifyChanged();
-                    throw;
-                }
-
-                SurfaceWorkflowService.EnsureBothTinsReady(synchronizeCadLayers: true);
+                var builds = await Task.Run(() => SurfaceWorkflowService.BuildPairCoreDetailed());
+                SurfaceWorkflowService.DrawTinPair(builds);
                 MessageBox.Show(
                     "ĐÃ TẠO ĐỦ 2 TIN DÙNG CHO TÍNH KHỐI LƯỢNG\r\n\r\n" +
                     $"Hiện trạng → {st.Existing.TinLayer}: {builds[0].Summary}\r\n" +
