@@ -11,3 +11,5 @@ Phần này độc lập với mã nguồn ATVSLĐ hiện hữu.
 
 
 Build trigger: Windows AutoCAD 2023 CI initialized.
+
+PR CI build trigger for AutoCAD 2023 release candidate.

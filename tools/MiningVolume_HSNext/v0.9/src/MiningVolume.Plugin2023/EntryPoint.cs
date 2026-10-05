@@ -106,7 +106,7 @@ namespace MiningVolume2023
                         doc.Editor.WriteMessage("\nMiningVolume: Project đã nạp với " + r.Warnings.Count + " cảnh báo. Mở trang Dự án để xem/kiểm soát.");
                 }
             }
-            catch (Exception ex)
+            catch (System.Exception ex)
             {
                 doc.Editor.WriteMessage("\nMiningVolume: chưa tự nạp được Project - " + ex.Message);
             }
@@ -117,7 +117,7 @@ namespace MiningVolume2023
         {
             var doc = AcApp.DocumentManager.MdiActiveDocument;
             if (doc == null) return string.Empty;
-            try { return doc.Database.FingerprintGuid.ToString("D"); }
+            try { return doc.Database.FingerprintGuid.ToString(); }
             catch { return doc.Name ?? string.Empty; }
         }
 
@@ -127,7 +127,7 @@ namespace MiningVolume2023
             var r = Services.SelfTestService.Run();
             var ed = AcApp.DocumentManager.MdiActiveDocument?.Editor;
             if (r.Passed)
-                ed?.WriteMessage("\nMiningVolume v0.8 SELFTEST: PASS (" + r.Checks.Count + " checks). Log: " + r.OutputFile);
+                ed?.WriteMessage("\nMiningVolume v0.9 SELFTEST: PASS (" + r.Checks.Count + " checks). Log: " + r.OutputFile);
             else
                 ed?.WriteMessage("\nMiningVolume v0.8 SELFTEST: FAIL (" + r.Errors.Count + " errors). Log: " + r.OutputFile);
         }
@@ -135,7 +135,7 @@ namespace MiningVolume2023
         [CommandMethod("MVABOUT")]
         public void About()
         {
-            AcApp.ShowAlertDialog("MiningVolume 2023\nHS-Next • Mine Survey & Earthwork\nIntegration v0.8");
+            AcApp.ShowAlertDialog("MiningVolume 2023\nHS-Next • Mine Survey & Earthwork\nPre-Release v0.9");
         }
     }
 }
