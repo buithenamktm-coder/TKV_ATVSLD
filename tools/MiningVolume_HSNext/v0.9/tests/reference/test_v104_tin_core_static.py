@@ -75,3 +75,9 @@ def test_runtime_selftest_exercises_production_builder_and_real_autocad_faces():
     assert "TinCadRenderer.CountFaces" in s
     assert "Layer TIN hiện trạng chính thức tồn tại trong DWG" in s
     assert "Layer TIN thiết kế chính thức tồn tại trong DWG" in s
+
+
+def test_reserved_tin_layers_never_blindly_delete_non_faces():
+    s = read("src/MiningVolume.Plugin2023/Services/TinCadRenderer.cs")
+    assert "chứa đối tượng không phải 3DFACE" in s
+    assert "không xóa tự động để tránh mất dữ liệu CAD" in s
