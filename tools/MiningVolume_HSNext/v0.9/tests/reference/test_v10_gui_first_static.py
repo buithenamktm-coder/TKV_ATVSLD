@@ -30,3 +30,14 @@ def test_cli_commands_are_not_used_by_ribbon():
     ribbon = read("src/MiningVolume.Plugin2023/RibbonBuilder.cs")
     for cmd in ["MV_DATA", "MV_MODEL", "MV_SECTION", "MV_VOLUME", "MV_EXPORT", "MVOPEN"]:
         assert cmd not in ribbon
+
+
+def test_bundle_is_startup_driven_not_command_registered():
+    xml = read("bundle/MiningVolume2023.bundle/PackageContents.xml")
+    assert 'LoadOnAutoCADStartup="True"' in xml
+    assert "<Commands" not in xml
+    assert 'Global="MV_DATA"' not in xml
+    assert 'Global="MV_MODEL"' not in xml
+    assert 'Global="MV_SECTION"' not in xml
+    assert 'Global="MV_VOLUME"' not in xml
+    assert 'Global="MV_EXPORT"' not in xml
