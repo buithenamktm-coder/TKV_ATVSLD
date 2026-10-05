@@ -1,4 +1,5 @@
 using System;
+using System.Windows.Forms;
 using Autodesk.AutoCAD.Runtime;
 using Autodesk.AutoCAD.Windows;
 using AcApp = Autodesk.AutoCAD.ApplicationServices.Application;
@@ -14,28 +15,39 @@ namespace MiningVolume2023
     {
         internal static PaletteSet Palette;
         internal static MainPaletteControl MainControl;
+
         private static bool _idleHooked;
+        private static bool _healthCheckDone;
         private static string _loadedDrawingFingerprint;
 
         public void Initialize()
         {
             TryRibbon();
-            if (Autodesk.Windows.ComponentManager.Ribbon == null && !_idleHooked)
-            {
-                AcApp.Idle += OnIdle;
-                _idleHooked = true;
-            }
+            HookIdle();
         }
 
         public void Terminate()
         {
-            if (_idleHooked) AcApp.Idle -= OnIdle;
+            if (_idleHooked)
+            {
+                AcApp.Idle -= OnIdle;
+                _idleHooked = false;
+            }
+        }
+
+        private static void HookIdle()
+        {
+            if (_idleHooked) return;
+            AcApp.Idle += OnIdle;
+            _idleHooked = true;
         }
 
         private static void OnIdle(object sender, EventArgs e)
         {
             TryRibbon();
-            if (Autodesk.Windows.ComponentManager.Ribbon != null && _idleHooked)
+            TryInternalHealthCheck();
+
+            if (Autodesk.Windows.ComponentManager.Ribbon != null && _healthCheckDone && _idleHooked)
             {
                 AcApp.Idle -= OnIdle;
                 _idleHooked = false;
@@ -47,9 +59,38 @@ namespace MiningVolume2023
             try { RibbonBuilder.EnsureRibbon(); } catch { }
         }
 
+        private static void TryInternalHealthCheck()
+        {
+            if (_healthCheckDone || Autodesk.Windows.ComponentManager.Ribbon == null) return;
+            _healthCheckDone = true;
+            try
+            {
+                var r = SelfTestService.Run();
+                if (!r.Passed)
+                {
+                    MessageBox.Show(
+                        "MiningVolume đã nạp nhưng kiểm tra nội bộ không đạt.\r\n\r\n" +
+                        string.Join("\r\n", r.Errors) +
+                        "\r\n\r\nLog: " + r.OutputFile,
+                        "MiningVolume 2023",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Error);
+                }
+            }
+            catch (System.Exception ex)
+            {
+                MessageBox.Show(
+                    "MiningVolume không hoàn thành được kiểm tra nội bộ sau khi nạp:\r\n" + ex.Message,
+                    "MiningVolume 2023",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
+            }
+        }
+
         internal static void Open(AppPage page)
         {
             EnsureCurrentDrawingProjectLoaded();
+
             if (Palette == null)
             {
                 Palette = new PaletteSet("MINING VOLUME", new Guid("8C96DC13-BC65-4A2C-8B34-2D7644FD1C62"))
@@ -61,8 +102,46 @@ namespace MiningVolume2023
                 MainControl = new MainPaletteControl();
                 Palette.Add("Phần mềm", MainControl);
             }
+
             Palette.Visible = true;
             MainControl.ShowPage(page);
+        }
+
+        internal static void SaveProjectFromRibbon()
+        {
+            try
+            {
+                var saved = ProjectPersistenceService.SaveCurrentProject();
+                Open(AppPage.Project);
+                MessageBox.Show(
+                    "Đã lưu Project vào DWG lúc " + saved.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss") + ".",
+                    "MiningVolume 2023",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+            }
+            catch (System.Exception ex)
+            {
+                MessageBox.Show(ex.Message, "Lưu Project", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        internal static void ShowAbout()
+        {
+            MessageBox.Show(
+                "MiningVolume 2023\r\nHS-Next • Mine Survey & Earthwork\r\nv0.10 GUI Preview\r\n\r\nGiao diện Ribbon/Palette gọi trực tiếp C#, không điều khiển bằng chuỗi lệnh.",
+                "MiningVolume 2023",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
+
+        internal static bool PaletteVisible
+        {
+            get { return Palette != null && Palette.Visible; }
+        }
+
+        internal static void SetPaletteVisible(bool visible)
+        {
+            if (Palette != null) Palette.Visible = visible;
         }
 
         [CommandMethod("MVOPEN", CommandFlags.Session)] public static void OpenPalette() => Open(AppPage.Project);
@@ -73,43 +152,50 @@ namespace MiningVolume2023
         [CommandMethod("MV_VOLUME", CommandFlags.Session)] public static void OpenVolume() => Open(AppPage.Volume);
         [CommandMethod("MV_EXPORT", CommandFlags.Session)] public static void OpenExport() => Open(AppPage.Export);
 
+        // Các lệnh dưới đây chỉ là shortcut/diagnostic tùy chọn, không được Ribbon sử dụng.
         [CommandMethod("MV_PROJECT_SAVE", CommandFlags.Session)]
-        public static void SaveProject()
-        {
-            var saved = Services.ProjectPersistenceService.SaveCurrentProject();
-            AcApp.DocumentManager.MdiActiveDocument?.Editor.WriteMessage("\nMiningVolume: đã lưu Project vào DWG lúc " + saved.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss") + ".");
-        }
+        public static void SaveProject() => SaveProjectFromRibbon();
 
         [CommandMethod("MV_PROJECT_LOAD", CommandFlags.Session)]
         public static void LoadProject()
         {
-            var r = Services.ProjectPersistenceService.LoadCurrentProject(true);
-            AcApp.DocumentManager.MdiActiveDocument?.Editor.WriteMessage("\nMiningVolume: " + r.Message);
-            _loadedDrawingFingerprint = CurrentFingerprint();
-            Open(AppPage.Project);
+            try
+            {
+                var r = ProjectPersistenceService.LoadCurrentProject(true);
+                _loadedDrawingFingerprint = CurrentFingerprint();
+                Open(AppPage.Project);
+                MessageBox.Show(r.Message, "MiningVolume 2023", MessageBoxButtons.OK,
+                    r.Warnings.Count > 0 ? MessageBoxIcon.Warning : MessageBoxIcon.Information);
+            }
+            catch (System.Exception ex)
+            {
+                MessageBox.Show(ex.Message, "Nạp Project", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
 
         private static void EnsureCurrentDrawingProjectLoaded()
         {
             var doc = AcApp.DocumentManager.MdiActiveDocument;
             if (doc == null) return;
+
             string fingerprint = CurrentFingerprint();
             if (string.Equals(_loadedDrawingFingerprint, fingerprint, StringComparison.OrdinalIgnoreCase)) return;
 
             ProjectState.Current.Reset();
             try
             {
-                if (Services.ProjectPersistenceService.HasSavedProject())
-                {
-                    var r = Services.ProjectPersistenceService.LoadCurrentProject(true);
-                    if (r.Warnings.Count > 0)
-                        doc.Editor.WriteMessage("\nMiningVolume: Project đã nạp với " + r.Warnings.Count + " cảnh báo. Mở trang Dự án để xem/kiểm soát.");
-                }
+                if (ProjectPersistenceService.HasSavedProject())
+                    ProjectPersistenceService.LoadCurrentProject(true);
             }
             catch (System.Exception ex)
             {
-                doc.Editor.WriteMessage("\nMiningVolume: chưa tự nạp được Project - " + ex.Message);
+                MessageBox.Show(
+                    "Không tự nạp được Project đã lưu trong DWG:\r\n" + ex.Message,
+                    "MiningVolume 2023",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
             }
+
             _loadedDrawingFingerprint = fingerprint;
         }
 
@@ -124,18 +210,17 @@ namespace MiningVolume2023
         [CommandMethod("MVSELFTEST", CommandFlags.Session)]
         public static void SelfTest()
         {
-            var r = Services.SelfTestService.Run();
-            var ed = AcApp.DocumentManager.MdiActiveDocument?.Editor;
-            if (r.Passed)
-                ed?.WriteMessage("\nMiningVolume v0.9 SELFTEST: PASS (" + r.Checks.Count + " checks). Log: " + r.OutputFile);
-            else
-                ed?.WriteMessage("\nMiningVolume v0.8 SELFTEST: FAIL (" + r.Errors.Count + " errors). Log: " + r.OutputFile);
+            var r = SelfTestService.Run();
+            MessageBox.Show(
+                r.Passed
+                    ? "SELFTEST PASS (" + r.Checks.Count + " kiểm tra).\r\n" + r.OutputFile
+                    : "SELFTEST FAIL (" + r.Errors.Count + " lỗi).\r\n" + r.OutputFile,
+                "MiningVolume 2023",
+                MessageBoxButtons.OK,
+                r.Passed ? MessageBoxIcon.Information : MessageBoxIcon.Error);
         }
 
         [CommandMethod("MVABOUT")]
-        public void About()
-        {
-            AcApp.ShowAlertDialog("MiningVolume 2023\nHS-Next • Mine Survey & Earthwork\nPre-Release v0.9");
-        }
+        public void About() => ShowAbout();
     }
 }
