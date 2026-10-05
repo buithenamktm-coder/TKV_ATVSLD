@@ -105,7 +105,12 @@ namespace MiningVolume2023.UI
             try { has = ProjectPersistenceService.HasSavedProject(); } catch { }
             var st = ProjectState.Current;
             _saved.Text = has ? (st.LastProjectSavedUtc.HasValue ? "Có • " + st.LastProjectSavedUtc.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss") : "Có") : "Chưa lưu";
-            _summary.Text = $"HT: {st.Existing.ActiveVertexCount:n0} đỉnh • TK: {st.Design.ActiveVertexCount:n0} đỉnh • MC: {(st.SectionSystem?.Lines.Count ?? 0):n0} • Khối lượng: {(st.VolumeResult == null ? "chưa tính" : "đã tính")}";
+            string tinHt = st.Existing.IsTinCurrent ? $"OK {st.Existing.Tin.Triangles.Count:n0} tam giác" : "CHƯA HỢP LỆ";
+            string tinTk = st.Design.IsTinCurrent ? $"OK {st.Design.Tin.Triangles.Count:n0} tam giác" : "CHƯA HỢP LỆ";
+            _summary.Text =
+                $"TIN HT: {tinHt} • TIN TK: {tinTk} • " +
+                $"MC: {(st.SectionSystem?.Lines.Count ?? 0):n0} • " +
+                $"Khối lượng: {(st.VolumeResult == null ? "chưa tính" : "đã tính")}";
             _load.Enabled = has;
             _delete.Enabled = has;
         }
