@@ -1,0 +1,36 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MiningVolume.Core", "src\MiningVolume.Core\MiningVolume.Core.csproj", "{9C4FCE0D-2B55-4E40-9E88-1A0D6A3EAA01}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MiningVolume.Surface", "src\MiningVolume.Surface\MiningVolume.Surface.csproj", "{9C4FCE0D-2B55-4E40-9E88-1A0D6A3EAA02}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MiningVolume.Cad2023", "src\MiningVolume.Cad2023\MiningVolume.Cad2023.csproj", "{9C4FCE0D-2B55-4E40-9E88-1A0D6A3EAA03}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MiningVolume.Plugin2023", "src\MiningVolume.Plugin2023\MiningVolume.Plugin2023.csproj", "{9C4FCE0D-2B55-4E40-9E88-1A0D6A3EAA04}"
+EndProject
+Global
+ GlobalSection(SolutionConfigurationPlatforms) = preSolution
+  Debug|Any CPU = Debug|Any CPU
+  Release|Any CPU = Release|Any CPU
+ EndGlobalSection
+ GlobalSection(ProjectConfigurationPlatforms) = postSolution
+  {9C4FCE0D-2B55-4E40-9E88-1A0D6A3EAA01}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+  {9C4FCE0D-2B55-4E40-9E88-1A0D6A3EAA01}.Debug|Any CPU.Build.0 = Debug|Any CPU
+  {9C4FCE0D-2B55-4E40-9E88-1A0D6A3EAA01}.Release|Any CPU.ActiveCfg = Release|Any CPU
+  {9C4FCE0D-2B55-4E40-9E88-1A0D6A3EAA01}.Release|Any CPU.Build.0 = Release|Any CPU
+  {9C4FCE0D-2B55-4E40-9E88-1A0D6A3EAA02}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+  {9C4FCE0D-2B55-4E40-9E88-1A0D6A3EAA02}.Debug|Any CPU.Build.0 = Debug|Any CPU
+  {9C4FCE0D-2B55-4E40-9E88-1A0D6A3EAA02}.Release|Any CPU.ActiveCfg = Release|Any CPU
+  {9C4FCE0D-2B55-4E40-9E88-1A0D6A3EAA02}.Release|Any CPU.Build.0 = Release|Any CPU
+  {9C4FCE0D-2B55-4E40-9E88-1A0D6A3EAA03}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+  {9C4FCE0D-2B55-4E40-9E88-1A0D6A3EAA03}.Debug|Any CPU.Build.0 = Debug|Any CPU
+  {9C4FCE0D-2B55-4E40-9E88-1A0D6A3EAA03}.Release|Any CPU.ActiveCfg = Release|Any CPU
+  {9C4FCE0D-2B55-4E40-9E88-1A0D6A3EAA03}.Release|Any CPU.Build.0 = Release|Any CPU
+  {9C4FCE0D-2B55-4E40-9E88-1A0D6A3EAA04}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+  {9C4FCE0D-2B55-4E40-9E88-1A0D6A3EAA04}.Debug|Any CPU.Build.0 = Debug|Any CPU
+  {9C4FCE0D-2B55-4E40-9E88-1A0D6A3EAA04}.Release|Any CPU.ActiveCfg = Release|Any CPU
+  {9C4FCE0D-2B55-4E40-9E88-1A0D6A3EAA04}.Release|Any CPU.Build.0 = Release|Any CPU
+ EndGlobalSection
+EndGlobal
