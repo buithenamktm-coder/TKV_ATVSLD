@@ -60,3 +60,5 @@ Workflow chạy trên `windows-2022`:
 ## Nguyên tắc phát hành
 
 Không giao cho người dùng một Setup chỉ chứa source hoặc yêu cầu compile tại máy cài. Setup v0.9 hợp lệ phải mang sẵn các DLL Release và phải qua `MVSELFTEST` trong AutoCAD 2023.
+
+CI trigger marker: AutoCAD 2023 Windows release candidate.
