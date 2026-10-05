@@ -1,6 +1,6 @@
 using System;
 using System.Windows.Forms;
-using Autodesk.AutoCAD.ApplicationServices;
+using AcApp = Autodesk.AutoCAD.ApplicationServices.Application;
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.EditorInput;
 using MiningVolume.Core.Geometry;
@@ -23,7 +23,7 @@ namespace MiningVolume2023.Services
     {
         public static string PickClosedBoundary()
         {
-            var doc = Application.DocumentManager.MdiActiveDocument;
+            var doc = AcApp.DocumentManager.MdiActiveDocument;
             if (doc == null) return null;
 
             using (new PalettePickScope())
@@ -54,7 +54,7 @@ namespace MiningVolume2023.Services
 
         public static PickDirectionResult PickDirection()
         {
-            var doc = Application.DocumentManager.MdiActiveDocument;
+            var doc = AcApp.DocumentManager.MdiActiveDocument;
             if (doc == null) return null;
 
             using (new PalettePickScope())
@@ -91,7 +91,7 @@ namespace MiningVolume2023.Services
 
         public static Vec2? PickPlanPoint(string prompt)
         {
-            var doc = Application.DocumentManager.MdiActiveDocument;
+            var doc = AcApp.DocumentManager.MdiActiveDocument;
             if (doc == null) return null;
 
             using (new PalettePickScope())
@@ -104,7 +104,7 @@ namespace MiningVolume2023.Services
 
         public static Autodesk.AutoCAD.Geometry.Point3d? PickInsertionPoint(string prompt)
         {
-            var doc = Application.DocumentManager.MdiActiveDocument;
+            var doc = AcApp.DocumentManager.MdiActiveDocument;
             if (doc == null) return null;
 
             using (new PalettePickScope())
