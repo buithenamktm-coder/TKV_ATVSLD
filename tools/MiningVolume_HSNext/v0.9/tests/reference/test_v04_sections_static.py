@@ -17,7 +17,7 @@ def test_section_page_no_placeholder_messages():
     s=read('src/MiningVolume.Plugin2023/UI/SectionPage.cs')
     assert 'Sẽ nối' not in s
     assert 'XEM TRƯỚC TUYẾN' in s
-    assert 'THÀNH LẬP MẶT CẮT' in s
+    assert 'XUẤT / VẼ MẶT CẮT' in s
     assert 'Thêm tuyến' in s and 'Dịch tuyến' in s and 'Xóa tuyến' in s
 
 
