@@ -1,6 +1,6 @@
-# MiningVolume HS-Next v0.9 — AutoCAD 2023 Pre-Release
+# MiningVolume HS-Next v0.10 — AutoCAD 2023 GUI-first Release Candidate
 
-Mốc v0.9 tập trung biến bộ mã v0.8 thành **Release cài như phần mềm bình thường**: binary add-in được build sẵn trên Windows CI, Setup chỉ cài bundle và tự kiểm tra trong AutoCAD 2023. Máy người dùng **không cần Visual Studio, MSBuild hoặc Build Tools**.
+Mốc v0.10 tập trung biến bộ mã v0.8 thành **Release cài như phần mềm bình thường**: binary add-in được build sẵn trên Windows CI, Setup chỉ cài bundle và tự kiểm tra trong AutoCAD 2023. Máy người dùng **không cần Visual Studio, MSBuild hoặc Build Tools**.
 
 ## Các thay đổi chính so với v0.8
 
@@ -15,7 +15,7 @@ Mốc v0.9 tập trung biến bộ mã v0.8 thành **Release cài như phần m�
    - Bundle khóa `SeriesMin=R24.2`, `SeriesMax=R24.2`.
    - Các DLL API của Autodesk chỉ dùng lúc compile, không đóng vào bộ cài.
 
-3. **Setup v0.9 không biên dịch trên máy người dùng**
+3. **Setup v0.10 không biên dịch trên máy người dùng**
    - Release pipeline build sẵn 4 DLL MiningVolume.
    - Setup chỉ copy `.bundle` vào `C:\ProgramData\Autodesk\ApplicationPlugins`.
    - Sau cài, Setup tự mở AutoCAD 2023 và chạy `MVSELFTEST`.
@@ -42,7 +42,7 @@ Dữ liệu nguồn hỗ trợ `POINT`, `LINE`, `LWPOLYLINE`, `POLYLINE`, `3D PO
 
 ### Chưa được ghi là PASS
 
-Môi trường làm việc hiện tại không có Windows + AutoCAD 2023, vì vậy **chưa có quyền ghi PASS cho runtime AutoCAD 2023** và chưa gọi v0.9 là Release 1.0. File Setup chính thức chỉ được tạo bởi Windows release pipeline sau khi DLL compile thật.
+Môi trường làm việc hiện tại không có Windows + AutoCAD 2023, vì vậy **chưa có quyền ghi PASS cho runtime AutoCAD 2023** và chưa gọi v0.10 là Release 1.0. File Setup chính thức chỉ được tạo bởi Windows release pipeline sau khi DLL compile thật.
 
 ## Build Release
 
@@ -54,11 +54,19 @@ Workflow chạy trên `windows-2022`:
 3. đóng 4 DLL MiningVolume vào bundle;
 4. chạy `release/verify_release.ps1`;
 5. tạo `installer/payload.zip`;
-6. build `MiningVolume_HSNext_AutoCAD2023_Setup_v0.9.exe`;
+6. build `MiningVolume_HSNext_AutoCAD2023_Setup_v0.10.exe`;
 7. tạo SHA-256 và upload artifact.
 
 ## Nguyên tắc phát hành
 
-Không giao cho người dùng một Setup chỉ chứa source hoặc yêu cầu compile tại máy cài. Setup v0.9 hợp lệ phải mang sẵn các DLL Release và phải qua `MVSELFTEST` trong AutoCAD 2023.
+Không giao cho người dùng một Setup chỉ chứa source hoặc yêu cầu compile tại máy cài. Setup v0.10 hợp lệ phải mang sẵn các DLL Release và phải qua `MVSELFTEST` trong AutoCAD 2023.
 
 CI trigger marker: AutoCAD 2023 Windows release candidate.
+
+
+## Kiến trúc GUI-first v0.10
+
+- Ribbon gọi trực tiếp C# và mở các trang Project / Dữ liệu / Mô hình / Mặt cắt / Khối lượng / Excel.
+- Luồng người dùng không gửi chuỗi lệnh xuống Command Line.
+- Package tự nạp khi AutoCAD 2023 khởi động; không đăng ký danh sách lệnh MV_* trong PackageContents.xml.
+- Các CommandMethod kỹ thuật chỉ giữ cho tự kiểm tra/chẩn đoán và tương thích nội bộ, không phải giao diện sử dụng chính.
