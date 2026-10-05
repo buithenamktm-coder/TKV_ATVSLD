@@ -81,8 +81,8 @@ namespace MiningVolume2023
         }
 
         /// <summary>
-        /// GUI-first: Ribbon calls C# directly. No SendStringToExecute and no
-        /// command-line indirection in normal user workflow.
+        /// GUI-first: Ribbon calls C# directly with no command-string indirection
+        /// in the normal user workflow.
         /// </summary>
         private sealed class DirectHandler : ICommand
         {
