@@ -50,7 +50,8 @@ def test_model_page_has_explicit_existing_design_and_pair_tin_build():
     assert "TẠO / CẬP NHẬT TIN THIẾT KẾ" in s
     assert "TẠO / CẬP NHẬT CẢ HAI TIN" in s
     assert "BuildBothTinAsync" in s
-    assert "Only write to CAD after BOTH core surfaces have built successfully" in s
+    assert "BuildPairCoreDetailed" in s
+    assert "DrawTinPair" in s
 
 def test_sections_and_volume_are_gated_by_verified_tin_pair():
     section = read("src/MiningVolume.Plugin2023/Services/SectionWorkflowService.cs")
