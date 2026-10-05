@@ -9,6 +9,16 @@ namespace MiningVolume2023.Services
     {
         public static List<string> GetLayers()
         {
+            return GetLayers(includeMiningVolumeOutputs: true);
+        }
+
+        public static List<string> GetSourceLayers()
+        {
+            return GetLayers(includeMiningVolumeOutputs: false);
+        }
+
+        private static List<string> GetLayers(bool includeMiningVolumeOutputs)
+        {
             var result = new List<string>();
             var doc = Application.DocumentManager.MdiActiveDocument;
             if (doc == null) return result;
@@ -19,12 +29,22 @@ namespace MiningVolume2023.Services
                 foreach (ObjectId id in lt)
                 {
                     var ltr = (LayerTableRecord)tr.GetObject(id, OpenMode.ForRead);
-                    if (!ltr.IsDependent) result.Add(ltr.Name);
+                    if (ltr.IsDependent) continue;
+                    if (!includeMiningVolumeOutputs && IsMiningVolumeOutputLayer(ltr.Name)) continue;
+                    result.Add(ltr.Name);
                 }
                 tr.Commit();
             }
             result.Sort(StringComparer.CurrentCultureIgnoreCase);
             return result;
+        }
+
+        private static bool IsMiningVolumeOutputLayer(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name)) return false;
+            return name.StartsWith("MV_TIN_", StringComparison.OrdinalIgnoreCase) ||
+                   name.StartsWith("MV_MC_", StringComparison.OrdinalIgnoreCase) ||
+                   name.StartsWith("MV_SELFTEST_", StringComparison.OrdinalIgnoreCase);
         }
     }
 }

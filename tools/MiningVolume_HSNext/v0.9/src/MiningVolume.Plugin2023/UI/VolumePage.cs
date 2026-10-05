@@ -65,6 +65,10 @@ namespace MiningVolume2023.UI
                 _calculate.Enabled = false;
                 UseWaitCursor = true;
                 _status.Text = "Đang tính diện tích theo tầng và khối lượng giữa các mặt cắt...";
+                // Hard gate: calculation is allowed only when BOTH TINs are current
+                // and their CAD layers are synchronized with the verified core surfaces.
+                SurfaceWorkflowService.EnsureBothTinsReady(synchronizeCadLayers: true);
+
                 double from = st.FromLevel, to = st.ToLevel, step = st.LevelStep;
                 var system = st.SectionSystem;
                 var profiles = st.SectionProfiles.ToArray();

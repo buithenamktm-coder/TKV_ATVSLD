@@ -1,4 +1,4 @@
-# QA REPORT — MiningVolume HS-Next v0.10.3
+# QA REPORT — MiningVolume HS-Next v0.10.4
 
 ## Kết luận hiện tại
 
@@ -8,12 +8,12 @@ Không gọi đây là Release 1.0 cho đến khi binary build trên Windows đ�
 
 ## Kết quả kiểm tra tự động
 
-- Reference/static tests: **88 PASS / 0 FAIL**.
+- Reference/static tests: **100 PASS / 0 FAIL**.
 - `go vet installer/main.go`: PASS với payload QA.
 - Cross-build installer shell `GOOS=windows GOARCH=amd64`: PASS.
 - Kết quả PE: `PE32+ GUI x86-64`.
 
-## Các hạng mục v0.10.3 đã khép kín ở mức mã nguồn
+## Các hạng mục v0.10.4 đã khép kín ở mức mã nguồn
 
 ### TIN
 - Bỏ `NetTopologySuite` khỏi source và csproj.
@@ -66,7 +66,7 @@ Không gọi đây là Release 1.0 cho đến khi binary build trên Windows đ�
 
 Các mục này phải do Windows release runner + AutoCAD 2023 runtime gate xác nhận trước khi phát hành chính thức.
 
-## Regression v0.10.3 — UI initialization
+## Regression v0.10.4 — UI initialization
 
 - Đã tái hiện lỗi thực tế: `Value '1000' is not valid for 'Value'` khi `NumericUpDown.Value` được gán trước `Maximum`.
 - Đã sửa helper `SectionPage.Num`: range trước, value sau.
@@ -75,9 +75,26 @@ Các mục này phải do Windows release runner + AutoCAD 2023 runtime gate xá
 - Windows CI cuối: 88 PASS, build thành công, 0 compile errors, release bundle policy PASS.
 
 
-## Regression v0.10.3 — Section page layout
+## Regression v0.10.4 — Section page layout
 
 - Loại bỏ cơ chế xếp chồng nhiều vùng `Dock=Top + BringToFront` ở trang Mặt cắt.
 - Nút chính đổi thành `XUẤT / VẼ MẶT CẮT` và luôn nằm trong hàng thao tác chính.
 - Kiểm tra đủ các hàng Khoảng cách / Mức tầng / Từ mức / Đến mức / Tỷ lệ ngang / Tỷ lệ đứng.
 - Runtime self-test kiểm tra nút vẽ mặt cắt hiển thị trong palette tối thiểu.
+
+
+## TIN integrity gate — v0.10.4
+
+- Hai TIN là điều kiện bắt buộc trước mặt cắt/khối lượng.
+- TIN được gắn revision của SurfaceModel; sửa dữ liệu nguồn làm TIN invalid ngay.
+- CAD output được kiểm chứng: số 3DFACE trên layer phải bằng số tam giác lõi.
+- Có thao tác tạo riêng từng TIN và tạo đồng thời cặp TIN.
+- Pair build chỉ ghi CAD sau khi cả hai core TIN build thành công; nếu ghi một trong hai thất bại thì xóa cả cặp để không để lại đầu vào nửa vời.
+- Runtime self-test có smoke test layer TIN thật trên AutoCAD host.
+
+
+### Windows CI v0.10.4
+- 100 PASS / 0 FAIL.
+- Build succeeded, 0 compile errors.
+- Release bundle policy PASS.
+- CAD-host TIN layer smoke test được thực thi bởi `MVSELFTEST` sau khi cài trên AutoCAD 2023 thật; CI không giả lập kết quả runtime này.

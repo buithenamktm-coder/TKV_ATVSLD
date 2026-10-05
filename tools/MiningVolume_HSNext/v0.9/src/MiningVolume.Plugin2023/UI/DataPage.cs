@@ -67,7 +67,7 @@ namespace MiningVolume2023.UI
         {
             try
             {
-                var layers = LayerService.GetLayers();
+                var layers = LayerService.GetSourceLayers();
                 Fill(_existingLayer, layers, ProjectState.Current.Existing.Layer);
                 Fill(_designLayer, layers, ProjectState.Current.Design.Layer);
                 _status.Text = layers.Count.ToString("n0") + " layer trong bản vẽ.";
@@ -122,7 +122,10 @@ namespace MiningVolume2023.UI
                 _status.Refresh();
                 var r = SurfaceWorkflowService.LoadLayer(role, cb.Text, allowed);
                 ProjectState.Current.ActiveRole = role;
-                _status.Text = $"Đã nạp {ProjectState.Current.Get(role).Name}: {r.Summary}. Chưa dựng TIN.";
+                _status.Text =
+                    $"Đã nạp {ProjectState.Current.Get(role).Name}: {r.Summary}. " +
+                    $"Đã chuẩn bị layer TIN: {r.OutputTinLayer}. " +
+                    "Sang mục Mô hình để TẠO / CẬP NHẬT TIN.";
             }
             catch (Exception ex)
             {

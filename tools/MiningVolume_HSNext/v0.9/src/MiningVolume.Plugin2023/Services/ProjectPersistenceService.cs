@@ -162,7 +162,12 @@ namespace MiningVolume2023.Services
 
         private static ModelSnapshot CaptureModel(ModelSession session)
         {
-            var s = new ModelSnapshot { Layer = session.Layer, TinVisible = session.TinVisible, HadTin = session.Tin != null };
+            var s = new ModelSnapshot
+            {
+                Layer = session.Layer,
+                TinVisible = session.TinVisible,
+                HadTin = session.IsTinCurrent
+            };
             foreach (var t in session.AllowedTypes) s.AllowedTypes.Add((int)t);
             if (session.Source == null) return s;
             foreach (var e in session.Source.Entities)

@@ -23,6 +23,7 @@ namespace MiningVolume2023.UI
         private readonly Label _info;
         private readonly ProgressBar _progress;
         private readonly Button _build;
+        private readonly Button _buildBoth;
         private readonly Button _toggleTin;
         private readonly List<RowRef> _rows = new List<RowRef>();
         private bool _busy;
@@ -38,7 +39,11 @@ namespace MiningVolume2023.UI
             _model = new ComboBox { Width = 130, DropDownStyle = ComboBoxStyle.DropDownList };
             _model.Items.AddRange(new object[] { "Hiện trạng", "Thiết kế" });
             _model.SelectedIndex = ProjectState.Current.ActiveRole == ModelRole.Existing ? 0 : 1;
-            _model.SelectedIndexChanged += (s, e) => { ProjectState.Current.ActiveRole = CurrentRole; RebuildRows(); };
+            _model.SelectedIndexChanged += (s, e) =>
+            {
+                ProjectState.Current.ActiveRole = CurrentRole;
+                RebuildRows();
+            };
             top.Controls.Add(_model);
             top.Controls.Add(Button("Loại điểm", (s, e) => DisableSelectedVertices()));
             top.Controls.Add(Button("Loại đối tượng", (s, e) => DisableSelectedEntities()));
@@ -49,19 +54,36 @@ namespace MiningVolume2023.UI
             Controls.Add(top);
             top.BringToFront();
 
-            var second = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 38, WrapContents = false, Padding = new Padding(0, 2, 0, 2) };
-            _build = Button("LƯU / CẬP NHẬT MÔ HÌNH", async (s, e) => await BuildTinAsync());
-            _build.Width = 210;
+            var second = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Top,
+                Height = 72,
+                WrapContents = true,
+                Padding = new Padding(0, 2, 0, 2),
+                AutoScroll = false
+            };
+            _build = Button("TẠO / CẬP NHẬT TIN", async (s, e) => await BuildTinAsync());
+            _build.Width = 220;
+            _buildBoth = Button("TẠO / CẬP NHẬT CẢ HAI TIN", async (s, e) => await BuildBothTinAsync());
+            _buildBoth.Width = 205;
             _toggleTin = Button("Ẩn TIN", (s, e) => ToggleTin());
             _toggleTin.Width = 90;
             second.Controls.Add(_build);
+            second.Controls.Add(_buildBoth);
             second.Controls.Add(_toggleTin);
             _progress = new ProgressBar { Width = 150, Height = 24, Style = ProgressBarStyle.Marquee, Visible = false, MarqueeAnimationSpeed = 25 };
             second.Controls.Add(_progress);
             Controls.Add(second);
             second.BringToFront();
 
-            _info = new Label { Dock = DockStyle.Bottom, Height = 34, Text = "Chưa có dữ liệu.", ForeColor = Color.DimGray };
+            _info = new Label
+            {
+                Dock = DockStyle.Bottom,
+                Height = 58,
+                Text = "Chưa có dữ liệu.",
+                ForeColor = Color.DimGray,
+                AutoEllipsis = true
+            };
             Controls.Add(_info);
 
             _grid = new DataGridView
@@ -124,10 +146,22 @@ namespace MiningVolume2023.UI
         private void UpdateInfo()
         {
             var s = CurrentSession;
-            string tin = s.Tin == null ? "TIN: chưa tạo" : $"TIN: {s.Tin.Triangles.Count:n0} tam giác";
-            _info.Text = $"{s.Name} • Layer: {s.Layer ?? "-"} • {s.EntityCount:n0} đối tượng • {s.ActiveVertexCount:n0}/{s.VertexCount:n0} đỉnh đang dùng • {tin}";
+            _build.Text = CurrentRole == ModelRole.Existing
+                ? "TẠO / CẬP NHẬT TIN HIỆN TRẠNG"
+                : "TẠO / CẬP NHẬT TIN THIẾT KẾ";
+
+            _info.Text =
+                $"{s.Name} • nguồn: {s.Layer ?? "-"} • {s.EntityCount:n0} đối tượng • {s.ActiveVertexCount:n0}/{s.VertexCount:n0} đỉnh đang dùng" +
+                Environment.NewLine +
+                SurfaceWorkflowService.TinStatusText(ModelRole.Existing) + "   |   " +
+                SurfaceWorkflowService.TinStatusText(ModelRole.Design);
+
             _toggleTin.Text = s.TinVisible ? "Ẩn TIN" : "Hiện TIN";
             _toggleTin.Enabled = s.Tin != null && !_busy;
+            _build.Enabled = !_busy && s.Source != null && s.Source.Entities.Count > 0;
+            _buildBoth.Enabled = !_busy &&
+                ProjectState.Current.Existing.Source != null && ProjectState.Current.Existing.Source.Entities.Count > 0 &&
+                ProjectState.Current.Design.Source != null && ProjectState.Current.Design.Source.Entities.Count > 0;
         }
 
         private void GridCellValueNeeded(object sender, DataGridViewCellValueEventArgs e)
@@ -171,14 +205,18 @@ namespace MiningVolume2023.UI
 
         private void DisableSelectedVertices()
         {
-            foreach (var r in SelectedRows()) CurrentSession.Source.SetVertexEnabled(r.Entity.Id, r.Vertex.Index, false);
-            ProjectState.Current.NotifyChanged();
+            var rows = SelectedRows().ToList();
+            if (rows.Count == 0) return;
+            foreach (var r in rows) CurrentSession.Source.SetVertexEnabled(r.Entity.Id, r.Vertex.Index, false);
+            SurfaceWorkflowService.InvalidateTin(CurrentRole, clearCadLayer: true);
         }
 
         private void DisableSelectedEntities()
         {
-            foreach (var id in SelectedRows().Select(r => r.Entity.Id).Distinct()) CurrentSession.Source.RemoveEntityFromModel(id);
-            ProjectState.Current.NotifyChanged();
+            var ids = SelectedRows().Select(r => r.Entity.Id).Distinct().ToList();
+            if (ids.Count == 0) return;
+            foreach (var id in ids) CurrentSession.Source.RemoveEntityFromModel(id);
+            SurfaceWorkflowService.InvalidateTin(CurrentRole, clearCadLayer: true);
         }
 
         private void RestoreSelected()
@@ -189,7 +227,7 @@ namespace MiningVolume2023.UI
                 foreach (var v in entity.Vertices) v.Reset();
             }
             CurrentSession.Source.Touch();
-            ProjectState.Current.NotifyChanged();
+            SurfaceWorkflowService.InvalidateTin(CurrentRole, clearCadLayer: true);
         }
 
         private void RestoreAll()
@@ -201,7 +239,7 @@ namespace MiningVolume2023.UI
                 foreach (var v in entity.Vertices) v.Reset();
             }
             CurrentSession.Source.Touch();
-            ProjectState.Current.NotifyChanged();
+            SurfaceWorkflowService.InvalidateTin(CurrentRole, clearCadLayer: true);
         }
 
         private void EditZ()
@@ -212,7 +250,7 @@ namespace MiningVolume2023.UI
             {
                 if (form.ShowDialog(this) != DialogResult.OK) return;
                 CurrentSession.Source.OverrideVertexZ(row.Entity.Id, row.Vertex.Index, form.Value);
-                ProjectState.Current.NotifyChanged();
+                SurfaceWorkflowService.InvalidateTin(CurrentRole, clearCadLayer: true);
             }
         }
 
@@ -228,30 +266,99 @@ namespace MiningVolume2023.UI
             var role = CurrentRole;
             try
             {
-                SetBusy(true, "Đang kiểm tra dữ liệu và dựng TIN...");
-                var tin = await Task.Run(() => SurfaceWorkflowService.BuildCore(role));
-                SurfaceWorkflowService.DrawTin(role, tin);
-                _info.Text = $"Đã cập nhật {ProjectState.Current.Get(role).Name}: {tin.Triangles.Count:n0} tam giác TIN.";
+                SetBusy(true, $"Đang kiểm tra dữ liệu và dựng TIN {ProjectState.Current.Get(role).Name}...");
+                var build = await Task.Run(() => SurfaceWorkflowService.BuildCoreDetailed(role));
+                SurfaceWorkflowService.DrawTin(role, build);
+                MessageBox.Show(
+                    $"TIN {ProjectState.Current.Get(role).Name} đã tạo thành công.\r\n\r\n" +
+                    $"Layer TIN: {ProjectState.Current.Get(role).TinLayer}\r\n" +
+                    build.Summary,
+                    "MiningVolume - TIN",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
             }
             catch (SurfaceValidationException ex)
             {
-                ShowValidation(ex.Issues);
+                ShowValidation(ex.ModelName, ex.Issues);
             }
             catch (Exception ex)
             {
-                MessageBox.Show(ex.Message, "Không cập nhật được mô hình", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(ex.Message, "Không tạo được TIN", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally { SetBusy(false, null); }
         }
 
-        private void ShowValidation(IReadOnlyList<ValidationIssue> issues)
+        private async Task BuildBothTinAsync()
+        {
+            if (_busy) return;
+            var st = ProjectState.Current;
+            if (st.Existing.Source == null || st.Existing.Source.Entities.Count == 0 ||
+                st.Design.Source == null || st.Design.Source.Entities.Count == 0)
+            {
+                MessageBox.Show(
+                    "Phải nạp đủ dữ liệu Hiện trạng và Thiết kế trước khi tạo cặp TIN.",
+                    "MiningVolume - TIN",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+                return;
+            }
+
+            try
+            {
+                SetBusy(true, "Đang dựng đồng thời cặp TIN hiện trạng / thiết kế...");
+                var builds = await Task.Run(() => new[]
+                {
+                    SurfaceWorkflowService.BuildCoreDetailed(ModelRole.Existing),
+                    SurfaceWorkflowService.BuildCoreDetailed(ModelRole.Design)
+                });
+
+                // Only write to CAD after BOTH core surfaces have built successfully.
+                try
+                {
+                    SurfaceWorkflowService.DrawTin(ModelRole.Existing, builds[0]);
+                    SurfaceWorkflowService.DrawTin(ModelRole.Design, builds[1]);
+                }
+                catch
+                {
+                    // Never leave a half-updated pair of TINs as calculation input.
+                    SurfaceWorkflowService.InvalidateTin(ModelRole.Existing, clearCadLayer: true, notify: false);
+                    SurfaceWorkflowService.InvalidateTin(ModelRole.Design, clearCadLayer: true, notify: false);
+                    ProjectState.Current.NotifyChanged();
+                    throw;
+                }
+
+                SurfaceWorkflowService.EnsureBothTinsReady(synchronizeCadLayers: true);
+                MessageBox.Show(
+                    "ĐÃ TẠO ĐỦ 2 TIN DÙNG CHO TÍNH KHỐI LƯỢNG\r\n\r\n" +
+                    $"Hiện trạng → {st.Existing.TinLayer}: {builds[0].Summary}\r\n" +
+                    $"Thiết kế → {st.Design.TinLayer}: {builds[1].Summary}",
+                    "MiningVolume - Cặp TIN hợp lệ",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+            }
+            catch (SurfaceValidationException ex)
+            {
+                ShowValidation(ex.ModelName, ex.Issues);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.Message, "Không tạo được cặp TIN", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally { SetBusy(false, null); }
+        }
+
+        private void ShowValidation(string modelName, IReadOnlyList<ValidationIssue> issues)
         {
             int errors = issues.Count(x => x.Severity == ValidationSeverity.Error);
             int warnings = issues.Count(x => x.Severity == ValidationSeverity.Warning);
             var lines = issues.Take(30).Select(x => $"[{x.Severity}] {x.Code}: {x.Message}");
             string suffix = issues.Count > 30 ? $"\r\n... còn {issues.Count - 30:n0} cảnh báo/lỗi khác." : string.Empty;
-            MessageBox.Show($"Không dựng TIN. Có {errors:n0} lỗi, {warnings:n0} cảnh báo.\r\n\r\n" + string.Join("\r\n", lines) + suffix,
-                "Kiểm tra dữ liệu mô hình", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            MessageBox.Show(
+                $"Không dựng TIN {modelName}. Có {errors:n0} lỗi, {warnings:n0} cảnh báo.\r\n\r\n" +
+                string.Join("\r\n", lines) + suffix,
+                $"Kiểm tra dữ liệu {modelName}",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
         }
 
         private void ToggleTin()
@@ -265,7 +372,10 @@ namespace MiningVolume2023.UI
         private void SetBusy(bool busy, string message)
         {
             _busy = busy;
-            _build.Enabled = !busy;
+            _build.Enabled = !busy && CurrentSession.Source != null && CurrentSession.Source.Entities.Count > 0;
+            _buildBoth.Enabled = !busy &&
+                ProjectState.Current.Existing.Source != null && ProjectState.Current.Existing.Source.Entities.Count > 0 &&
+                ProjectState.Current.Design.Source != null && ProjectState.Current.Design.Source.Entities.Count > 0;
             _toggleTin.Enabled = !busy && CurrentSession.Tin != null;
             _model.Enabled = !busy;
             _grid.Enabled = !busy;
