@@ -101,8 +101,9 @@ def test_project_autoload_on_palette_open_once_per_drawing():
 def test_ribbon_has_project_panel():
     s = read('src/MiningVolume.Plugin2023/RibbonBuilder.cs')
     assert 'AddPanel(tab, "Dự án"' in s
-    assert 'MV_PROJECT ' in s
-    assert 'MV_PROJECT_SAVE ' in s
+    assert 'EntryPoint.Open(AppPage.Project)' in s
+    assert 'EntryPoint.SaveProjectFromRibbon' in s
+    assert 'SendStringToExecute' not in s
 
 
 def test_project_scale_and_report_info_are_connected_to_state():
