@@ -1,4 +1,4 @@
-# QA REPORT — MiningVolume HS-Next v0.10.2
+# QA REPORT — MiningVolume HS-Next v0.10.3
 
 ## Kết luận hiện tại
 
@@ -13,7 +13,7 @@ Không gọi đây là Release 1.0 cho đến khi binary build trên Windows đ�
 - Cross-build installer shell `GOOS=windows GOARCH=amd64`: PASS.
 - Kết quả PE: `PE32+ GUI x86-64`.
 
-## Các hạng mục v0.10.2 đã khép kín ở mức mã nguồn
+## Các hạng mục v0.10.3 đã khép kín ở mức mã nguồn
 
 ### TIN
 - Bỏ `NetTopologySuite` khỏi source và csproj.
@@ -66,10 +66,18 @@ Không gọi đây là Release 1.0 cho đến khi binary build trên Windows đ�
 
 Các mục này phải do Windows release runner + AutoCAD 2023 runtime gate xác nhận trước khi phát hành chính thức.
 
-## Regression v0.10.2 — UI initialization
+## Regression v0.10.3 — UI initialization
 
 - Đã tái hiện lỗi thực tế: `Value '1000' is not valid for 'Value'` khi `NumericUpDown.Value` được gán trước `Maximum`.
 - Đã sửa helper `SectionPage.Num`: range trước, value sau.
 - Đã thêm static scan toàn plugin để chặn Value-first NumericUpDown.
 - Runtime self-test giờ khởi tạo `MainPaletteControl` thật và kiểm tra startup exception.
 - Windows CI cuối: 88 PASS, build thành công, 0 compile errors, release bundle policy PASS.
+
+
+## Regression v0.10.3 — Section page layout
+
+- Loại bỏ cơ chế xếp chồng nhiều vùng `Dock=Top + BringToFront` ở trang Mặt cắt.
+- Nút chính đổi thành `XUẤT / VẼ MẶT CẮT` và luôn nằm trong hàng thao tác chính.
+- Kiểm tra đủ các hàng Khoảng cách / Mức tầng / Từ mức / Đến mức / Tỷ lệ ngang / Tỷ lệ đứng.
+- Runtime self-test kiểm tra nút vẽ mặt cắt hiển thị trong palette tối thiểu.
