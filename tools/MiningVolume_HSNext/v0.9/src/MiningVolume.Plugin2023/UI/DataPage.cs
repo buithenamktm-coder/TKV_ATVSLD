@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 using MiningVolume.Core.Model;
 using MiningVolume2023.Services;
@@ -13,6 +14,7 @@ namespace MiningVolume2023.UI
         private readonly ComboBox _designLayer;
         private readonly CheckedListBox _types;
         private readonly Label _status;
+        private readonly Button _buildPair;
 
         public DataPage()
         {
@@ -40,13 +42,26 @@ namespace MiningVolume2023.UI
             body.Controls.Add(refresh, 1, 4);
             body.SetColumnSpan(refresh, 2);
 
-            _status = new Label { Text = "Chưa nạp dữ liệu", Dock = DockStyle.Fill, AutoSize = true, ForeColor = Color.DimGray };
+            _status = new Label
+            {
+                Text = "Chưa nạp dữ liệu",
+                Dock = DockStyle.Fill,
+                AutoSize = true,
+                ForeColor = Color.DimGray
+            };
             body.Controls.Add(_status, 1, 5);
             body.SetColumnSpan(_status, 2);
+
+            _buildPair = Btn("TẠO CẶP TIN HIỆN TRẠNG + THIẾT KẾ", async (s, e) => await BuildPairTinAsync());
+            _buildPair.Font = new Font("Arial", 9F, FontStyle.Bold);
+            _buildPair.Enabled = false;
+            body.Controls.Add(_buildPair, 1, 6);
+            body.SetColumnSpan(_buildPair, 2);
 
             Controls.Add(body);
             body.BringToFront();
             RefreshLayers();
+            RefreshPairButton();
         }
 
         private static Button Btn(string text, EventHandler h)
@@ -108,6 +123,75 @@ namespace MiningVolume2023.UI
             return set;
         }
 
+        private void RefreshPairButton()
+        {
+            var st = ProjectState.Current;
+            _buildPair.Enabled =
+                st.Existing.Source != null && st.Existing.Source.Entities.Count > 0 &&
+                st.Design.Source != null && st.Design.Source.Entities.Count > 0;
+        }
+
+        private async Task BuildPairTinAsync()
+        {
+            var st = ProjectState.Current;
+            if (st.Existing.Source == null || st.Existing.Source.Entities.Count == 0 ||
+                st.Design.Source == null || st.Design.Source.Entities.Count == 0)
+            {
+                MessageBox.Show(
+                    "Phải nạp đủ dữ liệu Hiện trạng và Thiết kế trước khi tạo cặp TIN.",
+                    "MiningVolume - TIN",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+                return;
+            }
+
+            try
+            {
+                _buildPair.Enabled = false;
+                UseWaitCursor = true;
+                _status.Text = "Đang kiểm tra và dựng cặp TIN hiện trạng / thiết kế...";
+                _status.Refresh();
+
+                var builds = await Task.Run(() => SurfaceWorkflowService.BuildPairCoreDetailed());
+                SurfaceWorkflowService.DrawTinPair(builds);
+
+                _status.Text =
+                    $"Cặp TIN hợp lệ: {st.Existing.TinLayer} = {builds[0].TriangleCount:n0} tam giác; " +
+                    $"{st.Design.TinLayer} = {builds[1].TriangleCount:n0} tam giác.";
+
+                MessageBox.Show(
+                    "ĐÃ TẠO ĐỦ 2 TIN DÙNG CHO TÍNH KHỐI LƯỢNG\r\n\r\n" +
+                    $"Hiện trạng → {st.Existing.TinLayer}: {builds[0].Summary}\r\n" +
+                    $"Thiết kế → {st.Design.TinLayer}: {builds[1].Summary}",
+                    "MiningVolume - Cặp TIN hợp lệ",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+            }
+            catch (SurfaceValidationException ex)
+            {
+                var lines = new List<string>();
+                foreach (var issue in ex.Issues)
+                    lines.Add($"[{issue.Severity}] {issue.Code}: {issue.Message}");
+                MessageBox.Show(
+                    $"Không dựng được TIN {ex.ModelName}.\r\n\r\n" +
+                    string.Join("\r\n", lines.GetRange(0, Math.Min(20, lines.Count))),
+                    "Kiểm tra dữ liệu TIN",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+                _status.Text = $"TIN {ex.ModelName} chưa hợp lệ.";
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.Message, "Không tạo được cặp TIN", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                _status.Text = "Chưa tạo được cặp TIN.";
+            }
+            finally
+            {
+                UseWaitCursor = false;
+                RefreshPairButton();
+            }
+        }
+
         private void LoadModel(ModelRole role)
         {
             var cb = role == ModelRole.Existing ? _existingLayer : _designLayer;
@@ -124,8 +208,8 @@ namespace MiningVolume2023.UI
                 ProjectState.Current.ActiveRole = role;
                 _status.Text =
                     $"Đã nạp {ProjectState.Current.Get(role).Name}: {r.Summary}. " +
-                    $"Đã chuẩn bị layer TIN: {r.OutputTinLayer}. " +
-                    "Sang mục Mô hình để TẠO / CẬP NHẬT TIN.";
+                    $"Đã chuẩn bị layer TIN: {r.OutputTinLayer}.";
+                RefreshPairButton();
             }
             catch (Exception ex)
             {
