@@ -8,7 +8,7 @@ Không gọi đây là Release 1.0 cho đến khi binary build trên Windows đ�
 
 ## Kết quả kiểm tra tự động
 
-- Reference/static tests: **88 PASS / 0 FAIL**.
+- Reference/static tests: **100 PASS / 0 FAIL**.
 - `go vet installer/main.go`: PASS với payload QA.
 - Cross-build installer shell `GOOS=windows GOARCH=amd64`: PASS.
 - Kết quả PE: `PE32+ GUI x86-64`.
@@ -91,3 +91,10 @@ Các mục này phải do Windows release runner + AutoCAD 2023 runtime gate xá
 - Có thao tác tạo riêng từng TIN và tạo đồng thời cặp TIN.
 - Pair build chỉ ghi CAD sau khi cả hai core TIN build thành công; nếu ghi một trong hai thất bại thì xóa cả cặp để không để lại đầu vào nửa vời.
 - Runtime self-test có smoke test layer TIN thật trên AutoCAD host.
+
+
+### Windows CI v0.10.4
+- 100 PASS / 0 FAIL.
+- Build succeeded, 0 compile errors.
+- Release bundle policy PASS.
+- CAD-host TIN layer smoke test được thực thi bởi `MVSELFTEST` sau khi cài trên AutoCAD 2023 thật; CI không giả lập kết quả runtime này.
