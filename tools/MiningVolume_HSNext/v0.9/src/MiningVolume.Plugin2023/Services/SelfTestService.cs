@@ -80,13 +80,15 @@ namespace MiningVolume2023.Services
                 {
                     Check(r, ui.Controls.Count > 0, "Khởi tạo đầy đủ giao diện MiningVolume");
                 }
+                Check(r, string.IsNullOrWhiteSpace(EntryPoint.StartupUiError),
+                    "Giao diện startup không phát sinh exception");
             }
             catch (Exception ex)
             {
                 r.Errors.Add(ex.ToString());
             }
 
-            r.Passed = r.Errors.Count == 0 && r.Checks.Count >= 10;
+            r.Passed = r.Errors.Count == 0 && r.Checks.Count >= 11;
             r.OutputFile = ResolveOutputPath();
             WriteResultFile(r);
             return r;
