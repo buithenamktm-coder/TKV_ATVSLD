@@ -4,11 +4,11 @@ on:
   workflow_dispatch:
   pull_request:
     paths:
-      - 'tools/MiningVolume_HSNext/v0.9/**'
+      - 'tools/MiningVolume_HSNext/v0.10/**'
       - '.github/workflows/build-miningvolume-autocad2023.yml'
   push:
     paths:
-      - 'tools/MiningVolume_HSNext/v0.9/**'
+      - 'tools/MiningVolume_HSNext/v0.10/**'
       - '.github/workflows/build-miningvolume-autocad2023.yml'
 
 jobs:
@@ -18,7 +18,7 @@ jobs:
       contents: read
 
     env:
-      MV_ROOT: tools/MiningVolume_HSNext/v0.9
+      MV_ROOT: tools/MiningVolume_HSNext/v0.10
 
     steps:
       - uses: actions/checkout@v4
@@ -90,24 +90,24 @@ jobs:
           $env:GOOS='windows'
           $env:GOARCH='amd64'
           $env:CGO_ENABLED='0'
-          go build -trimpath -ldflags '-s -w -H=windowsgui' -o ../dist/MiningVolume_HSNext_AutoCAD2023_Setup_v0.9.exe main.go
+          go build -trimpath -ldflags '-s -w -H=windowsgui' -o ../dist/MiningVolume_HSNext_AutoCAD2023_Setup_v0.10.exe main.go
 
       - name: Create checksums and source archive
         shell: pwsh
         run: |
           Set-Location $env:MV_ROOT
-          $setup = 'dist/MiningVolume_HSNext_AutoCAD2023_Setup_v0.9.exe'
+          $setup = 'dist/MiningVolume_HSNext_AutoCAD2023_Setup_v0.10.exe'
           $hash = (Get-FileHash $setup -Algorithm SHA256).Hash.ToLowerInvariant()
           "SHA256  $hash  $(Split-Path $setup -Leaf)" | Set-Content -Encoding ascii dist/SHA256SUMS.txt
-          Compress-Archive -Path src,bundle,release,README.md,QA_REPORT.md,MiningVolume.HSNext.sln -DestinationPath dist/MiningVolume_HSNext_Source_v0.9.zip -CompressionLevel Optimal
+          Compress-Archive -Path src,bundle,release,README.md,QA_REPORT.md,MiningVolume.HSNext.sln -DestinationPath dist/MiningVolume_HSNext_Source_v0.10.zip -CompressionLevel Optimal
 
       - name: Upload release candidate
         uses: actions/upload-artifact@v4
         with:
-          name: MiningVolume-HSNext-AutoCAD2023-v0.9
+          name: MiningVolume-HSNext-AutoCAD2023-v0.10
           if-no-files-found: error
           path: |
-            tools/MiningVolume_HSNext/v0.9/dist/MiningVolume_HSNext_AutoCAD2023_Setup_v0.9.exe
-            tools/MiningVolume_HSNext/v0.9/dist/MiningVolume_HSNext_Source_v0.9.zip
-            tools/MiningVolume_HSNext/v0.9/dist/SHA256SUMS.txt
-            tools/MiningVolume_HSNext/v0.9/bundle/MiningVolume2023.bundle/**
+            tools/MiningVolume_HSNext/v0.10/dist/MiningVolume_HSNext_AutoCAD2023_Setup_v0.10.exe
+            tools/MiningVolume_HSNext/v0.10/dist/MiningVolume_HSNext_Source_v0.10.zip
+            tools/MiningVolume_HSNext/v0.10/dist/SHA256SUMS.txt
+            tools/MiningVolume_HSNext/v0.10/bundle/MiningVolume2023.bundle/**
