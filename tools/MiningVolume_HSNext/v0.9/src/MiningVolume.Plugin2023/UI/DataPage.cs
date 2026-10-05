@@ -67,7 +67,7 @@ namespace MiningVolume2023.UI
         {
             try
             {
-                var layers = LayerService.GetLayers();
+                var layers = LayerService.GetSourceLayers();
                 Fill(_existingLayer, layers, ProjectState.Current.Existing.Layer);
                 Fill(_designLayer, layers, ProjectState.Current.Design.Layer);
                 _status.Text = layers.Count.ToString("n0") + " layer trong bản vẽ.";
