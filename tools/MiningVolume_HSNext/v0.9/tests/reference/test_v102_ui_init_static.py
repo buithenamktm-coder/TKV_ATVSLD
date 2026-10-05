@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -31,3 +32,14 @@ def test_installer_selftest_does_not_block_on_startup_dialog():
     s = read("src/MiningVolume.Plugin2023/EntryPoint.cs")
     assert 'Environment.GetEnvironmentVariable("MININGVOLUME_SELFTEST_FILE")' in s
     assert "StartupUiError = ex.ToString();" in s
+
+
+def test_no_value_first_numeric_updown_initializer_anywhere():
+    plugin = ROOT / "src" / "MiningVolume.Plugin2023"
+    bad = []
+    pattern = re.compile(r"new\s+NumericUpDown\s*\{\s*Value\s*=")
+    for p in plugin.rglob("*.cs"):
+        text = p.read_text(encoding="utf-8")
+        if pattern.search(text):
+            bad.append(str(p.relative_to(ROOT)))
+    assert not bad, bad
