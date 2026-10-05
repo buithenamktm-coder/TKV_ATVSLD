@@ -90,7 +90,19 @@ namespace MiningVolume2023.UI
             base.Dispose(disposing);
         }
 
-        private static NumericUpDown Num(decimal v, decimal min, decimal max) => new NumericUpDown { Value = v, Minimum = min, Maximum = max, DecimalPlaces = 2, Dock = DockStyle.Fill, ThousandsSeparator = true };
+        private static NumericUpDown Num(decimal v, decimal min, decimal max)
+        {
+            var n = new NumericUpDown
+            {
+                Minimum = min,
+                Maximum = max,
+                DecimalPlaces = 2,
+                Dock = DockStyle.Fill,
+                ThousandsSeparator = true
+            };
+            n.Value = Math.Max(min, Math.Min(max, v));
+            return n;
+        }
         private static Button Button(string t, EventHandler h) { var b = new Button { Text = t, AutoSize = true, Height = 28, Margin = new Padding(2) }; b.Click += h; return b; }
         private static void Add(TableLayoutPanel p, int r, string label, Control c, Control b) { p.Controls.Add(new Label { Text = label, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 0, r); p.Controls.Add(c, 1, r); p.Controls.Add(b, 2, r); }
 

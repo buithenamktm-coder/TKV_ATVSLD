@@ -17,11 +17,12 @@ namespace MiningVolume2023
         internal static MainPaletteControl MainControl;
         private static bool _idleHooked;
         private static bool _startupUiOpened;
+        internal static string StartupUiError { get; private set; }
         private static string _loadedDrawingFingerprint;
 
         public void Initialize()
         {
-            StartupLog("Initialize: MiningVolume v0.10.1");
+            StartupLog("Initialize: MiningVolume v0.10.2");
             TryRibbon();
             HookIdle();
         }
@@ -40,20 +41,28 @@ namespace MiningVolume2023
                 try
                 {
                     Open(AppPage.Project);
+                    StartupUiError = null;
                     _startupUiOpened = true;
                     StartupLog("Startup palette opened successfully. Ribbon=" +
                         (Autodesk.Windows.ComponentManager.Ribbon == null ? "OFF/Unavailable" : "Available"));
                 }
                 catch (System.Exception ex)
                 {
+                    StartupUiError = ex.ToString();
                     StartupLog("Startup palette FAILED: " + ex);
                     _startupUiOpened = true;
-                    try
+
+                    // During installer self-test, do not block AutoCAD with a modal dialog.
+                    // MVSELFTEST will report this startup error as FAIL and the installer rolls back.
+                    if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("MININGVOLUME_SELFTEST_FILE")))
                     {
-                        AcApp.ShowAlertDialog("MiningVolume đã được nạp nhưng không mở được giao diện.\n\n" +
-                            ex.Message + "\n\nXem log tại: " + StartupLogPath());
+                        try
+                        {
+                            AcApp.ShowAlertDialog("MiningVolume đã được nạp nhưng không mở được giao diện.\n\n" +
+                                ex.Message + "\n\nXem log tại: " + StartupLogPath());
+                        }
+                        catch { }
                     }
-                    catch { }
                 }
             }
 
@@ -182,15 +191,15 @@ namespace MiningVolume2023
             var r = Services.SelfTestService.Run();
             var ed = AcApp.DocumentManager.MdiActiveDocument?.Editor;
             if (r.Passed)
-                ed?.WriteMessage("\nMiningVolume v0.10.1 SELFTEST: PASS (" + r.Checks.Count + " checks). Log: " + r.OutputFile);
+                ed?.WriteMessage("\nMiningVolume v0.10.2 SELFTEST: PASS (" + r.Checks.Count + " checks). Log: " + r.OutputFile);
             else
-                ed?.WriteMessage("\nMiningVolume v0.10.1 SELFTEST: FAIL (" + r.Errors.Count + " errors). Log: " + r.OutputFile);
+                ed?.WriteMessage("\nMiningVolume v0.10.2 SELFTEST: FAIL (" + r.Errors.Count + " errors). Log: " + r.OutputFile);
         }
 
         [CommandMethod("MVABOUT")]
         public void About()
         {
-            AcApp.ShowAlertDialog("MiningVolume 2023\nHS-Next • Mine Survey & Earthwork\nGUI-first v0.10.1");
+            AcApp.ShowAlertDialog("MiningVolume 2023\nHS-Next • Mine Survey & Earthwork\nGUI-first v0.10.2");
         }
     }
 }
