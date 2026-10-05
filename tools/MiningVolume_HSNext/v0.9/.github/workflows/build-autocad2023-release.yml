@@ -74,23 +74,23 @@ jobs:
           CGO_ENABLED: '0'
         run: |
           New-Item -ItemType Directory -Force ../dist | Out-Null
-          go build -trimpath -ldflags '-s -w -H=windowsgui' -o ../dist/MiningVolume_HSNext_AutoCAD2023_Setup_v0.10.exe main.go
+          go build -trimpath -ldflags '-s -w -H=windowsgui' -o ../dist/MiningVolume_HSNext_AutoCAD2023_Setup_v0.10.1.exe main.go
 
       - name: Create checksums and source archive
         shell: pwsh
         run: |
-          $setup = 'dist/MiningVolume_HSNext_AutoCAD2023_Setup_v0.10.exe'
+          $setup = 'dist/MiningVolume_HSNext_AutoCAD2023_Setup_v0.10.1.exe'
           $hash = (Get-FileHash $setup -Algorithm SHA256).Hash.ToLowerInvariant()
           "SHA256  $hash  $(Split-Path $setup -Leaf)" | Set-Content -Encoding ascii dist/SHA256SUMS.txt
-          Compress-Archive -Path src,bundle,release,README.md,QA_REPORT.md,MiningVolume.HSNext.sln -DestinationPath dist/MiningVolume_HSNext_Source_v0.10.zip -CompressionLevel Optimal
+          Compress-Archive -Path src,bundle,release,README.md,QA_REPORT.md,MiningVolume.HSNext.sln -DestinationPath dist/MiningVolume_HSNext_Source_v0.10.1.zip -CompressionLevel Optimal
 
       - name: Upload release candidate
         uses: actions/upload-artifact@v4
         with:
-          name: MiningVolume-HSNext-AutoCAD2023-v0.10
+          name: MiningVolume-HSNext-AutoCAD2023-v0.10.1
           if-no-files-found: error
           path: |
-            dist/MiningVolume_HSNext_AutoCAD2023_Setup_v0.10.exe
-            dist/MiningVolume_HSNext_Source_v0.10.zip
+            dist/MiningVolume_HSNext_AutoCAD2023_Setup_v0.10.1.exe
+            dist/MiningVolume_HSNext_Source_v0.10.1.zip
             dist/SHA256SUMS.txt
             bundle/MiningVolume2023.bundle/**
