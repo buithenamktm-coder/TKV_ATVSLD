@@ -11,7 +11,9 @@ namespace MiningVolume2023.Services
         {
             using (var tr = db.TransactionManager.StartTransaction())
             {
-                EnsureLayer(db, tr, layerName, aciColor);
+                var id = EnsureLayer(db, tr, layerName, aciColor);
+                var ltr = (LayerTableRecord)tr.GetObject(id, OpenMode.ForWrite);
+                ltr.IsLocked = true;
                 tr.Commit();
             }
         }
@@ -156,6 +158,7 @@ namespace MiningVolume2023.Services
                 }
 
                 var ltr = (LayerTableRecord)tr.GetObject(layerId, OpenMode.ForWrite);
+                ltr.IsLocked = false;
                 ltr.Erase();
                 tr.Commit();
                 return true;
