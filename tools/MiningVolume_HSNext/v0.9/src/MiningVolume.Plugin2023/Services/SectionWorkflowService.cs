@@ -77,8 +77,9 @@ namespace MiningVolume2023.Services
         {
             var state = ProjectState.Current;
             EnsureSystem();
-            if (state.Existing.Tin == null) throw new InvalidOperationException("Chưa tạo TIN hiện trạng. Vào mục Mô hình và bấm Lưu/Cập nhật mô hình.");
-            if (state.Design.Tin == null) throw new InvalidOperationException("Chưa tạo TIN thiết kế. Vào mục Mô hình và bấm Lưu/Cập nhật mô hình.");
+
+            // Profiles are calculation input. Never use a missing/stale/partially drawn TIN.
+            SurfaceWorkflowService.EnsureBothTinsReady(synchronizeCadLayers: true);
 
             var sampler = new TinSectionSampler();
             var profiles = new List<SectionProfile>();
