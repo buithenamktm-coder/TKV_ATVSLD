@@ -124,3 +124,16 @@ Runtime `MVSELFTEST` v0.10.4 còn tạo thật hai layer TIN tạm trong AutoCAD
 
 
 Windows CI v0.10.4 cuối: **100/100 reference/static tests PASS**, build AutoCAD 2023 add-in thành công, 0 compile errors, release bundle policy PASS. Smoke test tạo layer TIN thật nằm trong `MVSELFTEST` và được Setup thực thi trên máy có AutoCAD 2023.
+
+
+## Cổng TIN bắt buộc — v0.10.4
+
+TIN hiện trạng và TIN thiết kế là dữ liệu đầu vào bắt buộc cho mặt cắt và khối lượng.
+
+- Hai layer đầu ra được tạo ngay khi DWG hoạt động: `MV_TIN_HIENTRANG` và `MV_TIN_THIETKE`.
+- Nạp lại dữ liệu nguồn hoặc sửa/loại điểm làm TIN cũ mất hiệu lực và xóa biểu diễn cũ trên layer.
+- Có thể tạo từng TIN hoặc dùng một nút `TẠO / CẬP NHẬT CẢ HAI TIN`; cặp TIN chỉ được chấp nhận khi cả hai lõi dựng thành công.
+- Sau khi ghi xuống AutoCAD, phần mềm kiểm tra số `3DFACE` trên layer phải bằng đúng số tam giác của lõi TIN.
+- Layer TIN được khóa sau khi tạo để tránh chỉnh tay làm sai đầu vào tính toán.
+- Trước khi lấy mặt cắt hoặc tính khối lượng, phần mềm kiểm tra cả hai TIN còn đồng bộ với dữ liệu X-Y-Z hiện tại; nếu layer bị xóa/mất mặt thì phần mềm tự đồng bộ lại từ TIN đã xác minh.
+- Runtime self-test của Setup dùng chính `SurfaceInputPreparer` + `ConformingTinBuilder`, sau đó ghi/đếm `3DFACE` thật trong AutoCAD.
