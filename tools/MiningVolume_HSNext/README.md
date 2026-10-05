@@ -8,3 +8,6 @@ Mã nguồn MiningVolume HS-Next dành cho AutoCAD 2023 được đặt tách bi
 - Mục tiêu: build DLL net48, đóng bundle AutoCAD 2023 và tạo Setup không cần Build Tools trên máy người dùng.
 
 Phần này độc lập với mã nguồn ATVSLĐ hiện hữu.
+
+
+Build trigger: Windows AutoCAD 2023 CI initialized.
