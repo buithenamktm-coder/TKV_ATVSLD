@@ -93,7 +93,7 @@ namespace MiningVolume2023.Services
 
             var prepared = new SurfaceInputPreparer().Prepare(session.Source, options);
             if (prepared.HasErrors)
-                throw new SurfaceValidationException(prepared.Issues);
+                throw new SurfaceValidationException(session.Name, prepared.Issues);
 
             var tin = new ConformingTinBuilder().Build(session.Name, prepared, options);
             if (tin == null || tin.Triangles == null || tin.Triangles.Count == 0)
@@ -279,8 +279,14 @@ namespace MiningVolume2023.Services
 
     public sealed class SurfaceValidationException : Exception
     {
-        public SurfaceValidationException(IReadOnlyList<ValidationIssue> issues)
-            : base("Dữ liệu mô hình còn lỗi, chưa thể dựng TIN.") { Issues = issues; }
+        public SurfaceValidationException(string modelName, IReadOnlyList<ValidationIssue> issues)
+            : base($"Dữ liệu mô hình {modelName} còn lỗi, chưa thể dựng TIN.")
+        {
+            ModelName = modelName;
+            Issues = issues;
+        }
+
+        public string ModelName { get; }
         public IReadOnlyList<ValidationIssue> Issues { get; }
     }
 }
