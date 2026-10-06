@@ -1,0 +1,85 @@
+name: Verify MiningVolume AutoCAD 2023 Runtime
+
+on:
+  workflow_dispatch:
+
+jobs:
+  runtime:
+    runs-on: [self-hosted, Windows, X64, autocad2023]
+    timeout-minutes: 20
+    permissions:
+      contents: read
+
+    env:
+      MV_ROOT: tools/MiningVolume_HSNext/v0.9
+      SOURCE_SHA: ${{ github.sha }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Confirm interactive AutoCAD 2023 runner
+        shell: pwsh
+        run: |
+          if (-not (Test-Path 'C:\Program Files\Autodesk\AutoCAD 2023\acad.exe')) {
+            throw 'Runner không có AutoCAD 2023 tại đường dẫn chuẩn.'
+          }
+          if (Get-Process acad -ErrorAction SilentlyContinue) {
+            throw 'Hãy đóng AutoCAD trước khi chạy runtime gate.'
+          }
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore with real AutoCAD 2023 references
+        shell: pwsh
+        run: |
+          Set-Location $env:MV_ROOT
+          dotnet restore MiningVolume.HSNext.sln -p:UseAutoCADNuGet=false
+
+      - name: Build against installed AutoCAD 2023
+        shell: pwsh
+        run: |
+          Set-Location $env:MV_ROOT
+          dotnet build MiningVolume.HSNext.sln -c Release --no-restore -p:UseAutoCADNuGet=false -p:AutoCAD2023Dir='C:\Program Files\Autodesk\AutoCAD 2023'
+
+      - name: Assemble runtime bundle
+        shell: pwsh
+        run: |
+          Set-Location $env:MV_ROOT
+          $out = 'bundle/MiningVolume2023.bundle/Contents/Windows'
+          New-Item -ItemType Directory -Force $out | Out-Null
+          Remove-Item "$out/*" -Force -ErrorAction SilentlyContinue
+          Copy-Item 'src/MiningVolume.Plugin2023/bin/Release/net48/MiningVolume2023.dll' $out
+          Copy-Item 'src/MiningVolume.Core/bin/Release/net48/MiningVolume.Core.dll' $out
+          Copy-Item 'src/MiningVolume.Surface/bin/Release/net48/MiningVolume.Surface.dll' $out
+          Copy-Item 'src/MiningVolume.Cad2023/bin/Release/net48/MiningVolume.Cad2023.dll' $out
+          ./release/verify_release.ps1
+
+      - name: Run MVSELFTEST in AutoCAD 2023
+        shell: pwsh
+        run: |
+          Set-Location $env:MV_ROOT
+          ./release/verify_autocad2023_runtime.ps1
+
+      - name: Capture startup log
+        if: always()
+        shell: pwsh
+        run: |
+          $p = Join-Path $env:ProgramData 'MiningVolume2023\Logs\startup.log'
+          if (Test-Path $p) {
+            New-Item -ItemType Directory -Force "$env:MV_ROOT/dist" | Out-Null
+            Copy-Item $p "$env:MV_ROOT/dist/startup_runtime.log" -Force
+          }
+
+      - name: Upload runtime proof
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: MiningVolume-AutoCAD2023-Runtime-v0.10.4
+          if-no-files-found: warn
+          path: |
+            tools/MiningVolume_HSNext/v0.9/dist/RUNTIME_VERIFICATION.txt
+            tools/MiningVolume_HSNext/v0.9/dist/MVSELFTEST_RUNTIME.txt
+            tools/MiningVolume_HSNext/v0.9/dist/startup_runtime.log
