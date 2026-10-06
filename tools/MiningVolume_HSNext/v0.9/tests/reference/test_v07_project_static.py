@@ -66,8 +66,8 @@ def test_restore_reloads_source_then_reapplies_user_edits():
 
 def test_restore_can_rebuild_tin_profiles_and_volume():
     s = read('src/MiningVolume.Plugin2023/Services/ProjectPersistenceService.cs')
-    assert 'SurfaceWorkflowService.BuildCore(role)' in s
-    assert 'SurfaceWorkflowService.DrawTin(role, tin)' in s
+    assert 'SurfaceWorkflowService.BuildCoreDetailed(role)' in s
+    assert 'SurfaceWorkflowService.DrawTin(role, build)' in s
     assert 'SectionWorkflowService.BuildProfiles()' in s
     assert 'VolumeWorkflowService.CalculateCore' in s
 
