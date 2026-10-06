@@ -159,15 +159,21 @@ jobs:
             'Do not treat this package as the final release.'
             'The final artifact is created only by the AutoCAD 2023 runtime workflow after Status=PASS.'
           ) | Set-Content -Encoding utf8 dist/PRE_RELEASE_NOTICE.txt
-          $sourceZip = 'dist/MiningVolume_HSNext_Source_v0.10.4.zip'
+          $sourceZip = Join-Path $env:GITHUB_WORKSPACE "$env:MV_ROOT/dist/MiningVolume_HSNext_Source_v0.10.4.zip"
           Remove-Item $sourceZip -Force -ErrorAction SilentlyContinue
-          git archive --format=zip --prefix=MiningVolume_HSNext_v0.10.4/ -o $sourceZip HEAD tools/MiningVolume_HSNext/v0.9
-          if ($LASTEXITCODE -ne 0 -or -not (Test-Path $sourceZip)) {
-            throw 'Không tạo được source archive sạch từ Git HEAD.'
+          Push-Location $env:GITHUB_WORKSPACE
+          try {
+            git archive --format=zip --prefix=MiningVolume_HSNext_v0.10.4/ -o $sourceZip HEAD tools/MiningVolume_HSNext/v0.9
+            if ($LASTEXITCODE -ne 0 -or -not (Test-Path $sourceZip)) {
+              throw 'Không tạo được source archive sạch từ Git HEAD.'
+            }
+          }
+          finally {
+            Pop-Location
           }
 
           Add-Type -AssemblyName System.IO.Compression.FileSystem
-          $zip = [System.IO.Compression.ZipFile]::OpenRead((Resolve-Path $sourceZip))
+          $zip = [System.IO.Compression.ZipFile]::OpenRead($sourceZip)
           try {
             $names = @($zip.Entries | ForEach-Object { $_.FullName.Replace('\','/') })
             $requiredSourceSuffix = @(
