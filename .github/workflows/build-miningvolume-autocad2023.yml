@@ -76,6 +76,20 @@ jobs:
           Set-Location $env:MV_ROOT
           ./release/verify_release.ps1
 
+      - name: Parse AutoCAD runtime verifier
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile(
+            (Join-Path $env:MV_ROOT 'release/verify_autocad2023_runtime.ps1'),
+            [ref]$tokens,
+            [ref]$errors)
+          if ($errors.Count -gt 0) {
+            $errors | ForEach-Object { Write-Error $_ }
+            exit 1
+          }
+
       - name: Create installer payload
         shell: pwsh
         run: |
