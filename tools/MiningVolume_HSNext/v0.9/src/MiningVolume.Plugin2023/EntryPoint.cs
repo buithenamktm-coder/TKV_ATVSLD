@@ -45,13 +45,23 @@ namespace MiningVolume2023
                     SurfaceWorkflowService.EnsureOutputLayer(ModelRole.Existing);
                     SurfaceWorkflowService.EnsureOutputLayer(ModelRole.Design);
 
-                    Open(AppPage.Project);
+                    bool autoOpen = UserSettingsService.AutoOpenPalette;
+                    if (autoOpen)
+                    {
+                        Open(AppPage.Project);
+                        StartupLog("Startup palette opened automatically.");
+                    }
+                    else
+                    {
+                        StartupLog("Startup palette auto-open is OFF. Use Ribbon/menu to open MiningVolume.");
+                    }
+
                     StartupUiError = null;
                     _startupUiOpened = true;
                     StartupLog("TIN output layers ready: " +
                         ProjectState.Current.Existing.TinLayer + " / " +
                         ProjectState.Current.Design.TinLayer);
-                    StartupLog("Startup palette opened successfully. Ribbon=" +
+                    StartupLog("Startup initialization successful. Ribbon=" +
                         (Autodesk.Windows.ComponentManager.Ribbon == null ? "OFF/Unavailable" : "Available"));
                 }
                 catch (System.Exception ex)
@@ -138,6 +148,16 @@ namespace MiningVolume2023
         }
 
         [CommandMethod("MVOPEN", CommandFlags.Session)] public static void OpenPalette() => Open(AppPage.Project);
+
+        [CommandMethod("MV_AUTOPEN", CommandFlags.Session)]
+        public static void ToggleAutoOpen()
+        {
+            bool next = !UserSettingsService.AutoOpenPalette;
+            UserSettingsService.AutoOpenPalette = next;
+            AcApp.DocumentManager.MdiActiveDocument?.Editor.WriteMessage(
+                "\nMiningVolume: tự động mở bảng khi khởi động AutoCAD = " + (next ? "BẬT" : "TẮT") + ".");
+            if (MainControl != null) MainControl.Refresh();
+        }
         [CommandMethod("MV_PROJECT", CommandFlags.Session)] public static void OpenProject() => Open(AppPage.Project);
         [CommandMethod("MV_DATA", CommandFlags.Session)] public static void OpenData() => Open(AppPage.Data);
         [CommandMethod("MV_MODEL", CommandFlags.Session)] public static void OpenModel() => Open(AppPage.Model);

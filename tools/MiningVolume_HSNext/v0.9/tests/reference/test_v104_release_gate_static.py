@@ -89,3 +89,16 @@ def test_runtime_pass_requires_critical_tin_checks_and_interactive_admin_session
         assert token in runtime
     assert "WindowsBuiltInRole]::Administrator" in runtime
     assert "[Environment]::UserInteractive" in runtime
+
+
+def test_palette_auto_open_is_user_controlled_and_defaults_off():
+    settings = read("src/MiningVolume.Plugin2023/Services/UserSettingsService.cs")
+    entry = read("src/MiningVolume.Plugin2023/EntryPoint.cs")
+    project = read("src/MiningVolume.Plugin2023/UI/ProjectPage.cs")
+    assert 'AutoOpenPalette' in settings
+    assert 'return false;' in settings
+    assert 'Registry.CurrentUser' in settings
+    assert 'if (autoOpen)' in entry
+    assert 'Startup palette auto-open is OFF' in entry
+    assert 'Tự động mở bảng MiningVolume khi khởi động AutoCAD' in project
+    assert 'UserSettingsService.AutoOpenPalette = _autoOpen.Checked' in project

@@ -157,3 +157,12 @@ Kết quả PASS phải tạo:
 - SHA-256 của 4 DLL MiningVolume.
 
 Runner phải chạy trong phiên Windows tương tác có AutoCAD 2023 đã kích hoạt bản quyền. Không coi CI hosted là thay thế cho runtime gate này.
+
+
+## Tùy chọn tự động mở bảng MiningVolume
+
+- Mặc định MiningVolume **không tự bật palette** mỗi lần khởi động AutoCAD, tránh che vùng bản vẽ.
+- Người dùng mở bảng từ Ribbon/menu MiningVolume khi cần.
+- Trong trang **Dự án** có checkbox `Tự động mở bảng MiningVolume khi khởi động AutoCAD`.
+- Tùy chọn được lưu theo tài khoản Windows và giữ nguyên cho các lần khởi động sau; không ghi vào từng DWG.
+- Có lệnh kỹ thuật `MV_AUTOPEN` để đảo nhanh trạng thái bật/tắt khi cần.
