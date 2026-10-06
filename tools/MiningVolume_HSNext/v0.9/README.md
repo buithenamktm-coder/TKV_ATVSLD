@@ -144,3 +144,16 @@ TIN hiện trạng và TIN thiết kế là dữ liệu đầu vào bắt buộc
 Final v0.10.4 TIN release build trigger.
 
 Final CI branch marker for v0.10.4 TIN release.
+
+
+## Runtime verification trên AutoCAD 2023 thật
+
+Repository có workflow thủ công `.github/workflows/verify-miningvolume-autocad2023-runtime.yml`. Workflow này dùng self-hosted Windows runner gắn nhãn `autocad2023`, build bằng chính DLL API của AutoCAD 2023 cài trên máy rồi chạy `release/verify_autocad2023_runtime.ps1`.
+
+Kết quả PASS phải tạo:
+- `RUNTIME_VERIFICATION.txt`;
+- `MVSELFTEST_RUNTIME.txt`;
+- thông tin version AutoCAD 2023;
+- SHA-256 của 4 DLL MiningVolume.
+
+Runner phải chạy trong phiên Windows tương tác có AutoCAD 2023 đã kích hoạt bản quyền. Không coi CI hosted là thay thế cho runtime gate này.
