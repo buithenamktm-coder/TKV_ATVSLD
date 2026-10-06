@@ -19,6 +19,7 @@ jobs:
 
     env:
       MV_ROOT: tools/MiningVolume_HSNext/v0.9
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
 
     steps:
       - uses: actions/checkout@v4
@@ -110,7 +111,8 @@ jobs:
           "SHA256  $hash  $(Split-Path $setup -Leaf)" | Set-Content -Encoding ascii dist/SHA256SUMS.txt
           @(
             'MiningVolume HS-Next v0.10.4 - BUILD VERIFICATION'
-            "Git commit: $env:GITHUB_SHA"
+            "Source commit: $env:SOURCE_SHA"
+            "Workflow commit: $env:GITHUB_SHA"
             "Workflow run: $env:GITHUB_RUN_ID"
             'Windows CI reference/static tests: PASS'
             'AutoCAD 2023 API compile: PASS'
