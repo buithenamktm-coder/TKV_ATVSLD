@@ -178,3 +178,20 @@ def test_installer_admin_check_and_success_message_match_palette_policy():
     assert 'exec.Command("net","session")' not in installer
     assert "MiningVolume không tự mở bảng theo mặc định" in installer
     assert "bảng MiningVolume sẽ tự hiện" not in installer
+
+
+def test_installer_rejects_foreign_dlls_and_wrong_package_metadata():
+    installer = read("installer/main.go")
+    assert "allowedDll := map[string]bool" in installer
+    for dll in [
+        "miningvolume2023.dll",
+        "miningvolume.core.dll",
+        "miningvolume.surface.dll",
+        "miningvolume.cad2023.dll",
+    ]:
+        assert dll in installer
+    assert "Bundle chứa DLL ngoài danh sách cho phép" in installer
+    assert 'AppVersion="0.10.4"' in installer
+    assert 'SeriesMin="R24.2"' in installer
+    assert 'SeriesMax="R24.2"' in installer
+    assert 'LoadOnAutoCADStartup="True"' in installer

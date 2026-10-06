@@ -95,16 +95,47 @@ func install() {
 }
 
 func validatePrebuiltBundle(root string) error {
-    required := []string{
-        filepath.Join(root, "PackageContents.xml"),
-        filepath.Join(root, "Contents", "Windows", "MiningVolume2023.dll"),
-        filepath.Join(root, "Contents", "Windows", "MiningVolume.Core.dll"),
-        filepath.Join(root, "Contents", "Windows", "MiningVolume.Surface.dll"),
-        filepath.Join(root, "Contents", "Windows", "MiningVolume.Cad2023.dll"),
+    packageXml := filepath.Join(root, "PackageContents.xml")
+    windowsDir := filepath.Join(root, "Contents", "Windows")
+    allowedDll := map[string]bool{
+        "miningvolume2023.dll": true,
+        "miningvolume.core.dll": true,
+        "miningvolume.surface.dll": true,
+        "miningvolume.cad2023.dll": true,
     }
-    for _, p := range required { if !exists(p) { return fmt.Errorf("Thiếu file Release: %s", filepath.Base(p)) } }
-    if exists(filepath.Join(root, "Contents", "Windows", "NetTopologySuite.dll")) {
-        return fmt.Errorf("Release v0.10.4 không được phụ thuộc NetTopologySuite.dll")
+
+    required := []string{
+        packageXml,
+        filepath.Join(windowsDir, "MiningVolume2023.dll"),
+        filepath.Join(windowsDir, "MiningVolume.Core.dll"),
+        filepath.Join(windowsDir, "MiningVolume.Surface.dll"),
+        filepath.Join(windowsDir, "MiningVolume.Cad2023.dll"),
+    }
+    for _, p := range required {
+        if !exists(p) { return fmt.Errorf("Thiếu file Release: %s", filepath.Base(p)) }
+    }
+
+    entries, err := os.ReadDir(windowsDir)
+    if err != nil { return fmt.Errorf("Không đọc được thư mục binary Release: %w", err) }
+    for _, entry := range entries {
+        if entry.IsDir() || !strings.EqualFold(filepath.Ext(entry.Name()), ".dll") { continue }
+        if !allowedDll[strings.ToLower(entry.Name())] {
+            return fmt.Errorf("Bundle chứa DLL ngoài danh sách cho phép: %s", entry.Name())
+        }
+    }
+
+    xmlBytes, err := os.ReadFile(packageXml)
+    if err != nil { return fmt.Errorf("Không đọc được PackageContents.xml: %w", err) }
+    xmlText := string(xmlBytes)
+    for _, token := range []string{
+        `AppVersion="0.10.4"`,
+        `SeriesMin="R24.2"`,
+        `SeriesMax="R24.2"`,
+        `LoadOnAutoCADStartup="True"`,
+    } {
+        if !strings.Contains(xmlText, token) {
+            return fmt.Errorf("PackageContents.xml thiếu cấu hình bắt buộc: %s", token)
+        }
     }
     return nil
 }

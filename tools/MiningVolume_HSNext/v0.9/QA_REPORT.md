@@ -154,3 +154,10 @@ Setup bắt buộc tự chạy `MVSELFTEST` trong AutoCAD 2023 và rollback nế
 
 - Setup dùng `fltmc` để kiểm tra token Administrator, không còn phụ thuộc `net session`/Windows Server service.
 - Thông báo cài thành công đã đồng bộ với chính sách UI: MiningVolume **không tự mở palette theo mặc định**; người dùng mở từ Ribbon hoặc bật tùy chọn tự động mở.
+
+
+## Installer payload hardening
+
+- Setup tự kiểm tra lại payload sau giải nén, không chỉ dựa vào CI.
+- Thư mục `Contents/Windows` chỉ được phép có 4 DLL MiningVolume; mọi DLL lạ (kể cả DLL Autodesk hoặc `NetTopologySuite.dll`) làm cài đặt dừng trước khi thay đổi AutoCAD.
+- Setup kiểm `PackageContents.xml` phải đúng `AppVersion=0.10.4`, `SeriesMin/SeriesMax=R24.2` và `LoadOnAutoCADStartup=True`.
