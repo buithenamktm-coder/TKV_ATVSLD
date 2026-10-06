@@ -189,3 +189,11 @@ Runner **không chạy dưới dạng Windows Service** vì AutoCAD/MVSELFTEST c
 - Lệnh kỹ thuật tương ứng: `MV_TOGGLE`.
 - Việc ẩn bảng không làm mất Project, TIN hay kết quả đang làm việc.
 - `MVSELFTEST` trên AutoCAD 2023 thật bắt buộc kiểm tra chuỗi mở → ẩn → hiện lại palette; Setup chỉ PASS khi thao tác này hoạt động.
+
+
+## Phân biệt PRE-RELEASE và bản phát hành sau runtime PASS
+
+- Workflow GitHub-hosted chỉ tạo artifact `MiningVolume-HSNext-AutoCAD2023-v0.10.4-PRE-RELEASE`.
+- File cài đặt trong artifact này có hậu tố `_PRE_RELEASE.exe` và kèm `PRE_RELEASE_NOTICE.txt`; không được coi là bản phát hành cuối.
+- Chỉ workflow chạy trên máy AutoCAD 2023 thật, sau khi `RUNTIME_VERIFICATION.txt` có `Status=PASS`, mới được phép build `MiningVolume_HSNext_AutoCAD2023_Setup_v0.10.4_RUNTIME_PASS.exe`.
+- Artifact cuối có tên `MiningVolume-HSNext-AutoCAD2023-v0.10.4-RUNTIME-PASS` và kèm `RUNTIME_RELEASE_VERIFICATION.txt` + SHA-256 của Setup.

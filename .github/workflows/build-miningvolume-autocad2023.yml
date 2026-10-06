@@ -114,13 +114,13 @@ jobs:
           $env:GOOS='windows'
           $env:GOARCH='amd64'
           $env:CGO_ENABLED='0'
-          go build -trimpath -ldflags '-s -w -H=windowsgui' -o ../dist/MiningVolume_HSNext_AutoCAD2023_Setup_v0.10.4.exe main.go
+          go build -trimpath -ldflags '-s -w -H=windowsgui' -o ../dist/MiningVolume_HSNext_AutoCAD2023_Setup_v0.10.4_PRE_RELEASE.exe main.go
 
       - name: Create checksums and source archive
         shell: pwsh
         run: |
           Set-Location $env:MV_ROOT
-          $setup = 'dist/MiningVolume_HSNext_AutoCAD2023_Setup_v0.10.4.exe'
+          $setup = 'dist/MiningVolume_HSNext_AutoCAD2023_Setup_v0.10.4_PRE_RELEASE.exe'
           $hash = (Get-FileHash $setup -Algorithm SHA256).Hash.ToLowerInvariant()
           "SHA256  $hash  $(Split-Path $setup -Leaf)" | Set-Content -Encoding ascii dist/SHA256SUMS.txt
           @(
@@ -134,21 +134,30 @@ jobs:
             'Release bundle policy: PASS'
             'Installer go vet: PASS'
             'Native Windows installer build: PASS'
+            'Release status: PRE-RELEASE ONLY - AutoCAD 2023 runtime not verified'
             "Setup SHA256: $hash"
             'AutoCAD 2023 host runtime self-test: NOT EXECUTED ON GITHUB-HOSTED RUNNER'
             'Runtime gate: Setup runs MVSELFTEST in AutoCAD 2023 and rolls back unless Status=PASS.'
           ) | Set-Content -Encoding utf8 dist/BUILD_VERIFICATION.txt
+          @(
+            'MININGVOLUME HS-NEXT v0.10.4 - PRE-RELEASE'
+            'This artifact was built on GitHub-hosted Windows CI.'
+            'AutoCAD 2023 host runtime MVSELFTEST has NOT been executed for this artifact.'
+            'Do not treat this package as the final release.'
+            'The final artifact is created only by the AutoCAD 2023 runtime workflow after Status=PASS.'
+          ) | Set-Content -Encoding utf8 dist/PRE_RELEASE_NOTICE.txt
           Compress-Archive -Path src,bundle,release,README.md,QA_REPORT.md,MiningVolume.HSNext.sln -DestinationPath dist/MiningVolume_HSNext_Source_v0.10.4.zip -CompressionLevel Optimal
           Get-Content dist/BUILD_VERIFICATION.txt
 
-      - name: Upload release candidate
+      - name: Upload pre-release candidate
         uses: actions/upload-artifact@v4
         with:
-          name: MiningVolume-HSNext-AutoCAD2023-v0.10.4
+          name: MiningVolume-HSNext-AutoCAD2023-v0.10.4-PRE-RELEASE
           if-no-files-found: error
           path: |
-            tools/MiningVolume_HSNext/v0.9/dist/MiningVolume_HSNext_AutoCAD2023_Setup_v0.10.4.exe
+            tools/MiningVolume_HSNext/v0.9/dist/MiningVolume_HSNext_AutoCAD2023_Setup_v0.10.4_PRE_RELEASE.exe
             tools/MiningVolume_HSNext/v0.9/dist/MiningVolume_HSNext_Source_v0.10.4.zip
+            tools/MiningVolume_HSNext/v0.9/dist/PRE_RELEASE_NOTICE.txt
             tools/MiningVolume_HSNext/v0.9/dist/SHA256SUMS.txt
             tools/MiningVolume_HSNext/v0.9/dist/BUILD_VERIFICATION.txt
             tools/MiningVolume_HSNext/v0.9/QA_REPORT.md
