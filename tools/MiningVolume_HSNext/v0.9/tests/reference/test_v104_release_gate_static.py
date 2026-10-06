@@ -40,3 +40,10 @@ def test_release_pipeline_emits_build_verification_and_vets_installer():
     assert "Compile errors: 0" in s
     assert "AutoCAD 2023 host runtime self-test: NOT EXECUTED ON GITHUB-HOSTED RUNNER" in s
     assert "Runtime gate: Setup runs MVSELFTEST" in s
+
+
+def test_installer_requires_current_runtime_selftest_and_persists_proof():
+    s = read("installer/main.go")
+    assert "MiningVolume HS-Next v0.10.4 runtime self-test" in s
+    assert "writeRuntimeVerification(cad, detail)" in s
+    assert "runtime_verification.txt" in s
