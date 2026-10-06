@@ -105,15 +105,59 @@ jobs:
           Write-Host "Runtime source commit: $sha"
           Write-Host "Requested source: $env:REQUESTED_SOURCE_REF"
 
-      - name: Confirm interactive AutoCAD 2023 runner
+      - name: Resolve AutoCAD 2023 installation
         shell: pwsh
         run: |
-          if (-not (Test-Path 'C:\Program Files\Autodesk\AutoCAD 2023\acad.exe')) {
-            throw 'Runner không có AutoCAD 2023 tại đường dẫn chuẩn.'
-          }
           if (Get-Process acad -ErrorAction SilentlyContinue) {
             throw 'Hãy đóng AutoCAD trước khi chạy runtime gate.'
           }
+
+          $candidates = @(
+            (Join-Path $env:ProgramFiles 'Autodesk\AutoCAD 2023'),
+            'C:\Program Files\Autodesk\AutoCAD 2023'
+          ) | Select-Object -Unique
+
+          $cadDir = $null
+          foreach ($dir in $candidates) {
+            if ($dir -and (Test-Path (Join-Path $dir 'acad.exe')) -and (Test-Path (Join-Path $dir 'AcMgd.dll'))) {
+              $cadDir = $dir
+              break
+            }
+          }
+
+          if (-not $cadDir) {
+            foreach ($root in @(
+              'HKLM:\SOFTWARE\Autodesk\AutoCAD\R24.2',
+              'HKLM:\SOFTWARE\WOW6432Node\Autodesk\AutoCAD\R24.2'
+            )) {
+              if (-not (Test-Path $root)) { continue }
+              foreach ($key in Get-ChildItem $root -ErrorAction SilentlyContinue) {
+                try {
+                  $candidate = (Get-ItemProperty $key.PSPath -ErrorAction Stop).AcadLocation
+                  if ($candidate -and (Test-Path (Join-Path $candidate 'acad.exe')) -and
+                      (Test-Path (Join-Path $candidate 'AcMgd.dll'))) {
+                    $cadDir = $candidate
+                    break
+                  }
+                } catch { }
+              }
+              if ($cadDir) { break }
+            }
+          }
+
+          if (-not $cadDir) {
+            throw 'Không tìm thấy AutoCAD 2023 R24.2 trên runtime runner.'
+          }
+
+          $acad = Join-Path $cadDir 'acad.exe'
+          $version = (Get-Item $acad).VersionInfo.FileVersion
+          if ($version -notmatch '^24\.2') {
+            throw "acad.exe không phải AutoCAD 2023 R24.2. FileVersion=$version"
+          }
+
+          "AUTOCAD2023_DIR=$cadDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "AutoCAD 2023: $acad"
+          Write-Host "FileVersion: $version"
 
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@v4
@@ -130,7 +174,7 @@ jobs:
         shell: pwsh
         run: |
           Set-Location $env:MV_ROOT
-          dotnet build MiningVolume.HSNext.sln -c Release --no-restore -p:UseAutoCADNuGet=false -p:AutoCAD2023Dir='C:\Program Files\Autodesk\AutoCAD 2023'
+          dotnet build MiningVolume.HSNext.sln -c Release --no-restore -p:UseAutoCADNuGet=false -p:AutoCAD2023Dir="$env:AUTOCAD2023_DIR"
 
       - name: Assemble runtime bundle
         shell: pwsh

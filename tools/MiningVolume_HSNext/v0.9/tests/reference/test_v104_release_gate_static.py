@@ -112,6 +112,8 @@ def test_runtime_runner_bootstrap_requires_interactive_autocad2023_host():
     assert "AutoCAD 2023 R24.2" in s
     assert "--labels 'autocad2023'" in s
     assert "run.cmd" in s
+    assert "Start-Process -FilePath" in s
+    assert "-Verb RunAs" in s
     assert "Không cài runner dưới dạng Windows Service" in s
 
 

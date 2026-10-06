@@ -124,3 +124,10 @@ Setup bắt buộc tự chạy `MVSELFTEST` trong AutoCAD 2023 và rollback nế
 - Workflow thủ công `.github/workflows/verify-miningvolume-autocad2023-runtime.yml` chỉ chạy trên self-hosted runner có nhãn `autocad2023`.
 - Runner phải là Windows x64, có AutoCAD 2023 đã kích hoạt bản quyền và chạy GitHub Actions Runner trong phiên người dùng tương tác; không chạy dưới Windows service không có desktop.
 - `main` vẫn không được merge/phát hành nếu workflow runtime chưa PASS.
+
+
+## Runtime runner hardening
+
+- Launcher self-hosted runner tự yêu cầu UAC và nâng quyền Administrator trước khi chạy `run.cmd`.
+- Workflow runtime không còn khóa cứng một đường dẫn AutoCAD; nó dò AutoCAD 2023 R24.2 từ thư mục chuẩn hoặc Registry và truyền đúng `AutoCAD2023Dir` vào build.
+- Runtime workflow có concurrency + cleanup để chỉ giữ gate mới nhất, tránh chạy nối tiếp các commit cũ khi runner online trở lại.

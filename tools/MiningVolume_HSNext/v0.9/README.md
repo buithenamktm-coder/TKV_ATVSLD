@@ -176,7 +176,9 @@ Runner phải chạy trong phiên Windows tương tác có AutoCAD 2023 đã kí
 2. Cài GitHub CLI và đăng nhập `gh auth login` bằng tài khoản có quyền quản trị Actions của repository.
 3. Chạy `release/setup_autocad2023_runner.ps1`.
 4. Script kiểm tra AutoCAD 2023, tải/cấu hình GitHub Actions runner với nhãn `autocad2023` và tạo `START_MiningVolume_Runtime_Runner.cmd`.
-5. Chạy file START đó trong phiên Windows đang đăng nhập và giữ cửa sổ mở khi kiểm thử.
+5. Chạy file START đó trong phiên Windows đang đăng nhập và giữ cửa sổ mở khi kiểm thử. Launcher tự yêu cầu UAC và nâng quyền Administrator nếu cần.
+
+Workflow runtime tự dò AutoCAD 2023 R24.2 từ thư mục cài chuẩn hoặc Registry rồi build bằng đúng các DLL API trên máy thử nghiệm.
 
 Runner **không chạy dưới dạng Windows Service** vì AutoCAD/MVSELFTEST cần desktop session tương tác. Workflow `Verify MiningVolume AutoCAD 2023 Runtime` chỉ được coi PASS khi `RUNTIME_VERIFICATION.txt` ghi `Status=PASS`.
 
