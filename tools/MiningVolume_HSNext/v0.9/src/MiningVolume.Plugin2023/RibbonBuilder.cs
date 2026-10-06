@@ -21,6 +21,7 @@ namespace MiningVolume2023
 
             AddPanel(tab, "Dự án", new[]
             {
+                Btn("Ẩn / Hiện bảng", RibbonAction.TogglePalette),
                 Btn("Project", RibbonAction.Project),
                 Btn("Lưu Project", RibbonAction.SaveProject)
             });
@@ -70,6 +71,7 @@ namespace MiningVolume2023
 
         private enum RibbonAction
         {
+            TogglePalette,
             Project,
             SaveProject,
             Data,
@@ -95,6 +97,9 @@ namespace MiningVolume2023
 
                 switch (action)
                 {
+                    case RibbonAction.TogglePalette:
+                        EntryPoint.TogglePalette();
+                        break;
                     case RibbonAction.Project:
                         EntryPoint.Open(AppPage.Project);
                         break;
