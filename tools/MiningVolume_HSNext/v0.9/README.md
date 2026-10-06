@@ -179,3 +179,10 @@ Runner phải chạy trong phiên Windows tương tác có AutoCAD 2023 đã kí
 5. Chạy file START đó trong phiên Windows đang đăng nhập và giữ cửa sổ mở khi kiểm thử.
 
 Runner **không chạy dưới dạng Windows Service** vì AutoCAD/MVSELFTEST cần desktop session tương tác. Workflow `Verify MiningVolume AutoCAD 2023 Runtime` chỉ được coi PASS khi `RUNTIME_VERIFICATION.txt` ghi `Status=PASS`.
+
+
+### Bật/tắt bảng trong khi làm việc
+
+- Ribbon **MINING VOLUME → Dự án** có nút **Ẩn / Hiện bảng** để đóng/mở palette ngay trong phiên AutoCAD.
+- Lệnh kỹ thuật tương ứng: `MV_TOGGLE`.
+- Việc ẩn bảng không làm mất Project, TIN hay kết quả đang làm việc.
