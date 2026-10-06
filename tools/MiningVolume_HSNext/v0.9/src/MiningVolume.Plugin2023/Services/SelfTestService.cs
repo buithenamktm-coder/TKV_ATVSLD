@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using MiningVolume.Core.Geometry;
 using MiningVolume.Core.Model;
+using MiningVolume.Core.Model;
 using MiningVolume.Core.Reporting;
 using MiningVolume.Core.Sections;
 using MiningVolume.Core.Surface;
@@ -34,6 +35,8 @@ namespace MiningVolume2023.Services
                 var existing = CreateFlatTin("SelfTest Existing", 10.0);
                 var design = CreateFlatTin("SelfTest Design", 0.0);
                 Check(r, existing.Triangles.Count == 2 && design.Triangles.Count == 2, "TIN tổng hợp 2 tam giác / bề mặt");
+
+                RunBreaklineNormalizationSmoke(r);
 
                 var boundary = new List<Vec2>
                 {
@@ -130,6 +133,34 @@ namespace MiningVolume2023.Services
             r.OutputFile = ResolveOutputPath();
             WriteResultFile(r);
             return r;
+        }
+
+        private static void RunBreaklineNormalizationSmoke(SelfTestResult r)
+        {
+            var options = new SurfaceBuildOptions
+            {
+                XyTolerance = 1e-6,
+                ZConflictTolerance = 1e-4,
+                MinimumTriangleArea = 1e-10
+            };
+
+            var crossing = new SurfaceModel("Crossing");
+            crossing.Entities.Add(new SourceEntity("A", "A", "0", SourceEntityType.Line,
+                new[] { new Vec3(0, 0, 0), new Vec3(10, 10, 0) }));
+            crossing.Entities.Add(new SourceEntity("B", "B", "0", SourceEntityType.Line,
+                new[] { new Vec3(0, 10, 0), new Vec3(10, 0, 0) }));
+            var cp = new SurfaceInputPreparer().Prepare(crossing, options);
+            Check(r, !cp.HasErrors, "Breakline cắt nhau cùng Z được tự tạo nút, không chặn TIN");
+            Check(r, cp.Breaklines.Count == 4, "Breakline cắt nhau được chia thành 4 đoạn ràng buộc");
+
+            var overlap = new SurfaceModel("Overlap");
+            overlap.Entities.Add(new SourceEntity("C", "C", "0", SourceEntityType.Line,
+                new[] { new Vec3(0, 0, 0), new Vec3(10, 0, 0) }));
+            overlap.Entities.Add(new SourceEntity("D", "D", "0", SourceEntityType.Line,
+                new[] { new Vec3(5, 0, 0), new Vec3(15, 0, 0) }));
+            var op = new SurfaceInputPreparer().Prepare(overlap, options);
+            Check(r, !op.HasErrors && op.Breaklines.Count == 3,
+                "Breakline chồng lấn cùng Z được chia/khử trùng tự động");
         }
 
         private static void RunCadTinLayerSmoke(SelfTestResult r, TinSurface existing, TinSurface design)
