@@ -63,18 +63,26 @@ func install() {
     target := filepath.Join(appPlugins, "MiningVolume2023.bundle")
     backup := target + ".v0104bak"
     os.MkdirAll(appPlugins, 0755)
-    os.RemoveAll(backup)
+
+    // Recover conservatively from an interrupted previous install before starting
+    // a new transaction. An unverified target is never preferred over its backup.
+    if exists(backup) {
+        os.RemoveAll(target)
+        if err := restoreBackup(backup, target); err != nil {
+            msg("Không khôi phục được bản sao lưu từ lần cài trước: "+err.Error(), 0x10); return
+        }
+    }
     if exists(target) {
         if err := os.Rename(target, backup); err != nil { msg("Không sao lưu được bản cũ: "+err.Error(), 0x10); return }
     }
     if err := copyDir(source, target); err != nil {
-        os.RemoveAll(target); restoreBackup(backup, target)
+        os.RemoveAll(target); _ = _ = restoreBackup(backup, target)
         msg("Không cài được bundle: "+err.Error(), 0x10); return
     }
 
     ok, detail := runAutoCADSelfTest(cad)
     if !ok {
-        os.RemoveAll(target); restoreBackup(backup, target)
+        os.RemoveAll(target); _ = _ = restoreBackup(backup, target)
         writePersistentLog("selftest_failed", detail)
         msg("MiningVolume đã tự rollback vì kiểm thử trong AutoCAD 2023 không đạt.\n\n"+detail, 0x10); return
     }
@@ -129,6 +137,21 @@ func runAutoCADSelfTest(cad string) (bool, string) {
                 if !strings.Contains(txt, "MiningVolume HS-Next v0.10.4 runtime self-test") {
                     _ = cmd.Process.Kill()
                     return false, "MVSELFTEST trả PASS nhưng log không đúng phiên bản v0.10.4.\n\n"+txt
+                }
+                required := []string{
+                    "PASS | Khởi tạo đầy đủ giao diện MiningVolume",
+                    "PASS | AutoCAD tạo/ghi/đếm đúng layer TIN hiện trạng",
+                    "PASS | AutoCAD tạo/ghi/đếm đúng layer TIN thiết kế",
+                    "PASS | Layer TIN đúng màu quy ước: hiện trạng ACI 1, thiết kế ACI 3",
+                    "PASS | Layer TIN chỉ chứa 3DFACE và được khóa sau khi ghi",
+                    "PASS | Có thể ẩn cả hai TIN và layer vẫn khóa",
+                    "PASS | Có thể hiện lại cả hai TIN và layer vẫn khóa",
+                }
+                for _, token := range required {
+                    if !strings.Contains(txt, token) {
+                        _ = cmd.Process.Kill()
+                        return false, "MVSELFTEST thiếu kiểm tra runtime bắt buộc: "+token+"\n\n"+txt
+                    }
                 }
                 done := make(chan error,1); go func(){done<-cmd.Wait()}()
                 select { case <-done: case <-time.After(5*time.Second): _ = cmd.Process.Kill() }
@@ -202,7 +225,11 @@ func writePersistentLog(kind, content string) {
 }
 func copyDir(src,dst string) error { return filepath.Walk(src,func(path string,info os.FileInfo,err error) error{ if err!=nil{return err}; rel,_:=filepath.Rel(src,path); out:=filepath.Join(dst,rel); if info.IsDir(){return os.MkdirAll(out,0755)}; return copyFile(path,out) }) }
 func copyFile(src,dst string) error { in,err:=os.Open(src);if err!=nil{return err};defer in.Close();os.MkdirAll(filepath.Dir(dst),0755);out,err:=os.Create(dst);if err!=nil{return err};_,e:=io.Copy(out,in);c:=out.Close();if e!=nil{return e};return c }
-func restoreBackup(backup,target string){ if exists(backup){ _=os.Rename(backup,target) } }
+func restoreBackup(backup,target string) error {
+    if !exists(backup) { return nil }
+    os.RemoveAll(target)
+    return os.Rename(backup,target)
+}
 func exists(p string) bool { _,e:=os.Stat(p);return e==nil }
 func hasArg(args []string,s string) bool { for _,a:=range args{if strings.EqualFold(a,s){return true}};return false }
 func processRunning(name string) bool { out,_:=exec.Command("tasklist","/FI","IMAGENAME eq "+name).CombinedOutput();return strings.Contains(strings.ToLower(string(out)),strings.ToLower(name)) }
