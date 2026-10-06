@@ -5,7 +5,6 @@ using System.IO;
 using System.Linq;
 using MiningVolume.Core.Geometry;
 using MiningVolume.Core.Model;
-using MiningVolume.Core.Model;
 using MiningVolume.Core.Reporting;
 using MiningVolume.Core.Sections;
 using MiningVolume.Core.Surface;
@@ -129,7 +128,7 @@ namespace MiningVolume2023.Services
                 r.Errors.Add(ex.ToString());
             }
 
-            r.Passed = r.Errors.Count == 0 && r.Checks.Count >= 16;
+            r.Passed = r.Errors.Count == 0 && r.Checks.Count >= 23;
             r.OutputFile = ResolveOutputPath();
             WriteResultFile(r);
             return r;
@@ -199,6 +198,36 @@ namespace MiningVolume2023.Services
                         writtenDesign == design.Triangles.Count &&
                         countDesign == design.Triangles.Count,
                         "AutoCAD tạo/ghi/đếm đúng layer TIN thiết kế");
+
+                    Check(r,
+                        TinCadRenderer.GetLayerColorIndex(doc.Database, existingLayer) == 1 &&
+                        TinCadRenderer.GetLayerColorIndex(doc.Database, designLayer) == 3,
+                        "Layer TIN đúng màu quy ước: hiện trạng ACI 1, thiết kế ACI 3");
+
+                    Check(r,
+                        TinCadRenderer.IsLayerLocked(doc.Database, existingLayer) &&
+                        TinCadRenderer.IsLayerLocked(doc.Database, designLayer) &&
+                        TinCadRenderer.CountUnexpectedEntities(doc.Database, existingLayer) == 0 &&
+                        TinCadRenderer.CountUnexpectedEntities(doc.Database, designLayer) == 0,
+                        "Layer TIN chỉ chứa 3DFACE và được khóa sau khi ghi");
+
+                    TinCadRenderer.SetVisible(doc.Database, existingLayer, false);
+                    TinCadRenderer.SetVisible(doc.Database, designLayer, false);
+                    Check(r,
+                        !TinCadRenderer.IsLayerVisible(doc.Database, existingLayer) &&
+                        !TinCadRenderer.IsLayerVisible(doc.Database, designLayer) &&
+                        TinCadRenderer.IsLayerLocked(doc.Database, existingLayer) &&
+                        TinCadRenderer.IsLayerLocked(doc.Database, designLayer),
+                        "Có thể ẩn cả hai TIN và layer vẫn khóa");
+
+                    TinCadRenderer.SetVisible(doc.Database, existingLayer, true);
+                    TinCadRenderer.SetVisible(doc.Database, designLayer, true);
+                    Check(r,
+                        TinCadRenderer.IsLayerVisible(doc.Database, existingLayer) &&
+                        TinCadRenderer.IsLayerVisible(doc.Database, designLayer) &&
+                        TinCadRenderer.IsLayerLocked(doc.Database, existingLayer) &&
+                        TinCadRenderer.IsLayerLocked(doc.Database, designLayer),
+                        "Có thể hiện lại cả hai TIN và layer vẫn khóa");
                 }
                 finally
                 {

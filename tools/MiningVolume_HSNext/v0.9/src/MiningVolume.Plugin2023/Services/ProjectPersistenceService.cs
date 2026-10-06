@@ -215,8 +215,7 @@ namespace MiningVolume2023.Services
 
             if (rebuildDerived)
             {
-                TryRebuildTin(ModelRole.Existing, snap.Existing, warnings);
-                TryRebuildTin(ModelRole.Design, snap.Design, warnings);
+                RebuildSavedTins(snap, warnings);
                 if (snap.HadProfiles && state.SectionSystem != null && state.Existing.Tin != null && state.Design.Tin != null)
                 {
                     try { SectionWorkflowService.BuildProfiles(); }
@@ -261,6 +260,38 @@ namespace MiningVolume2023.Services
                 session.TinVisible = snap.TinVisible;
             }
             catch (Exception ex) { warnings.Add($"Không nạp lại được {role}: {ex.Message}"); }
+        }
+
+        private static void RebuildSavedTins(ProjectSnapshot snap, List<string> warnings)
+        {
+            bool hadExisting = snap?.Existing?.HadTin == true;
+            bool hadDesign = snap?.Design?.HadTin == true;
+
+            if (hadExisting && hadDesign)
+            {
+                try
+                {
+                    // A saved calculation-ready project must restore the two TINs as one pair.
+                    // Build both cores first, then let DrawTinPair enforce the CAD atomicity gate.
+                    var builds = SurfaceWorkflowService.BuildPairCoreDetailed();
+                    SurfaceWorkflowService.DrawTinPair(builds);
+                    SurfaceWorkflowService.SetTinVisible(ModelRole.Existing, snap.Existing.TinVisible);
+                    SurfaceWorkflowService.SetTinVisible(ModelRole.Design, snap.Design.TinVisible);
+                }
+                catch (Exception ex)
+                {
+                    // Even if CAD cleanup itself encountered a protected/foreign entity,
+                    // never leave either in-memory TIN eligible for downstream calculation.
+                    SurfaceWorkflowService.InvalidateTin(ModelRole.Existing, clearCadLayer: false, notify: false);
+                    SurfaceWorkflowService.InvalidateTin(ModelRole.Design, clearCadLayer: false, notify: false);
+                    ProjectState.Current.NotifyChanged();
+                    warnings.Add("Không dựng lại được cặp TIN hiện trạng/thiết kế: " + ex.Message);
+                }
+                return;
+            }
+
+            if (hadExisting) TryRebuildTin(ModelRole.Existing, snap.Existing, warnings);
+            if (hadDesign) TryRebuildTin(ModelRole.Design, snap.Design, warnings);
         }
 
         private static void TryRebuildTin(ModelRole role, ModelSnapshot snap, List<string> warnings)

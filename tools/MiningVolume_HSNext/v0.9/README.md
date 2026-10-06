@@ -46,7 +46,7 @@ Môi trường làm việc hiện tại không có Windows + AutoCAD 2023, vì v
 
 ## Build Release
 
-Workflow: `.github/workflows/build-autocad2023-release.yml`
+Workflow: `.github/workflows/build-miningvolume-autocad2023.yml`
 
 Workflow chạy trên `windows-2022`:
 1. chạy QA;
@@ -55,7 +55,9 @@ Workflow chạy trên `windows-2022`:
 4. chạy `release/verify_release.ps1`;
 5. tạo `installer/payload.zip`;
 6. build `MiningVolume_HSNext_AutoCAD2023_Setup_v0.10.4.exe`;
-7. tạo SHA-256 và upload artifact.
+7. tạo SHA-256 + `BUILD_VERIFICATION.txt` và upload artifact.
+
+`BUILD_VERIFICATION.txt` chỉ ghi PASS cho các gate thực sự chạy trên GitHub-hosted Windows runner. Runtime AutoCAD 2023 được ghi rõ là chưa chạy trên GitHub; Setup vẫn bắt buộc chạy `MVSELFTEST` trong AutoCAD 2023 và tự rollback nếu không nhận `Status=PASS`.
 
 ## Nguyên tắc phát hành
 

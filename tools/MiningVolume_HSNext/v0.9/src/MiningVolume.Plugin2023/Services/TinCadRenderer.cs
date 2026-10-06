@@ -162,6 +162,58 @@ namespace MiningVolume2023.Services
             }
         }
 
+        public static int CountUnexpectedEntities(Database db, string layerName)
+        {
+            int count = 0;
+            using (var tr = db.TransactionManager.StartOpenCloseTransaction())
+            {
+                var lt = (LayerTable)tr.GetObject(db.LayerTableId, OpenMode.ForRead);
+                if (!lt.Has(layerName)) return 0;
+                var layerId = lt[layerName];
+                var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
+                var ms = (BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForRead);
+                foreach (ObjectId id in ms)
+                {
+                    var ent = tr.GetObject(id, OpenMode.ForRead) as Entity;
+                    if (ent != null && ent.LayerId == layerId && !(ent is Face)) count++;
+                }
+            }
+            return count;
+        }
+
+        public static bool IsLayerVisible(Database db, string layerName)
+        {
+            using (var tr = db.TransactionManager.StartOpenCloseTransaction())
+            {
+                var lt = (LayerTable)tr.GetObject(db.LayerTableId, OpenMode.ForRead);
+                if (!lt.Has(layerName)) return false;
+                var ltr = (LayerTableRecord)tr.GetObject(lt[layerName], OpenMode.ForRead);
+                return !ltr.IsOff && !ltr.IsFrozen;
+            }
+        }
+
+        public static bool IsLayerLocked(Database db, string layerName)
+        {
+            using (var tr = db.TransactionManager.StartOpenCloseTransaction())
+            {
+                var lt = (LayerTable)tr.GetObject(db.LayerTableId, OpenMode.ForRead);
+                if (!lt.Has(layerName)) return false;
+                var ltr = (LayerTableRecord)tr.GetObject(lt[layerName], OpenMode.ForRead);
+                return ltr.IsLocked;
+            }
+        }
+
+        public static short? GetLayerColorIndex(Database db, string layerName)
+        {
+            using (var tr = db.TransactionManager.StartOpenCloseTransaction())
+            {
+                var lt = (LayerTable)tr.GetObject(db.LayerTableId, OpenMode.ForRead);
+                if (!lt.Has(layerName)) return null;
+                var ltr = (LayerTableRecord)tr.GetObject(lt[layerName], OpenMode.ForRead);
+                return ltr.Color.ColorIndex;
+            }
+        }
+
         public static void SetVisible(Database db, string layerName, bool visible)
         {
             using (var tr = db.TransactionManager.StartTransaction())

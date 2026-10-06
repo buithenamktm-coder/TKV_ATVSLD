@@ -296,10 +296,21 @@ namespace MiningVolume2023.Services
             var doc = Application.DocumentManager.MdiActiveDocument ??
                       throw new InvalidOperationException("Không có bản vẽ AutoCAD đang hoạt động.");
             int count;
+            int unexpected;
+            bool exists;
             using (doc.LockDocument())
+            {
+                exists = TinCadRenderer.LayerExists(doc.Database, session.TinLayer);
                 count = TinCadRenderer.CountFaces(doc.Database, session.TinLayer);
+                unexpected = TinCadRenderer.CountUnexpectedEntities(doc.Database, session.TinLayer);
+            }
 
-            if (count == session.Tin.Triangles.Count)
+            if (unexpected > 0)
+                throw new InvalidOperationException(
+                    $"Layer {session.TinLayer} có {unexpected:n0} đối tượng không phải 3DFACE. " +
+                    "Không dùng layer này để tính nhằm tránh xóa nhầm dữ liệu CAD.");
+
+            if (exists && count == session.Tin.Triangles.Count)
                 return;
 
             // If the output layer was deleted/edited manually, rebuild its CAD

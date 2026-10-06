@@ -82,6 +82,15 @@ jobs:
           Remove-Item installer/payload.zip -Force -ErrorAction SilentlyContinue
           Compress-Archive -Path bundle -DestinationPath installer/payload.zip -CompressionLevel Optimal
 
+      - name: Verify installer source
+        shell: pwsh
+        run: |
+          Set-Location "$env:MV_ROOT/installer"
+          $env:GOOS='windows'
+          $env:GOARCH='amd64'
+          $env:CGO_ENABLED='0'
+          go vet main.go
+
       - name: Build native Windows installer
         shell: pwsh
         run: |
@@ -99,7 +108,22 @@ jobs:
           $setup = 'dist/MiningVolume_HSNext_AutoCAD2023_Setup_v0.10.4.exe'
           $hash = (Get-FileHash $setup -Algorithm SHA256).Hash.ToLowerInvariant()
           "SHA256  $hash  $(Split-Path $setup -Leaf)" | Set-Content -Encoding ascii dist/SHA256SUMS.txt
+          @(
+            'MiningVolume HS-Next v0.10.4 - BUILD VERIFICATION'
+            "Git commit: $env:GITHUB_SHA"
+            "Workflow run: $env:GITHUB_RUN_ID"
+            'Windows CI reference/static tests: PASS'
+            'AutoCAD 2023 API compile: PASS'
+            'Compile errors: 0'
+            'Release bundle policy: PASS'
+            'Installer go vet: PASS'
+            'Native Windows installer build: PASS'
+            "Setup SHA256: $hash"
+            'AutoCAD 2023 host runtime self-test: NOT EXECUTED ON GITHUB-HOSTED RUNNER'
+            'Runtime gate: Setup runs MVSELFTEST in AutoCAD 2023 and rolls back unless Status=PASS.'
+          ) | Set-Content -Encoding utf8 dist/BUILD_VERIFICATION.txt
           Compress-Archive -Path src,bundle,release,README.md,QA_REPORT.md,MiningVolume.HSNext.sln -DestinationPath dist/MiningVolume_HSNext_Source_v0.10.4.zip -CompressionLevel Optimal
+          Get-Content dist/BUILD_VERIFICATION.txt
 
       - name: Upload release candidate
         uses: actions/upload-artifact@v4
@@ -110,4 +134,6 @@ jobs:
             tools/MiningVolume_HSNext/v0.9/dist/MiningVolume_HSNext_AutoCAD2023_Setup_v0.10.4.exe
             tools/MiningVolume_HSNext/v0.9/dist/MiningVolume_HSNext_Source_v0.10.4.zip
             tools/MiningVolume_HSNext/v0.9/dist/SHA256SUMS.txt
+            tools/MiningVolume_HSNext/v0.9/dist/BUILD_VERIFICATION.txt
+            tools/MiningVolume_HSNext/v0.9/QA_REPORT.md
             tools/MiningVolume_HSNext/v0.9/bundle/MiningVolume2023.bundle/**
