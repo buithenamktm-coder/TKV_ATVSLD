@@ -166,7 +166,7 @@ def test_hosted_ci_builds_exact_head_and_clean_git_source_archive():
     assert "Checkout/source mismatch" in hosted
     assert "Checked out commit: $env:CHECKED_OUT_SHA" in hosted
     assert "git archive --format=zip" in hosted
-    assert "HEAD:tools/MiningVolume_HSNext/v0.9" in hosted
+    assert "-o $sourceZip HEAD tools/MiningVolume_HSNext/v0.9" in hosted
     assert "/(?:bin|obj)/" in hosted
     assert "/installer/payload\\.zip$" in hosted
 
