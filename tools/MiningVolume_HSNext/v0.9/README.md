@@ -34,7 +34,7 @@ Dữ liệu nguồn hỗ trợ `POINT`, `LINE`, `LWPOLYLINE`, `POLYLINE`, `3D PO
 
 ## Kiểm thử hiện tại
 
-- `pytest`: **115/115 PASS**.
+- `pytest`: **121/121 PASS**.
 - Installer shell: `go vet` PASS.
 - Installer shell cross-build: Windows PE64 PASS.
 - `PackageContents.xml`: AutoCAD 2023 R24.2 only.
@@ -125,7 +125,7 @@ Quy trình kiểm soát:
 Runtime `MVSELFTEST` v0.10.4 còn tạo thật hai layer TIN tạm trong AutoCAD, ghi/đếm 3DFACE và chỉ PASS nếu cả TIN hiện trạng và TIN thiết kế đều được tạo đúng.
 
 
-Windows CI v0.10.4 hiện tại: **115/115 reference/static tests PASS**, build AutoCAD 2023 add-in thành công, **0 warning, 0 compile errors**, `go vet` PASS và release bundle policy PASS. Smoke test tạo layer TIN thật nằm trong `MVSELFTEST` và được Setup thực thi trên máy có AutoCAD 2023.
+Windows CI v0.10.4 hiện tại: **121/121 reference/static tests PASS**, build AutoCAD 2023 add-in thành công, **0 warning, 0 compile errors**, `go vet` PASS và release bundle policy PASS. Smoke test tạo layer TIN thật nằm trong `MVSELFTEST` và được Setup thực thi trên máy có AutoCAD 2023.
 
 
 ## Cổng TIN bắt buộc — v0.10.4
