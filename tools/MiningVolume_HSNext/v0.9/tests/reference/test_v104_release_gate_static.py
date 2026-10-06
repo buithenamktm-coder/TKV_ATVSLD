@@ -154,8 +154,9 @@ def test_hosted_artifact_is_explicitly_pre_release_and_final_requires_runtime_pa
 def test_source_archive_contains_installer_and_regression_tests():
     hosted = read("../../../.github/workflows/build-miningvolume-autocad2023.yml")
     assert "git archive --format=zip" in hosted
-    assert "MiningVolume_HSNext_v0.10.4/installer/main.go" in hosted
-    assert "MiningVolume_HSNext_v0.10.4/tests/reference/test_v104_release_gate_static.py" in hosted
+    assert "'/installer/main.go'" in hosted
+    assert "'/tests/reference/test_v104_release_gate_static.py'" in hosted
+    assert "EndsWith($suffix" in hosted
 
 
 def test_hosted_ci_builds_exact_head_and_clean_git_source_archive():
@@ -168,3 +169,11 @@ def test_hosted_ci_builds_exact_head_and_clean_git_source_archive():
     assert "HEAD:tools/MiningVolume_HSNext/v0.9" in hosted
     assert "/(?:bin|obj)/" in hosted
     assert "/installer/payload\\.zip$" in hosted
+
+
+def test_installer_admin_check_and_success_message_match_palette_policy():
+    installer = read("installer/main.go")
+    assert 'exec.Command("fltmc").Run()==nil' in installer
+    assert 'exec.Command("net","session")' not in installer
+    assert "MiningVolume không tự mở bảng theo mặc định" in installer
+    assert "bảng MiningVolume sẽ tự hiện" not in installer

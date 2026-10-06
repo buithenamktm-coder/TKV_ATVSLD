@@ -197,3 +197,8 @@ Runner **không chạy dưới dạng Windows Service** vì AutoCAD/MVSELFTEST c
 - File cài đặt trong artifact này có hậu tố `_PRE_RELEASE.exe` và kèm `PRE_RELEASE_NOTICE.txt`; không được coi là bản phát hành cuối.
 - Chỉ workflow chạy trên máy AutoCAD 2023 thật, sau khi `RUNTIME_VERIFICATION.txt` có `Status=PASS`, mới được phép build `MiningVolume_HSNext_AutoCAD2023_Setup_v0.10.4_RUNTIME_PASS.exe`.
 - Artifact cuối có tên `MiningVolume-HSNext-AutoCAD2023-v0.10.4-RUNTIME-PASS` và kèm `RUNTIME_RELEASE_VERIFICATION.txt` + SHA-256 của Setup.
+
+
+### Kiểm soát quyền của Setup
+
+Setup kiểm tra quyền Administrator bằng cơ chế không phụ thuộc dịch vụ Windows Server; sau cài thành công, thông báo cũng tuân theo chính sách mới: palette MiningVolume không tự mở theo mặc định.

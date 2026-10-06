@@ -170,14 +170,16 @@ jobs:
           $zip = [System.IO.Compression.ZipFile]::OpenRead((Resolve-Path $sourceZip))
           try {
             $names = @($zip.Entries | ForEach-Object { $_.FullName.Replace('\','/') })
-            $requiredSource = @(
-              'MiningVolume_HSNext_v0.10.4/installer/main.go',
-              'MiningVolume_HSNext_v0.10.4/tests/reference/test_v104_release_gate_static.py',
-              'MiningVolume_HSNext_v0.10.4/release/verify_autocad2023_runtime.ps1',
-              'MiningVolume_HSNext_v0.10.4/src/MiningVolume.Plugin2023/Services/SelfTestService.cs'
+            $requiredSourceSuffix = @(
+              '/installer/main.go',
+              '/tests/reference/test_v104_release_gate_static.py',
+              '/release/verify_autocad2023_runtime.ps1',
+              '/src/MiningVolume.Plugin2023/Services/SelfTestService.cs'
             )
-            foreach ($required in $requiredSource) {
-              if ($names -notcontains $required) { throw "Source archive thiếu file bắt buộc: $required" }
+            foreach ($suffix in $requiredSourceSuffix) {
+              if (-not ($names | Where-Object { $_.EndsWith($suffix, [StringComparison]::OrdinalIgnoreCase) })) {
+                throw "Source archive thiếu file bắt buộc có hậu tố: $suffix"
+              }
             }
             $generated = @($names | Where-Object {
               $_ -match '/(?:bin|obj)/' -or $_ -match '/installer/payload\.zip$'

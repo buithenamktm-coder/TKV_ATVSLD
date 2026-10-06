@@ -148,3 +148,9 @@ Setup bắt buộc tự chạy `MVSELFTEST` trong AutoCAD 2023 và rollback nế
 - Source ZIP được tạo bằng `git archive` từ đúng Git HEAD, không lấy workspace đã build.
 - CI kiểm bắt buộc source ZIP có `installer/main.go`, regression tests, runtime verifier và SelfTestService.
 - CI chặn `bin/`, `obj/` và `installer/payload.zip` lọt vào source archive.
+
+
+## Installer elevation và thông báo palette
+
+- Setup dùng `fltmc` để kiểm tra token Administrator, không còn phụ thuộc `net session`/Windows Server service.
+- Thông báo cài thành công đã đồng bộ với chính sách UI: MiningVolume **không tự mở palette theo mặc định**; người dùng mở từ Ribbon hoặc bật tùy chọn tự động mở.

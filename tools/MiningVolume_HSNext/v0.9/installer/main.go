@@ -91,7 +91,7 @@ func install() {
     if err := registerUninstall(target); err != nil {
         msg("Add-in đã PASS trong AutoCAD nhưng chưa ghi được mục gỡ cài đặt: "+err.Error(), 0x30); return
     }
-    msg("Cài đặt MiningVolume v0.10.4 thành công.\n\nAutoCAD 2023 runtime self-test: PASS.\nMáy không cần Visual Studio/Build Tools.\nMở AutoCAD: bảng MiningVolume sẽ tự hiện, kể cả khi Ribbon đang tắt.", 0x40)
+    msg("Cài đặt MiningVolume v0.10.4 thành công.\n\nAutoCAD 2023 runtime self-test: PASS.\nMáy không cần Visual Studio/Build Tools.\nMở AutoCAD: MiningVolume không tự mở bảng theo mặc định; mở từ Ribbon MINING VOLUME hoặc bật tùy chọn tự động mở trong trang Dự án.", 0x40)
 }
 
 func validatePrebuiltBundle(root string) error {
@@ -234,7 +234,7 @@ func restoreBackup(backup,target string) error {
 func exists(p string) bool { _,e:=os.Stat(p);return e==nil }
 func hasArg(args []string,s string) bool { for _,a:=range args{if strings.EqualFold(a,s){return true}};return false }
 func processRunning(name string) bool { out,_:=exec.Command("tasklist","/FI","IMAGENAME eq "+name).CombinedOutput();return strings.Contains(strings.ToLower(string(out)),strings.ToLower(name)) }
-func isAdmin() bool { return exec.Command("net","session").Run()==nil }
+func isAdmin() bool { return exec.Command("fltmc").Run()==nil }
 func elevate(extra string) { exe,_:=os.Executable(); ps:=fmt.Sprintf("Start-Process -FilePath %s -ArgumentList %s -Verb RunAs",psQuote(exe),psQuote(extra)); _=exec.Command("powershell.exe","-NoProfile","-WindowStyle","Hidden","-Command",ps).Start() }
 func psQuote(s string) string { return "'"+strings.ReplaceAll(s,"'","''")+"'" }
 func msg(text string, icon uintptr) { user32:=syscall.NewLazyDLL("user32.dll"); proc:=user32.NewProc("MessageBoxW"); t,_:=syscall.UTF16PtrFromString(text); c,_:=syscall.UTF16PtrFromString(productName); proc.Call(0,uintptr(unsafe.Pointer(t)),uintptr(unsafe.Pointer(c)),0x0|icon) }
