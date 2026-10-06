@@ -9,6 +9,15 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+$identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+$principal = New-Object Security.Principal.WindowsPrincipal($identity)
+if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    throw 'Runtime verifier phải chạy bằng tài khoản Administrator để cài tạm bundle vào ProgramData.'
+}
+if (-not [Environment]::UserInteractive) {
+    throw 'Runtime verifier phải chạy trong phiên Windows tương tác, không chạy dưới service session.'
+}
+
 function Find-AutoCAD2023 {
     $candidates = @(
         (Join-Path $env:ProgramFiles 'Autodesk\AutoCAD 2023'),
@@ -76,9 +85,14 @@ New-Item -ItemType Directory -Force (Split-Path $OutputPath -Parent) | Out-Null
 Remove-Item $SelfTestPath -Force -ErrorAction SilentlyContinue
 Remove-Item $OutputPath -Force -ErrorAction SilentlyContinue
 
+# Recover from an interrupted earlier runtime verification before starting.
+if (Test-Path $backup) {
+    Remove-Item $target -Recurse -Force -ErrorAction SilentlyContinue
+    Move-Item $backup $target -Force
+}
+
 $hadPrevious = Test-Path $target
 try {
-    Remove-Item $backup -Recurse -Force -ErrorAction SilentlyContinue
     if ($hadPrevious) { Move-Item $target $backup -Force }
     Copy-Directory $bundle $target
 
