@@ -130,4 +130,4 @@ Setup bắt buộc tự chạy `MVSELFTEST` trong AutoCAD 2023 và rollback nế
 
 - Launcher self-hosted runner tự yêu cầu UAC và nâng quyền Administrator trước khi chạy `run.cmd`.
 - Workflow runtime không còn khóa cứng một đường dẫn AutoCAD; nó dò AutoCAD 2023 R24.2 từ thư mục chuẩn hoặc Registry và truyền đúng `AutoCAD2023Dir` vào build.
-- Runtime workflow có concurrency + cleanup để chỉ giữ gate mới nhất, tránh chạy nối tiếp các commit cũ khi runner online trở lại.
+- Runtime workflow chỉ cleanup các run cũ khi nhận đúng lệnh `/runtime-autocad2023`; các comment PR khác không được phép hủy runtime gate đang chờ.

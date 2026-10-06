@@ -10,10 +10,6 @@ on:
   issue_comment:
     types: [created]
 
-concurrency:
-  group: miningvolume-autocad2023-runtime
-  cancel-in-progress: true
-
 jobs:
   prepare:
     if: >-
