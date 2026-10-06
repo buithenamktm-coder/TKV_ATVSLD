@@ -79,6 +79,7 @@ func install() {
         msg("MiningVolume đã tự rollback vì kiểm thử trong AutoCAD 2023 không đạt.\n\n"+detail, 0x10); return
     }
     os.RemoveAll(backup)
+    writeRuntimeVerification(cad, detail)
     if err := registerUninstall(target); err != nil {
         msg("Add-in đã PASS trong AutoCAD nhưng chưa ghi được mục gỡ cài đặt: "+err.Error(), 0x30); return
     }
@@ -125,6 +126,10 @@ func runAutoCADSelfTest(cad string) (bool, string) {
         if b, err := os.ReadFile(log); err == nil {
             txt := string(b)
             if strings.Contains(txt, "Status=PASS") {
+                if !strings.Contains(txt, "MiningVolume HS-Next v0.10.4 runtime self-test") {
+                    _ = cmd.Process.Kill()
+                    return false, "MVSELFTEST trả PASS nhưng log không đúng phiên bản v0.10.4.\n\n"+txt
+                }
                 done := make(chan error,1); go func(){done<-cmd.Wait()}()
                 select { case <-done: case <-time.After(5*time.Second): _ = cmd.Process.Kill() }
                 return true, txt
@@ -178,6 +183,16 @@ func extractPayload(dst string) error {
         _,e:=io.Copy(w,rc); w.Close(); rc.Close(); if e!=nil{return e}
     }
     return nil
+}
+
+func writeRuntimeVerification(cadDir, selfTest string) {
+    pd:=os.Getenv("ProgramData"); if pd==""{pd=`C:\ProgramData`}
+    dir:=filepath.Join(pd,"MiningVolume2023","Logs"); _=os.MkdirAll(dir,0755)
+    content:=fmt.Sprintf(
+        "MiningVolume HS-Next v0.10.4 runtime verification\r\n"+
+        "Timestamp=%s\r\nStatus=PASS\r\nAutoCAD=%s\r\n\r\n%s",
+        time.Now().Format(time.RFC3339), filepath.Join(cadDir,"acad.exe"), selfTest)
+    _=os.WriteFile(filepath.Join(dir,"runtime_verification.txt"),[]byte(content),0644)
 }
 
 func writePersistentLog(kind, content string) {
