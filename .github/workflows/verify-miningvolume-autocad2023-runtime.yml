@@ -77,7 +77,9 @@ jobs:
             }
 
       - name: Record requested source
-        run: echo "Runtime source requested: ${{ steps.source.outputs.result }}"
+        shell: bash
+        run: |
+          echo "Runtime source requested: ${{ steps.source.outputs.result }}"
 
   runtime:
     needs: prepare
