@@ -149,6 +149,21 @@ namespace MiningVolume2023
 
         [CommandMethod("MVOPEN", CommandFlags.Session)] public static void OpenPalette() => Open(AppPage.Project);
 
+        internal static void TogglePalette()
+        {
+            if (Palette == null)
+            {
+                Open(AppPage.Project);
+                return;
+            }
+
+            Palette.Visible = !Palette.Visible;
+            StartupLog("Palette visibility toggled: " + (Palette.Visible ? "ON" : "OFF"));
+        }
+
+        [CommandMethod("MV_TOGGLE", CommandFlags.Session)]
+        public static void TogglePaletteCommand() => TogglePalette();
+
         [CommandMethod("MV_AUTOPEN", CommandFlags.Session)]
         public static void ToggleAutoOpen()
         {
