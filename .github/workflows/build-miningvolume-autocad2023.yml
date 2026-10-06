@@ -146,7 +146,7 @@ jobs:
             'Do not treat this package as the final release.'
             'The final artifact is created only by the AutoCAD 2023 runtime workflow after Status=PASS.'
           ) | Set-Content -Encoding utf8 dist/PRE_RELEASE_NOTICE.txt
-          Compress-Archive -Path src,bundle,release,README.md,QA_REPORT.md,MiningVolume.HSNext.sln -DestinationPath dist/MiningVolume_HSNext_Source_v0.10.4.zip -CompressionLevel Optimal
+          Compress-Archive -Path src,bundle,release,installer,tests,README.md,QA_REPORT.md,MiningVolume.HSNext.sln -DestinationPath dist/MiningVolume_HSNext_Source_v0.10.4.zip -CompressionLevel Optimal
           Get-Content dist/BUILD_VERIFICATION.txt
 
       - name: Upload pre-release candidate

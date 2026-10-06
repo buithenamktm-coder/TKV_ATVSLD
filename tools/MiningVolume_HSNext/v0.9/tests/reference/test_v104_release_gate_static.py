@@ -149,3 +149,8 @@ def test_hosted_artifact_is_explicitly_pre_release_and_final_requires_runtime_pa
     assert "MiningVolume_HSNext_AutoCAD2023_Setup_v0.10.4_RUNTIME_PASS.exe" in runtime
     assert "if ($runtimeProof -notmatch 'Status=PASS')" in runtime
     assert "RUNTIME_RELEASE_VERIFICATION.txt" in runtime
+
+
+def test_source_archive_contains_installer_and_regression_tests():
+    hosted = read("../../../.github/workflows/build-miningvolume-autocad2023.yml")
+    assert "Compress-Archive -Path src,bundle,release,installer,tests,README.md,QA_REPORT.md,MiningVolume.HSNext.sln" in hosted
