@@ -36,6 +36,7 @@ def test_release_pipeline_emits_build_verification_and_vets_installer():
     s = read("../../../.github/workflows/build-miningvolume-autocad2023.yml")
     assert "go vet main.go" in s
     assert "BUILD_VERIFICATION.txt" in s
+    assert "Source commit: $env:SOURCE_SHA" in s
     assert "Compile errors: 0" in s
     assert "AutoCAD 2023 host runtime self-test: NOT EXECUTED ON GITHUB-HOSTED RUNNER" in s
     assert "Runtime gate: Setup runs MVSELFTEST" in s
