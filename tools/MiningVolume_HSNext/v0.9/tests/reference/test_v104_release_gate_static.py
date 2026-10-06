@@ -116,6 +116,8 @@ def test_runtime_runner_bootstrap_requires_interactive_autocad2023_host():
     assert "run.cmd" in s
     assert "Start-Process -FilePath" in s
     assert "-Verb RunAs" in s
+    assert ">nul 2>&1 fltmc" in s
+    assert "net session" not in s
     assert "Không cài runner dưới dạng Windows Service" in s
 
 

@@ -106,7 +106,7 @@ if ((Test-Path $config) -and -not $Reconfigure) {
 $launcher = Join-Path $RunnerRoot 'START_MiningVolume_Runtime_Runner.cmd'
 @(
     '@echo off',
-    '>nul 2>&1 net session',
+    '>nul 2>&1 fltmc',
     'if %errorlevel% neq 0 (',
     '  powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Process -FilePath ''%~f0'' -Verb RunAs"',
     '  exit /b',
