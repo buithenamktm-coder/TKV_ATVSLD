@@ -27,6 +27,8 @@ namespace MiningVolume2023.Services
         public double MinZ { get; set; }
         public double MaxZ { get; set; }
         public DateTime SourceModifiedUtc { get; set; }
+        public long SourceRevision { get; set; }
+        internal SurfaceModel SourceModel { get; set; }
         public int TriangleCount => Tin?.Triangles?.Count ?? 0;
 
         public string Summary =>
@@ -99,7 +101,9 @@ namespace MiningVolume2023.Services
             if (session.Source == null || session.Source.Entities.Count == 0)
                 throw new InvalidOperationException($"Mô hình {session.Name} chưa có dữ liệu.");
 
-            var sourceModified = session.Source.LastModifiedUtc;
+            var source = session.Source;
+            var sourceModified = source.LastModifiedUtc;
+            var sourceRevision = source.Revision;
             var options = new SurfaceBuildOptions
             {
                 XyTolerance = 1e-6,
@@ -107,13 +111,18 @@ namespace MiningVolume2023.Services
                 MinimumTriangleArea = 1e-10
             };
 
-            var prepared = new SurfaceInputPreparer().Prepare(session.Source, options);
+            var prepared = new SurfaceInputPreparer().Prepare(source, options);
             if (prepared.HasErrors)
                 throw new SurfaceValidationException(session.Name, prepared.Issues);
 
             var tin = new ConformingTinBuilder().Build(session.Name, prepared, options);
             if (tin == null || tin.Triangles == null || tin.Triangles.Count == 0)
                 throw new InvalidOperationException($"TIN {session.Name} không tạo được tam giác hợp lệ.");
+
+            if (!ReferenceEquals(session.Source, source) || source.Revision != sourceRevision)
+                throw new InvalidOperationException(
+                    $"Dữ liệu {session.Name} đã thay đổi trong lúc đang dựng TIN. " +
+                    "Kết quả tạm bị hủy; hãy tạo/cập nhật TIN lại.");
 
             return new SurfaceBuildResult
             {
@@ -124,7 +133,9 @@ namespace MiningVolume2023.Services
                 WarningCount = prepared.Issues.Count(x => x.Severity == ValidationSeverity.Warning),
                 MinZ = prepared.Sites.Min(p => p.Z),
                 MaxZ = prepared.Sites.Max(p => p.Z),
-                SourceModifiedUtc = sourceModified
+                SourceModifiedUtc = sourceModified,
+                SourceRevision = sourceRevision,
+                SourceModel = source
             };
         }
 
@@ -173,17 +184,17 @@ namespace MiningVolume2023.Services
         {
             if (build == null) throw new ArgumentNullException(nameof(build));
             if (build.Role != role) throw new InvalidOperationException("Kết quả dựng TIN không đúng mô hình cần ghi.");
-            DrawTinInternal(role, build.Tin, build.SourceModifiedUtc);
+            DrawTinInternal(role, build.Tin, build.SourceModel, build.SourceRevision, build.SourceModifiedUtc);
         }
 
         public static void DrawTin(ModelRole role, TinSurface tin)
         {
             var session = ProjectState.Current.Get(role);
-            var stamp = session.Source?.LastModifiedUtc ?? DateTime.UtcNow;
-            DrawTinInternal(role, tin, stamp);
+            var source = session.Source ?? throw new InvalidOperationException("Mô hình chưa có dữ liệu nguồn.");
+            DrawTinInternal(role, tin, source, source.Revision, source.LastModifiedUtc);
         }
 
-        private static void DrawTinInternal(ModelRole role, TinSurface tin, DateTime sourceModifiedUtc)
+        private static void DrawTinInternal(ModelRole role, TinSurface tin, SurfaceModel sourceModel, long sourceRevision, DateTime sourceModifiedUtc)
         {
             if (tin == null) throw new ArgumentNullException(nameof(tin));
             if (tin.Triangles == null || tin.Triangles.Count == 0)
@@ -191,6 +202,11 @@ namespace MiningVolume2023.Services
 
             var state = ProjectState.Current;
             var session = state.Get(role);
+            if (sourceModel == null || !ReferenceEquals(session.Source, sourceModel) || sourceModel.Revision != sourceRevision)
+                throw new InvalidOperationException(
+                    $"Dữ liệu {session.Name} đã thay đổi sau khi dựng TIN. " +
+                    "Không ghi TIN cũ xuống AutoCAD; hãy tạo/cập nhật lại TIN.");
+
             var doc = Application.DocumentManager.MdiActiveDocument ??
                       throw new InvalidOperationException("Không có bản vẽ AutoCAD đang hoạt động.");
 
@@ -214,6 +230,7 @@ namespace MiningVolume2023.Services
 
             session.Tin = tin;
             session.TinBuiltFromSourceUtc = sourceModifiedUtc;
+            session.TinBuiltFromSourceRevision = sourceRevision;
             session.LastBuiltUtc = DateTime.UtcNow;
             session.TinVisible = true;
             state.SectionProfiles.Clear();
@@ -241,6 +258,7 @@ namespace MiningVolume2023.Services
             var session = state.Get(role);
             session.Tin = null;
             session.TinBuiltFromSourceUtc = null;
+            session.TinBuiltFromSourceRevision = null;
             session.LastBuiltUtc = null;
             session.TinVisible = false;
 
@@ -315,7 +333,12 @@ namespace MiningVolume2023.Services
 
             // If the output layer was deleted/edited manually, rebuild its CAD
             // representation from the verified in-memory TIN before computation.
-            DrawTinInternal(role, session.Tin, session.TinBuiltFromSourceUtc.Value);
+            DrawTinInternal(
+                role,
+                session.Tin,
+                session.Source,
+                session.TinBuiltFromSourceRevision.Value,
+                session.TinBuiltFromSourceUtc ?? session.Source.LastModifiedUtc);
         }
 
         public static string TinStatusText(ModelRole role)
