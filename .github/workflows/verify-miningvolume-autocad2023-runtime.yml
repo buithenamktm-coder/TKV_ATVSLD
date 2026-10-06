@@ -160,6 +160,11 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.x'
+
       - name: Restore with real AutoCAD 2023 references
         shell: pwsh
         run: |
@@ -191,6 +196,44 @@ jobs:
           Set-Location $env:MV_ROOT
           ./release/verify_autocad2023_runtime.ps1
 
+      - name: Build runtime-validated installer
+        shell: pwsh
+        run: |
+          Set-Location $env:MV_ROOT
+          if (-not (Test-Path 'dist/RUNTIME_VERIFICATION.txt')) {
+            throw 'Thiếu RUNTIME_VERIFICATION.txt sau MVSELFTEST.'
+          }
+          $runtimeProof = Get-Content 'dist/RUNTIME_VERIFICATION.txt' -Raw
+          if ($runtimeProof -notmatch 'Status=PASS') {
+            throw 'Không được tạo Setup FINAL khi runtime verification chưa PASS.'
+          }
+
+          Remove-Item installer/payload.zip -Force -ErrorAction SilentlyContinue
+          Compress-Archive -Path bundle -DestinationPath installer/payload.zip -CompressionLevel Optimal
+
+          Set-Location installer
+          $env:GOOS='windows'
+          $env:GOARCH='amd64'
+          $env:CGO_ENABLED='0'
+          go vet main.go
+          go build -trimpath -ldflags '-s -w -H=windowsgui' -o ../dist/MiningVolume_HSNext_AutoCAD2023_Setup_v0.10.4_RUNTIME_PASS.exe main.go
+          Set-Location ..
+
+          $setup = 'dist/MiningVolume_HSNext_AutoCAD2023_Setup_v0.10.4_RUNTIME_PASS.exe'
+          $hash = (Get-FileHash $setup -Algorithm SHA256).Hash.ToLowerInvariant()
+          @(
+            'MiningVolume HS-Next v0.10.4 - RUNTIME-PASS RELEASE VERIFICATION'
+            ('Timestamp=' + (Get-Date).ToString('o'))
+            'Status=PASS'
+            ('SourceCommit=' + $env:SOURCE_SHA)
+            ('RuntimeWorkflowRun=' + $env:GITHUB_RUN_ID)
+            'AutoCAD2023Runtime=PASS'
+            'MVSELFTEST=PASS'
+            ('SetupSHA256=' + $hash)
+          ) | Set-Content -Encoding utf8 dist/RUNTIME_RELEASE_VERIFICATION.txt
+          "SHA256  $hash  $(Split-Path $setup -Leaf)" | Set-Content -Encoding ascii dist/RUNTIME_RELEASE_SHA256.txt
+          Get-Content dist/RUNTIME_RELEASE_VERIFICATION.txt
+
       - name: Capture startup log
         if: always()
         shell: pwsh
@@ -201,11 +244,25 @@ jobs:
             Copy-Item $p "$env:MV_ROOT/dist/startup_runtime.log" -Force
           }
 
-      - name: Upload runtime proof
+      - name: Upload runtime-passed release
+        uses: actions/upload-artifact@v4
+        with:
+          name: MiningVolume-HSNext-AutoCAD2023-v0.10.4-RUNTIME-PASS
+          if-no-files-found: error
+          path: |
+            tools/MiningVolume_HSNext/v0.9/dist/MiningVolume_HSNext_AutoCAD2023_Setup_v0.10.4_RUNTIME_PASS.exe
+            tools/MiningVolume_HSNext/v0.9/dist/RUNTIME_RELEASE_VERIFICATION.txt
+            tools/MiningVolume_HSNext/v0.9/dist/RUNTIME_RELEASE_SHA256.txt
+            tools/MiningVolume_HSNext/v0.9/dist/RUNTIME_VERIFICATION.txt
+            tools/MiningVolume_HSNext/v0.9/dist/MVSELFTEST_RUNTIME.txt
+            tools/MiningVolume_HSNext/v0.9/dist/startup_runtime.log
+            tools/MiningVolume_HSNext/v0.9/bundle/MiningVolume2023.bundle/**
+
+      - name: Upload runtime diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: MiningVolume-AutoCAD2023-Runtime-v0.10.4
+          name: MiningVolume-AutoCAD2023-Runtime-Diagnostics-v0.10.4
           if-no-files-found: warn
           path: |
             tools/MiningVolume_HSNext/v0.9/dist/RUNTIME_VERIFICATION.txt
