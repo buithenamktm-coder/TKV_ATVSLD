@@ -27,6 +27,7 @@ namespace MiningVolume2023.Services
         public SurfaceModel Source { get; set; }
         public TinSurface Tin { get; set; }
         public DateTime? TinBuiltFromSourceUtc { get; set; }
+        public long? TinBuiltFromSourceRevision { get; set; }
         public bool TinVisible { get; set; } = true;
         public bool IsTinCurrent
         {
@@ -35,9 +36,9 @@ namespace MiningVolume2023.Services
                 return Tin != null &&
                        Tin.Triangles != null &&
                        Tin.Triangles.Count > 0 &&
-                       TinBuiltFromSourceUtc.HasValue &&
+                       TinBuiltFromSourceRevision.HasValue &&
                        Source != null &&
-                       TinBuiltFromSourceUtc.Value >= Source.LastModifiedUtc;
+                       TinBuiltFromSourceRevision.Value == Source.Revision;
             }
         }
         public HashSet<SourceEntityType> AllowedTypes { get; } = new HashSet<SourceEntityType>();
@@ -121,6 +122,7 @@ namespace MiningVolume2023.Services
             s.Source = new SurfaceModel(s.Name);
             s.Tin = null;
             s.TinBuiltFromSourceUtc = null;
+            s.TinBuiltFromSourceRevision = null;
             s.TinVisible = true;
             s.LastBuiltUtc = null;
             s.AllowedTypes.Clear();
