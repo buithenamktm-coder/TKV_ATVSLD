@@ -112,3 +112,17 @@ def test_runtime_runner_bootstrap_requires_interactive_autocad2023_host():
     assert "--labels 'autocad2023'" in s
     assert "run.cmd" in s
     assert "Không cài runner dưới dạng Windows Service" in s
+
+
+def test_palette_has_direct_show_hide_toggle_and_startup_default_off():
+    entry = read("src/MiningVolume.Plugin2023/EntryPoint.cs")
+    ribbon = read("src/MiningVolume.Plugin2023/RibbonBuilder.cs")
+    project = read("src/MiningVolume.Plugin2023/UI/ProjectPage.cs")
+    settings = read("src/MiningVolume.Plugin2023/Services/UserSettingsService.cs")
+    assert "internal static void TogglePalette()" in entry
+    assert "Palette.Visible = !Palette.Visible" in entry
+    assert 'CommandMethod("MV_TOGGLE"' in entry
+    assert 'Btn("Ẩn / Hiện bảng", RibbonAction.TogglePalette)' in ribbon
+    assert "EntryPoint.TogglePalette();" in ribbon
+    assert "Tự động mở bảng MiningVolume khi khởi động AutoCAD" in project
+    assert "if (key == null) return false;" in settings
