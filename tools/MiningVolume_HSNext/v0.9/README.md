@@ -140,3 +140,5 @@ TIN hiện trạng và TIN thiết kế là dữ liệu đầu vào bắt buộc
 
 
 Final v0.10.4 TIN release build trigger.
+
+Final CI branch marker for v0.10.4 TIN release.
