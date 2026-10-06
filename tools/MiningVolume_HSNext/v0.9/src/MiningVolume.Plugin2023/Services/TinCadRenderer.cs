@@ -169,11 +169,10 @@ namespace MiningVolume2023.Services
                 var lt = (LayerTable)tr.GetObject(db.LayerTableId, OpenMode.ForRead);
                 if (!lt.Has(layerName)) { tr.Commit(); return; }
                 var ltr = (LayerTableRecord)tr.GetObject(lt[layerName], OpenMode.ForWrite);
-                bool wasLocked = ltr.IsLocked;
                 ltr.IsLocked = false;
                 if (visible && ltr.IsFrozen) ltr.IsFrozen = false;
                 ltr.IsOff = !visible;
-                ltr.IsLocked = wasLocked || true;
+                ltr.IsLocked = true;
                 tr.Commit();
             }
         }
