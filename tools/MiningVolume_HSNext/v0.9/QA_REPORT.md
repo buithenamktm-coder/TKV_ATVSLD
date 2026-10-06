@@ -115,3 +115,12 @@ Setup bắt buộc tự chạy `MVSELFTEST` trong AutoCAD 2023 và rollback nế
 - Mặt cắt và khối lượng phải gọi cổng `EnsureBothTinsReady`.
 - TIN layer khóa sau build; update do phần mềm kiểm soát.
 - Self-test runtime dựng TIN bằng production builder và smoke-test layer AutoCAD thật.
+
+
+## Runtime gate tự động — AutoCAD 2023 thật
+
+- Có script `release/verify_autocad2023_runtime.ps1` để cài tạm bundle vào `ProgramData/Autodesk/ApplicationPlugins`, chạy `MVSELFTEST` trong AutoCAD 2023 thật, kiểm đúng phiên bản v0.10.4 và khôi phục bundle trước đó sau kiểm thử.
+- Runtime verifier xuất `RUNTIME_VERIFICATION.txt` cùng log `MVSELFTEST_RUNTIME.txt`, có version AutoCAD và SHA-256 của 4 DLL MiningVolume.
+- Workflow thủ công `.github/workflows/verify-miningvolume-autocad2023-runtime.yml` chỉ chạy trên self-hosted runner có nhãn `autocad2023`.
+- Runner phải là Windows x64, có AutoCAD 2023 đã kích hoạt bản quyền và chạy GitHub Actions Runner trong phiên người dùng tương tác; không chạy dưới Windows service không có desktop.
+- `main` vẫn không được merge/phát hành nếu workflow runtime chưa PASS.
