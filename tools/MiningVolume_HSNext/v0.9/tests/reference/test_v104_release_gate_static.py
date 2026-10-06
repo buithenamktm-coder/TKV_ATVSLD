@@ -47,3 +47,22 @@ def test_installer_requires_current_runtime_selftest_and_persists_proof():
     assert "MiningVolume HS-Next v0.10.4 runtime self-test" in s
     assert "writeRuntimeVerification(cad, detail)" in s
     assert "runtime_verification.txt" in s
+
+
+def test_runtime_gate_has_real_autocad_self_hosted_workflow_and_proof():
+    ps = read("release/verify_autocad2023_runtime.ps1")
+    wf = read("../../../.github/workflows/verify-miningvolume-autocad2023-runtime.yml")
+    assert "Status=PASS" in ps
+    assert "AutoCADFileVersion" in ps
+    assert "RUNTIME_VERIFICATION.txt" in ps
+    assert "MVSELFTEST_RUNTIME.txt" in ps
+    assert "Layer TIN đúng màu quy ước" in ps
+    assert "runs-on: [self-hosted, Windows, X64, autocad2023]" in wf
+    assert "Run MVSELFTEST in AutoCAD 2023" in wf
+    assert "MiningVolume-AutoCAD2023-Runtime-v0.10.4" in wf
+
+def test_hosted_ci_parses_runtime_verifier_script():
+    s = read("../../../.github/workflows/build-miningvolume-autocad2023.yml")
+    assert "Parse AutoCAD runtime verifier" in s
+    assert "verify_autocad2023_runtime.ps1" in s
+    assert "Parser]::ParseFile" in s
