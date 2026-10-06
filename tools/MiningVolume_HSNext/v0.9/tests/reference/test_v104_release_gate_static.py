@@ -82,6 +82,7 @@ def test_runtime_pass_requires_critical_tin_checks_and_interactive_admin_session
     runtime = read("release/verify_autocad2023_runtime.ps1")
     for token in [
         "PASS | Khởi tạo đầy đủ giao diện MiningVolume",
+        "PASS | Bật/tắt palette MiningVolume hoạt động",
         "PASS | Layer TIN đúng màu quy ước: hiện trạng ACI 1, thiết kế ACI 3",
         "PASS | Có thể hiện lại cả hai TIN và layer vẫn khóa",
     ]:
@@ -124,5 +125,8 @@ def test_palette_has_direct_show_hide_toggle_and_startup_default_off():
     assert 'CommandMethod("MV_TOGGLE"' in entry
     assert 'Btn("Ẩn / Hiện bảng", RibbonAction.TogglePalette)' in ribbon
     assert "EntryPoint.TogglePalette();" in ribbon
+    selftest = read("src/MiningVolume.Plugin2023/Services/SelfTestService.cs")
+    assert "Bật/tắt palette MiningVolume hoạt động" in selftest
+    assert "EntryPoint.TogglePalette();" in selftest
     assert "Tự động mở bảng MiningVolume khi khởi động AutoCAD" in project
     assert "if (key == null) return false;" in settings

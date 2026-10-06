@@ -60,7 +60,7 @@ Không gọi đây là Release 1.0 cho đến khi binary build trên Windows đ�
 Windows CI đã compile thật solution `net48` với AutoCAD.NET 24.2 và tạo Setup. Tuy nhiên runner GitHub không có AutoCAD 2023 host, vì vậy các mục sau **chưa được ghi PASS**:
 
 1. Nạp DLL vào AutoCAD 2023 thật.
-2. Ribbon/Palette khởi tạo trong host thật.
+2. Ribbon/Palette khởi tạo trong host thật và thao tác Ẩn/Hiện palette.
 3. Chọn entity trong DWG thật.
 4. Tạo/ghi/đếm hai layer TIN bằng 3DFACE trong database AutoCAD thật.
 5. Kiểm tra màu ACI 1/3, khóa layer và bật/tắt TIN trong host thật.

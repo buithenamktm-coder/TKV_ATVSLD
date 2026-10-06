@@ -139,6 +139,7 @@ try {
 
         $requiredPass = @(
             'PASS | Khởi tạo đầy đủ giao diện MiningVolume',
+            'PASS | Bật/tắt palette MiningVolume hoạt động',
             'PASS | AutoCAD tạo/ghi/đếm đúng layer TIN hiện trạng',
             'PASS | AutoCAD tạo/ghi/đếm đúng layer TIN thiết kế',
             'PASS | Layer TIN đúng màu quy ước: hiện trạng ACI 1, thiết kế ACI 3',

@@ -102,6 +102,18 @@ namespace MiningVolume2023.Services
                 Check(r, string.IsNullOrWhiteSpace(EntryPoint.StartupUiError),
                     "Giao diện startup không phát sinh exception");
 
+                // Exercise the real AutoCAD PaletteSet used by the user. This is a
+                // release gate for the Ribbon "Ẩn / Hiện bảng" action, not only a
+                // static code check.
+                EntryPoint.Open(AppPage.Project);
+                bool paletteOpened = EntryPoint.Palette != null && EntryPoint.Palette.Visible;
+                EntryPoint.TogglePalette();
+                bool paletteHidden = EntryPoint.Palette != null && !EntryPoint.Palette.Visible;
+                EntryPoint.TogglePalette();
+                bool paletteShownAgain = EntryPoint.Palette != null && EntryPoint.Palette.Visible;
+                Check(r, paletteOpened && paletteHidden && paletteShownAgain,
+                    "Bật/tắt palette MiningVolume hoạt động");
+
                 // AutoCAD-host smoke test: the release is not allowed to PASS unless
                 // MiningVolume can create real dedicated TIN layers and write/verify
                 // the expected number of 3DFACE triangles in the active database.
@@ -128,7 +140,7 @@ namespace MiningVolume2023.Services
                 r.Errors.Add(ex.ToString());
             }
 
-            r.Passed = r.Errors.Count == 0 && r.Checks.Count >= 23;
+            r.Passed = r.Errors.Count == 0 && r.Checks.Count >= 24;
             r.OutputFile = ResolveOutputPath();
             WriteResultFile(r);
             return r;

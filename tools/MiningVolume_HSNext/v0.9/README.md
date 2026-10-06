@@ -186,3 +186,4 @@ Runner **không chạy dưới dạng Windows Service** vì AutoCAD/MVSELFTEST c
 - Ribbon **MINING VOLUME → Dự án** có nút **Ẩn / Hiện bảng** để đóng/mở palette ngay trong phiên AutoCAD.
 - Lệnh kỹ thuật tương ứng: `MV_TOGGLE`.
 - Việc ẩn bảng không làm mất Project, TIN hay kết quả đang làm việc.
+- `MVSELFTEST` trên AutoCAD 2023 thật bắt buộc kiểm tra chuỗi mở → ẩn → hiện lại palette; Setup chỉ PASS khi thao tác này hoạt động.
