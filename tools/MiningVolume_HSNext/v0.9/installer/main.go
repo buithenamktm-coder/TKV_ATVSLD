@@ -76,13 +76,13 @@ func install() {
         if err := os.Rename(target, backup); err != nil { msg("Không sao lưu được bản cũ: "+err.Error(), 0x10); return }
     }
     if err := copyDir(source, target); err != nil {
-        os.RemoveAll(target); _ = _ = restoreBackup(backup, target)
+        os.RemoveAll(target); _ = restoreBackup(backup, target)
         msg("Không cài được bundle: "+err.Error(), 0x10); return
     }
 
     ok, detail := runAutoCADSelfTest(cad)
     if !ok {
-        os.RemoveAll(target); _ = _ = restoreBackup(backup, target)
+        os.RemoveAll(target); _ = restoreBackup(backup, target)
         writePersistentLog("selftest_failed", detail)
         msg("MiningVolume đã tự rollback vì kiểm thử trong AutoCAD 2023 không đạt.\n\n"+detail, 0x10); return
     }
