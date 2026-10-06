@@ -8,7 +8,7 @@ Không gọi đây là Release 1.0 cho đến khi binary build trên Windows đ�
 
 ## Kết quả kiểm tra tự động
 
-- Reference/static tests: **100 PASS / 0 FAIL**.
+- Reference/static tests: **115 PASS / 0 FAIL**.
 - `go vet installer/main.go`: PASS với payload QA.
 - Cross-build installer shell `GOOS=windows GOARCH=amd64`: PASS.
 - Kết quả PE: `PE32+ GUI x86-64`.
@@ -55,16 +55,18 @@ Không gọi đây là Release 1.0 cho đến khi binary build trên Windows đ�
 - XLSX;
 - ground truth tổng đào `100000.0 m³`.
 
-## Hạng mục chưa thể xác nhận trong môi trường hiện tại
+## Hạng mục chưa thể xác nhận trong GitHub-hosted CI
 
-1. Compile solution thật bằng Windows/.NET Framework toolchain.
-2. Nạp DLL vào AutoCAD 2023 thật.
-3. Ribbon/Palette khởi tạo trong host thật.
-4. Chọn entity trong DWG thật.
-5. Vẽ TIN/mặt cắt trong database AutoCAD thật.
+Windows CI đã compile thật solution `net48` với AutoCAD.NET 24.2 và tạo Setup. Tuy nhiên runner GitHub không có AutoCAD 2023 host, vì vậy các mục sau **chưa được ghi PASS**:
+
+1. Nạp DLL vào AutoCAD 2023 thật.
+2. Ribbon/Palette khởi tạo trong host thật.
+3. Chọn entity trong DWG thật.
+4. Tạo/ghi/đếm hai layer TIN bằng 3DFACE trong database AutoCAD thật.
+5. Kiểm tra màu ACI 1/3, khóa layer và bật/tắt TIN trong host thật.
 6. `MVSELFTEST` runtime PASS.
 
-Các mục này phải do Windows release runner + AutoCAD 2023 runtime gate xác nhận trước khi phát hành chính thức.
+Setup bắt buộc tự chạy `MVSELFTEST` trong AutoCAD 2023 và rollback nếu không nhận `Status=PASS`. Chỉ sau runtime gate này mới được coi là đủ điều kiện phát hành chính thức.
 
 ## Regression v0.10.4 — UI initialization
 
@@ -72,7 +74,7 @@ Các mục này phải do Windows release runner + AutoCAD 2023 runtime gate xá
 - Đã sửa helper `SectionPage.Num`: range trước, value sau.
 - Đã thêm static scan toàn plugin để chặn Value-first NumericUpDown.
 - Runtime self-test giờ khởi tạo `MainPaletteControl` thật và kiểm tra startup exception.
-- Windows CI cuối: 88 PASS, build thành công, 0 compile errors, release bundle policy PASS.
+- Mốc lỗi UI ban đầu đã được khóa bằng regression test; CI hiện tại đã tăng lên 115 test.
 
 
 ## Regression v0.10.4 — Section page layout
@@ -93,11 +95,14 @@ Các mục này phải do Windows release runner + AutoCAD 2023 runtime gate xá
 - Runtime self-test có smoke test layer TIN thật trên AutoCAD host.
 
 
-### Windows CI v0.10.4
-- 100 PASS / 0 FAIL.
-- Build succeeded, 0 compile errors.
+### Windows CI v0.10.4 — lượt kiểm soát hiện tại
+- 115 PASS / 0 FAIL.
+- Build succeeded: 0 warning, 0 compile errors.
 - Release bundle policy PASS.
-- CAD-host TIN layer smoke test được thực thi bởi `MVSELFTEST` sau khi cài trên AutoCAD 2023 thật; CI không giả lập kết quả runtime này.
+- `go vet installer/main.go`: PASS.
+- Native Windows Setup build: PASS.
+- CI sinh `BUILD_VERIFICATION.txt` và `SHA256SUMS.txt`.
+- CAD-host TIN layer smoke test **không chạy trên GitHub-hosted runner**; nó được Setup thực thi bằng `MVSELFTEST` trên máy có AutoCAD 2023 thật.
 
 
 ## QA gate v0.10.4 — TIN calculation input
