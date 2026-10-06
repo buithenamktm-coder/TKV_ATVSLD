@@ -154,3 +154,15 @@ def test_hosted_artifact_is_explicitly_pre_release_and_final_requires_runtime_pa
 def test_source_archive_contains_installer_and_regression_tests():
     hosted = read("../../../.github/workflows/build-miningvolume-autocad2023.yml")
     assert "Compress-Archive -Path src,bundle,release,installer,tests,README.md,QA_REPORT.md,MiningVolume.HSNext.sln" in hosted
+
+
+def test_hosted_ci_builds_exact_head_and_clean_git_source_archive():
+    hosted = read("../../../.github/workflows/build-miningvolume-autocad2023.yml")
+    assert "ref: ${{ github.event.pull_request.head.sha || github.sha }}" in hosted
+    assert "Verify exact source checkout" in hosted
+    assert "Checkout/source mismatch" in hosted
+    assert "Checked out commit: $env:CHECKED_OUT_SHA" in hosted
+    assert "git archive --format=zip" in hosted
+    assert "HEAD:tools/MiningVolume_HSNext/v0.9" in hosted
+    assert "/(?:bin|obj)/" in hosted
+    assert "/installer/payload\\.zip$" in hosted

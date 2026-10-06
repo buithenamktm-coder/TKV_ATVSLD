@@ -139,3 +139,12 @@ Setup bắt buộc tự chạy `MVSELFTEST` trong AutoCAD 2023 và rollback nế
 - Workflow AutoCAD 2023 thật chỉ build Setup `_RUNTIME_PASS.exe` sau khi đọc được `RUNTIME_VERIFICATION.txt` với `Status=PASS`.
 - Artifact `RUNTIME-PASS` kèm `RUNTIME_RELEASE_VERIFICATION.txt`, `RUNTIME_RELEASE_SHA256.txt`, log MVSELFTEST và bundle đã kiểm thử.
 - Nhờ đó artifact hosted không thể bị nhầm với bản đã qua runtime gate.
+
+
+## Build provenance và source archive sạch
+
+- Hosted workflow checkout trực tiếp đúng `SOURCE_SHA` (PR head hoặc push SHA), sau đó so sánh `git rev-parse HEAD`; mismatch làm build FAIL.
+- `BUILD_VERIFICATION.txt` ghi cả Source commit và Checked out commit để tránh trường hợp PR merge-ref bị ghi nhầm là head commit.
+- Source ZIP được tạo bằng `git archive` từ đúng Git HEAD, không lấy workspace đã build.
+- CI kiểm bắt buộc source ZIP có `installer/main.go`, regression tests, runtime verifier và SelfTestService.
+- CI chặn `bin/`, `obj/` và `installer/payload.zip` lọt vào source archive.
