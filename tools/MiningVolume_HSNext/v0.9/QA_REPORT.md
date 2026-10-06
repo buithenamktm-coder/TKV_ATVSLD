@@ -8,7 +8,7 @@ Không gọi đây là Release 1.0 cho đến khi binary build trên Windows đ�
 
 ## Kết quả kiểm tra tự động
 
-- Reference/static tests: **121 PASS / 0 FAIL**.
+- Reference/static tests: **124 PASS / 0 FAIL**.
 - `go vet installer/main.go`: PASS với payload QA.
 - Cross-build installer shell `GOOS=windows GOARCH=amd64`: PASS.
 - Kết quả PE: `PE32+ GUI x86-64`.
@@ -74,7 +74,7 @@ Setup bắt buộc tự chạy `MVSELFTEST` trong AutoCAD 2023 và rollback nế
 - Đã sửa helper `SectionPage.Num`: range trước, value sau.
 - Đã thêm static scan toàn plugin để chặn Value-first NumericUpDown.
 - Runtime self-test giờ khởi tạo `MainPaletteControl` thật và kiểm tra startup exception.
-- Mốc lỗi UI ban đầu đã được khóa bằng regression test; CI hiện tại đã tăng lên 121 test.
+- Mốc lỗi UI ban đầu đã được khóa bằng regression test; CI hiện tại đã tăng lên 124 test.
 
 
 ## Regression v0.10.4 — Section page layout
@@ -96,7 +96,7 @@ Setup bắt buộc tự chạy `MVSELFTEST` trong AutoCAD 2023 và rollback nế
 
 
 ### Windows CI v0.10.4 — lượt kiểm soát hiện tại
-- 121 PASS / 0 FAIL.
+- 124 PASS / 0 FAIL.
 - Build succeeded: 0 warning, 0 compile errors.
 - Release bundle policy PASS.
 - `go vet installer/main.go`: PASS.

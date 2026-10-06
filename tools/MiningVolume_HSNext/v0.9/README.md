@@ -34,7 +34,7 @@ Dữ liệu nguồn hỗ trợ `POINT`, `LINE`, `LWPOLYLINE`, `POLYLINE`, `3D PO
 
 ## Kiểm thử hiện tại
 
-- `pytest`: **121/121 PASS**.
+- `pytest`: **124/124 PASS**.
 - Installer shell: `go vet` PASS.
 - Installer shell cross-build: Windows PE64 PASS.
 - `PackageContents.xml`: AutoCAD 2023 R24.2 only.
@@ -76,7 +76,7 @@ CI trigger marker: AutoCAD 2023 Windows release candidate.
 
 ## Classic workspace / Ribbon tắt — v0.10.4
 
-MiningVolume không phụ thuộc Ribbon để xuất hiện. Khi add-in được AutoCAD 2023 nạp và có bản vẽ hoạt động, palette `MINING VOLUME` tự mở từ sự kiện Idle. Ribbon chỉ là điểm truy cập bổ sung nếu workspace có Ribbon.
+MiningVolume không phụ thuộc Ribbon để được nạp. Khi add-in được AutoCAD 2023 nạp và có bản vẽ hoạt động, phần khởi tạo/TIN layer vẫn được chuẩn bị nhưng palette `MINING VOLUME` **không tự mở theo mặc định**. Người dùng mở bảng từ Ribbon khi cần; nếu đang dùng Classic workspace/Ribbon tắt thì có thể dùng lệnh `MVOPEN` hoặc `MV_TOGGLE`. Tùy chọn tự mở có thể bật lại trong trang Dự án.
 
 Nếu giao diện khởi động thất bại, add-in không bỏ qua lỗi im lặng. Nó hiển thị thông báo và ghi log tại:
 
@@ -125,7 +125,7 @@ Quy trình kiểm soát:
 Runtime `MVSELFTEST` v0.10.4 còn tạo thật hai layer TIN tạm trong AutoCAD, ghi/đếm 3DFACE và chỉ PASS nếu cả TIN hiện trạng và TIN thiết kế đều được tạo đúng.
 
 
-Windows CI v0.10.4 hiện tại: **121/121 reference/static tests PASS**, build AutoCAD 2023 add-in thành công, **0 warning, 0 compile errors**, `go vet` PASS và release bundle policy PASS. Smoke test tạo layer TIN thật nằm trong `MVSELFTEST` và được Setup thực thi trên máy có AutoCAD 2023.
+Windows CI v0.10.4 hiện tại: **124/124 reference/static tests PASS**, build AutoCAD 2023 add-in thành công, **0 warning, 0 compile errors**, `go vet` PASS và release bundle policy PASS. Smoke test tạo layer TIN thật nằm trong `MVSELFTEST` và được Setup thực thi trên máy có AutoCAD 2023.
 
 
 ## Cổng TIN bắt buộc — v0.10.4
