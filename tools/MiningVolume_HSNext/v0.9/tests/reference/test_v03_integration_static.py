@@ -47,4 +47,4 @@ def test_surface_preprocessor_uses_spatial_indexes():
     s=text('src/MiningVolume.Core/Surface/SurfaceInputPreparer.cs')
     assert 'PointGridIndex' in s
     assert 'SegmentGridIndex' in s
-    assert 'foreach (int siteIndex in index.Query' in s
+    assert 'foreach (int siteIndex in pointIndex.Query' in s
