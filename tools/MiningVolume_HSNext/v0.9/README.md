@@ -166,3 +166,16 @@ Runner phải chạy trong phiên Windows tương tác có AutoCAD 2023 đã kí
 - Trong trang **Dự án** có checkbox `Tự động mở bảng MiningVolume khi khởi động AutoCAD`.
 - Tùy chọn được lưu theo tài khoản Windows và giữ nguyên cho các lần khởi động sau; không ghi vào từng DWG.
 - Có lệnh kỹ thuật `MV_AUTOPEN` để đảo nhanh trạng thái bật/tắt khi cần.
+
+
+## Máy kiểm thử AutoCAD 2023 / self-hosted runner
+
+Để chạy gate runtime thật trên một máy Windows có AutoCAD 2023 R24.2:
+
+1. Mở PowerShell bằng **Run as administrator**.
+2. Cài GitHub CLI và đăng nhập `gh auth login` bằng tài khoản có quyền quản trị Actions của repository.
+3. Chạy `release/setup_autocad2023_runner.ps1`.
+4. Script kiểm tra AutoCAD 2023, tải/cấu hình GitHub Actions runner với nhãn `autocad2023` và tạo `START_MiningVolume_Runtime_Runner.cmd`.
+5. Chạy file START đó trong phiên Windows đang đăng nhập và giữ cửa sổ mở khi kiểm thử.
+
+Runner **không chạy dưới dạng Windows Service** vì AutoCAD/MVSELFTEST cần desktop session tương tác. Workflow `Verify MiningVolume AutoCAD 2023 Runtime` chỉ được coi PASS khi `RUNTIME_VERIFICATION.txt` ghi `Status=PASS`.

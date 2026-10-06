@@ -102,3 +102,13 @@ def test_palette_auto_open_is_user_controlled_and_defaults_off():
     assert 'Startup palette auto-open is OFF' in entry
     assert 'Tự động mở bảng MiningVolume khi khởi động AutoCAD' in project
     assert 'UserSettingsService.AutoOpenPalette = _autoOpen.Checked' in project
+
+
+def test_runtime_runner_bootstrap_requires_interactive_autocad2023_host():
+    s = read("release/setup_autocad2023_runner.ps1")
+    assert "WindowsBuiltInRole]::Administrator" in s
+    assert "[Environment]::UserInteractive" in s
+    assert "AutoCAD 2023 R24.2" in s
+    assert "--labels 'autocad2023'" in s
+    assert "run.cmd" in s
+    assert "Không cài runner dưới dạng Windows Service" in s
