@@ -301,8 +301,8 @@ namespace MiningVolume2023.Services
             if (session.Source == null || session.Source.Entities.Count == 0) return;
             try
             {
-                var tin = SurfaceWorkflowService.BuildCore(role);
-                SurfaceWorkflowService.DrawTin(role, tin);
+                var build = SurfaceWorkflowService.BuildCoreDetailed(role);
+                SurfaceWorkflowService.DrawTin(role, build);
                 SurfaceWorkflowService.SetTinVisible(role, snap.TinVisible);
             }
             catch (Exception ex) { warnings.Add($"Không dựng lại được TIN {session.Name}: {ex.Message}"); }
