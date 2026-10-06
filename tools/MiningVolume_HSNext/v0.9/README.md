@@ -137,3 +137,6 @@ TIN hiện trạng và TIN thiết kế là dữ liệu đầu vào bắt buộc
 - Layer TIN được khóa sau khi tạo để tránh chỉnh tay làm sai đầu vào tính toán.
 - Trước khi lấy mặt cắt hoặc tính khối lượng, phần mềm kiểm tra cả hai TIN còn đồng bộ với dữ liệu X-Y-Z hiện tại; nếu layer bị xóa/mất mặt thì phần mềm tự đồng bộ lại từ TIN đã xác minh.
 - Runtime self-test của Setup dùng chính `SurfaceInputPreparer` + `ConformingTinBuilder`, sau đó ghi/đếm `3DFACE` thật trong AutoCAD.
+
+
+Final v0.10.4 TIN release build trigger.
