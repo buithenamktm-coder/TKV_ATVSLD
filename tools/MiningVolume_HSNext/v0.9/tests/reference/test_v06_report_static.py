@@ -65,8 +65,10 @@ def test_report_control_totals_are_present():
     s = read(EXPORT_SERVICE)
     assert "Sai lệch kiểm soát đào" in s
     assert "Sai lệch kiểm soát đắp" in s
-    assert "r.TotalCutVolume - levelCut" in s
-    assert "r.TotalFillVolume - levelFill" in s
+    assert 'ReportCell.Formula3("=C5-C8")' in s
+    assert 'ReportCell.Formula3("=C6-C9")' in s
+    assert "ReportCell.Formula2" in s
+    assert "SumFormula" in s
 
 
 def test_volume_detail_exports_mid_section_and_formula():
@@ -98,3 +100,25 @@ def test_writer_blanks_nonfinite_numeric_values_and_self_validates_package():
     assert "ValidatePackage(filePath, report.Sheets.Count)" in s
     assert 'zip.GetEntry(path)' in s
     assert "new XmlDocument()" in s
+
+
+def test_xlsx_writer_supports_real_formulas_and_recalculation():
+    s = read(REPORT)
+    for token in [
+        "FormulaInteger", "Formula2", "Formula3",
+        'x.WriteElementString("f", formula)',
+        'x.WriteStartElement("calcPr")',
+        'x.WriteAttributeString("calcMode", "auto")',
+        'x.WriteAttributeString("fullCalcOnLoad", "1")',
+    ]:
+        assert token in s
+
+
+def test_export_links_summary_to_detail_and_level_sheets():
+    s = read(EXPORT_SERVICE)
+    assert "'Khối lượng chi tiết'!H" in s
+    assert "'Khối lượng chi tiết'!L" in s
+    assert "'Tổng hợp theo tầng'!E" in s
+    assert "'Tổng hợp theo tầng'!F" in s
+    assert "VolumeFormula(x.CutFormula" in s
+    assert "VolumeFormula(x.FillFormula" in s
