@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using MiningVolume.Core.Geometry;
 
 namespace MiningVolume.Core.Model
@@ -92,11 +93,18 @@ namespace MiningVolume.Core.Model
     public sealed class SurfaceModel
     {
         public SurfaceModel(string name) { Name = name ?? "Mô hình"; }
+        private long _revision;
+
         public string Name { get; set; }
         public List<SourceEntity> Entities { get; } = new List<SourceEntity>();
         public DateTime LastModifiedUtc { get; private set; } = DateTime.UtcNow;
+        public long Revision => Interlocked.Read(ref _revision);
 
-        public void Touch() => LastModifiedUtc = DateTime.UtcNow;
+        public void Touch()
+        {
+            LastModifiedUtc = DateTime.UtcNow;
+            Interlocked.Increment(ref _revision);
+        }
         public void RemoveEntityFromModel(string id)
         {
             var e = Entities.FirstOrDefault(x => x.Id == id);

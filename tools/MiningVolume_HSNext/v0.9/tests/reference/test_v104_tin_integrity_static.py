@@ -7,9 +7,12 @@ def read(rel):
 
 def test_project_state_tracks_tin_source_revision():
     s = read("src/MiningVolume.Plugin2023/Services/ProjectState.cs")
-    assert "TinBuiltFromSourceUtc" in s
+    core = read("src/MiningVolume.Core/Model/SourceData.cs")
+    assert "Revision => Interlocked.Read" in core
+    assert "Interlocked.Increment" in core
+    assert "TinBuiltFromSourceRevision" in s
     assert "IsTinCurrent" in s
-    assert "TinBuiltFromSourceUtc.Value >= Source.LastModifiedUtc" in s
+    assert "TinBuiltFromSourceRevision.Value == Source.Revision" in s
 
 def test_loading_or_editing_source_invalidates_old_tin():
     workflow = read("src/MiningVolume.Plugin2023/Services/SurfaceWorkflowService.cs")
@@ -73,3 +76,11 @@ def test_output_layers_are_not_offered_as_source_layers():
     assert "GetSourceLayers" in service
     assert 'name.StartsWith("MV_TIN_"' in service
     assert "LayerService.GetSourceLayers()" in data
+
+
+def test_tin_build_rejects_source_changes_during_or_after_background_build():
+    s = read("src/MiningVolume.Plugin2023/Services/SurfaceWorkflowService.cs")
+    assert "SourceRevision" in s
+    assert "ReferenceEquals(session.Source, source)" in s
+    assert "source.Revision != sourceRevision" in s
+    assert "Không ghi TIN cũ xuống AutoCAD" in s

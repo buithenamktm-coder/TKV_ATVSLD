@@ -5,7 +5,6 @@ using System.IO;
 using System.Linq;
 using MiningVolume.Core.Geometry;
 using MiningVolume.Core.Model;
-using MiningVolume.Core.Model;
 using MiningVolume.Core.Reporting;
 using MiningVolume.Core.Sections;
 using MiningVolume.Core.Surface;
@@ -103,6 +102,18 @@ namespace MiningVolume2023.Services
                 Check(r, string.IsNullOrWhiteSpace(EntryPoint.StartupUiError),
                     "Giao diện startup không phát sinh exception");
 
+                // Exercise the real AutoCAD PaletteSet used by the user. This is a
+                // release gate for the Ribbon "Ẩn / Hiện bảng" action, not only a
+                // static code check.
+                EntryPoint.Open(AppPage.Project);
+                bool paletteOpened = EntryPoint.Palette != null && EntryPoint.Palette.Visible;
+                EntryPoint.TogglePalette();
+                bool paletteHidden = EntryPoint.Palette != null && !EntryPoint.Palette.Visible;
+                EntryPoint.TogglePalette();
+                bool paletteShownAgain = EntryPoint.Palette != null && EntryPoint.Palette.Visible;
+                Check(r, paletteOpened && paletteHidden && paletteShownAgain,
+                    "Bật/tắt palette MiningVolume hoạt động");
+
                 // AutoCAD-host smoke test: the release is not allowed to PASS unless
                 // MiningVolume can create real dedicated TIN layers and write/verify
                 // the expected number of 3DFACE triangles in the active database.
@@ -129,7 +140,7 @@ namespace MiningVolume2023.Services
                 r.Errors.Add(ex.ToString());
             }
 
-            r.Passed = r.Errors.Count == 0 && r.Checks.Count >= 16;
+            r.Passed = r.Errors.Count == 0 && r.Checks.Count >= 24;
             r.OutputFile = ResolveOutputPath();
             WriteResultFile(r);
             return r;
@@ -199,6 +210,36 @@ namespace MiningVolume2023.Services
                         writtenDesign == design.Triangles.Count &&
                         countDesign == design.Triangles.Count,
                         "AutoCAD tạo/ghi/đếm đúng layer TIN thiết kế");
+
+                    Check(r,
+                        TinCadRenderer.GetLayerColorIndex(doc.Database, existingLayer) == 1 &&
+                        TinCadRenderer.GetLayerColorIndex(doc.Database, designLayer) == 3,
+                        "Layer TIN đúng màu quy ước: hiện trạng ACI 1, thiết kế ACI 3");
+
+                    Check(r,
+                        TinCadRenderer.IsLayerLocked(doc.Database, existingLayer) &&
+                        TinCadRenderer.IsLayerLocked(doc.Database, designLayer) &&
+                        TinCadRenderer.CountUnexpectedEntities(doc.Database, existingLayer) == 0 &&
+                        TinCadRenderer.CountUnexpectedEntities(doc.Database, designLayer) == 0,
+                        "Layer TIN chỉ chứa 3DFACE và được khóa sau khi ghi");
+
+                    TinCadRenderer.SetVisible(doc.Database, existingLayer, false);
+                    TinCadRenderer.SetVisible(doc.Database, designLayer, false);
+                    Check(r,
+                        !TinCadRenderer.IsLayerVisible(doc.Database, existingLayer) &&
+                        !TinCadRenderer.IsLayerVisible(doc.Database, designLayer) &&
+                        TinCadRenderer.IsLayerLocked(doc.Database, existingLayer) &&
+                        TinCadRenderer.IsLayerLocked(doc.Database, designLayer),
+                        "Có thể ẩn cả hai TIN và layer vẫn khóa");
+
+                    TinCadRenderer.SetVisible(doc.Database, existingLayer, true);
+                    TinCadRenderer.SetVisible(doc.Database, designLayer, true);
+                    Check(r,
+                        TinCadRenderer.IsLayerVisible(doc.Database, existingLayer) &&
+                        TinCadRenderer.IsLayerVisible(doc.Database, designLayer) &&
+                        TinCadRenderer.IsLayerLocked(doc.Database, existingLayer) &&
+                        TinCadRenderer.IsLayerLocked(doc.Database, designLayer),
+                        "Có thể hiện lại cả hai TIN và layer vẫn khóa");
                 }
                 finally
                 {

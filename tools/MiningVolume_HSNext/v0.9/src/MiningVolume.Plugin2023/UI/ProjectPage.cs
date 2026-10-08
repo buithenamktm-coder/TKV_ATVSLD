@@ -15,6 +15,7 @@ namespace MiningVolume2023.UI
         private readonly Button _save;
         private readonly Button _load;
         private readonly Button _delete;
+        private readonly CheckBox _autoOpen;
 
         public ProjectPage()
         {
@@ -41,6 +42,19 @@ namespace MiningVolume2023.UI
             _delete = Btn("XÓA PROJECT ĐÃ LƯU", DeleteProject); _delete.Width = 165;
             buttons.Controls.Add(_save); buttons.Controls.Add(_load); buttons.Controls.Add(_delete);
             Controls.Add(buttons); buttons.BringToFront();
+
+            var preferences = new GroupBox { Text = "Tùy chọn giao diện", Dock = DockStyle.Top, Height = 64 };
+            _autoOpen = new CheckBox
+            {
+                Text = "Tự động mở bảng MiningVolume khi khởi động AutoCAD",
+                AutoSize = true,
+                Left = 12,
+                Top = 24,
+                Checked = UserSettingsService.AutoOpenPalette
+            };
+            _autoOpen.CheckedChanged += AutoOpenChanged;
+            preferences.Controls.Add(_autoOpen);
+            Controls.Add(preferences); preferences.BringToFront();
 
             _status = new Label { Dock = DockStyle.Top, Height = 44, Padding = new Padding(7, 5, 4, 4), ForeColor = Color.DimGray, Text = "Project được lưu trực tiếp trong DWG, không cần file phụ bên ngoài." };
             Controls.Add(_status); _status.BringToFront();
@@ -89,6 +103,24 @@ namespace MiningVolume2023.UI
             try { ProjectPersistenceService.DeleteSavedProject(); _status.Text = "Đã xóa Project đã lưu khỏi DWG."; }
             catch (Exception ex) { MessageBox.Show(ex.Message, "Xóa Project", MessageBoxButtons.OK, MessageBoxIcon.Error); }
             RefreshState();
+        }
+
+        private void AutoOpenChanged(object sender, EventArgs e)
+        {
+            try
+            {
+                UserSettingsService.AutoOpenPalette = _autoOpen.Checked;
+                _status.Text = _autoOpen.Checked
+                    ? "Đã bật tự động mở bảng MiningVolume cho các lần khởi động AutoCAD sau."
+                    : "Đã tắt tự động mở bảng MiningVolume. Khi cần, mở từ Ribbon/menu MiningVolume.";
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.Message, "Tùy chọn MiningVolume", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                _autoOpen.CheckedChanged -= AutoOpenChanged;
+                _autoOpen.Checked = UserSettingsService.AutoOpenPalette;
+                _autoOpen.CheckedChanged += AutoOpenChanged;
+            }
         }
 
         private void StateChanged(object sender, EventArgs e)

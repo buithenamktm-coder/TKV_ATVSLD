@@ -34,7 +34,7 @@ Dữ liệu nguồn hỗ trợ `POINT`, `LINE`, `LWPOLYLINE`, `POLYLINE`, `3D PO
 
 ## Kiểm thử hiện tại
 
-- `pytest`: **100/100 PASS**.
+- `pytest`: **129/129 PASS**.
 - Installer shell: `go vet` PASS.
 - Installer shell cross-build: Windows PE64 PASS.
 - `PackageContents.xml`: AutoCAD 2023 R24.2 only.
@@ -42,11 +42,11 @@ Dữ liệu nguồn hỗ trợ `POINT`, `LINE`, `LWPOLYLINE`, `POLYLINE`, `3D PO
 
 ### Chưa được ghi là PASS
 
-Môi trường làm việc hiện tại không có Windows + AutoCAD 2023, vì vậy **chưa có quyền ghi PASS cho runtime AutoCAD 2023** và chưa gọi v0.10.4 là Release 1.0. File Setup chính thức chỉ được tạo bởi Windows release pipeline sau khi DLL compile thật.
+Môi trường GitHub-hosted không có AutoCAD 2023, vì vậy **chưa có quyền ghi PASS cho runtime AutoCAD 2023** và chưa gọi v0.10.4 là Release 1.0. Hosted Windows pipeline chỉ tạo PRE-RELEASE; Setup cuối chỉ được tạo bởi workflow runtime sau khi AutoCAD 2023 thật trả `Status=PASS`.
 
 ## Build Release
 
-Workflow: `.github/workflows/build-autocad2023-release.yml`
+Workflow: `.github/workflows/build-miningvolume-autocad2023.yml`
 
 Workflow chạy trên `windows-2022`:
 1. chạy QA;
@@ -55,7 +55,9 @@ Workflow chạy trên `windows-2022`:
 4. chạy `release/verify_release.ps1`;
 5. tạo `installer/payload.zip`;
 6. build `MiningVolume_HSNext_AutoCAD2023_Setup_v0.10.4.exe`;
-7. tạo SHA-256 và upload artifact.
+7. tạo SHA-256 + `BUILD_VERIFICATION.txt` và upload artifact.
+
+`BUILD_VERIFICATION.txt` chỉ ghi PASS cho các gate thực sự chạy trên GitHub-hosted Windows runner. Runtime AutoCAD 2023 được ghi rõ là chưa chạy trên GitHub; Setup vẫn bắt buộc chạy `MVSELFTEST` trong AutoCAD 2023 và tự rollback nếu không nhận `Status=PASS`.
 
 ## Nguyên tắc phát hành
 
@@ -74,7 +76,7 @@ CI trigger marker: AutoCAD 2023 Windows release candidate.
 
 ## Classic workspace / Ribbon tắt — v0.10.4
 
-MiningVolume không phụ thuộc Ribbon để xuất hiện. Khi add-in được AutoCAD 2023 nạp và có bản vẽ hoạt động, palette `MINING VOLUME` tự mở từ sự kiện Idle. Ribbon chỉ là điểm truy cập bổ sung nếu workspace có Ribbon.
+MiningVolume không phụ thuộc Ribbon để được nạp. Khi add-in được AutoCAD 2023 nạp và có bản vẽ hoạt động, phần khởi tạo/TIN layer vẫn được chuẩn bị nhưng palette `MINING VOLUME` **không tự mở theo mặc định**. Người dùng mở bảng từ Ribbon khi cần; nếu đang dùng Classic workspace/Ribbon tắt thì có thể dùng lệnh `MVOPEN` hoặc `MV_TOGGLE`. Tùy chọn tự mở có thể bật lại trong trang Dự án.
 
 Nếu giao diện khởi động thất bại, add-in không bỏ qua lỗi im lặng. Nó hiển thị thông báo và ghi log tại:
 
@@ -123,7 +125,7 @@ Quy trình kiểm soát:
 Runtime `MVSELFTEST` v0.10.4 còn tạo thật hai layer TIN tạm trong AutoCAD, ghi/đếm 3DFACE và chỉ PASS nếu cả TIN hiện trạng và TIN thiết kế đều được tạo đúng.
 
 
-Windows CI v0.10.4 cuối: **100/100 reference/static tests PASS**, build AutoCAD 2023 add-in thành công, 0 compile errors, release bundle policy PASS. Smoke test tạo layer TIN thật nằm trong `MVSELFTEST` và được Setup thực thi trên máy có AutoCAD 2023.
+Windows CI v0.10.4 hiện tại: **129/129 reference/static tests PASS**, build AutoCAD 2023 add-in thành công, **0 warning, 0 compile errors**, `go vet` PASS và release bundle policy PASS. Smoke test tạo layer TIN thật nằm trong `MVSELFTEST` và được Setup thực thi trên máy có AutoCAD 2023.
 
 
 ## Cổng TIN bắt buộc — v0.10.4
@@ -136,9 +138,67 @@ TIN hiện trạng và TIN thiết kế là dữ liệu đầu vào bắt buộc
 - Sau khi ghi xuống AutoCAD, phần mềm kiểm tra số `3DFACE` trên layer phải bằng đúng số tam giác của lõi TIN.
 - Layer TIN được khóa sau khi tạo để tránh chỉnh tay làm sai đầu vào tính toán.
 - Trước khi lấy mặt cắt hoặc tính khối lượng, phần mềm kiểm tra cả hai TIN còn đồng bộ với dữ liệu X-Y-Z hiện tại; nếu layer bị xóa/mất mặt thì phần mềm tự đồng bộ lại từ TIN đã xác minh.
-- Runtime self-test của Setup dùng chính `SurfaceInputPreparer` + `ConformingTinBuilder`, sau đó ghi/đếm `3DFACE` thật trong AutoCAD.
+- Runtime self-test của Setup dùng chính `SurfaceInputPreparer` + `ConformingTinBuilder`, sau đó ghi/đếm `3DFACE` thật trong AutoCAD; đồng thời kiểm màu ACI 1/3, trạng thái khóa layer và thao tác ẩn/hiện TIN.
 
 
 Final v0.10.4 TIN release build trigger.
 
 Final CI branch marker for v0.10.4 TIN release.
+
+
+## Runtime verification trên AutoCAD 2023 thật
+
+Repository có workflow thủ công `.github/workflows/verify-miningvolume-autocad2023-runtime.yml`. Workflow này dùng self-hosted Windows runner gắn nhãn `autocad2023`, build bằng chính DLL API của AutoCAD 2023 cài trên máy rồi chạy `release/verify_autocad2023_runtime.ps1`.
+
+Kết quả PASS phải tạo:
+- `RUNTIME_VERIFICATION.txt`;
+- `MVSELFTEST_RUNTIME.txt`;
+- thông tin version AutoCAD 2023;
+- SHA-256 của 4 DLL MiningVolume.
+
+Runner phải chạy trong phiên Windows tương tác có AutoCAD 2023 đã kích hoạt bản quyền. Không coi CI hosted là thay thế cho runtime gate này.
+
+
+## Tùy chọn tự động mở bảng MiningVolume
+
+- Mặc định MiningVolume **không tự bật palette** mỗi lần khởi động AutoCAD, tránh che vùng bản vẽ.
+- Người dùng mở bảng từ Ribbon/menu MiningVolume khi cần.
+- Trong trang **Dự án** có checkbox `Tự động mở bảng MiningVolume khi khởi động AutoCAD`.
+- Tùy chọn được lưu theo tài khoản Windows và giữ nguyên cho các lần khởi động sau; không ghi vào từng DWG.
+- Có lệnh kỹ thuật `MV_AUTOPEN` để đảo nhanh trạng thái bật/tắt khi cần.
+
+
+## Máy kiểm thử AutoCAD 2023 / self-hosted runner
+
+Để chạy gate runtime thật trên một máy Windows có AutoCAD 2023 R24.2:
+
+1. Mở PowerShell bằng **Run as administrator**.
+2. Cài GitHub CLI và đăng nhập `gh auth login` bằng tài khoản có quyền quản trị Actions của repository.
+3. Chạy `release/setup_autocad2023_runner.ps1`.
+4. Script kiểm tra AutoCAD 2023, tải/cấu hình GitHub Actions runner với nhãn `autocad2023` và tạo `START_MiningVolume_Runtime_Runner.cmd`.
+5. Chạy file START đó trong phiên Windows đang đăng nhập và giữ cửa sổ mở khi kiểm thử. Launcher tự yêu cầu UAC và nâng quyền Administrator nếu cần.
+
+Workflow runtime tự dò AutoCAD 2023 R24.2 từ thư mục cài chuẩn hoặc Registry rồi build bằng đúng các DLL API trên máy thử nghiệm.
+
+Runner **không chạy dưới dạng Windows Service** vì AutoCAD/MVSELFTEST cần desktop session tương tác. Workflow `Verify MiningVolume AutoCAD 2023 Runtime` chỉ được coi PASS khi `RUNTIME_VERIFICATION.txt` ghi `Status=PASS`.
+
+
+### Bật/tắt bảng trong khi làm việc
+
+- Ribbon **MINING VOLUME → Dự án** có nút **Ẩn / Hiện bảng** để đóng/mở palette ngay trong phiên AutoCAD.
+- Lệnh kỹ thuật tương ứng: `MV_TOGGLE`.
+- Việc ẩn bảng không làm mất Project, TIN hay kết quả đang làm việc.
+- `MVSELFTEST` trên AutoCAD 2023 thật bắt buộc kiểm tra chuỗi mở → ẩn → hiện lại palette; Setup chỉ PASS khi thao tác này hoạt động.
+
+
+## Phân biệt PRE-RELEASE và bản phát hành sau runtime PASS
+
+- Workflow GitHub-hosted chỉ tạo artifact `MiningVolume-HSNext-AutoCAD2023-v0.10.4-PRE-RELEASE`.
+- File cài đặt trong artifact này có hậu tố `_PRE_RELEASE.exe` và kèm `PRE_RELEASE_NOTICE.txt`; không được coi là bản phát hành cuối.
+- Chỉ workflow chạy trên máy AutoCAD 2023 thật, sau khi `RUNTIME_VERIFICATION.txt` có `Status=PASS`, mới được phép build `MiningVolume_HSNext_AutoCAD2023_Setup_v0.10.4_RUNTIME_PASS.exe`.
+- Artifact cuối có tên `MiningVolume-HSNext-AutoCAD2023-v0.10.4-RUNTIME-PASS` và kèm `RUNTIME_RELEASE_VERIFICATION.txt` + SHA-256 của Setup.
+
+
+### Kiểm soát quyền của Setup
+
+Setup kiểm tra quyền Administrator bằng cơ chế không phụ thuộc dịch vụ Windows Server; sau cài thành công, thông báo cũng tuân theo chính sách mới: palette MiningVolume không tự mở theo mặc định.

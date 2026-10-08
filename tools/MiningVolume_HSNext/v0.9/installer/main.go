@@ -63,39 +63,79 @@ func install() {
     target := filepath.Join(appPlugins, "MiningVolume2023.bundle")
     backup := target + ".v0104bak"
     os.MkdirAll(appPlugins, 0755)
-    os.RemoveAll(backup)
+
+    // Recover conservatively from an interrupted previous install before starting
+    // a new transaction. An unverified target is never preferred over its backup.
+    if exists(backup) {
+        os.RemoveAll(target)
+        if err := restoreBackup(backup, target); err != nil {
+            msg("Không khôi phục được bản sao lưu từ lần cài trước: "+err.Error(), 0x10); return
+        }
+    }
     if exists(target) {
         if err := os.Rename(target, backup); err != nil { msg("Không sao lưu được bản cũ: "+err.Error(), 0x10); return }
     }
     if err := copyDir(source, target); err != nil {
-        os.RemoveAll(target); restoreBackup(backup, target)
+        os.RemoveAll(target); _ = restoreBackup(backup, target)
         msg("Không cài được bundle: "+err.Error(), 0x10); return
     }
 
     ok, detail := runAutoCADSelfTest(cad)
     if !ok {
-        os.RemoveAll(target); restoreBackup(backup, target)
+        os.RemoveAll(target); _ = restoreBackup(backup, target)
         writePersistentLog("selftest_failed", detail)
         msg("MiningVolume đã tự rollback vì kiểm thử trong AutoCAD 2023 không đạt.\n\n"+detail, 0x10); return
     }
     os.RemoveAll(backup)
+    writeRuntimeVerification(cad, detail)
     if err := registerUninstall(target); err != nil {
         msg("Add-in đã PASS trong AutoCAD nhưng chưa ghi được mục gỡ cài đặt: "+err.Error(), 0x30); return
     }
-    msg("Cài đặt MiningVolume v0.10.4 thành công.\n\nAutoCAD 2023 runtime self-test: PASS.\nMáy không cần Visual Studio/Build Tools.\nMở AutoCAD: bảng MiningVolume sẽ tự hiện, kể cả khi Ribbon đang tắt.", 0x40)
+    msg("Cài đặt MiningVolume v0.10.4 thành công.\n\nAutoCAD 2023 runtime self-test: PASS.\nMáy không cần Visual Studio/Build Tools.\nMở AutoCAD: MiningVolume không tự mở bảng theo mặc định; mở từ Ribbon MINING VOLUME hoặc bật tùy chọn tự động mở trong trang Dự án.", 0x40)
 }
 
 func validatePrebuiltBundle(root string) error {
-    required := []string{
-        filepath.Join(root, "PackageContents.xml"),
-        filepath.Join(root, "Contents", "Windows", "MiningVolume2023.dll"),
-        filepath.Join(root, "Contents", "Windows", "MiningVolume.Core.dll"),
-        filepath.Join(root, "Contents", "Windows", "MiningVolume.Surface.dll"),
-        filepath.Join(root, "Contents", "Windows", "MiningVolume.Cad2023.dll"),
+    packageXml := filepath.Join(root, "PackageContents.xml")
+    windowsDir := filepath.Join(root, "Contents", "Windows")
+    allowedDll := map[string]bool{
+        "miningvolume2023.dll": true,
+        "miningvolume.core.dll": true,
+        "miningvolume.surface.dll": true,
+        "miningvolume.cad2023.dll": true,
     }
-    for _, p := range required { if !exists(p) { return fmt.Errorf("Thiếu file Release: %s", filepath.Base(p)) } }
-    if exists(filepath.Join(root, "Contents", "Windows", "NetTopologySuite.dll")) {
-        return fmt.Errorf("Release v0.10.4 không được phụ thuộc NetTopologySuite.dll")
+
+    required := []string{
+        packageXml,
+        filepath.Join(windowsDir, "MiningVolume2023.dll"),
+        filepath.Join(windowsDir, "MiningVolume.Core.dll"),
+        filepath.Join(windowsDir, "MiningVolume.Surface.dll"),
+        filepath.Join(windowsDir, "MiningVolume.Cad2023.dll"),
+    }
+    for _, p := range required {
+        if !exists(p) { return fmt.Errorf("Thiếu file Release: %s", filepath.Base(p)) }
+    }
+
+    entries, err := os.ReadDir(windowsDir)
+    if err != nil { return fmt.Errorf("Không đọc được thư mục binary Release: %w", err) }
+    for _, entry := range entries {
+        if entry.IsDir() || !strings.EqualFold(filepath.Ext(entry.Name()), ".dll") { continue }
+        if !allowedDll[strings.ToLower(entry.Name())] {
+            return fmt.Errorf("Bundle chứa DLL ngoài danh sách cho phép: %s", entry.Name())
+        }
+    }
+
+    xmlBytes, err := os.ReadFile(packageXml)
+    if err != nil { return fmt.Errorf("Không đọc được PackageContents.xml: %w", err) }
+    xmlText := string(xmlBytes)
+    for _, token := range []string{
+        `AppVersion="0.10.4"`,
+        `SeriesMin="R24.2"`,
+        `SeriesMax="R24.2"`,
+        `LoadOnAutoCADStartup="True"`,
+    } {
+        if !strings.Contains(xmlText, token) {
+            return fmt.Errorf("PackageContents.xml thiếu cấu hình bắt buộc: %s", token)
+        }
     }
     return nil
 }
@@ -125,6 +165,26 @@ func runAutoCADSelfTest(cad string) (bool, string) {
         if b, err := os.ReadFile(log); err == nil {
             txt := string(b)
             if strings.Contains(txt, "Status=PASS") {
+                if !strings.Contains(txt, "MiningVolume HS-Next v0.10.4 runtime self-test") {
+                    _ = cmd.Process.Kill()
+                    return false, "MVSELFTEST trả PASS nhưng log không đúng phiên bản v0.10.4.\n\n"+txt
+                }
+                required := []string{
+                    "PASS | Khởi tạo đầy đủ giao diện MiningVolume",
+                    "PASS | Bật/tắt palette MiningVolume hoạt động",
+                    "PASS | AutoCAD tạo/ghi/đếm đúng layer TIN hiện trạng",
+                    "PASS | AutoCAD tạo/ghi/đếm đúng layer TIN thiết kế",
+                    "PASS | Layer TIN đúng màu quy ước: hiện trạng ACI 1, thiết kế ACI 3",
+                    "PASS | Layer TIN chỉ chứa 3DFACE và được khóa sau khi ghi",
+                    "PASS | Có thể ẩn cả hai TIN và layer vẫn khóa",
+                    "PASS | Có thể hiện lại cả hai TIN và layer vẫn khóa",
+                }
+                for _, token := range required {
+                    if !strings.Contains(txt, token) {
+                        _ = cmd.Process.Kill()
+                        return false, "MVSELFTEST thiếu kiểm tra runtime bắt buộc: "+token+"\n\n"+txt
+                    }
+                }
                 done := make(chan error,1); go func(){done<-cmd.Wait()}()
                 select { case <-done: case <-time.After(5*time.Second): _ = cmd.Process.Kill() }
                 return true, txt
@@ -180,6 +240,16 @@ func extractPayload(dst string) error {
     return nil
 }
 
+func writeRuntimeVerification(cadDir, selfTest string) {
+    pd:=os.Getenv("ProgramData"); if pd==""{pd=`C:\ProgramData`}
+    dir:=filepath.Join(pd,"MiningVolume2023","Logs"); _=os.MkdirAll(dir,0755)
+    content:=fmt.Sprintf(
+        "MiningVolume HS-Next v0.10.4 runtime verification\r\n"+
+        "Timestamp=%s\r\nStatus=PASS\r\nAutoCAD=%s\r\n\r\n%s",
+        time.Now().Format(time.RFC3339), filepath.Join(cadDir,"acad.exe"), selfTest)
+    _=os.WriteFile(filepath.Join(dir,"runtime_verification.txt"),[]byte(content),0644)
+}
+
 func writePersistentLog(kind, content string) {
     pd:=os.Getenv("ProgramData"); if pd==""{pd=`C:\ProgramData`}
     dir:=filepath.Join(pd,"MiningVolume2023","Logs"); _=os.MkdirAll(dir,0755)
@@ -187,11 +257,15 @@ func writePersistentLog(kind, content string) {
 }
 func copyDir(src,dst string) error { return filepath.Walk(src,func(path string,info os.FileInfo,err error) error{ if err!=nil{return err}; rel,_:=filepath.Rel(src,path); out:=filepath.Join(dst,rel); if info.IsDir(){return os.MkdirAll(out,0755)}; return copyFile(path,out) }) }
 func copyFile(src,dst string) error { in,err:=os.Open(src);if err!=nil{return err};defer in.Close();os.MkdirAll(filepath.Dir(dst),0755);out,err:=os.Create(dst);if err!=nil{return err};_,e:=io.Copy(out,in);c:=out.Close();if e!=nil{return e};return c }
-func restoreBackup(backup,target string){ if exists(backup){ _=os.Rename(backup,target) } }
+func restoreBackup(backup,target string) error {
+    if !exists(backup) { return nil }
+    os.RemoveAll(target)
+    return os.Rename(backup,target)
+}
 func exists(p string) bool { _,e:=os.Stat(p);return e==nil }
 func hasArg(args []string,s string) bool { for _,a:=range args{if strings.EqualFold(a,s){return true}};return false }
 func processRunning(name string) bool { out,_:=exec.Command("tasklist","/FI","IMAGENAME eq "+name).CombinedOutput();return strings.Contains(strings.ToLower(string(out)),strings.ToLower(name)) }
-func isAdmin() bool { return exec.Command("net","session").Run()==nil }
+func isAdmin() bool { return exec.Command("fltmc").Run()==nil }
 func elevate(extra string) { exe,_:=os.Executable(); ps:=fmt.Sprintf("Start-Process -FilePath %s -ArgumentList %s -Verb RunAs",psQuote(exe),psQuote(extra)); _=exec.Command("powershell.exe","-NoProfile","-WindowStyle","Hidden","-Command",ps).Start() }
 func psQuote(s string) string { return "'"+strings.ReplaceAll(s,"'","''")+"'" }
 func msg(text string, icon uintptr) { user32:=syscall.NewLazyDLL("user32.dll"); proc:=user32.NewProc("MessageBoxW"); t,_:=syscall.UTF16PtrFromString(text); c,_:=syscall.UTF16PtrFromString(productName); proc.Call(0,uintptr(unsafe.Pointer(t)),uintptr(unsafe.Pointer(c)),0x0|icon) }
