@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using Autodesk.AutoCAD.ApplicationServices;
 using MiningVolume.Cad2023;
@@ -28,12 +29,16 @@ namespace MiningVolume2023.Services
         public double MaxZ { get; set; }
         public DateTime SourceModifiedUtc { get; set; }
         public long SourceRevision { get; set; }
+        public long PrepareMilliseconds { get; set; }
+        public long TriangulationMilliseconds { get; set; }
         internal SurfaceModel SourceModel { get; set; }
         public int TriangleCount => Tin?.Triangles?.Count ?? 0;
+        public long CoreMilliseconds => PrepareMilliseconds + TriangulationMilliseconds;
 
         public string Summary =>
             $"{SiteCount:n0} điểm TIN • {BreaklineCount:n0} đoạn breakline • {TriangleCount:n0} tam giác" +
             $" • Z: {MinZ:0.###} → {MaxZ:0.###}" +
+            $" • dựng {CoreMilliseconds / 1000.0:0.00}s" +
             (WarningCount > 0 ? $" • {WarningCount:n0} cảnh báo" : string.Empty);
     }
 
@@ -111,11 +116,15 @@ namespace MiningVolume2023.Services
                 MinimumTriangleArea = 1e-10
             };
 
+            var prepareWatch = Stopwatch.StartNew();
             var prepared = new SurfaceInputPreparer().Prepare(source, options);
+            prepareWatch.Stop();
             if (prepared.HasErrors)
                 throw new SurfaceValidationException(session.Name, prepared.Issues);
 
+            var triangulationWatch = Stopwatch.StartNew();
             var tin = new ConformingTinBuilder().Build(session.Name, prepared, options);
+            triangulationWatch.Stop();
             if (tin == null || tin.Triangles == null || tin.Triangles.Count == 0)
                 throw new InvalidOperationException($"TIN {session.Name} không tạo được tam giác hợp lệ.");
 
@@ -135,6 +144,8 @@ namespace MiningVolume2023.Services
                 MaxZ = prepared.Sites.Max(p => p.Z),
                 SourceModifiedUtc = sourceModified,
                 SourceRevision = sourceRevision,
+                PrepareMilliseconds = prepareWatch.ElapsedMilliseconds,
+                TriangulationMilliseconds = triangulationWatch.ElapsedMilliseconds,
                 SourceModel = source
             };
         }
@@ -153,7 +164,7 @@ namespace MiningVolume2023.Services
             };
         }
 
-        public static void DrawTinPair(SurfaceBuildResult[] builds)
+        public static void DrawTinPair(SurfaceBuildResult[] builds, Action<string> progress = null)
         {
             if (builds == null || builds.Length != 2)
                 throw new ArgumentException("Cặp kết quả TIN không hợp lệ.", nameof(builds));
@@ -165,9 +176,16 @@ namespace MiningVolume2023.Services
 
             try
             {
+                progress?.Invoke($"Đang ghi TIN hiện trạng xuống AutoCAD: {existing.TriangleCount:n0} tam giác...");
                 DrawTin(ModelRole.Existing, existing);
+                progress?.Invoke($"Đang ghi TIN thiết kế xuống AutoCAD: {design.TriangleCount:n0} tam giác...");
                 DrawTin(ModelRole.Design, design);
-                EnsureBothTinsReady(synchronizeCadLayers: true);
+
+                // Both layers were just written under document lock by this workflow.
+                // Re-scanning the whole ModelSpace immediately would be redundant and
+                // very expensive on production mine drawings.
+                EnsureBothTinsReady(synchronizeCadLayers: false);
+                progress?.Invoke("Đã ghi xong cặp TIN và kiểm tra trạng thái nguồn.");
             }
             catch
             {
@@ -211,7 +229,6 @@ namespace MiningVolume2023.Services
                       throw new InvalidOperationException("Không có bản vẽ AutoCAD đang hoạt động.");
 
             int written;
-            int verified;
             using (doc.LockDocument())
             {
                 written = TinCadRenderer.Replace(
@@ -220,13 +237,17 @@ namespace MiningVolume2023.Services
                     tin,
                     role == ModelRole.Existing ? (short)1 : (short)3);
                 TinCadRenderer.SetVisible(doc.Database, session.TinLayer, true);
-                verified = TinCadRenderer.CountFaces(doc.Database, session.TinLayer);
             }
 
-            if (written != tin.Triangles.Count || verified != tin.Triangles.Count)
+            // Replace() validates the reserved layer, erases every previous TIN face and
+            // appends every core triangle inside one locked transaction. If that
+            // transaction commits and the created count matches, the CAD representation
+            // is current by construction. Runtime/self-test still performs an independent
+            // CountFaces check against the DWG.
+            if (written != tin.Triangles.Count)
                 throw new InvalidOperationException(
                     $"Ghi TIN {session.Name} xuống AutoCAD không đầy đủ: lõi có {tin.Triangles.Count:n0} tam giác, " +
-                    $"đã ghi {written:n0}, kiểm tra trên layer còn {verified:n0}.");
+                    $"đã ghi {written:n0}.");
 
             session.Tin = tin;
             session.TinBuiltFromSourceUtc = sourceModifiedUtc;

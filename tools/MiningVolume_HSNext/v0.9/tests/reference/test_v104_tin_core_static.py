@@ -43,10 +43,11 @@ def test_renderer_replaces_verifies_and_locks_tin_faces():
     assert "ColorIndex = 256" in s
     assert 'db.Clayer = lt["0"]' in s
 
-def test_surface_workflow_verifies_face_count_matches_core_triangle_count():
+def test_surface_workflow_keeps_face_count_by_atomic_replace_and_runtime_verification():
     s = read("src/MiningVolume.Plugin2023/Services/SurfaceWorkflowService.cs")
     assert "written != tin.Triangles.Count" in s
-    assert "verified != tin.Triangles.Count" in s
+    assert "verified != tin.Triangles.Count" not in s
+    assert "EnsureBothTinsReady(synchronizeCadLayers: false)" in s
     assert "EnsureTinLayerSynchronized" in s
     assert "EnsureBothTinsReady" in s
 

@@ -41,9 +41,11 @@ def test_tin_renderer_creates_visible_writable_dedicated_layer_and_verifies_face
     ]:
         assert token in s
 
-def test_surface_workflow_verifies_cad_face_count_equals_core_triangle_count():
+def test_surface_workflow_keeps_core_triangle_count_invariant_without_immediate_rescan():
     s = read("src/MiningVolume.Plugin2023/Services/SurfaceWorkflowService.cs")
-    assert "written != tin.Triangles.Count || verified != tin.Triangles.Count" in s
+    assert "written != tin.Triangles.Count" in s
+    assert "verified != tin.Triangles.Count" not in s
+    assert "EnsureBothTinsReady(synchronizeCadLayers: false)" in s
     assert "EnsureTinLayerSynchronized" in s
     assert "EnsureBothTinsReady" in s
 

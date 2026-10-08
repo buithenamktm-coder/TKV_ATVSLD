@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Drawing;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -149,15 +150,33 @@ namespace MiningVolume2023.UI
             {
                 _buildPair.Enabled = false;
                 UseWaitCursor = true;
-                _status.Text = "Đang kiểm tra và dựng cặp TIN hiện trạng / thiết kế...";
-                _status.Refresh();
+                var totalWatch = Stopwatch.StartNew();
 
-                var builds = await Task.Run(() => SurfaceWorkflowService.BuildPairCoreDetailed());
-                SurfaceWorkflowService.DrawTinPair(builds);
+                _status.Text = $"Đang dựng TIN hiện trạng từ {st.Existing.ActiveVertexCount:n0} đỉnh...";
+                _status.Refresh();
+                var existing = await Task.Run(() => SurfaceWorkflowService.BuildCoreDetailed(ModelRole.Existing));
 
                 _status.Text =
-                    $"Cặp TIN hợp lệ: {st.Existing.TinLayer} = {builds[0].TriangleCount:n0} tam giác; " +
-                    $"{st.Design.TinLayer} = {builds[1].TriangleCount:n0} tam giác.";
+                    $"Hiện trạng xong ({existing.TriangleCount:n0} tam giác, {existing.CoreMilliseconds / 1000.0:0.00}s). " +
+                    $"Đang dựng TIN thiết kế từ {st.Design.ActiveVertexCount:n0} đỉnh...";
+                _status.Refresh();
+                var design = await Task.Run(() => SurfaceWorkflowService.BuildCoreDetailed(ModelRole.Design));
+
+                var builds = new[] { existing, design };
+                var cadWatch = Stopwatch.StartNew();
+                SurfaceWorkflowService.DrawTinPair(builds, message =>
+                {
+                    _status.Text = message;
+                    _status.Refresh();
+                    Application.DoEvents();
+                });
+                cadWatch.Stop();
+                totalWatch.Stop();
+
+                _status.Text =
+                    $"Cặp TIN hợp lệ: {st.Existing.TinLayer} = {existing.TriangleCount:n0}; " +
+                    $"{st.Design.TinLayer} = {design.TriangleCount:n0} tam giác. " +
+                    $"Ghi CAD {cadWatch.Elapsed.TotalSeconds:0.00}s; tổng {totalWatch.Elapsed.TotalSeconds:0.00}s.";
 
                 MessageBox.Show(
                     "ĐÃ TẠO ĐỦ 2 TIN DÙNG CHO TÍNH KHỐI LƯỢNG\r\n\r\n" +

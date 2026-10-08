@@ -55,10 +55,11 @@ namespace MiningVolume.Surface
                 throw new InvalidOperationException("Không tạo được tam giác Delaunay từ dữ liệu đầu vào.");
 
             var locked = new HashSet<EdgeKey>();
+            var siteIndex = new SiteIndex(vertices, realCount, options.XyTolerance);
             foreach (var seg in input.Breaklines)
             {
-                int a = FindSiteIndex(vertices, realCount, seg.A, options.XyTolerance);
-                int b = FindSiteIndex(vertices, realCount, seg.B, options.XyTolerance);
+                int a = siteIndex.Find(seg.A);
+                int b = siteIndex.Find(seg.B);
                 if (a < 0 || b < 0)
                     throw new InvalidOperationException("Không ánh xạ được đầu mút breakline vào site TIN: " + seg.SourceId);
                 if (a == b) continue;
@@ -268,15 +269,63 @@ namespace MiningVolume.Surface
             return orient > 0 ? det > eps : det < -eps;
         }
 
-        private static int FindSiteIndex(List<Vec3> vertices, int realCount, Vec3 p, double tol)
+        private sealed class SiteIndex
         {
-            int best = -1; double bestD = double.PositiveInfinity;
-            for (int i = 0; i < realCount; i++)
+            private readonly Dictionary<string, List<int>> _cells = new Dictionary<string, List<int>>();
+            private readonly List<Vec3> _vertices;
+            private readonly double _tol;
+            private readonly double _tol2;
+
+            public SiteIndex(List<Vec3> vertices, int realCount, double tolerance)
             {
-                double d = vertices[i].XY.DistanceTo(p.XY);
-                if (d <= tol && d < bestD) { best = i; bestD = d; }
+                _vertices = vertices;
+                _tol = Math.Max(tolerance, 1e-12);
+                _tol2 = _tol * _tol;
+
+                for (int i = 0; i < realCount; i++)
+                {
+                    var p = vertices[i];
+                    string key = Key(Ix(p.X), Iy(p.Y));
+                    List<int> ids;
+                    if (!_cells.TryGetValue(key, out ids))
+                    {
+                        ids = new List<int>();
+                        _cells[key] = ids;
+                    }
+                    ids.Add(i);
+                }
             }
-            return best;
+
+            public int Find(Vec3 p)
+            {
+                long ix = Ix(p.X);
+                long iy = Iy(p.Y);
+                int best = -1;
+                double bestD2 = double.PositiveInfinity;
+
+                for (long dx = -1; dx <= 1; dx++)
+                for (long dy = -1; dy <= 1; dy++)
+                {
+                    List<int> ids;
+                    if (!_cells.TryGetValue(Key(ix + dx, iy + dy), out ids)) continue;
+                    foreach (int id in ids)
+                    {
+                        double px = _vertices[id].X - p.X;
+                        double py = _vertices[id].Y - p.Y;
+                        double d2 = px * px + py * py;
+                        if (d2 <= _tol2 && d2 < bestD2)
+                        {
+                            best = id;
+                            bestD2 = d2;
+                        }
+                    }
+                }
+                return best;
+            }
+
+            private long Ix(double x) => (long)Math.Floor(x / _tol);
+            private long Iy(double y) => (long)Math.Floor(y / _tol);
+            private static string Key(long x, long y) => x + ":" + y;
         }
     }
 }
