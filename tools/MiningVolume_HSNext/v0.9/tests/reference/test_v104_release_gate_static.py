@@ -212,3 +212,9 @@ def test_runtime_verifier_explicitly_netloads_plugin_and_clears_stale_startup_lo
     assert "MiningVolume2023.dll" in runtime
     assert "Remove-Item $startupLog -Force" in runtime
     assert "không có startup.log mới từ lần chạy này" in runtime
+
+
+def test_palette_primary_command_is_tkl_with_legacy_alias():
+    entry = read("src/MiningVolume.Plugin2023/EntryPoint.cs")
+    assert '[CommandMethod("TKL", CommandFlags.Session)]' in entry
+    assert '[CommandMethod("MV_TOGGLE", CommandFlags.Session)]' in entry
