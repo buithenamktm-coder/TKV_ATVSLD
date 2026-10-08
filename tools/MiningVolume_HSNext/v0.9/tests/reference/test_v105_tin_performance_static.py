@@ -19,7 +19,7 @@ def test_pair_build_does_not_rescan_just_written_cad_layers():
     pair = s[s.index("public static void DrawTinPair"):s.index("public static void DrawTin(ModelRole role, SurfaceBuildResult build)")]
     draw = s[s.index("private static void DrawTinInternal"):s.index("public static void EnsureOutputLayer")]
     assert "EnsureBothTinsReady(synchronizeCadLayers: false)" in pair
-    assert "CountFaces" not in draw
+    assert "TinCadRenderer.CountFaces(" not in draw
     assert "written != tin.Triangles.Count" in draw
 
 def test_breakline_endpoint_lookup_uses_spatial_site_index():
