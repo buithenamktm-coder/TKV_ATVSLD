@@ -218,3 +218,9 @@ def test_palette_primary_command_is_tkl_with_legacy_alias():
     entry = read("src/MiningVolume.Plugin2023/EntryPoint.cs")
     assert '[CommandMethod("TKL", CommandFlags.Session)]' in entry
     assert '[CommandMethod("MV_TOGGLE", CommandFlags.Session)]' in entry
+
+
+def test_main_palette_shows_fixed_developer_name():
+    ui = read("src/MiningVolume.Plugin2023/UI/MainPaletteControl.cs")
+    assert 'Text = "Phát triển: Bùi Thế Nam"' in ui
+    assert 'Height = 78' in ui

@@ -18,9 +18,10 @@ namespace MiningVolume2023.UI
             BackColor = Color.White;
             Font = new Font("Arial", 9F);
 
-            var header = new Panel { Dock = DockStyle.Top, Height = 60, BackColor = Color.FromArgb(245, 245, 245) };
-            header.Controls.Add(new Label { Text = "MINING VOLUME 2023", AutoSize = true, Font = new Font("Arial", 12F, FontStyle.Bold), Location = new Point(14, 10) });
-            header.Controls.Add(new Label { Text = "HS-Next • Mine Survey & Earthwork • AutoCAD 2023", AutoSize = true, Location = new Point(15, 35), ForeColor = Color.DimGray });
+            var header = new Panel { Dock = DockStyle.Top, Height = 78, BackColor = Color.FromArgb(245, 245, 245) };
+            header.Controls.Add(new Label { Text = "MINING VOLUME 2023", AutoSize = true, Font = new Font("Arial", 12F, FontStyle.Bold), Location = new Point(14, 8) });
+            header.Controls.Add(new Label { Text = "HS-Next • Mine Survey & Earthwork • AutoCAD 2023", AutoSize = true, Location = new Point(15, 31), ForeColor = Color.DimGray });
+            header.Controls.Add(new Label { Text = "Phát triển: Bùi Thế Nam", AutoSize = true, Font = new Font("Arial", 8.5F, FontStyle.Bold), Location = new Point(15, 50), ForeColor = Color.FromArgb(70, 70, 70) });
             Controls.Add(header);
 
             var nav = new FlowLayoutPanel { Dock = DockStyle.Left, Width = 145, FlowDirection = FlowDirection.TopDown, WrapContents = false, Padding = new Padding(7, 10, 7, 7), BackColor = Color.FromArgb(238, 238, 238) };
