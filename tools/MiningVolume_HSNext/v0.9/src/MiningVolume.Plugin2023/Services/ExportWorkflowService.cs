@@ -36,7 +36,13 @@ namespace MiningVolume2023.Services
             if (state.VolumeResult == null) throw new InvalidOperationException("Chưa tính khối lượng. Hãy thực hiện Bước 8 trước khi xuất Excel.");
 
             var report = BuildReport(state, options);
+            WriteXlsx(filePath, report);
+        }
+
+        public static void WriteXlsx(string filePath, SpreadsheetReport report)
+        {
             SimpleXlsxWriter.Write(filePath, report);
+            XlsxBrandingInjector.Apply(filePath, report);
         }
 
         public static SpreadsheetReport BuildReport(ProjectState state, ExportOptions options)
