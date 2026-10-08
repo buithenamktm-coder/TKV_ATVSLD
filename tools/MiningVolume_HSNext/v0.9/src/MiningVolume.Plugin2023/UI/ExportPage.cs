@@ -66,7 +66,7 @@ namespace MiningVolume2023.UI
 
             Controls.Add(new Label
             {
-                Text = "Excel: Arial 12 • không tô nền • toàn bộ bảng đóng khung • số liệu 2–3 chữ số thập phân theo loại dữ liệu.",
+                Text = "Excel: Arial 12 • bảng đóng khung • công thức liên kết thật • logo IMSAT ở sheet báo cáo chính.",
                 Dock = DockStyle.Top,
                 Height = 42,
                 ForeColor = Color.DimGray,
@@ -134,7 +134,7 @@ namespace MiningVolume2023.UI
                     UseWaitCursor = true;
                     _status.Text = "Đang lập workbook và ghi file Excel...";
                     var report = await Task.Run(() => ExportWorkflowService.BuildReport(st, opt));
-                    await Task.Run(() => SimpleXlsxWriter.Write(dlg.FileName, report));
+                    await Task.Run(() => ExportWorkflowService.WriteXlsx(dlg.FileName, report));
                     _status.Text = "Đã xuất: " + dlg.FileName;
                     MessageBox.Show("Đã xuất báo cáo Excel thành công.\n\n" + dlg.FileName, "MiningVolume 2023", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
