@@ -68,10 +68,27 @@ namespace MiningVolume2023.Services
         public static void ReplaceProfiles(Database db, IReadOnlyList<SectionProfile> profiles, Point3d insertion,
             double horizontalScale, double verticalScale, double levelStep)
         {
+            ReplaceProfilesBatched(db, profiles, insertion, horizontalScale, verticalScale, levelStep, 0, profiles?.Count ?? 0, true);
+        }
+
+        public static double ReplaceProfilesBatched(
+            Database db,
+            IReadOnlyList<SectionProfile> profiles,
+            Point3d insertion,
+            double horizontalScale,
+            double verticalScale,
+            double levelStep,
+            int startIndex,
+            int count,
+            bool clearFirst)
+        {
             if (profiles == null || profiles.Count == 0) throw new InvalidOperationException("Chưa có dữ liệu mặt cắt.");
             if (horizontalScale <= 0 || verticalScale <= 0) throw new ArgumentOutOfRangeException("Tỷ lệ mặt cắt phải lớn hơn 0.");
             if (levelStep <= 0) levelStep = 5.0;
             double vExag = horizontalScale / verticalScale;
+
+            if (startIndex < 0 || startIndex > profiles.Count) throw new ArgumentOutOfRangeException(nameof(startIndex));
+            count = Math.Max(0, Math.Min(count, profiles.Count - startIndex));
 
             using (var tr = db.TransactionManager.StartTransaction())
             {
@@ -81,12 +98,26 @@ namespace MiningVolume2023.Services
                 ObjectId txLayer = EnsureLayer(db, tr, TextLayer, 7);
                 ObjectId styleId = EnsureArialStyle(db, tr);
                 var ms = ModelSpace(db, tr, true);
-                EraseOnLayers(ms, tr, new[] { exLayer, deLayer, axLayer, txLayer });
+                if (clearFirst)
+                    EraseOnLayers(ms, tr, new[] { exLayer, deLayer, axLayer, txLayer });
 
                 double baseX = insertion.X;
                 double currentY = insertion.Y;
-                foreach (var p in profiles)
+
+                // Reconstruct the vertical origin for this batch deterministically
+                // from all earlier profile heights. No CAD scan is required.
+                for (int k = 0; k < startIndex; k++)
                 {
+                    var prev = profiles[k];
+                    double prevBaseZ = Math.Floor(prev.MinZ / levelStep) * levelStep;
+                    double prevTopZ = Math.Ceiling(prev.MaxZ / levelStep) * levelStep;
+                    if (prevTopZ <= prevBaseZ) prevTopZ = prevBaseZ + levelStep;
+                    currentY -= (prevTopZ - prevBaseZ) * vExag + 45.0;
+                }
+
+                for (int pi = startIndex; pi < startIndex + count; pi++)
+                {
+                    var p = profiles[pi];
                     double width = Math.Max(1.0, p.Line.MaxT - p.Line.MinT);
                     double baseZ = Math.Floor(p.MinZ / levelStep) * levelStep;
                     double topZ = Math.Ceiling(p.MaxZ / levelStep) * levelStep;
@@ -126,6 +157,7 @@ namespace MiningVolume2023.Services
                     currentY -= height + 45.0;
                 }
                 tr.Commit();
+                return currentY;
             }
         }
 

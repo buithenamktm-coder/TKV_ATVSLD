@@ -116,13 +116,37 @@ namespace MiningVolume2023.Services
             return profiles;
         }
 
-        public static void DrawProfiles(Point3d insertion, double horizontalScale, double verticalScale, double levelStep)
+        public static void DrawProfiles(
+            Point3d insertion,
+            double horizontalScale,
+            double verticalScale,
+            double levelStep,
+            Action<int, int> progress = null)
         {
             var state = ProjectState.Current;
             if (state.SectionProfiles.Count == 0) BuildProfiles();
             var doc = Application.DocumentManager.MdiActiveDocument ?? throw new InvalidOperationException("Không có bản vẽ AutoCAD đang hoạt động.");
+
+            const int batchSize = 20;
+            int total = state.SectionProfiles.Count;
             using (doc.LockDocument())
-                SectionCadRenderer.ReplaceProfiles(doc.Database, state.SectionProfiles, insertion, horizontalScale, verticalScale, levelStep);
+            {
+                for (int start = 0; start < total; start += batchSize)
+                {
+                    int count = Math.Min(batchSize, total - start);
+                    SectionCadRenderer.ReplaceProfilesBatched(
+                        doc.Database,
+                        state.SectionProfiles,
+                        insertion,
+                        horizontalScale,
+                        verticalScale,
+                        levelStep,
+                        start,
+                        count,
+                        start == 0);
+                    progress?.Invoke(start + count, total);
+                }
+            }
         }
 
         public static void ClearPreview()

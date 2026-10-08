@@ -317,17 +317,25 @@ namespace MiningVolume2023.UI
                 var ins = SelectionService.PickInsertionPoint("Chọn điểm chèn hệ mặt cắt: ");
                 if (!ins.HasValue) return;
 
-                _status.Text = "Đang vẽ hệ mặt cắt xuống AutoCAD...";
+                var drawWatch = Stopwatch.StartNew();
+                _status.Text = $"Đang vẽ mặt cắt 0/{profiles.Count:n0} xuống AutoCAD...";
                 _status.Refresh();
                 SectionWorkflowService.DrawProfiles(
                     ins.Value,
                     (double)_hScale.Value,
                     (double)_vScale.Value,
-                    (double)_levelStep.Value);
+                    (double)_levelStep.Value,
+                    (done, total) =>
+                    {
+                        _status.Text = $"Đang vẽ mặt cắt {done:n0}/{total:n0} xuống AutoCAD...";
+                        _status.Refresh();
+                        Application.DoEvents();
+                    });
+                drawWatch.Stop();
 
                 _status.Text =
                     $"Đã thành lập {profiles.Count:n0} mặt cắt; {valid:n0} mặt cắt có đủ dữ liệu hai TIN. " +
-                    $"Thời gian tính {watch.Elapsed.TotalSeconds:0.0}s.";
+                    $"Tính {watch.Elapsed.TotalSeconds:0.0}s; vẽ {drawWatch.Elapsed.TotalSeconds:0.0}s.";
                 RefreshGrid();
             }
             catch (Exception ex)

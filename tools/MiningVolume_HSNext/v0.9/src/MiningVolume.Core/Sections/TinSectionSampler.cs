@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using MiningVolume.Core.Geometry;
 using MiningVolume.Core.Surface;
 
@@ -40,14 +42,25 @@ namespace MiningVolume.Core.Sections
             if (design == null) throw new ArgumentNullException(nameof(design));
 
             // Build each spatial index once, then reuse it for the whole section system.
+            // Profiles are independent and both triangle indices are immutable after
+            // construction, so large section systems can use multiple CPU cores safely.
             var existingIndex = IndexFor(existing);
             var designIndex = IndexFor(design);
-            var result = new List<SectionProfile>(lines.Count);
-            for (int i = 0; i < lines.Count; i++)
+            var result = new SectionProfile[lines.Count];
+            int completed = 0;
+
+            var options = new ParallelOptions
             {
-                progress?.Invoke(i + 1, lines.Count, lines[i].Name);
-                result.Add(BuildProfileIndexed(lines[i], existingIndex, designIndex, tol));
-            }
+                MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount - 1)
+            };
+
+            Parallel.For(0, lines.Count, options, i =>
+            {
+                result[i] = BuildProfileIndexed(lines[i], existingIndex, designIndex, tol);
+                int done = Interlocked.Increment(ref completed);
+                progress?.Invoke(done, lines.Count, lines[i].Name);
+            });
+
             return result;
         }
 

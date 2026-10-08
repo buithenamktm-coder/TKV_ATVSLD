@@ -92,3 +92,21 @@ def test_section_renderer_batches_tin_segments_into_polylines():
     assert "new Polyline(points.Count)" in s
     block = s[s.index("AddProfilePolylines(ms, tr, p"):s.index("currentY -= height + 45.0")]
     assert "AddLine(ms, tr" not in block
+
+
+def test_section_profiles_are_parallelized_but_keep_original_order():
+    s = read("src/MiningVolume.Core/Sections/TinSectionSampler.cs")
+    assert "Parallel.For(0, lines.Count" in s
+    assert "var result = new SectionProfile[lines.Count]" in s
+    assert "result[i] = BuildProfileIndexed" in s
+    assert "Interlocked.Increment" in s
+
+def test_section_cad_output_is_batched_to_avoid_one_giant_transaction():
+    renderer = read("src/MiningVolume.Plugin2023/Services/SectionCadRenderer.cs")
+    workflow = read("src/MiningVolume.Plugin2023/Services/SectionWorkflowService.cs")
+    page = read("src/MiningVolume.Plugin2023/UI/SectionPage.cs")
+    assert "ReplaceProfilesBatched" in renderer
+    assert "const int batchSize = 20" in workflow
+    assert "start == 0" in workflow
+    assert "Đang vẽ mặt cắt {done:n0}/{total:n0}" in page
+    assert "drawWatch.Elapsed.TotalSeconds" in page
