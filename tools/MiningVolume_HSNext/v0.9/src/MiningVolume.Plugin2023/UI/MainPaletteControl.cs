@@ -1,5 +1,7 @@
+using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.IO;
 using System.Windows.Forms;
 
 namespace MiningVolume2023.UI
@@ -64,13 +66,33 @@ namespace MiningVolume2023.UI
                 BackColor = UiTheme.Sidebar
             };
 
+            int textLeft = 16;
+            try
+            {
+                string logoPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Assets", "imsat_logo_64.png");
+                if (File.Exists(logoPath))
+                {
+                    var logo = new PictureBox
+                    {
+                        Image = Image.FromFile(logoPath),
+                        SizeMode = PictureBoxSizeMode.Zoom,
+                        Size = new Size(58, 58),
+                        Location = new Point(14, 13),
+                        BackColor = Color.Transparent
+                    };
+                    header.Controls.Add(logo);
+                    textLeft = 82;
+                }
+            }
+            catch { }
+
             header.Controls.Add(new Label
             {
                 Text = "IMSAT MINING VOLUME",
                 AutoSize = true,
                 Font = new Font("Arial", 13F, FontStyle.Bold),
                 ForeColor = Color.White,
-                Location = new Point(16, 9)
+                Location = new Point(textLeft, 9)
             });
             header.Controls.Add(new Label
             {
@@ -78,7 +100,7 @@ namespace MiningVolume2023.UI
                 AutoSize = true,
                 Font = new Font("Arial", 8.5F),
                 ForeColor = Color.FromArgb(190, 204, 216),
-                Location = new Point(17, 35)
+                Location = new Point(textLeft + 1, 35)
             });
             header.Controls.Add(new Label
             {
@@ -86,7 +108,7 @@ namespace MiningVolume2023.UI
                 AutoSize = true,
                 Font = new Font("Arial", 8.5F, FontStyle.Bold),
                 ForeColor = Color.FromArgb(122, 213, 181),
-                Location = new Point(17, 58)
+                Location = new Point(textLeft + 1, 58)
             });
             return header;
         }
