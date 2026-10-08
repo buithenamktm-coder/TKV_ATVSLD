@@ -161,8 +161,12 @@ namespace MiningVolume2023
             StartupLog("Palette visibility toggled: " + (Palette.Visible ? "ON" : "OFF"));
         }
 
-        [CommandMethod("MV_TOGGLE", CommandFlags.Session)]
+        [CommandMethod("TKL", CommandFlags.Session)]
         public static void TogglePaletteCommand() => TogglePalette();
+
+        // Legacy alias kept for compatibility with previous builds/scripts.
+        [CommandMethod("MV_TOGGLE", CommandFlags.Session)]
+        public static void TogglePaletteLegacyCommand() => TogglePalette();
 
         [CommandMethod("MV_AUTOPEN", CommandFlags.Session)]
         public static void ToggleAutoOpen()

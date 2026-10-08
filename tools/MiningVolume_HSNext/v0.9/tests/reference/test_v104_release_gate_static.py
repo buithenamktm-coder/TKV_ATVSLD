@@ -224,3 +224,15 @@ def test_main_palette_shows_fixed_developer_name():
     ui = read("src/MiningVolume.Plugin2023/UI/MainPaletteControl.cs")
     assert 'Text = "Phát triển: Bùi Thế Nam"' in ui
     assert 'Height = 78' in ui
+
+
+def test_palette_uses_shared_professional_ui_theme():
+    ui = read("src/MiningVolume.Plugin2023/UI/MainPaletteControl.cs")
+    theme = read("src/MiningVolume.Plugin2023/UI/UiTheme.cs")
+    assert "UiTheme.ApplyPage(page)" in ui
+    assert 'Text = "QUY TRÌNH"' in ui
+    assert 'Text = "Lệnh nhanh:  TKL\\r\\nHiện / ẩn bảng MiningVolume"' in ui
+    assert "UiTheme.Accent" in ui
+    assert "StyleGrid(DataGridView grid)" in theme
+    assert "StyleButton(Button button)" in theme
+    assert "EnableHeadersVisualStyles = false" in theme
