@@ -20,54 +20,166 @@ namespace MiningVolume2023.UI
         public DataPage()
         {
             Font = new Font("Arial", 9F);
-            BackColor = Color.White;
-            Controls.Add(new Label { Text = "DỮ LIỆU ĐẦU VÀO", Dock = DockStyle.Top, Height = 32, Font = new Font("Arial", 11F, FontStyle.Bold) });
+            BackColor = UiTheme.Canvas;
+            AutoScroll = true;
+            Padding = new Padding(0);
 
-            var body = new TableLayoutPanel { Dock = DockStyle.Top, Height = 330, ColumnCount = 3, RowCount = 8, Padding = new Padding(4) };
-            body.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 125));
-            body.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            body.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 105));
+            var header = new Panel
+            {
+                Dock = DockStyle.Top,
+                Height = 64,
+                BackColor = UiTheme.Surface,
+                Padding = new Padding(16, 10, 16, 8)
+            };
+            header.Controls.Add(new Label
+            {
+                Text = "DỮ LIỆU ĐẦU VÀO",
+                Dock = DockStyle.Top,
+                Height = 26,
+                Font = new Font("Arial", 12F, FontStyle.Bold),
+                ForeColor = UiTheme.TextStrong
+            });
+            header.Controls.Add(new Label
+            {
+                Text = "Chọn layer hiện trạng, thiết kế và các loại đối tượng tham gia mô hình.",
+                Dock = DockStyle.Bottom,
+                Height = 22,
+                Font = new Font("Arial", 8.75F),
+                ForeColor = UiTheme.Muted
+            });
 
-            _existingLayer = new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList };
-            _designLayer = new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList };
-            AddRow(body, 0, "Hiện trạng", _existingLayer, Btn("Nạp dữ liệu", (s, e) => LoadModel(ModelRole.Existing)));
-            AddRow(body, 1, "Thiết kế", _designLayer, Btn("Nạp dữ liệu", (s, e) => LoadModel(ModelRole.Design)));
+            var body = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Top,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                FlowDirection = FlowDirection.TopDown,
+                WrapContents = false,
+                Padding = new Padding(14, 14, 14, 18),
+                BackColor = UiTheme.Canvas
+            };
 
-            _types = new CheckedListBox { Dock = DockStyle.Fill, Height = 120, CheckOnClick = true };
-            foreach (var x in new[] { "POINT", "LINE", "LWPOLYLINE", "2D POLYLINE", "3D POLYLINE", "Đường đồng mức" }) _types.Items.Add(x, true);
-            body.Controls.Add(new Label { Text = "Loại dữ liệu", Dock = DockStyle.Fill, TextAlign = ContentAlignment.TopLeft }, 0, 2);
-            body.Controls.Add(_types, 1, 2);
-            body.SetColumnSpan(_types, 2);
+            var sourceBox = new GroupBox
+            {
+                Text = "Nguồn dữ liệu",
+                Width = 520,
+                Height = 112,
+                Margin = new Padding(0, 0, 0, 12)
+            };
+            var source = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 3,
+                RowCount = 2,
+                Padding = new Padding(10, 8, 10, 8)
+            };
+            source.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 88));
+            source.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            source.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 116));
+            source.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
+            source.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
 
-            var refresh = Btn("Làm mới danh sách layer", (s, e) => RefreshLayers());
-            body.Controls.Add(refresh, 1, 4);
-            body.SetColumnSpan(refresh, 2);
+            _existingLayer = new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList, Margin = new Padding(3, 5, 6, 5) };
+            _designLayer = new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList, Margin = new Padding(3, 5, 6, 5) };
+            AddRow(source, 0, "Hiện trạng", _existingLayer, Btn("Nạp dữ liệu", (s, e) => LoadModel(ModelRole.Existing)));
+            AddRow(source, 1, "Thiết kế", _designLayer, Btn("Nạp dữ liệu", (s, e) => LoadModel(ModelRole.Design)));
+            sourceBox.Controls.Add(source);
+            body.Controls.Add(sourceBox);
 
+            var typeBox = new GroupBox
+            {
+                Text = "Loại dữ liệu tham gia TIN",
+                Width = 520,
+                Height = 174,
+                Margin = new Padding(0, 0, 0, 12)
+            };
+            _types = new CheckedListBox
+            {
+                Dock = DockStyle.Fill,
+                CheckOnClick = true,
+                IntegralHeight = false,
+                BorderStyle = BorderStyle.FixedSingle,
+                Margin = new Padding(0)
+            };
+            foreach (var x in new[] { "POINT", "LINE", "LWPOLYLINE", "2D POLYLINE", "3D POLYLINE", "Đường đồng mức" })
+                _types.Items.Add(x, true);
+            var typePanel = new Panel { Dock = DockStyle.Fill, Padding = new Padding(10, 8, 10, 10) };
+            typePanel.Controls.Add(_types);
+            typeBox.Controls.Add(typePanel);
+            body.Controls.Add(typeBox);
+
+            var statusBox = new GroupBox
+            {
+                Text = "Trạng thái mô hình",
+                Width = 520,
+                Height = 104,
+                Margin = new Padding(0, 0, 0, 12)
+            };
             _status = new Label
             {
-                Text = "Chưa nạp dữ liệu",
+                Text = "Chưa nạp dữ liệu.",
                 Dock = DockStyle.Fill,
-                AutoSize = true,
-                ForeColor = Color.DimGray
+                ForeColor = UiTheme.Muted,
+                Padding = new Padding(10, 8, 10, 8),
+                AutoEllipsis = true,
+                TextAlign = ContentAlignment.MiddleLeft
             };
-            body.Controls.Add(_status, 1, 5);
-            body.SetColumnSpan(_status, 2);
+            statusBox.Controls.Add(_status);
+            body.Controls.Add(statusBox);
+
+            var actions = new TableLayoutPanel
+            {
+                Width = 520,
+                Height = 92,
+                ColumnCount = 1,
+                RowCount = 2,
+                Margin = new Padding(0),
+                Padding = new Padding(0)
+            };
+            actions.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
+            actions.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
+
+            var refresh = Btn("Làm mới danh sách layer", (s, e) => RefreshLayers());
+            refresh.Dock = DockStyle.Fill;
+            refresh.Margin = new Padding(0, 0, 0, 6);
+            actions.Controls.Add(refresh, 0, 0);
 
             _buildPair = Btn("TẠO CẶP TIN HIỆN TRẠNG + THIẾT KẾ", async (s, e) => await BuildPairTinAsync());
             _buildPair.Font = new Font("Arial", 9F, FontStyle.Bold);
+            _buildPair.Dock = DockStyle.Fill;
+            _buildPair.Margin = new Padding(0);
             _buildPair.Enabled = false;
-            body.Controls.Add(_buildPair, 1, 6);
-            body.SetColumnSpan(_buildPair, 2);
+            actions.Controls.Add(_buildPair, 0, 1);
+            body.Controls.Add(actions);
+
+            body.SizeChanged += (s, e) =>
+            {
+                int width = Math.Max(420, body.ClientSize.Width - body.Padding.Horizontal - 4);
+                sourceBox.Width = width;
+                typeBox.Width = width;
+                statusBox.Width = width;
+                actions.Width = width;
+            };
 
             Controls.Add(body);
-            body.BringToFront();
+            Controls.Add(header);
+            header.BringToFront();
+
             RefreshLayers();
             RefreshPairButton();
         }
 
         private static Button Btn(string text, EventHandler h)
         {
-            var b = new Button { Text = text, Dock = DockStyle.Fill, Height = 28 };
+            var b = new Button
+            {
+                Text = text,
+                Dock = DockStyle.Fill,
+                Height = 34,
+                MinimumSize = new Size(0, 34),
+                Margin = new Padding(3, 4, 3, 4),
+                UseCompatibleTextRendering = true
+            };
             b.Click += h;
             return b;
         }
