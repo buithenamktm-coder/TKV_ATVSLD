@@ -204,3 +204,11 @@ def test_autocad2023_version_accepts_autodesk_r24_2_prefix():
     assert "'^R?24\\.2'" in runtime
     assert "'^R?24\\.2'" in runner
     assert "'^R?24\\.2'" in workflow
+
+
+def test_runtime_verifier_explicitly_netloads_plugin_and_clears_stale_startup_log():
+    runtime = read("release/verify_autocad2023_runtime.ps1")
+    assert "'_.NETLOAD'" in runtime
+    assert "MiningVolume2023.dll" in runtime
+    assert "Remove-Item $startupLog -Force" in runtime
+    assert "không có startup.log mới từ lần chạy này" in runtime

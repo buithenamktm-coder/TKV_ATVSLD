@@ -168,3 +168,10 @@ Setup bắt buộc tự chạy `MVSELFTEST` trong AutoCAD 2023 và rollback nế
 - Autodesk có thể trả FileVersion theo dạng `R24.2.x.x` thay vì chỉ `24.2.x.x`.
 - Runtime workflow, runtime verifier và runner bootstrap đều chấp nhận cả tiền tố `24.2` và `R24.2`.
 - Mốc này được khóa bằng regression test để tránh false-negative trên máy AutoCAD 2023 thật.
+
+
+## Runtime bootstrap không phụ thuộc autoload
+
+- Runtime verifier xóa `startup.log` cũ trước mỗi lần kiểm thử để không nhầm log lịch sử với lần chạy hiện tại.
+- AutoCAD batch script gọi `_.NETLOAD` trực tiếp tới `MiningVolume2023.dll` trong bundle runtime trước khi gọi `MVSELFTEST`.
+- Nếu sau timeout vẫn không có `MVSELFTEST_RUNTIME.txt`, verifier đưa startup log mới (hoặc xác nhận không có startup log mới) thẳng vào lỗi để phân biệt load failure với self-test failure.

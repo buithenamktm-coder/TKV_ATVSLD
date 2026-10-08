@@ -77,6 +77,7 @@ foreach ($rel in $required) {
 $programData = if ($env:ProgramData) { $env:ProgramData } else { 'C:\ProgramData' }
 $appPlugins = Join-Path $programData 'Autodesk\ApplicationPlugins'
 $target = Join-Path $appPlugins 'MiningVolume2023.bundle'
+$startupLog = Join-Path $programData 'MiningVolume2023\Logs\startup.log'
 $backup = Join-Path $appPlugins 'MiningVolume2023.bundle.runtimeverify.bak'
 $temp = Join-Path $env:TEMP ("MiningVolumeRuntime_" + [Guid]::NewGuid().ToString('N'))
 $scriptPath = Join-Path $temp 'runtime_selftest.scr'
@@ -84,6 +85,7 @@ New-Item -ItemType Directory -Force $temp | Out-Null
 New-Item -ItemType Directory -Force (Split-Path $OutputPath -Parent) | Out-Null
 Remove-Item $SelfTestPath -Force -ErrorAction SilentlyContinue
 Remove-Item $OutputPath -Force -ErrorAction SilentlyContinue
+Remove-Item $startupLog -Force -ErrorAction SilentlyContinue
 
 # Recover from an interrupted earlier runtime verification before starting.
 if (Test-Path $backup) {
@@ -96,11 +98,18 @@ try {
     if ($hadPrevious) { Move-Item $target $backup -Force }
     Copy-Directory $bundle $target
 
+    $pluginDll = Join-Path $target 'Contents\Windows\MiningVolume2023.dll'
+    if (-not (Test-Path $pluginDll)) {
+        throw "Không tìm thấy DLL plugin để NETLOAD: $pluginDll"
+    }
+
     @(
         'FILEDIA'
         '0'
         'CMDDIA'
         '0'
+        '_.NETLOAD'
+        ('"' + $pluginDll + '"')
         'MVSELFTEST'
         '_.QUIT'
     ) | Set-Content -Path $scriptPath -Encoding ASCII
@@ -127,7 +136,14 @@ try {
         }
 
         if (-not (Test-Path $SelfTestPath)) {
-            throw "AutoCAD không sinh log MVSELFTEST trong $TimeoutSeconds giây."
+            $startupDetail = if (Test-Path $startupLog) {
+                Get-Content $startupLog -Raw
+            } else {
+                '(không có startup.log mới từ lần chạy này)'
+            }
+            throw "AutoCAD không sinh log MVSELFTEST trong $TimeoutSeconds giây.
+Startup log hiện tại:
+$startupDetail"
         }
         $result = Get-Content $SelfTestPath -Raw
         if ($result -notmatch 'MiningVolume HS-Next v0\.10\.4 runtime self-test') {
