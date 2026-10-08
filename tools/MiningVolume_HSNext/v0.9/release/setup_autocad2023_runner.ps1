@@ -30,7 +30,7 @@ function Find-AutoCAD2023 {
         $acad = Join-Path $dir 'acad.exe'
         if ((Test-Path $acad) -and (Test-Path (Join-Path $dir 'AcMgd.dll'))) {
             $version = (Get-Item $acad).VersionInfo.FileVersion
-            if ($version -match '^24\.2') {
+            if ($version -match '^R?24\.2') {
                 return [pscustomobject]@{ Directory = $dir; Acad = $acad; Version = $version }
             }
         }

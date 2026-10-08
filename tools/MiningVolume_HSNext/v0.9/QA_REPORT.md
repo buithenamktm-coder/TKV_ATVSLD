@@ -161,3 +161,10 @@ Setup bắt buộc tự chạy `MVSELFTEST` trong AutoCAD 2023 và rollback nế
 - Setup tự kiểm tra lại payload sau giải nén, không chỉ dựa vào CI.
 - Thư mục `Contents/Windows` chỉ được phép có 4 DLL MiningVolume; mọi DLL lạ (kể cả DLL Autodesk hoặc `NetTopologySuite.dll`) làm cài đặt dừng trước khi thay đổi AutoCAD.
 - Setup kiểm `PackageContents.xml` phải đúng `AppVersion=0.10.4`, `SeriesMin/SeriesMax=R24.2` và `LoadOnAutoCADStartup=True`.
+
+
+## AutoCAD 2023 FileVersion compatibility
+
+- Autodesk có thể trả FileVersion theo dạng `R24.2.x.x` thay vì chỉ `24.2.x.x`.
+- Runtime workflow, runtime verifier và runner bootstrap đều chấp nhận cả tiền tố `24.2` và `R24.2`.
+- Mốc này được khóa bằng regression test để tránh false-negative trên máy AutoCAD 2023 thật.

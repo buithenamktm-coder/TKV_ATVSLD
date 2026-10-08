@@ -195,3 +195,12 @@ def test_installer_rejects_foreign_dlls_and_wrong_package_metadata():
     assert 'SeriesMin="R24.2"' in installer
     assert 'SeriesMax="R24.2"' in installer
     assert 'LoadOnAutoCADStartup="True"' in installer
+
+
+def test_autocad2023_version_accepts_autodesk_r24_2_prefix():
+    runtime = read("release/verify_autocad2023_runtime.ps1")
+    runner = read("release/setup_autocad2023_runner.ps1")
+    workflow = read("../../../.github/workflows/verify-miningvolume-autocad2023-runtime.yml")
+    assert "'^R?24\\.2'" in runtime
+    assert "'^R?24\\.2'" in runner
+    assert "'^R?24\\.2'" in workflow

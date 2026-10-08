@@ -55,7 +55,7 @@ function Copy-Directory([string]$Source, [string]$Destination) {
 $cadDir = Find-AutoCAD2023
 $acad = Join-Path $cadDir 'acad.exe'
 $acadVersion = (Get-Item $acad).VersionInfo.FileVersion
-if ($acadVersion -notmatch '^24\.2') {
+if ($acadVersion -notmatch '^R?24\.2') {
     throw "acad.exe không phải AutoCAD 2023 R24.2. FileVersion=$acadVersion"
 }
 if (Get-Process acad -ErrorAction SilentlyContinue) {
