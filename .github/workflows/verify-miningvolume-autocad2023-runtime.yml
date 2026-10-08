@@ -93,6 +93,34 @@ jobs:
         with:
           ref: ${{ env.REQUESTED_SOURCE_REF }}
 
+      - name: Ensure PowerShell 7
+        shell: powershell
+        run: |
+          $pwsh = Get-Command pwsh.exe -ErrorAction SilentlyContinue
+          if (-not $pwsh) {
+            $winget = Get-Command winget.exe -ErrorAction SilentlyContinue
+            if (-not $winget) {
+              throw 'PowerShell 7 is missing and winget is unavailable.'
+            }
+            & $winget.Source install --id Microsoft.PowerShell --exact --source winget --accept-source-agreements --accept-package-agreements --silent | Out-Host
+            if ($LASTEXITCODE -ne 0) {
+              throw "winget failed to install PowerShell 7. ExitCode=$LASTEXITCODE"
+            }
+          }
+
+          $pwshPath = (Get-Command pwsh.exe -ErrorAction SilentlyContinue).Source
+          if (-not $pwshPath) {
+            $candidate = Join-Path $env:ProgramFiles 'PowerShell\7\pwsh.exe'
+            if (Test-Path $candidate) { $pwshPath = $candidate }
+          }
+          if (-not $pwshPath -or -not (Test-Path $pwshPath)) {
+            throw 'PowerShell 7 installation completed but pwsh.exe was not found.'
+          }
+
+          $pwshDir = Split-Path $pwshPath -Parent
+          $pwshDir | Out-File -FilePath $env:GITHUB_PATH -Encoding ascii -Append
+          Write-Host "PowerShell 7: $pwshPath"
+
       - name: Record exact source commit
         shell: pwsh
         run: |
@@ -147,7 +175,7 @@ jobs:
 
           $acad = Join-Path $cadDir 'acad.exe'
           $version = (Get-Item $acad).VersionInfo.FileVersion
-          if ($version -notmatch '^24\.2') {
+          if ($version -notmatch '^R?24\.2') {
             throw "acad.exe không phải AutoCAD 2023 R24.2. FileVersion=$version"
           }
 
@@ -159,11 +187,6 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
-
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.23.x'
 
       - name: Restore with real AutoCAD 2023 references
         shell: pwsh
@@ -195,6 +218,35 @@ jobs:
         run: |
           Set-Location $env:MV_ROOT
           ./release/verify_autocad2023_runtime.ps1
+
+      - name: Ensure Go toolchain after runtime PASS
+        shell: pwsh
+        run: |
+          $go = Get-Command go.exe -ErrorAction SilentlyContinue
+          if (-not $go) {
+            $winget = Get-Command winget.exe -ErrorAction SilentlyContinue
+            if (-not $winget) {
+              throw 'Go is missing and winget is unavailable.'
+            }
+            & $winget.Source install --id GoLang.Go --exact --source winget --accept-source-agreements --accept-package-agreements --silent | Out-Host
+            if ($LASTEXITCODE -ne 0) {
+              throw "winget failed to install Go. ExitCode=$LASTEXITCODE"
+            }
+          }
+
+          $goPath = (Get-Command go.exe -ErrorAction SilentlyContinue).Source
+          if (-not $goPath) {
+            $candidate = Join-Path $env:ProgramFiles 'Go\bin\go.exe'
+            if (Test-Path $candidate) { $goPath = $candidate }
+          }
+          if (-not $goPath -or -not (Test-Path $goPath)) {
+            throw 'Go installation completed but go.exe was not found.'
+          }
+
+          $goDir = Split-Path $goPath -Parent
+          $goDir | Out-File -FilePath $env:GITHUB_PATH -Encoding ascii -Append
+          Write-Host "Go: $goPath"
+          & $goPath version
 
       - name: Build runtime-validated installer
         shell: pwsh
