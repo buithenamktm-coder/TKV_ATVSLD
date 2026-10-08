@@ -11,6 +11,9 @@ namespace MiningVolume2023.Services
 {
     public sealed class ExportOptions
     {
+        public const string FixedDeveloperName = "Bùi Thế Nam";
+        public const string FixedDeveloperContact = "Điện thoại: 0967280686";
+
         public bool IncludeSourceXyz { get; set; } = true;
         public bool IncludeSectionData { get; set; } = true;
         public bool IncludeSectionAreas { get; set; } = true;
@@ -18,8 +21,8 @@ namespace MiningVolume2023.Services
         public bool IncludeLevels { get; set; } = true;
         public bool IncludeSummary { get; set; } = true;
         public bool IncludeWarnings { get; set; } = true;
-        public string DeveloperName { get; set; } = string.Empty;
-        public string DeveloperContact { get; set; } = string.Empty;
+        public string DeveloperName { get; set; } = FixedDeveloperName;
+        public string DeveloperContact { get; set; } = FixedDeveloperContact;
     }
 
     public static class ExportWorkflowService
@@ -42,7 +45,7 @@ namespace MiningVolume2023.Services
             var report = new SpreadsheetReport
             {
                 Title = "MiningVolume 2023 - Báo cáo mặt cắt và khối lượng",
-                Creator = string.IsNullOrWhiteSpace(options.DeveloperName) ? "MiningVolume 2023" : options.DeveloperName.Trim(),
+                Creator = ExportOptions.FixedDeveloperName,
                 CreatedAt = now
             };
 
@@ -63,8 +66,8 @@ namespace MiningVolume2023.Services
             s.Landscape = false;
             s.Notes.Add("Báo cáo được xuất tự động từ MiningVolume 2023 - HS-Next.");
             AddKV(s, "Thời gian xuất", now.ToString("dd/MM/yyyy HH:mm:ss"));
-            AddKV(s, "Người phát triển phần mềm", EmptyAsNotSet(opt.DeveloperName));
-            AddKV(s, "Địa chỉ liên hệ / email / điện thoại", EmptyAsNotSet(opt.DeveloperContact));
+            AddKV(s, "Người phát triển phần mềm", ExportOptions.FixedDeveloperName);
+            AddKV(s, "Điện thoại", "0967280686");
             AddKV(s, "Layer hiện trạng", EmptyAsNotSet(st.Existing.Layer));
             AddKV(s, "Layer thiết kế", EmptyAsNotSet(st.Design.Layer));
             AddKV(s, "Số đối tượng hiện trạng", st.Existing.EntityCount.ToString("n0"));
@@ -207,8 +210,8 @@ namespace MiningVolume2023.Services
             var s = NewSheet("Tổng khối", "BẢNG TỔNG HỢP KHỐI LƯỢNG",
                 new[] { "Chỉ tiêu", "Đơn vị", "Giá trị" }, 40, 14, 22);
             s.Landscape = false;
-            s.Notes.Add("Người phát triển: " + EmptyAsNotSet(opt.DeveloperName));
-            s.Notes.Add("Liên hệ: " + EmptyAsNotSet(opt.DeveloperContact));
+            s.Notes.Add("Người phát triển: " + ExportOptions.FixedDeveloperName);
+            s.Notes.Add(ExportOptions.FixedDeveloperContact);
             s.Rows.Add(new[] { ReportCell.Text("Tổng khối lượng đào", true), ReportCell.Text("m³"), ReportCell.N2(r.TotalCutVolume, true) });
             s.Rows.Add(new[] { ReportCell.Text("Tổng khối lượng đắp", true), ReportCell.Text("m³"), ReportCell.N2(r.TotalFillVolume, true) });
             s.Rows.Add(new[] { ReportCell.Text("Chênh lệch đào - đắp", true), ReportCell.Text("m³"), ReportCell.N2(r.NetVolume, true) });

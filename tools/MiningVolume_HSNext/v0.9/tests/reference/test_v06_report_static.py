@@ -73,3 +73,19 @@ def test_volume_detail_exports_mid_section_and_formula():
     s = read(EXPORT_SERVICE)
     for token in ["CutAreaMid", "FillAreaMid", "FormulaName(x.CutFormula)", "FormulaName(x.FillFormula)"]:
         assert token in s
+
+def test_xlsx_writer_emits_autofilter_before_mergecells_per_ooxml_schema():
+    s = read(REPORT)
+    worksheet = s[s.index("private static void WriteWorksheet"):s.index("private static void Merge")]
+    assert worksheet.index('x.WriteStartElement("autoFilter")') < worksheet.index('x.WriteStartElement("mergeCells")')
+    assert "OOXML worksheet schema requires autoFilter before mergeCells" in worksheet
+
+def test_developer_identity_is_fixed_and_readonly():
+    service = read(EXPORT_SERVICE)
+    ui = read(EXPORT_UI)
+    assert 'FixedDeveloperName = "Bùi Thế Nam"' in service
+    assert 'FixedDeveloperContact = "Điện thoại: 0967280686"' in service
+    assert 'ReadOnly = true' in ui
+    assert 'Text = ExportOptions.FixedDeveloperName' in ui
+    assert 'Text = ExportOptions.FixedDeveloperContact' in ui
+    assert "TextChanged += ReportInfoChanged" not in ui

@@ -362,6 +362,12 @@ namespace MiningVolume.Core.Reporting
                 }
                 x.WriteEndElement();
 
+                // OOXML worksheet schema requires autoFilter before mergeCells.
+                // Writing these in the opposite order can make Excel repair/reject the workbook.
+                if (sheet.AutoFilter && sheet.Headers.Count > 0 && lastDataRow >= headerRow)
+                {
+                    x.WriteStartElement("autoFilter"); x.WriteAttributeString("ref", "A" + headerRow.ToString(CultureInfo.InvariantCulture) + ":" + ColumnName(colCount) + Math.Max(headerRow, lastDataRow).ToString(CultureInfo.InvariantCulture)); x.WriteEndElement();
+                }
                 if (colCount > 1 && titleRows + noteRows > 0)
                 {
                     x.WriteStartElement("mergeCells"); x.WriteAttributeString("count", (titleRows + noteRows).ToString(CultureInfo.InvariantCulture));
@@ -369,10 +375,6 @@ namespace MiningVolume.Core.Reporting
                     if (titleRows > 0) { Merge(x, mr, colCount); mr++; }
                     for (int i = 0; i < noteRows; i++, mr++) Merge(x, mr, colCount);
                     x.WriteEndElement();
-                }
-                if (sheet.AutoFilter && sheet.Headers.Count > 0 && lastDataRow >= headerRow)
-                {
-                    x.WriteStartElement("autoFilter"); x.WriteAttributeString("ref", "A" + headerRow.ToString(CultureInfo.InvariantCulture) + ":" + ColumnName(colCount) + Math.Max(headerRow, lastDataRow).ToString(CultureInfo.InvariantCulture)); x.WriteEndElement();
                 }
                 x.WriteStartElement("pageMargins"); x.WriteAttributeString("left", "0.3"); x.WriteAttributeString("right", "0.3"); x.WriteAttributeString("top", "0.5"); x.WriteAttributeString("bottom", "0.5"); x.WriteAttributeString("header", "0.2"); x.WriteAttributeString("footer", "0.2"); x.WriteEndElement();
                 x.WriteStartElement("pageSetup"); x.WriteAttributeString("orientation", sheet.Landscape ? "landscape" : "portrait"); x.WriteAttributeString("fitToWidth", "1"); x.WriteAttributeString("fitToHeight", "0"); x.WriteEndElement();

@@ -41,8 +41,8 @@ namespace MiningVolume2023.UI
             devTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             devTable.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
             devTable.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
-            _developer = new TextBox { Dock = DockStyle.Fill, Text = ProjectState.Current.DeveloperName, Font = new Font("Arial", 9F) };
-            _contact = new TextBox { Dock = DockStyle.Fill, Text = ProjectState.Current.DeveloperContact, Font = new Font("Arial", 9F) };
+            _developer = new TextBox { Dock = DockStyle.Fill, Text = ExportOptions.FixedDeveloperName, ReadOnly = true, Font = new Font("Arial", 9F) };
+            _contact = new TextBox { Dock = DockStyle.Fill, Text = ExportOptions.FixedDeveloperContact, ReadOnly = true, Font = new Font("Arial", 9F) };
             devTable.Controls.Add(LabelCell("Người phát triển phần mềm"), 0, 0);
             devTable.Controls.Add(_developer, 1, 0);
             devTable.Controls.Add(LabelCell("Địa chỉ liên hệ / email / điện thoại"), 0, 1);
@@ -84,8 +84,6 @@ namespace MiningVolume2023.UI
             Controls.Add(bottom);
             bottom.BringToFront();
 
-            _developer.TextChanged += ReportInfoChanged;
-            _contact.TextChanged += ReportInfoChanged;
             ProjectState.Current.Changed += StateChanged;
             RefreshState();
         }
@@ -126,8 +124,8 @@ namespace MiningVolume2023.UI
                     IncludeLevels = _levels.Checked,
                     IncludeSummary = _summary.Checked,
                     IncludeWarnings = _warnings.Checked,
-                    DeveloperName = _developer.Text?.Trim() ?? string.Empty,
-                    DeveloperContact = _contact.Text?.Trim() ?? string.Empty
+                    DeveloperName = ExportOptions.FixedDeveloperName,
+                    DeveloperContact = ExportOptions.FixedDeveloperContact
                 };
 
                 try
@@ -153,12 +151,6 @@ namespace MiningVolume2023.UI
             }
         }
 
-        private void ReportInfoChanged(object sender, EventArgs e)
-        {
-            ProjectState.Current.DeveloperName = _developer.Text?.Trim() ?? string.Empty;
-            ProjectState.Current.DeveloperContact = _contact.Text?.Trim() ?? string.Empty;
-        }
-
         private void StateChanged(object sender, EventArgs e)
         {
             if (!IsHandleCreated) return;
@@ -168,8 +160,8 @@ namespace MiningVolume2023.UI
         private void RefreshState()
         {
             var st = ProjectState.Current;
-            if (!_developer.Focused) _developer.Text = st.DeveloperName ?? string.Empty;
-            if (!_contact.Focused) _contact.Text = st.DeveloperContact ?? string.Empty;
+            _developer.Text = ExportOptions.FixedDeveloperName;
+            _contact.Text = ExportOptions.FixedDeveloperContact;
             bool ready = st.VolumeResult != null && st.SectionProfiles.Count > 0;
             _export.Enabled = ready;
             if (ready)
