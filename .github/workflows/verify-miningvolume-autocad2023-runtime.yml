@@ -222,25 +222,40 @@ jobs:
       - name: Ensure Go toolchain after runtime PASS
         shell: pwsh
         run: |
+          $goPath = $null
           $go = Get-Command go.exe -ErrorAction SilentlyContinue
-          if (-not $go) {
+          if ($go -and $go.Source -and (Test-Path $go.Source)) {
+            $goPath = $go.Source
+          }
+
+          if (-not $goPath) {
+            $candidate = Join-Path $env:ProgramFiles 'Go\bin\go.exe'
+            if (Test-Path $candidate) {
+              $goPath = $candidate
+              Write-Host "Go already installed outside current runner PATH: $goPath"
+            }
+          }
+
+          if (-not $goPath) {
             $winget = Get-Command winget.exe -ErrorAction SilentlyContinue
             if (-not $winget) {
               throw 'Go is missing and winget is unavailable.'
             }
+
             & $winget.Source install --id GoLang.Go --exact --source winget --accept-source-agreements --accept-package-agreements --silent | Out-Host
-            if ($LASTEXITCODE -ne 0) {
-              throw "winget failed to install Go. ExitCode=$LASTEXITCODE"
+            $wingetExit = $LASTEXITCODE
+
+            $candidate = Join-Path $env:ProgramFiles 'Go\bin\go.exe'
+            if (Test-Path $candidate) {
+              $goPath = $candidate
+              Write-Host "Go executable found after winget. ExitCode=$wingetExit"
+            } else {
+              throw "winget did not provide go.exe. ExitCode=$wingetExit"
             }
           }
 
-          $goPath = (Get-Command go.exe -ErrorAction SilentlyContinue).Source
-          if (-not $goPath) {
-            $candidate = Join-Path $env:ProgramFiles 'Go\bin\go.exe'
-            if (Test-Path $candidate) { $goPath = $candidate }
-          }
           if (-not $goPath -or -not (Test-Path $goPath)) {
-            throw 'Go installation completed but go.exe was not found.'
+            throw 'go.exe was not found after Go toolchain detection.'
           }
 
           $goDir = Split-Path $goPath -Parent
