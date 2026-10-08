@@ -293,7 +293,7 @@ namespace MiningVolume2023.UI
                 var existing = state.Existing.Tin;
                 var design = state.Design.Tin;
                 var watch = Stopwatch.StartNew();
-                var progress = new Progress<string>(message =>
+                IProgress<string> progress = new Progress<string>(message =>
                 {
                     _status.Text = message;
                 });
