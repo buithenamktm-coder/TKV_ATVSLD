@@ -24,7 +24,7 @@ namespace MiningVolume2023.UI
             _content = new Panel
             {
                 Dock = DockStyle.Fill,
-                Padding = new Padding(14, 12, 14, 14),
+                Padding = new Padding(18, 14, 18, 18),
                 BackColor = UiTheme.Canvas
             };
 
@@ -60,25 +60,25 @@ namespace MiningVolume2023.UI
             var header = new Panel
             {
                 Dock = DockStyle.Top,
-                Height = 78,
+                Height = 86,
                 BackColor = UiTheme.Sidebar
             };
 
             header.Controls.Add(new Label
             {
-                Text = "MINING VOLUME 2023",
+                Text = "IMSAT MINING VOLUME",
                 AutoSize = true,
-                Font = new Font("Arial", 12.5F, FontStyle.Bold),
+                Font = new Font("Arial", 13F, FontStyle.Bold),
                 ForeColor = Color.White,
-                Location = new Point(16, 7)
+                Location = new Point(16, 9)
             });
             header.Controls.Add(new Label
             {
-                Text = "HS-Next • Mine Survey & Earthwork • AutoCAD 2023",
+                Text = "Mine Survey & Earthwork • AutoCAD",
                 AutoSize = true,
                 Font = new Font("Arial", 8.5F),
                 ForeColor = Color.FromArgb(190, 204, 216),
-                Location = new Point(17, 31)
+                Location = new Point(17, 35)
             });
             header.Controls.Add(new Label
             {
@@ -86,7 +86,7 @@ namespace MiningVolume2023.UI
                 AutoSize = true,
                 Font = new Font("Arial", 8.5F, FontStyle.Bold),
                 ForeColor = Color.FromArgb(122, 213, 181),
-                Location = new Point(17, 51)
+                Location = new Point(17, 58)
             });
             return header;
         }
@@ -96,7 +96,7 @@ namespace MiningVolume2023.UI
             var sidebar = new Panel
             {
                 Dock = DockStyle.Left,
-                Width = 164,
+                Width = 178,
                 BackColor = UiTheme.Sidebar
             };
 
@@ -114,7 +114,7 @@ namespace MiningVolume2023.UI
             {
                 Text = "Lệnh nhanh:  TKL\r\nHiện / ẩn bảng MiningVolume",
                 Dock = DockStyle.Bottom,
-                Height = 54,
+                Height = 62,
                 Padding = new Padding(12, 8, 6, 6),
                 Font = new Font("Arial", 8F),
                 ForeColor = Color.FromArgb(151, 169, 184),
@@ -141,8 +141,8 @@ namespace MiningVolume2023.UI
             var b = new Button
             {
                 Text = number + "   " + text,
-                Width = 148,
-                Height = 44,
+                Width = 162,
+                Height = 46,
                 FlatStyle = FlatStyle.Flat,
                 TextAlign = ContentAlignment.MiddleLeft,
                 Margin = new Padding(0, 0, 0, 6),
