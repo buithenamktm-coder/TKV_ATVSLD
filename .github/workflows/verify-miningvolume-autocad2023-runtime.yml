@@ -147,7 +147,7 @@ jobs:
 
           $acad = Join-Path $cadDir 'acad.exe'
           $version = (Get-Item $acad).VersionInfo.FileVersion
-          if ($version -notmatch '^24\.2') {
+          if ($version -notmatch '^R?24\.2') {
             throw "acad.exe không phải AutoCAD 2023 R24.2. FileVersion=$version"
           }
 
