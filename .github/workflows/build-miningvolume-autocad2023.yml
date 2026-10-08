@@ -81,6 +81,8 @@ jobs:
           Copy-Item 'src/MiningVolume.Core/bin/Release/net48/MiningVolume.Core.dll' $out
           Copy-Item 'src/MiningVolume.Surface/bin/Release/net48/MiningVolume.Surface.dll' $out
           Copy-Item 'src/MiningVolume.Cad2023/bin/Release/net48/MiningVolume.Cad2023.dll' $out
+          New-Item -ItemType Directory -Force "$out/Assets" | Out-Null
+          Copy-Item 'src/MiningVolume.Plugin2023/Assets/imsat_logo_64.png' "$out/Assets/imsat_logo_64.png"
 
       - name: Verify release bundle policy
         shell: pwsh
@@ -126,7 +128,17 @@ jobs:
           $env:GOOS='windows'
           $env:GOARCH='amd64'
           $env:CGO_ENABLED='0'
+
+          # Embed the official IMSAT icon into the Setup executable.
+          go install github.com/akavel/rsrc@latest
+          $rsrc = Join-Path ((go env GOPATH).Trim()) 'bin/rsrc.exe'
+          if (-not (Test-Path $rsrc)) { throw "Không tìm thấy rsrc.exe sau khi cài." }
+          & $rsrc -ico imsat.ico -arch amd64 -o rsrc_windows_amd64.syso
+          if ($LASTEXITCODE -ne 0) { throw "Không nhúng được icon IMSAT vào Setup." }
+
           go build -trimpath -ldflags '-s -w -H=windowsgui' -o ../dist/MiningVolume_HSNext_AutoCAD2023_Setup_v0.10.4_PRE_RELEASE.exe main.go
+          if ($LASTEXITCODE -ne 0) { throw "Build Setup thất bại." }
+          Remove-Item rsrc_windows_amd64.syso -Force -ErrorAction SilentlyContinue
 
       - name: Create checksums and source archive
         shell: pwsh
