@@ -136,9 +136,25 @@ jobs:
           & $rsrc -ico imsat.ico -arch amd64 -o rsrc_windows_amd64.syso
           if ($LASTEXITCODE -ne 0) { throw "Không nhúng được icon IMSAT vào Setup." }
 
-          go build -trimpath -ldflags '-s -w -H=windowsgui' -o ../dist/MiningVolume_HSNext_AutoCAD2023_Setup_v0.10.4_PRE_RELEASE.exe main.go
-          if ($LASTEXITCODE -ne 0) { throw "Build Setup thất bại." }
-          Remove-Item rsrc_windows_amd64.syso -Force -ErrorAction SilentlyContinue
+          # Build the directory package (not a single .go file) so the Windows
+          # resource .syso is linked into the executable.
+          $createdGoMod = $false
+          if (-not (Test-Path go.mod)) {
+            go mod init miningvolume-installer
+            if ($LASTEXITCODE -ne 0) { throw "Không tạo được go.mod tạm để build Setup." }
+            $createdGoMod = $true
+          }
+          try {
+            go build -trimpath -ldflags '-s -w -H=windowsgui' -o ../dist/MiningVolume_HSNext_AutoCAD2023_Setup_v0.10.4_PRE_RELEASE.exe .
+            if ($LASTEXITCODE -ne 0) { throw "Build Setup thất bại." }
+          }
+          finally {
+            Remove-Item rsrc_windows_amd64.syso -Force -ErrorAction SilentlyContinue
+            if ($createdGoMod) {
+              Remove-Item go.mod -Force -ErrorAction SilentlyContinue
+              Remove-Item go.sum -Force -ErrorAction SilentlyContinue
+            }
+          }
 
       - name: Create checksums and source archive
         shell: pwsh
