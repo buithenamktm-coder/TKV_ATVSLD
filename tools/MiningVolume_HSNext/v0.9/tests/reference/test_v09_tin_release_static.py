@@ -15,13 +15,14 @@ def test_surface_builder_has_no_nettopologysuite_dependency():
         assert token in s
 
 
-def test_breakline_recovery_locks_constraints_and_rejects_crossing_locked_edges():
+def test_breakline_recovery_locks_constraints_and_never_flips_locked_edges():
     s = read('src/MiningVolume.Surface/ConformingTinBuilder.cs')
     assert 'var locked = new HashSet<EdgeKey>()' in s
-    assert 'locked.Add(new EdgeKey(a, b))' in s
+    assert 'var constraint = new EdgeKey(a, b)' in s
+    assert 'locked.Add(constraint)' in s
     assert 'locked.Contains(e)' in s
     assert 'ProperIntersection' in s
-    assert 'Không tạo cạnh mới cắt một breakline đã khóa' in s
+    assert 'new diagonal cannot cross any unrelated' in s
 
 
 def test_autocad2023_official_nuget_reference_is_pinned_for_ci():
