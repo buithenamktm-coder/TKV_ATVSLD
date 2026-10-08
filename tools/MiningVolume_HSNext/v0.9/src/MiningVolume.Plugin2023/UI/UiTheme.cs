@@ -65,6 +65,7 @@ namespace MiningVolume2023.UI
 
         private static void StyleLabel(Label label)
         {
+            if (!label.AutoSize) label.AutoEllipsis = true;
             if (label.Font.Bold && label.Font.Size >= 10.5F)
             {
                 label.Font = new Font("Arial", 11.5F, FontStyle.Bold);
@@ -98,6 +99,9 @@ namespace MiningVolume2023.UI
             button.FlatAppearance.BorderColor = Border;
             button.Font = new Font("Arial", 9F, button.Font.Bold ? FontStyle.Bold : FontStyle.Regular);
             button.Cursor = Cursors.Hand;
+            if (button.MinimumSize.Height < 34)
+                button.MinimumSize = new Size(button.MinimumSize.Width, 34);
+            button.UseCompatibleTextRendering = true;
 
             string text = (button.Text ?? string.Empty).Trim().ToUpperInvariant();
             if (IsPrimary(text))
