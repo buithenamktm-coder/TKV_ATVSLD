@@ -223,7 +223,7 @@ def test_palette_primary_command_is_tkl_with_legacy_alias():
 def test_main_palette_shows_fixed_developer_name():
     ui = read("src/MiningVolume.Plugin2023/UI/MainPaletteControl.cs")
     assert 'Text = "Phát triển: Bùi Thế Nam"' in ui
-    assert 'Height = 78' in ui
+    assert 'Height = 86' in ui
 
 
 def test_palette_uses_shared_professional_ui_theme():
@@ -236,3 +236,37 @@ def test_palette_uses_shared_professional_ui_theme():
     assert "StyleGrid(DataGridView grid)" in theme
     assert "StyleButton(Button button)" in theme
     assert "EnableHeadersVisualStyles = false" in theme
+
+
+def test_classic_menu_bar_exposes_main_miningvolume_workflow():
+    entry = read("src/MiningVolume.Plugin2023/EntryPoint.cs")
+    menu = read("src/MiningVolume.Plugin2023/MenuBarBuilder.cs")
+    assert "MenuBarBuilder.EnsureMenu();" in entry
+    assert 'MenuName = "MINING VOLUME"' in menu
+    for token in [
+        "Hiện / Ẩn MiningVolume",
+        "Dữ liệu đầu vào",
+        "TIN / Mô hình",
+        "Mặt cắt",
+        "Tính khối lượng",
+        "Xuất Excel",
+        "^C^C_TKL ",
+    ]:
+        assert token in menu
+
+
+def test_imsat_branding_is_packaged_for_ribbon_excel_and_setup():
+    project = read("src/MiningVolume.Plugin2023/MiningVolume.Plugin2023.csproj")
+    ribbon = read("src/MiningVolume.Plugin2023/RibbonBuilder.cs")
+    export_ui = read("src/MiningVolume.Plugin2023/UI/ExportPage.cs")
+    branding = read("src/MiningVolume.Plugin2023/Services/XlsxBrandingInjector.cs")
+    installer = read("installer/main.go")
+    hosted = read("../../../.github/workflows/build-miningvolume-autocad2023.yml")
+    assert "imsat_logo_64.png" in project
+    assert "imsat_logo_64.png" in ribbon
+    assert "imsat_logo.png" in branding
+    assert "Thông tin" in branding and "Tổng khối" in branding
+    assert "logo IMSAT" in export_ui
+    assert "DisplayIcon" in installer
+    assert "IMSAT MiningVolume.lnk" in installer
+    assert "rsrc -ico imsat.ico" in hosted
