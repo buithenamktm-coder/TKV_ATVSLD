@@ -117,17 +117,11 @@ namespace MiningVolume2023.Services
                     AddText(ms, tr, styleId, txLayer, new Point3d(x0 + width * 0.55, y0 + height + 8, 0),
                         $"TL ngang 1/{horizontalScale:0}   TL đứng 1/{verticalScale:0}", 3.0, 0);
 
-                    foreach (var s in p.Segments)
-                    {
-                        double sx0 = s.S0;
-                        double sx1 = s.S1;
-                        AddLine(ms, tr,
-                            new Point3d(x0 + sx0, y0 + (s.ExistingZ0 - baseZ) * vExag, 0),
-                            new Point3d(x0 + sx1, y0 + (s.ExistingZ1 - baseZ) * vExag, 0), exLayer);
-                        AddLine(ms, tr,
-                            new Point3d(x0 + sx0, y0 + (s.DesignZ0 - baseZ) * vExag, 0),
-                            new Point3d(x0 + sx1, y0 + (s.DesignZ1 - baseZ) * vExag, 0), deLayer);
-                    }
+                    // Do not create two AutoCAD LINE entities for every tiny TIN
+                    // segment. On large TINs that can mean hundreds of thousands of
+                    // DBObjects for 200+ sections. Group each contiguous profile run
+                    // into one Polyline per surface instead.
+                    AddProfilePolylines(ms, tr, p, x0, y0, baseZ, vExag, exLayer, deLayer);
 
                     currentY -= height + 45.0;
                 }
@@ -173,6 +167,73 @@ namespace MiningVolume2023.Services
         {
             var line = new Line(a, b) { LayerId = layer };
             ms.AppendEntity(line); tr.AddNewlyCreatedDBObject(line, true);
+        }
+
+        private static void AddProfilePolylines(
+            BlockTableRecord ms,
+            Transaction tr,
+            SectionProfile profile,
+            double x0,
+            double y0,
+            double baseZ,
+            double vExag,
+            ObjectId existingLayer,
+            ObjectId designLayer)
+        {
+            if (profile == null || profile.Segments == null || profile.Segments.Count == 0)
+                return;
+
+            var existing = new List<Point2d>();
+            var design = new List<Point2d>();
+            double previousS1 = double.NaN;
+
+            foreach (var segment in profile.Segments)
+            {
+                bool contiguous =
+                    existing.Count > 0 &&
+                    !double.IsNaN(previousS1) &&
+                    Math.Abs(segment.S0 - previousS1) <= 1e-7;
+
+                if (!contiguous)
+                {
+                    FlushProfilePolyline(ms, tr, existing, existingLayer);
+                    FlushProfilePolyline(ms, tr, design, designLayer);
+                    existing.Clear();
+                    design.Clear();
+
+                    existing.Add(new Point2d(
+                        x0 + segment.S0,
+                        y0 + (segment.ExistingZ0 - baseZ) * vExag));
+                    design.Add(new Point2d(
+                        x0 + segment.S0,
+                        y0 + (segment.DesignZ0 - baseZ) * vExag));
+                }
+
+                existing.Add(new Point2d(
+                    x0 + segment.S1,
+                    y0 + (segment.ExistingZ1 - baseZ) * vExag));
+                design.Add(new Point2d(
+                    x0 + segment.S1,
+                    y0 + (segment.DesignZ1 - baseZ) * vExag));
+                previousS1 = segment.S1;
+            }
+
+            FlushProfilePolyline(ms, tr, existing, existingLayer);
+            FlushProfilePolyline(ms, tr, design, designLayer);
+        }
+
+        private static void FlushProfilePolyline(
+            BlockTableRecord ms,
+            Transaction tr,
+            List<Point2d> points,
+            ObjectId layer)
+        {
+            if (points == null || points.Count < 2) return;
+            var poly = new Polyline(points.Count) { LayerId = layer };
+            for (int i = 0; i < points.Count; i++)
+                poly.AddVertexAt(i, points[i], 0.0, 0.0, 0.0);
+            ms.AppendEntity(poly);
+            tr.AddNewlyCreatedDBObject(poly, true);
         }
 
         private static void AddText(BlockTableRecord ms, Transaction tr, ObjectId style, ObjectId layer, Point3d p, string value, double height, double rotation)

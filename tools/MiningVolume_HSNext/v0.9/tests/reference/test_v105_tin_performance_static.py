@@ -83,3 +83,12 @@ def test_section_page_builds_profiles_off_ui_thread_with_progress():
     assert "Đang tính mặt cắt" in page
     assert "BuildProfilesCore" in workflow
     assert "CommitProfiles" in workflow
+
+
+def test_section_renderer_batches_tin_segments_into_polylines():
+    s = read("src/MiningVolume.Plugin2023/Services/SectionCadRenderer.cs")
+    assert "AddProfilePolylines" in s
+    assert "FlushProfilePolyline" in s
+    assert "new Polyline(points.Count)" in s
+    block = s[s.index("AddProfilePolylines(ms, tr, p"):s.index("currentY -= height + 45.0")]
+    assert "AddLine(ms, tr" not in block
