@@ -64,3 +64,22 @@ def test_constraint_flip_updates_adjacency_locally_without_scanning_all_locked_e
     assert "RemoveTriangleOwners" in flip
     assert "AddTriangleOwners" in flip
     assert "foreach (var le in locked)" not in flip
+
+
+def test_section_sampler_uses_reusable_triangle_spatial_index():
+    s = read("src/MiningVolume.Core/Sections/TinSectionSampler.cs")
+    assert "private sealed class TriangleGridIndex" in s
+    assert "IndexFor(existing)" in s
+    assert "IndexFor(design)" in s
+    assert "QuerySegment(a, b)" in s
+    assert "_cells.TryGetValue" in s
+    assert "foreach (var tri in tin.Triangles)" not in s
+
+def test_section_page_builds_profiles_off_ui_thread_with_progress():
+    page = read("src/MiningVolume.Plugin2023/UI/SectionPage.cs")
+    workflow = read("src/MiningVolume.Plugin2023/Services/SectionWorkflowService.cs")
+    assert "private async void BuildProfiles" in page
+    assert "await Task.Run" in page
+    assert "Đang tính mặt cắt" in page
+    assert "BuildProfilesCore" in workflow
+    assert "CommitProfiles" in workflow
