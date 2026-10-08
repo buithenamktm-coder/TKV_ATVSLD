@@ -103,6 +103,7 @@ namespace MiningVolume2023
             try
             {
                 RibbonBuilder.EnsureRibbon();
+                MenuBarBuilder.EnsureMenu();
             }
             catch (System.Exception ex)
             {
@@ -137,8 +138,8 @@ namespace MiningVolume2023
                 Palette = new PaletteSet("MINING VOLUME", new Guid("8C96DC13-BC65-4A2C-8B34-2D7644FD1C62"))
                 {
                     Style = PaletteSetStyles.ShowAutoHideButton | PaletteSetStyles.ShowCloseButton | PaletteSetStyles.ShowPropertiesMenu,
-                    MinimumSize = new System.Drawing.Size(580, 620),
-                    Size = new System.Drawing.Size(820, 760)
+                    MinimumSize = new System.Drawing.Size(700, 660),
+                    Size = new System.Drawing.Size(940, 800)
                 };
                 MainControl = new MainPaletteControl();
                 Palette.Add("Phần mềm", MainControl);
@@ -246,7 +247,7 @@ namespace MiningVolume2023
         [CommandMethod("MVABOUT")]
         public void About()
         {
-            AcApp.ShowAlertDialog("MiningVolume 2023\nHS-Next • Mine Survey & Earthwork\nGUI-first v0.10.4");
+            AcApp.ShowAlertDialog("IMSAT MINING VOLUME\nMine Survey & Earthwork for AutoCAD\nPhát triển: Bùi Thế Nam\nĐiện thoại: 0967280686\nPhiên bản v0.10.4");
         }
     }
 }
