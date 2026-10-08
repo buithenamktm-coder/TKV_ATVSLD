@@ -25,6 +25,23 @@ namespace MiningVolume.Surface
             public bool Has(int v) { return A == v || B == v || C == v; }
         }
 
+        // Cached circumcircle used by the X-sweep Bowyer-Watson pass. Once the
+        // current X is to the right of RightX, this triangle can never be part
+        // of a later cavity and is moved permanently to the completed set.
+        private struct WorkTri
+        {
+            public Tri T;
+            public double Cx, Cy, R2, RightX;
+            public WorkTri(Tri t, double cx, double cy, double r2)
+            {
+                T = t;
+                Cx = cx;
+                Cy = cy;
+                R2 = r2;
+                RightX = cx + Math.Sqrt(Math.Max(0.0, r2));
+            }
+        }
+
         private struct EdgeKey : IEquatable<EdgeKey>
         {
             public readonly int A, B;
@@ -56,6 +73,14 @@ namespace MiningVolume.Surface
 
             var locked = new HashSet<EdgeKey>();
             var siteIndex = new SiteIndex(vertices, realCount, options.XyTolerance);
+
+            // Adjacency and the spatial edge index are built once for the whole
+            // constraint pass. The v0.10.4 implementation rebuilt adjacency for
+            // every breakline (and often for every edge-flip), which becomes
+            // prohibitive on contour models with tens of thousands of segments.
+            var adjacency = BuildAdjacency(tris);
+            var edgeIndex = new EdgeGridIndex(vertices, realCount, adjacency.Keys, options.XyTolerance);
+
             foreach (var seg in input.Breaklines)
             {
                 int a = siteIndex.Find(seg.A);
@@ -64,8 +89,10 @@ namespace MiningVolume.Surface
                     throw new InvalidOperationException("Không ánh xạ được đầu mút breakline vào site TIN: " + seg.SourceId);
                 if (a == b) continue;
 
-                RecoverConstraint(tris, vertices, new EdgeKey(a, b), locked, options.XyTolerance);
-                locked.Add(new EdgeKey(a, b));
+                var constraint = new EdgeKey(a, b);
+                if (!adjacency.ContainsKey(constraint))
+                    RecoverConstraint(tris, vertices, constraint, locked, adjacency, edgeIndex, options.XyTolerance);
+                locked.Add(constraint);
             }
 
             var output = new List<Triangle3>();
@@ -95,6 +122,7 @@ namespace MiningVolume.Surface
                 minX = Math.Min(minX, vertices[i].X); maxX = Math.Max(maxX, vertices[i].X);
                 minY = Math.Min(minY, vertices[i].Y); maxY = Math.Max(maxY, vertices[i].Y);
             }
+
             double cx = (minX + maxX) * 0.5, cy = (minY + maxY) * 0.5;
             double span = Math.Max(maxX - minX, maxY - minY);
             if (span <= tol) throw new InvalidOperationException("Các điểm TIN gần như trùng nhau trong XY.");
@@ -104,112 +132,231 @@ namespace MiningVolume.Surface
             int s1 = vertices.Count; vertices.Add(new Vec3(cx + 2.0 * r, cy - r, 0));
             int s2 = vertices.Count; vertices.Add(new Vec3(cx, cy + 2.0 * r, 0));
 
-            var tris = new List<Tri> { MakeCcw(s0, s1, s2, vertices) };
-            for (int p = 0; p < realCount; p++)
-            {
-                var bad = new List<int>();
-                for (int i = 0; i < tris.Count; i++)
-                    if (InCircumcircle(vertices[p].XY, tris[i], vertices, tol)) bad.Add(i);
+            var seed = MakeCcw(s0, s1, s2, vertices);
+            WorkTri seedWork;
+            if (!TryWorkTri(seed, vertices, out seedWork))
+                throw new InvalidOperationException("Không khởi tạo được tam giác bao Delaunay.");
 
+            // X-order is critical: it lets completed circumcircles leave the
+            // active set permanently instead of every new point scanning the
+            // entire triangulation.
+            var order = Enumerable.Range(0, realCount)
+                .OrderBy(i => vertices[i].X)
+                .ThenBy(i => vertices[i].Y)
+                .ToArray();
+
+            var open = new List<WorkTri> { seedWork };
+            var completed = new List<Tri>(Math.Max(4, realCount * 2));
+
+            foreach (int p in order)
+            {
+                var point = vertices[p];
                 var boundaryCount = new Dictionary<EdgeKey, int>();
-                for (int k = 0; k < bad.Count; k++)
+                var next = new List<WorkTri>(open.Count + 8);
+
+                for (int i = 0; i < open.Count; i++)
                 {
-                    var t = tris[bad[k]];
-                    AddEdgeCount(boundaryCount, new EdgeKey(t.A, t.B));
-                    AddEdgeCount(boundaryCount, new EdgeKey(t.B, t.C));
-                    AddEdgeCount(boundaryCount, new EdgeKey(t.C, t.A));
+                    var wt = open[i];
+
+                    // Sorted-X sweep: no future point can lie in this circle.
+                    if (wt.RightX < point.X - tol)
+                    {
+                        completed.Add(wt.T);
+                        continue;
+                    }
+
+                    double dx = point.X - wt.Cx;
+                    double dy = point.Y - wt.Cy;
+                    double d2 = dx * dx + dy * dy;
+                    double eps = Math.Max(tol * tol, Math.Abs(wt.R2) * 1e-12);
+                    if (d2 <= wt.R2 + eps)
+                    {
+                        AddEdgeCount(boundaryCount, new EdgeKey(wt.T.A, wt.T.B));
+                        AddEdgeCount(boundaryCount, new EdgeKey(wt.T.B, wt.T.C));
+                        AddEdgeCount(boundaryCount, new EdgeKey(wt.T.C, wt.T.A));
+                    }
+                    else
+                    {
+                        next.Add(wt);
+                    }
                 }
 
-                var badSet = new HashSet<int>(bad);
-                var kept = new List<Tri>(tris.Count + boundaryCount.Count);
-                for (int i = 0; i < tris.Count; i++) if (!badSet.Contains(i)) kept.Add(tris[i]);
                 foreach (var kv in boundaryCount)
                 {
                     if (kv.Value != 1) continue;
                     var nt = MakeCcw(kv.Key.A, kv.Key.B, p, vertices);
-                    if (TriangleArea2(nt, vertices) > tol * tol) kept.Add(nt);
+                    if (TriangleArea2(nt, vertices) <= tol * tol) continue;
+                    WorkTri nwt;
+                    if (TryWorkTri(nt, vertices, out nwt))
+                        next.Add(nwt);
                 }
-                tris = kept;
+
+                open = next;
             }
 
-            tris.RemoveAll(t => t.Has(s0) || t.Has(s1) || t.Has(s2));
+            for (int i = 0; i < open.Count; i++) completed.Add(open[i].T);
+            completed.RemoveAll(t => t.Has(s0) || t.Has(s1) || t.Has(s2));
             vertices.RemoveRange(realCount, vertices.Count - realCount);
-            return tris;
+            return completed;
         }
 
-        private static void RecoverConstraint(List<Tri> tris, List<Vec3> vertices, EdgeKey constraint,
-            HashSet<EdgeKey> locked, double tol)
+        private static bool TryWorkTri(Tri t, List<Vec3> v, out WorkTri work)
         {
-            int maxIter = Math.Max(200, tris.Count * 20);
+            var a = v[t.A];
+            var b = v[t.B];
+            var c = v[t.C];
+
+            // Local-coordinate circumcenter avoids squaring large mine-grid
+            // coordinates directly and is much more stable numerically.
+            double bx = b.X - a.X, by = b.Y - a.Y;
+            double cx = c.X - a.X, cy = c.Y - a.Y;
+            double d = 2.0 * (bx * cy - by * cx);
+            if (Math.Abs(d) <= 1e-30)
+            {
+                work = default(WorkTri);
+                return false;
+            }
+
+            double b2 = bx * bx + by * by;
+            double c2 = cx * cx + cy * cy;
+            double ux = (cy * b2 - by * c2) / d;
+            double uy = (bx * c2 - cx * b2) / d;
+            double ccx = a.X + ux;
+            double ccy = a.Y + uy;
+            double r2 = ux * ux + uy * uy;
+            if (double.IsNaN(r2) || double.IsInfinity(r2))
+            {
+                work = default(WorkTri);
+                return false;
+            }
+
+            work = new WorkTri(t, ccx, ccy, r2);
+            return true;
+        }
+
+        private static void RecoverConstraint(
+            List<Tri> tris,
+            List<Vec3> vertices,
+            EdgeKey constraint,
+            HashSet<EdgeKey> locked,
+            Dictionary<EdgeKey, List<int>> adjacency,
+            EdgeGridIndex edgeIndex,
+            double tol)
+        {
+            if (adjacency.ContainsKey(constraint)) return;
+
+            Vec2 ca = vertices[constraint.A].XY;
+            Vec2 cb = vertices[constraint.B].XY;
+            int initialCandidates = edgeIndex.Query(ca, cb).Count;
+            int maxIter = Math.Max(200, initialCandidates * 8 + 64);
+
             for (int iter = 0; iter < maxIter; iter++)
             {
-                var adj = BuildAdjacency(tris);
-                if (adj.ContainsKey(constraint)) return;
+                if (adjacency.ContainsKey(constraint)) return;
 
-                EdgeKey candidate = default(EdgeKey);
-                List<int> owners = null;
-                bool found = false;
-                Vec2 ca = vertices[constraint.A].XY, cb = vertices[constraint.B].XY;
-
-                foreach (var kv in adj)
+                bool flipped = false;
+                foreach (var e in edgeIndex.Query(ca, cb))
                 {
-                    var e = kv.Key;
-                    if (kv.Value.Count != 2) continue;
+                    List<int> owners;
+                    if (!adjacency.TryGetValue(e, out owners) || owners.Count != 2) continue;
                     if (locked.Contains(e)) continue;
-                    if (e.A == constraint.A || e.A == constraint.B || e.B == constraint.A || e.B == constraint.B) continue;
-                    if (!Geometry2D.ProperIntersection(ca, cb, vertices[e.A].XY, vertices[e.B].XY, tol)) continue;
-                    candidate = e; owners = kv.Value; found = true; break;
-                }
+                    if (e.A == constraint.A || e.A == constraint.B ||
+                        e.B == constraint.A || e.B == constraint.B) continue;
+                    if (!Geometry2D.ProperIntersection(
+                        ca, cb, vertices[e.A].XY, vertices[e.B].XY, tol)) continue;
 
-                if (!found)
-                    throw new InvalidOperationException("Không thể khôi phục cạnh breakline " + constraint +
-                        ". Kiểm tra điểm thẳng hàng, breakline giao nhau hoặc dữ liệu quá suy biến.");
-
-                if (!TryFlip(tris, owners[0], owners[1], candidate, vertices, locked, tol))
-                {
-                    // Thử một cạnh giao khác trước khi kết luận bế tắc.
-                    bool flipped = false;
-                    foreach (var kv in adj)
+                    int i1 = owners[0];
+                    int i2 = owners[1];
+                    if (TryFlip(tris, i1, i2, e, vertices, locked, adjacency, edgeIndex, tol))
                     {
-                        var e = kv.Key;
-                        if (kv.Value.Count != 2 || locked.Contains(e)) continue;
-                        if (e.A == constraint.A || e.A == constraint.B || e.B == constraint.A || e.B == constraint.B) continue;
-                        if (!Geometry2D.ProperIntersection(ca, cb, vertices[e.A].XY, vertices[e.B].XY, tol)) continue;
-                        if (TryFlip(tris, kv.Value[0], kv.Value[1], e, vertices, locked, tol)) { flipped = true; break; }
+                        flipped = true;
+                        break;
                     }
-                    if (!flipped)
-                        throw new InvalidOperationException("Không thể edge-flip để khôi phục breakline " + constraint + ".");
                 }
+
+                if (!flipped)
+                    throw new InvalidOperationException(
+                        "Không thể edge-flip để khôi phục breakline " + constraint +
+                        ". Kiểm tra điểm thẳng hàng, breakline giao nhau hoặc dữ liệu quá suy biến.");
             }
+
             throw new InvalidOperationException("Vượt số vòng lặp khi khôi phục breakline " + constraint + ".");
         }
 
-        private static bool TryFlip(List<Tri> tris, int i1, int i2, EdgeKey shared,
-            List<Vec3> vertices, HashSet<EdgeKey> locked, double tol)
+        private static bool TryFlip(
+            List<Tri> tris,
+            int i1,
+            int i2,
+            EdgeKey shared,
+            List<Vec3> vertices,
+            HashSet<EdgeKey> locked,
+            Dictionary<EdgeKey, List<int>> adjacency,
+            EdgeGridIndex edgeIndex,
+            double tol)
         {
-            var t1 = tris[i1]; var t2 = tris[i2];
-            int x = OppositeVertex(t1, shared); int y = OppositeVertex(t2, shared);
+            var t1 = tris[i1];
+            var t2 = tris[i2];
+            int x = OppositeVertex(t1, shared);
+            int y = OppositeVertex(t2, shared);
             if (x < 0 || y < 0 || x == y) return false;
 
-            // Hai đường chéo phải cắt nhau trong nội bộ tứ giác => tứ giác lồi và flip hợp lệ.
-            if (!Geometry2D.ProperIntersection(vertices[shared.A].XY, vertices[shared.B].XY,
-                                               vertices[x].XY, vertices[y].XY, tol)) return false;
+            // A valid diagonal flip stays inside the union of these two adjacent
+            // triangles. Therefore the new diagonal cannot cross any unrelated
+            // triangulation edge; checking every previously locked breakline
+            // here is unnecessary O(B) work.
+            if (!Geometry2D.ProperIntersection(
+                vertices[shared.A].XY, vertices[shared.B].XY,
+                vertices[x].XY, vertices[y].XY, tol)) return false;
+
             var newEdge = new EdgeKey(x, y);
             if (locked.Contains(newEdge)) return false;
 
-            // Không tạo cạnh mới cắt một breakline đã khóa.
-            foreach (var le in locked)
-            {
-                if (le.A == x || le.A == y || le.B == x || le.B == y) continue;
-                if (Geometry2D.ProperIntersection(vertices[x].XY, vertices[y].XY,
-                                                  vertices[le.A].XY, vertices[le.B].XY, tol)) return false;
-            }
-
             var n1 = MakeCcw(x, y, shared.A, vertices);
             var n2 = MakeCcw(y, x, shared.B, vertices);
-            if (TriangleArea2(n1, vertices) <= tol * tol || TriangleArea2(n2, vertices) <= tol * tol) return false;
-            tris[i1] = n1; tris[i2] = n2;
+            if (TriangleArea2(n1, vertices) <= tol * tol ||
+                TriangleArea2(n2, vertices) <= tol * tol) return false;
+
+            RemoveTriangleOwners(adjacency, t1, i1);
+            RemoveTriangleOwners(adjacency, t2, i2);
+
+            tris[i1] = n1;
+            tris[i2] = n2;
+
+            AddTriangleOwners(adjacency, n1, i1);
+            AddTriangleOwners(adjacency, n2, i2);
+
+            edgeIndex.Add(new EdgeKey(n1.A, n1.B));
+            edgeIndex.Add(new EdgeKey(n1.B, n1.C));
+            edgeIndex.Add(new EdgeKey(n1.C, n1.A));
+            edgeIndex.Add(new EdgeKey(n2.A, n2.B));
+            edgeIndex.Add(new EdgeKey(n2.B, n2.C));
+            edgeIndex.Add(new EdgeKey(n2.C, n2.A));
             return true;
+        }
+
+        private static void RemoveTriangleOwners(
+            Dictionary<EdgeKey, List<int>> adjacency, Tri t, int triIndex)
+        {
+            RemoveOwner(adjacency, new EdgeKey(t.A, t.B), triIndex);
+            RemoveOwner(adjacency, new EdgeKey(t.B, t.C), triIndex);
+            RemoveOwner(adjacency, new EdgeKey(t.C, t.A), triIndex);
+        }
+
+        private static void AddTriangleOwners(
+            Dictionary<EdgeKey, List<int>> adjacency, Tri t, int triIndex)
+        {
+            AddOwner(adjacency, new EdgeKey(t.A, t.B), triIndex);
+            AddOwner(adjacency, new EdgeKey(t.B, t.C), triIndex);
+            AddOwner(adjacency, new EdgeKey(t.C, t.A), triIndex);
+        }
+
+        private static void RemoveOwner(
+            Dictionary<EdgeKey, List<int>> adjacency, EdgeKey edge, int triIndex)
+        {
+            List<int> owners;
+            if (!adjacency.TryGetValue(edge, out owners)) return;
+            owners.Remove(triIndex);
+            if (owners.Count == 0) adjacency.Remove(edge);
         }
 
         private static Dictionary<EdgeKey, List<int>> BuildAdjacency(List<Tri> tris)
@@ -267,6 +414,112 @@ namespace MiningVolume.Surface
             double orient = Vec2.Cross(a, b, c);
             double eps = Math.Max(1e-14, tol * tol * tol * tol);
             return orient > 0 ? det > eps : det < -eps;
+        }
+
+        private sealed class EdgeGridIndex
+        {
+            private readonly Dictionary<string, List<EdgeKey>> _cells =
+                new Dictionary<string, List<EdgeKey>>();
+            private readonly HashSet<EdgeKey> _indexed = new HashSet<EdgeKey>();
+            private readonly List<Vec3> _vertices;
+            private readonly double _cell;
+            private readonly double _minX;
+            private readonly double _minY;
+
+            public EdgeGridIndex(
+                List<Vec3> vertices,
+                int realCount,
+                IEnumerable<EdgeKey> edges,
+                double tol)
+            {
+                _vertices = vertices;
+                double maxX = vertices[0].X, maxY = vertices[0].Y;
+                _minX = vertices[0].X;
+                _minY = vertices[0].Y;
+                for (int i = 1; i < realCount; i++)
+                {
+                    _minX = Math.Min(_minX, vertices[i].X);
+                    _minY = Math.Min(_minY, vertices[i].Y);
+                    maxX = Math.Max(maxX, vertices[i].X);
+                    maxY = Math.Max(maxY, vertices[i].Y);
+                }
+
+                var edgeList = edges.ToList();
+                double span = Math.Max(maxX - _minX, maxY - _minY);
+                _cell = Math.Max(
+                    Math.Max(tol * 100.0, 1e-9),
+                    span / Math.Max(32.0, Math.Sqrt(Math.Max(1, edgeList.Count))));
+
+                foreach (var edge in edgeList) Add(edge);
+            }
+
+            public void Add(EdgeKey edge)
+            {
+                if (!_indexed.Add(edge)) return;
+                foreach (var key in SegmentCells(
+                    _vertices[edge.A].XY, _vertices[edge.B].XY))
+                {
+                    List<EdgeKey> edges;
+                    if (!_cells.TryGetValue(key, out edges))
+                    {
+                        edges = new List<EdgeKey>();
+                        _cells[key] = edges;
+                    }
+                    edges.Add(edge);
+                }
+            }
+
+            public HashSet<EdgeKey> Query(Vec2 a, Vec2 b)
+            {
+                var result = new HashSet<EdgeKey>();
+                foreach (var cell in SegmentCellCoords(a, b))
+                {
+                    // Neighbor cells make the DDA robust when an intersection
+                    // lies exactly on a grid boundary.
+                    for (long dx = -1; dx <= 1; dx++)
+                    for (long dy = -1; dy <= 1; dy++)
+                    {
+                        List<EdgeKey> edges;
+                        if (!_cells.TryGetValue(Key(cell.Item1 + dx, cell.Item2 + dy), out edges))
+                            continue;
+                        foreach (var edge in edges) result.Add(edge);
+                    }
+                }
+                return result;
+            }
+
+            private IEnumerable<string> SegmentCells(Vec2 a, Vec2 b)
+            {
+                foreach (var cell in SegmentCellCoords(a, b))
+                    yield return Key(cell.Item1, cell.Item2);
+            }
+
+            private IEnumerable<Tuple<long, long>> SegmentCellCoords(Vec2 a, Vec2 b)
+            {
+                long x0 = Ix(a.X), y0 = Iy(a.Y);
+                long x1 = Ix(b.X), y1 = Iy(b.Y);
+                long steps = Math.Max(Math.Abs(x1 - x0), Math.Abs(y1 - y0));
+                if (steps == 0)
+                {
+                    yield return Tuple.Create(x0, y0);
+                    yield break;
+                }
+
+                long lastX = long.MinValue, lastY = long.MinValue;
+                for (long i = 0; i <= steps; i++)
+                {
+                    double t = i / (double)steps;
+                    long x = (long)Math.Floor(x0 + (x1 - x0) * t);
+                    long y = (long)Math.Floor(y0 + (y1 - y0) * t);
+                    if (x == lastX && y == lastY) continue;
+                    lastX = x; lastY = y;
+                    yield return Tuple.Create(x, y);
+                }
+            }
+
+            private long Ix(double x) => (long)Math.Floor((x - _minX) / _cell);
+            private long Iy(double y) => (long)Math.Floor((y - _minY) / _cell);
+            private static string Key(long x, long y) => x + ":" + y;
         }
 
         private sealed class SiteIndex

@@ -38,3 +38,29 @@ def test_data_page_reports_each_heavy_phase_and_timings():
     assert "Đang ghi TIN hiện trạng xuống AutoCAD" in read("src/MiningVolume.Plugin2023/Services/SurfaceWorkflowService.cs")
     assert "cadWatch.Elapsed.TotalSeconds" in s
     assert "totalWatch.Elapsed.TotalSeconds" in s
+
+
+def test_large_tin_delaunay_uses_x_sweep_and_cached_circumcircles():
+    s = read("src/MiningVolume.Surface/ConformingTinBuilder.cs")
+    assert "private struct WorkTri" in s
+    assert "RightX" in s
+    assert ".OrderBy(i => vertices[i].X)" in s
+    assert "wt.RightX < point.X - tol" in s
+    assert "TryWorkTri" in s
+
+def test_breakline_recovery_reuses_adjacency_and_spatial_edge_index():
+    s = read("src/MiningVolume.Surface/ConformingTinBuilder.cs")
+    build = s[s.index("public TinSurface Build"):s.index("private static List<Tri> BowyerWatson")]
+    recover = s[s.index("private static void RecoverConstraint"):s.index("private static bool TryFlip")]
+    assert "var adjacency = BuildAdjacency(tris)" in build
+    assert "var edgeIndex = new EdgeGridIndex" in build
+    assert "BuildAdjacency(tris)" not in recover
+    assert "edgeIndex.Query(ca, cb)" in recover
+    assert "private sealed class EdgeGridIndex" in s
+
+def test_constraint_flip_updates_adjacency_locally_without_scanning_all_locked_edges():
+    s = read("src/MiningVolume.Surface/ConformingTinBuilder.cs")
+    flip = s[s.index("private static bool TryFlip"):s.index("private static Dictionary<EdgeKey, List<int>> BuildAdjacency")]
+    assert "RemoveTriangleOwners" in flip
+    assert "AddTriangleOwners" in flip
+    assert "foreach (var le in locked)" not in flip
