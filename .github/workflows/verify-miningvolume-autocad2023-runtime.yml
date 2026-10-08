@@ -188,11 +188,6 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.23.x'
-
       - name: Restore with real AutoCAD 2023 references
         shell: pwsh
         run: |
@@ -223,6 +218,35 @@ jobs:
         run: |
           Set-Location $env:MV_ROOT
           ./release/verify_autocad2023_runtime.ps1
+
+      - name: Ensure Go toolchain after runtime PASS
+        shell: pwsh
+        run: |
+          $go = Get-Command go.exe -ErrorAction SilentlyContinue
+          if (-not $go) {
+            $winget = Get-Command winget.exe -ErrorAction SilentlyContinue
+            if (-not $winget) {
+              throw 'Go is missing and winget is unavailable.'
+            }
+            & $winget.Source install --id GoLang.Go --exact --source winget --accept-source-agreements --accept-package-agreements --silent | Out-Host
+            if ($LASTEXITCODE -ne 0) {
+              throw "winget failed to install Go. ExitCode=$LASTEXITCODE"
+            }
+          }
+
+          $goPath = (Get-Command go.exe -ErrorAction SilentlyContinue).Source
+          if (-not $goPath) {
+            $candidate = Join-Path $env:ProgramFiles 'Go\bin\go.exe'
+            if (Test-Path $candidate) { $goPath = $candidate }
+          }
+          if (-not $goPath -or -not (Test-Path $goPath)) {
+            throw 'Go installation completed but go.exe was not found.'
+          }
+
+          $goDir = Split-Path $goPath -Parent
+          $goDir | Out-File -FilePath $env:GITHUB_PATH -Encoding ascii -Append
+          Write-Host "Go: $goPath"
+          & $goPath version
 
       - name: Build runtime-validated installer
         shell: pwsh
