@@ -159,22 +159,31 @@ namespace MiningVolume2023.Services
             var s = NewSheet("Khối lượng chi tiết", "KHỐI LƯỢNG CHI TIẾT GIỮA CÁC MẶT CẮT",
                 new[] { "Đoạn", "MC đầu", "MC cuối", "L, m", "F đào đầu", "F đào giữa", "F đào cuối", "V đào, m³", "F đắp đầu", "F đắp giữa", "F đắp cuối", "V đắp, m³", "Công thức đào", "Công thức đắp", "Ghi chú" },
                 9, 13, 13, 12, 14, 14, 14, 16, 14, 14, 14, 16, 16, 16, 32);
-            s.Notes.Add("Prismoid được ưu tiên; trung bình hai đầu chỉ sử dụng khi không lấy được mặt cắt giữa thực từ TIN.");
+            s.Notes.Add("Các ô V đào/V đắp là công thức Excel thực. Prismoid được ưu tiên; trung bình hai đầu chỉ dùng khi không lấy được mặt cắt giữa thực từ TIN.");
+            const int firstDataRow = 4; // tiêu đề + ghi chú + hàng tiêu đề cột
+            int excelRow = firstDataRow;
             foreach (var x in r.Intervals)
             {
                 s.Rows.Add(new[]
                 {
                     ReportCell.Int(x.Index), ReportCell.Text(x.StartSection), ReportCell.Text(x.EndSection), ReportCell.N3(x.Distance),
-                    ReportCell.N2(x.CutAreaStart), ReportCell.N2(x.CutAreaMid), ReportCell.N2(x.CutAreaEnd), ReportCell.N2(x.CutVolume),
-                    ReportCell.N2(x.FillAreaStart), ReportCell.N2(x.FillAreaMid), ReportCell.N2(x.FillAreaEnd), ReportCell.N2(x.FillVolume),
+                    ReportCell.N2(x.CutAreaStart), ReportCell.N2(x.CutAreaMid), ReportCell.N2(x.CutAreaEnd),
+                    ReportCell.Formula2(VolumeFormula(x.CutFormula, excelRow, "D", "E", "F", "G")),
+                    ReportCell.N2(x.FillAreaStart), ReportCell.N2(x.FillAreaMid), ReportCell.N2(x.FillAreaEnd),
+                    ReportCell.Formula2(VolumeFormula(x.FillFormula, excelRow, "D", "I", "J", "K")),
                     ReportCell.Text(FormulaName(x.CutFormula)), ReportCell.Text(FormulaName(x.FillFormula)), ReportCell.Text(x.Note ?? string.Empty)
                 });
+                excelRow++;
             }
+
+            int lastDataRow = excelRow - 1;
             s.Rows.Add(new[]
             {
                 ReportCell.Text("TỔNG", true), ReportCell.Text(string.Empty, true), ReportCell.Text(string.Empty, true), ReportCell.Text(string.Empty, true),
-                ReportCell.Text(string.Empty, true), ReportCell.Text(string.Empty, true), ReportCell.Text(string.Empty, true), ReportCell.N2(r.TotalCutVolume, true),
-                ReportCell.Text(string.Empty, true), ReportCell.Text(string.Empty, true), ReportCell.Text(string.Empty, true), ReportCell.N2(r.TotalFillVolume, true),
+                ReportCell.Text(string.Empty, true), ReportCell.Text(string.Empty, true), ReportCell.Text(string.Empty, true),
+                ReportCell.Formula2(SumFormula("H", firstDataRow, lastDataRow), true),
+                ReportCell.Text(string.Empty, true), ReportCell.Text(string.Empty, true), ReportCell.Text(string.Empty, true),
+                ReportCell.Formula2(SumFormula("L", firstDataRow, lastDataRow), true),
                 ReportCell.Text(string.Empty, true), ReportCell.Text(string.Empty, true), ReportCell.Text(string.Empty, true)
             });
             return s;
@@ -185,19 +194,26 @@ namespace MiningVolume2023.Services
             var s = NewSheet("Tổng hợp theo tầng", "TỔNG HỢP KHỐI LƯỢNG THEO TẦNG / MỨC",
                 new[] { "STT", "Tầng / mức", "Cao độ dưới", "Cao độ trên", "V đào, m³", "V đắp, m³", "Chênh lệch, m³" },
                 8, 18, 14, 14, 18, 18, 18);
+            const int firstDataRow = 3; // tiêu đề + hàng tiêu đề cột
+            int excelRow = firstDataRow;
             int i = 1;
             foreach (var x in r.Levels)
             {
                 s.Rows.Add(new[]
                 {
                     ReportCell.Int(i++), ReportCell.Text(x.Band.Name), ReportCell.N3(x.Band.LowerZ), ReportCell.N3(x.Band.UpperZ),
-                    ReportCell.N2(x.CutVolume), ReportCell.N2(x.FillVolume), ReportCell.N2(x.NetVolume)
+                    ReportCell.N2(x.CutVolume), ReportCell.N2(x.FillVolume), ReportCell.Formula2("=E" + excelRow + "-F" + excelRow)
                 });
+                excelRow++;
             }
+            int lastDataRow = excelRow - 1;
+            int totalRow = excelRow;
             s.Rows.Add(new[]
             {
                 ReportCell.Text("TỔNG", true), ReportCell.Text(string.Empty, true), ReportCell.Text(string.Empty, true), ReportCell.Text(string.Empty, true),
-                ReportCell.N2(r.Levels.Sum(x => x.CutVolume), true), ReportCell.N2(r.Levels.Sum(x => x.FillVolume), true), ReportCell.N2(r.Levels.Sum(x => x.NetVolume), true)
+                ReportCell.Formula2(SumFormula("E", firstDataRow, lastDataRow), true),
+                ReportCell.Formula2(SumFormula("F", firstDataRow, lastDataRow), true),
+                ReportCell.Formula2("=E" + totalRow + "-F" + totalRow, true)
             });
             return s;
         }
@@ -212,15 +228,19 @@ namespace MiningVolume2023.Services
             s.Landscape = false;
             s.Notes.Add("Người phát triển: " + ExportOptions.FixedDeveloperName);
             s.Notes.Add(ExportOptions.FixedDeveloperContact);
-            s.Rows.Add(new[] { ReportCell.Text("Tổng khối lượng đào", true), ReportCell.Text("m³"), ReportCell.N2(r.TotalCutVolume, true) });
-            s.Rows.Add(new[] { ReportCell.Text("Tổng khối lượng đắp", true), ReportCell.Text("m³"), ReportCell.N2(r.TotalFillVolume, true) });
-            s.Rows.Add(new[] { ReportCell.Text("Chênh lệch đào - đắp", true), ReportCell.Text("m³"), ReportCell.N2(r.NetVolume, true) });
-            s.Rows.Add(new[] { ReportCell.Text("Tổng theo tầng - đào"), ReportCell.Text("m³"), ReportCell.N2(levelCut) });
-            s.Rows.Add(new[] { ReportCell.Text("Tổng theo tầng - đắp"), ReportCell.Text("m³"), ReportCell.N2(levelFill) });
-            s.Rows.Add(new[] { ReportCell.Text("Sai lệch kiểm soát đào (chi tiết - theo tầng)"), ReportCell.Text("m³"), ReportCell.N3(r.TotalCutVolume - levelCut) });
-            s.Rows.Add(new[] { ReportCell.Text("Sai lệch kiểm soát đắp (chi tiết - theo tầng)"), ReportCell.Text("m³"), ReportCell.N3(r.TotalFillVolume - levelFill) });
-            s.Rows.Add(new[] { ReportCell.Text("Số khoảng mặt cắt"), ReportCell.Text("khoảng"), ReportCell.Int(r.Intervals.Count) });
-            s.Rows.Add(new[] { ReportCell.Text("Số tầng / mức"), ReportCell.Text("tầng"), ReportCell.Int(r.Levels.Count) });
+
+            int detailTotalRow = 4 + r.Intervals.Count;
+            int levelTotalRow = 3 + r.Levels.Count;
+
+            s.Rows.Add(new[] { ReportCell.Text("Tổng khối lượng đào", true), ReportCell.Text("m³"), opt.IncludeIntervals ? ReportCell.Formula2("='Khối lượng chi tiết'!H" + detailTotalRow, true) : ReportCell.N2(r.TotalCutVolume, true) });
+            s.Rows.Add(new[] { ReportCell.Text("Tổng khối lượng đắp", true), ReportCell.Text("m³"), opt.IncludeIntervals ? ReportCell.Formula2("='Khối lượng chi tiết'!L" + detailTotalRow, true) : ReportCell.N2(r.TotalFillVolume, true) });
+            s.Rows.Add(new[] { ReportCell.Text("Chênh lệch đào - đắp", true), ReportCell.Text("m³"), ReportCell.Formula2("=C5-C6", true) });
+            s.Rows.Add(new[] { ReportCell.Text("Tổng theo tầng - đào"), ReportCell.Text("m³"), opt.IncludeLevels ? ReportCell.Formula2("='Tổng hợp theo tầng'!E" + levelTotalRow) : ReportCell.N2(levelCut) });
+            s.Rows.Add(new[] { ReportCell.Text("Tổng theo tầng - đắp"), ReportCell.Text("m³"), opt.IncludeLevels ? ReportCell.Formula2("='Tổng hợp theo tầng'!F" + levelTotalRow) : ReportCell.N2(levelFill) });
+            s.Rows.Add(new[] { ReportCell.Text("Sai lệch kiểm soát đào (chi tiết - theo tầng)"), ReportCell.Text("m³"), ReportCell.Formula3("=C5-C8") });
+            s.Rows.Add(new[] { ReportCell.Text("Sai lệch kiểm soát đắp (chi tiết - theo tầng)"), ReportCell.Text("m³"), ReportCell.Formula3("=C6-C9") });
+            s.Rows.Add(new[] { ReportCell.Text("Số khoảng mặt cắt"), ReportCell.Text("khoảng"), opt.IncludeIntervals ? ReportCell.FormulaInt("=COUNTA('Khối lượng chi tiết'!A4:A" + (3 + r.Intervals.Count) + ")") : ReportCell.Int(r.Intervals.Count) });
+            s.Rows.Add(new[] { ReportCell.Text("Số tầng / mức"), ReportCell.Text("tầng"), opt.IncludeLevels ? ReportCell.FormulaInt("=COUNTA('Tổng hợp theo tầng'!A3:A" + (2 + r.Levels.Count) + ")") : ReportCell.Int(r.Levels.Count) });
             return s;
         }
 
@@ -248,6 +268,16 @@ namespace MiningVolume2023.Services
         private static void AddKV(ReportSheet s, string key, string value) => s.Rows.Add(new[] { ReportCell.Text(key, true), ReportCell.Text(value) });
         private static string EmptyAsNotSet(string s) => string.IsNullOrWhiteSpace(s) ? "Chưa thiết lập" : s.Trim();
         private static string FormulaName(VolumeFormulaKind x) => x == VolumeFormulaKind.Prismoidal ? "Prismoid" : "TB hai đầu";
+        private static string VolumeFormula(VolumeFormulaKind kind, int row, string lengthCol, string startCol, string midCol, string endCol)
+        {
+            if (kind == VolumeFormulaKind.Prismoidal)
+                return "=" + lengthCol + row + "/6*(" + startCol + row + "+4*" + midCol + row + "+" + endCol + row + ")";
+            return "=" + lengthCol + row + "/2*(" + startCol + row + "+" + endCol + row + ")";
+        }
+        private static string SumFormula(string col, int firstRow, int lastRow)
+        {
+            return lastRow < firstRow ? "=0" : "=SUM(" + col + firstRow + ":" + col + lastRow + ")";
+        }
         private static string FormatLevel(double z) => z > 0 ? "+" + z.ToString("0.###") : z.ToString("0.###");
         private static string EntityTypeName(SourceEntityType type)
         {
