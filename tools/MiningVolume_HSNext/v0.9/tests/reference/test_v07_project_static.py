@@ -105,16 +105,19 @@ def test_ribbon_has_project_panel():
     assert 'EntryPoint.SaveProject();' in s
 
 
-def test_project_scale_and_report_info_are_connected_to_state():
+def test_project_scale_is_persisted_but_report_identity_is_fixed():
     state = read('src/MiningVolume.Plugin2023/Services/ProjectState.cs')
     section = read('src/MiningVolume.Plugin2023/UI/SectionPage.cs')
     export = read('src/MiningVolume.Plugin2023/UI/ExportPage.cs')
-    for token in ['HorizontalScale', 'VerticalScale', 'DeveloperName', 'DeveloperContact']:
+    service = read('src/MiningVolume.Plugin2023/Services/ExportWorkflowService.cs')
+    for token in ['HorizontalScale', 'VerticalScale']:
         assert token in state
     assert 'st.HorizontalScale = (double)_hScale.Value' in section
     assert 'st.VerticalScale = (double)_vScale.Value' in section
-    assert 'ProjectState.Current.DeveloperName' in export
-    assert 'ProjectState.Current.DeveloperContact' in export
+    assert 'ExportOptions.FixedDeveloperName' in export
+    assert 'ExportOptions.FixedDeveloperContact' in export
+    assert 'FixedDeveloperName = "Bùi Thế Nam"' in service
+    assert 'FixedDeveloperContact = "Điện thoại: 0967280686"' in service
 
 
 def test_runtime_serialization_references_present():

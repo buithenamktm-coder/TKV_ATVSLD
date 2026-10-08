@@ -89,3 +89,12 @@ def test_developer_identity_is_fixed_and_readonly():
     assert 'Text = ExportOptions.FixedDeveloperName' in ui
     assert 'Text = ExportOptions.FixedDeveloperContact' in ui
     assert "TextChanged += ReportInfoChanged" not in ui
+
+
+def test_writer_blanks_nonfinite_numeric_values_and_self_validates_package():
+    s = read(REPORT)
+    assert "double.IsNaN(number)" in s
+    assert "double.IsInfinity(number)" in s
+    assert "ValidatePackage(filePath, report.Sheets.Count)" in s
+    assert 'zip.GetEntry(path)' in s
+    assert "new XmlDocument()" in s

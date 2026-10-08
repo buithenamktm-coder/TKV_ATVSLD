@@ -102,6 +102,8 @@ namespace MiningVolume.Core.Reporting
                 for (int i = 0; i < report.Sheets.Count; i++)
                     WriteWorksheet(zip, i + 1, report.Sheets[i], normalizedNames[i]);
             }
+
+            ValidatePackage(filePath, report.Sheets.Count);
         }
 
         private static List<string> NormalizeSheetNames(IEnumerable<string> names)
@@ -408,9 +410,47 @@ namespace MiningVolume.Core.Reporting
             else
             {
                 var number = Convert.ToDouble(cell.Value, CultureInfo.InvariantCulture);
-                x.WriteElementString("v", number.ToString("0.###############", CultureInfo.InvariantCulture));
+                // SpreadsheetML numeric cells cannot contain NaN or Infinity.
+                // Boundary/invalid section values are exported as an empty cell
+                // instead of corrupting the whole workbook.
+                if (!double.IsNaN(number) && !double.IsInfinity(number))
+                    x.WriteElementString("v", number.ToString("0.###############", CultureInfo.InvariantCulture));
             }
             x.WriteEndElement();
+        }
+
+        private static void ValidatePackage(string filePath, int sheetCount)
+        {
+            using (var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read))
+            using (var zip = new ZipArchive(fs, ZipArchiveMode.Read, leaveOpen: false, entryNameEncoding: Encoding.UTF8))
+            {
+                var required = new List<string>
+                {
+                    "[Content_Types].xml",
+                    "_rels/.rels",
+                    "docProps/core.xml",
+                    "docProps/app.xml",
+                    "xl/workbook.xml",
+                    "xl/_rels/workbook.xml.rels",
+                    "xl/styles.xml"
+                };
+                for (int i = 1; i <= sheetCount; i++)
+                    required.Add("xl/worksheets/sheet" + i.ToString(CultureInfo.InvariantCulture) + ".xml");
+
+                foreach (var path in required)
+                {
+                    var entry = zip.GetEntry(path);
+                    if (entry == null)
+                        throw new InvalidDataException("Workbook XLSX thiếu thành phần bắt buộc: " + path);
+
+                    using (var stream = entry.Open())
+                    {
+                        var doc = new XmlDocument();
+                        doc.PreserveWhitespace = true;
+                        doc.Load(stream);
+                    }
+                }
+            }
         }
 
         private static int StyleFor(ReportCell cell)
