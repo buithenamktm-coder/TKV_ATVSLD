@@ -166,7 +166,7 @@ Startup log hiện tại:
 $startupDetail"
         }
         $result = Get-Content $SelfTestPath -Raw
-        if ($result -notmatch 'MiningVolume HS-Next v0\.10\.4 runtime self-test') {
+        if ($result -notmatch 'MiningVolume HS-Next v1\.0 runtime self-test') {
             throw 'MVSELFTEST log không đúng phiên bản v1.0.'
         }
         if ($result -notmatch 'Status=PASS') {
