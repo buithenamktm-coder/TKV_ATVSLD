@@ -22,7 +22,7 @@ namespace MiningVolume2023
 
         public void Initialize()
         {
-            StartupLog("Initialize: MiningVolume v0.10.4");
+            StartupLog("Initialize: MiningVolume v1.0");
             TryRibbon();
             HookIdle();
         }
@@ -239,15 +239,15 @@ namespace MiningVolume2023
             var r = Services.SelfTestService.Run();
             var ed = AcApp.DocumentManager.MdiActiveDocument?.Editor;
             if (r.Passed)
-                ed?.WriteMessage("\nMiningVolume v0.10.4 SELFTEST: PASS (" + r.Checks.Count + " checks). Log: " + r.OutputFile);
+                ed?.WriteMessage("\nMiningVolume v1.0 SELFTEST: PASS (" + r.Checks.Count + " checks). Log: " + r.OutputFile);
             else
-                ed?.WriteMessage("\nMiningVolume v0.10.4 SELFTEST: FAIL (" + r.Errors.Count + " errors). Log: " + r.OutputFile);
+                ed?.WriteMessage("\nMiningVolume v1.0 SELFTEST: FAIL (" + r.Errors.Count + " errors). Log: " + r.OutputFile);
         }
 
         [CommandMethod("MVABOUT")]
         public void About()
         {
-            AcApp.ShowAlertDialog("IMSAT MINING VOLUME\nMine Survey & Earthwork for AutoCAD\nPhát triển: Bùi Thế Nam\nĐiện thoại: 0967280686\nPhiên bản v0.10.4");
+            AcApp.ShowAlertDialog("IMSAT MINING VOLUME\nMine Survey & Earthwork for AutoCAD\nPhát triển: Bùi Thế Nam\nĐiện thoại: 0967280686\nPhiên bản v1.0");
         }
     }
 }
