@@ -11,18 +11,18 @@ namespace MiningVolume2023.UI
     /// </summary>
     internal static class UiTheme
     {
-        public static readonly Color Canvas = Color.FromArgb(244, 247, 250);
+        public static readonly Color Canvas = Color.FromArgb(242, 242, 247);
         public static readonly Color Surface = Color.White;
-        public static readonly Color Sidebar = Color.FromArgb(28, 42, 56);
-        public static readonly Color SidebarHover = Color.FromArgb(38, 55, 71);
-        public static readonly Color Accent = Color.FromArgb(31, 132, 104);
-        public static readonly Color AccentDark = Color.FromArgb(24, 108, 84);
-        public static readonly Color TextStrong = Color.FromArgb(34, 43, 53);
-        public static readonly Color Text = Color.FromArgb(66, 76, 86);
-        public static readonly Color Muted = Color.FromArgb(112, 123, 134);
-        public static readonly Color Border = Color.FromArgb(211, 219, 227);
-        public static readonly Color Soft = Color.FromArgb(238, 243, 247);
-        public static readonly Color Danger = Color.FromArgb(176, 65, 65);
+        public static readonly Color Sidebar = Color.FromArgb(248, 248, 250);
+        public static readonly Color SidebarHover = Color.FromArgb(235, 235, 240);
+        public static readonly Color Accent = Color.FromArgb(0, 122, 255);
+        public static readonly Color AccentDark = Color.FromArgb(0, 102, 214);
+        public static readonly Color TextStrong = Color.FromArgb(28, 28, 30);
+        public static readonly Color Text = Color.FromArgb(58, 58, 60);
+        public static readonly Color Muted = Color.FromArgb(99, 99, 102);
+        public static readonly Color Border = Color.FromArgb(209, 209, 214);
+        public static readonly Color Soft = Color.FromArgb(229, 229, 234);
+        public static readonly Color Danger = Color.FromArgb(255, 59, 48);
 
         public static void ApplyPage(Control root)
         {
@@ -181,9 +181,9 @@ namespace MiningVolume2023.UI
             grid.ColumnHeadersDefaultCellStyle.SelectionForeColor = TextStrong;
             grid.DefaultCellStyle.BackColor = Surface;
             grid.DefaultCellStyle.ForeColor = Text;
-            grid.DefaultCellStyle.SelectionBackColor = Color.FromArgb(222, 241, 234);
+            grid.DefaultCellStyle.SelectionBackColor = Color.FromArgb(220, 235, 255);
             grid.DefaultCellStyle.SelectionForeColor = TextStrong;
-            grid.AlternatingRowsDefaultCellStyle.BackColor = Color.FromArgb(249, 251, 252);
+            grid.AlternatingRowsDefaultCellStyle.BackColor = Color.FromArgb(248, 248, 250);
             grid.RowHeadersVisible = false;
         }
     }
