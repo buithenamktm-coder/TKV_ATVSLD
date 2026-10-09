@@ -178,7 +178,7 @@ jobs:
             'Release status: PRE-RELEASE ONLY - AutoCAD 2023 runtime not verified'
             "Setup SHA256: $hash"
             'AutoCAD 2023 host runtime self-test: NOT EXECUTED ON GITHUB-HOSTED RUNNER'
-            'Runtime gate: Setup runs MVSELFTEST in AutoCAD 2023 and rolls back unless Status=PASS.'
+            'Runtime gate: final Setup is published only after the self-hosted AutoCAD 2023 workflow PASS.'
           ) | Set-Content -Encoding utf8 dist/BUILD_VERIFICATION.txt
           @(
             'MININGVOLUME HS-NEXT v0.10.4 - PRE-RELEASE'
