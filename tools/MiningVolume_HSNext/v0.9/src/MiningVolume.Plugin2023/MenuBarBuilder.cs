@@ -10,7 +10,8 @@ namespace MiningVolume2023
     /// </summary>
     internal static class MenuBarBuilder
     {
-        private const string MenuName = "MINING VOLUME";
+        private const string MenuName = "IMSAT VOLUME";
+        private const string LegacyMenuName = "MINING VOLUME";
         private static bool _attempted;
 
         internal static void EnsureMenu()
@@ -38,13 +39,20 @@ namespace MiningVolume2023
                         menu = candidate;
                         break;
                     }
+
+                    if (string.Equals(name, LegacyMenuName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        // Dọn tên giao diện cũ để người dùng không thấy đồng thời
+                        // MINING VOLUME và IMSAT VOLUME sau khi nâng cấp.
+                        try { candidate.Delete(); } catch { }
+                    }
                 }
 
                 if (menu == null)
                 {
                     menu = menus.Add(MenuName);
                     int p = 0;
-                    menu.AddMenuItem(p++, "Hiện / Ẩn MiningVolume", "^C^CTKL ");
+                    menu.AddMenuItem(p++, "Hiện / Ẩn IMSAT VOLUME", "^C^CTKL ");
                     menu.AddSeparator(p++);
                     menu.AddMenuItem(p++, "Dự án", "^C^CMV_PROJECT ");
                     menu.AddMenuItem(p++, "Dữ liệu đầu vào", "^C^CMV_DATA ");
@@ -53,7 +61,7 @@ namespace MiningVolume2023
                     menu.AddMenuItem(p++, "Tính khối lượng", "^C^CMV_VOLUME ");
                     menu.AddMenuItem(p++, "Xuất Excel", "^C^CMV_EXPORT ");
                     menu.AddSeparator(p++);
-                    menu.AddMenuItem(p++, "Thông tin IMSAT MiningVolume", "^C^CMVABOUT ");
+                    menu.AddMenuItem(p++, "Thông tin IMSAT VOLUME", "^C^CMVABOUT ");
 
                     try
                     {
