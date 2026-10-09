@@ -104,7 +104,7 @@ namespace MiningVolume2023.UI
             });
             header.Controls.Add(new Label
             {
-                Text = "Phát triển: Bùi Thế Nam",
+                Text = "Phát triển: Bùi Thế Nam  •  Điện thoại: 0967280686",
                 AutoSize = true,
                 Font = new Font("Arial", 8.5F, FontStyle.Bold),
                 ForeColor = Color.FromArgb(122, 213, 181),
