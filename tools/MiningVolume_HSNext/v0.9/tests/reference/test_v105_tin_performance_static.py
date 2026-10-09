@@ -190,3 +190,28 @@ def test_duplicate_xy_conflicts_can_continue_with_upper_or_lower_vertex():
     assert "BuildRoleWithConflictChoiceAsync" in data
     assert "DuplicateXYConflictUi.Ask" in data
     assert "DuplicateXYConflictUi.Ask" in model
+
+
+def test_resolvable_tin_elevation_conflicts_use_same_upper_lower_dialog():
+    prep = read("src/MiningVolume.Core/Surface/SurfaceInputPreparer.cs")
+    tiled = read("src/MiningVolume.Surface/TiledConformingTinBuilder.cs")
+    workflow = read("src/MiningVolume.Plugin2023/Services/SurfaceWorkflowService.cs")
+    ui = read("src/MiningVolume.Plugin2023/UI/DuplicateXYConflictUi.cs")
+
+    for code in [
+        "POINT_ON_BREAKLINE_Z_CONFLICT",
+        "BREAKLINE_CROSSING_Z_CONFLICT",
+        "BREAKLINE_OVERLAP_Z_CONFLICT",
+    ]:
+        assert code in prep
+        assert code in tiled
+        assert code in workflow
+
+    assert "USER_RESOLVE_POINT_ON_BREAKLINE_UPPER" in prep
+    assert "USER_RESOLVE_POINT_ON_BREAKLINE_LOWER" in prep
+    assert "USER_RESOLVE_BREAKLINE_CROSSING_UPPER" in prep
+    assert "USER_RESOLVE_BREAKLINE_CROSSING_LOWER" in prep
+    assert "USER_RESOLVE_BREAKLINE_OVERLAP_UPPER" in prep
+    assert "USER_RESOLVE_BREAKLINE_OVERLAP_LOWER" in prep
+    assert "xung đột cao độ Z" in ui
+    assert "Bạn có muốn TIẾP TỤC tạo TIN" in ui
