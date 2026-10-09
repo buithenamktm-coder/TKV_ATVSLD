@@ -44,16 +44,16 @@ namespace MiningVolume2023
                 {
                     menu = menus.Add(MenuName);
                     int p = 0;
-                    menu.AddMenuItem(p++, "Hiện / Ẩn MiningVolume", "^C^C_TKL ");
+                    menu.AddMenuItem(p++, "Hiện / Ẩn MiningVolume", "^C^CTKL ");
                     menu.AddSeparator(p++);
-                    menu.AddMenuItem(p++, "Dự án", "^C^C_MV_PROJECT ");
-                    menu.AddMenuItem(p++, "Dữ liệu đầu vào", "^C^C_MV_DATA ");
-                    menu.AddMenuItem(p++, "TIN / Mô hình", "^C^C_MV_MODEL ");
-                    menu.AddMenuItem(p++, "Mặt cắt", "^C^C_MV_SECTION ");
-                    menu.AddMenuItem(p++, "Tính khối lượng", "^C^C_MV_VOLUME ");
-                    menu.AddMenuItem(p++, "Xuất Excel", "^C^C_MV_EXPORT ");
+                    menu.AddMenuItem(p++, "Dự án", "^C^CMV_PROJECT ");
+                    menu.AddMenuItem(p++, "Dữ liệu đầu vào", "^C^CMV_DATA ");
+                    menu.AddMenuItem(p++, "TIN / Mô hình", "^C^CMV_MODEL ");
+                    menu.AddMenuItem(p++, "Mặt cắt", "^C^CMV_SECTION ");
+                    menu.AddMenuItem(p++, "Tính khối lượng", "^C^CMV_VOLUME ");
+                    menu.AddMenuItem(p++, "Xuất Excel", "^C^CMV_EXPORT ");
                     menu.AddSeparator(p++);
-                    menu.AddMenuItem(p++, "Thông tin IMSAT MiningVolume", "^C^C_MVABOUT ");
+                    menu.AddMenuItem(p++, "Thông tin IMSAT MiningVolume", "^C^CMVABOUT ");
 
                     try
                     {
