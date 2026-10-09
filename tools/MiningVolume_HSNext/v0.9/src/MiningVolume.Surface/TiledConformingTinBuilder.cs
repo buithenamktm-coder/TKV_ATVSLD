@@ -366,6 +366,12 @@ namespace MiningVolume.Surface
                                     t.Centroid2D,
                                     coreMinX, coreMinY, coreMaxX, coreMaxY,
                                     ix == nx - 1, iy == ny - 1))
+                                .Where(t => options.ClipBoundary == null ||
+                                    options.ClipBoundary.Count < 3 ||
+                                    Geometry2D.PointInPolygon(
+                                        t.Centroid2D,
+                                        options.ClipBoundary,
+                                        options.XyTolerance))
                                 .ToList();
 
                             bool stable = true;
