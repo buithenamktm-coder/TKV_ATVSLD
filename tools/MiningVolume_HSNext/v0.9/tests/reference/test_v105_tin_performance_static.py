@@ -71,7 +71,9 @@ def test_section_sampler_uses_reusable_triangle_spatial_index():
     assert "private sealed class TriangleGridIndex" in s
     assert "IndexFor(existing)" in s
     assert "IndexFor(design)" in s
-    assert "QuerySegment(a, b)" in s
+    assert "QuerySegmentTriangles(a, b)" in s
+    assert "ITiledTriangleSource" in s
+    assert "_tiled.QueryTiles" in s
     assert "_cells.TryGetValue" in s
     assert "foreach (var tri in tin.Triangles)" not in s
 
@@ -124,3 +126,27 @@ def test_large_mine_tin_routes_to_tiled_engine_instead_of_one_global_delaunay():
     assert "TryClip" in tiled
     assert "PrepareRaw" in preparer
     assert "10 triệu đỉnh" in workflow
+
+
+def test_large_tin_is_file_backed_and_cad_render_is_bounded_preview():
+    store = read("src/MiningVolume.Surface/FileBackedTiledTriangleList.cs")
+    tiled = read("src/MiningVolume.Surface/TiledConformingTinBuilder.cs")
+    workflow = read("src/MiningVolume.Plugin2023/Services/SurfaceWorkflowService.cs")
+    state = read("src/MiningVolume.Plugin2023/Services/ProjectState.cs")
+    assert "ITiledTriangleSource" in store
+    assert "FileOptions.SequentialScan" in store
+    assert "cacheTiles: 6" in tiled
+    assert "PreviewTriangles" in tiled
+    assert "previewTriangles.Count < 200000" in tiled
+    assert "TinCadIsPreview" in state
+    assert "cadPreview" in workflow
+    assert "BuildCadPreview" in workflow
+
+
+def test_large_tin_ui_has_progress_and_user_cancel():
+    data = read("src/MiningVolume.Plugin2023/UI/DataPage.cs")
+    assert "CancellationTokenSource" in data
+    assert "HỦY DỰNG TIN" in data
+    assert "_buildCts.Cancel()" in data
+    assert "OperationCanceledException" in data
+    assert "SetBuildStatus" in data
