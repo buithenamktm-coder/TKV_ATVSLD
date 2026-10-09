@@ -255,11 +255,11 @@ namespace MiningVolume.Surface
             // thử lại cạnh chưa flip được sau khi topo xung quanh đã thay đổi.
             var pending = new Queue<EdgeKey>();
             var queued = new HashSet<EdgeKey>();
-            foreach (var e in CrossingEdgesOrdered(
+            foreach (var crossingEdge in CrossingEdgesOrdered(
                 ca, cb, constraint, vertices, locked, adjacency, edgeIndex, tol))
             {
-                pending.Enqueue(e);
-                queued.Add(e);
+                pending.Enqueue(crossingEdge);
+                queued.Add(crossingEdge);
             }
 
             if (pending.Count == 0)
@@ -276,30 +276,30 @@ namespace MiningVolume.Surface
             {
                 if (pending.Count == 0)
                 {
-                    foreach (var e in CrossingEdgesOrdered(
+                    foreach (var crossingEdge in CrossingEdgesOrdered(
                         ca, cb, constraint, vertices, locked, adjacency, edgeIndex, tol))
                     {
-                        if (queued.Add(e)) pending.Enqueue(e);
+                        if (queued.Add(crossingEdge)) pending.Enqueue(crossingEdge);
                     }
 
                     if (pending.Count == 0) break;
                 }
 
-                var e = pending.Dequeue();
-                queued.Remove(e);
+                var currentEdge = pending.Dequeue();
+                queued.Remove(currentEdge);
 
                 List<int> owners;
-                if (!adjacency.TryGetValue(e, out owners) || owners.Count != 2)
+                if (!adjacency.TryGetValue(currentEdge, out owners) || owners.Count != 2)
                     continue;
-                if (locked.Contains(e))
+                if (locked.Contains(currentEdge))
                     continue;
                 if (!Geometry2D.ProperIntersection(
-                    ca, cb, vertices[e.A].XY, vertices[e.B].XY, tol))
+                    ca, cb, vertices[currentEdge.A].XY, vertices[currentEdge.B].XY, tol))
                     continue;
 
                 EdgeKey replacement;
                 if (TryFlip(
-                    tris, owners[0], owners[1], e, vertices, locked,
+                    tris, owners[0], owners[1], currentEdge, vertices, locked,
                     adjacency, edgeIndex, tol, out replacement))
                 {
                     successfulFlips++;
@@ -323,7 +323,7 @@ namespace MiningVolume.Surface
                 }
                 else
                 {
-                    if (queued.Add(e)) pending.Enqueue(e);
+                    if (queued.Add(currentEdge)) pending.Enqueue(currentEdge);
                     failuresSinceProgress++;
 
                     // Nếu đã đi hết một vòng hàng đợi mà không flip được cạnh nào
