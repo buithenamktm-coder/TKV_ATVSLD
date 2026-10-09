@@ -32,6 +32,8 @@ namespace MiningVolume2023.Services
         public DateTime? TinBuiltFromSourceUtc { get; set; }
         public long? TinBuiltFromSourceRevision { get; set; }
         public bool TinVisible { get; set; } = true;
+        public int TinCadFaceCount { get; set; }
+        public bool TinCadIsPreview { get; set; }
         public bool IsTinCurrent
         {
             get
@@ -130,6 +132,8 @@ namespace MiningVolume2023.Services
             s.TinBuiltFromSourceUtc = null;
             s.TinBuiltFromSourceRevision = null;
             s.TinVisible = true;
+            s.TinCadFaceCount = 0;
+            s.TinCadIsPreview = false;
             s.LastBuiltUtc = null;
             s.AllowedTypes.Clear();
         }
