@@ -76,7 +76,7 @@ namespace MiningVolume2023
                     {
                         try
                         {
-                            AcApp.ShowAlertDialog("MiningVolume đã được nạp nhưng không mở được giao diện.\n\n" +
+                            AcApp.ShowAlertDialog("IMSAT VOLUME đã được nạp nhưng không mở được giao diện.\n\n" +
                                 ex.Message + "\n\nXem log tại: " + StartupLogPath());
                         }
                         catch { }
@@ -135,14 +135,14 @@ namespace MiningVolume2023
             EnsureCurrentDrawingProjectLoaded();
             if (Palette == null)
             {
-                Palette = new PaletteSet("MINING VOLUME", new Guid("8C96DC13-BC65-4A2C-8B34-2D7644FD1C62"))
+                Palette = new PaletteSet("IMSAT VOLUME", new Guid("8C96DC13-BC65-4A2C-8B34-2D7644FD1C62"))
                 {
                     Style = PaletteSetStyles.ShowAutoHideButton | PaletteSetStyles.ShowCloseButton | PaletteSetStyles.ShowPropertiesMenu,
-                    MinimumSize = new System.Drawing.Size(700, 660),
-                    Size = new System.Drawing.Size(940, 800)
+                    MinimumSize = new System.Drawing.Size(620, 540),
+                    Size = new System.Drawing.Size(800, 650)
                 };
                 MainControl = new MainPaletteControl();
-                Palette.Add("Phần mềm", MainControl);
+                Palette.Add("IMSAT VOLUME", MainControl);
             }
             Palette.Visible = true;
             MainControl.ShowPage(page);
@@ -175,7 +175,7 @@ namespace MiningVolume2023
             bool next = !UserSettingsService.AutoOpenPalette;
             UserSettingsService.AutoOpenPalette = next;
             AcApp.DocumentManager.MdiActiveDocument?.Editor.WriteMessage(
-                "\nMiningVolume: tự động mở bảng khi khởi động AutoCAD = " + (next ? "BẬT" : "TẮT") + ".");
+                "\nIMSAT VOLUME: tự động mở bảng khi khởi động AutoCAD = " + (next ? "BẬT" : "TẮT") + ".");
             if (MainControl != null) MainControl.Refresh();
         }
         [CommandMethod("MV_PROJECT", CommandFlags.Session)] public static void OpenProject() => Open(AppPage.Project);
@@ -189,14 +189,14 @@ namespace MiningVolume2023
         public static void SaveProject()
         {
             var saved = Services.ProjectPersistenceService.SaveCurrentProject();
-            AcApp.DocumentManager.MdiActiveDocument?.Editor.WriteMessage("\nMiningVolume: đã lưu Project vào DWG lúc " + saved.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss") + ".");
+            AcApp.DocumentManager.MdiActiveDocument?.Editor.WriteMessage("\nIMSAT VOLUME: đã lưu Project vào DWG lúc " + saved.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss") + ".");
         }
 
         [CommandMethod("MV_PROJECT_LOAD", CommandFlags.Session)]
         public static void LoadProject()
         {
             var r = Services.ProjectPersistenceService.LoadCurrentProject(true);
-            AcApp.DocumentManager.MdiActiveDocument?.Editor.WriteMessage("\nMiningVolume: " + r.Message);
+            AcApp.DocumentManager.MdiActiveDocument?.Editor.WriteMessage("\nIMSAT VOLUME: " + r.Message);
             _loadedDrawingFingerprint = CurrentFingerprint();
             Open(AppPage.Project);
         }
@@ -215,12 +215,12 @@ namespace MiningVolume2023
                 {
                     var r = Services.ProjectPersistenceService.LoadCurrentProject(true);
                     if (r.Warnings.Count > 0)
-                        doc.Editor.WriteMessage("\nMiningVolume: Project đã nạp với " + r.Warnings.Count + " cảnh báo. Mở trang Dự án để xem/kiểm soát.");
+                        doc.Editor.WriteMessage("\nIMSAT VOLUME: Project đã nạp với " + r.Warnings.Count + " cảnh báo. Mở trang Dự án để xem/kiểm soát.");
                 }
             }
             catch (System.Exception ex)
             {
-                doc.Editor.WriteMessage("\nMiningVolume: chưa tự nạp được Project - " + ex.Message);
+                doc.Editor.WriteMessage("\nIMSAT VOLUME: chưa tự nạp được Project - " + ex.Message);
             }
             _loadedDrawingFingerprint = fingerprint;
         }
@@ -247,7 +247,7 @@ namespace MiningVolume2023
         [CommandMethod("MVABOUT")]
         public void About()
         {
-            AcApp.ShowAlertDialog("IMSAT MINING VOLUME\nMine Survey & Earthwork for AutoCAD\nPhát triển: Bùi Thế Nam\nĐiện thoại: 0967280686\nPhiên bản v1.0");
+            AcApp.ShowAlertDialog("IMSAT VOLUME\nMine Survey & Earthwork for AutoCAD\nPhát triển: Bùi Thế Nam\nĐiện thoại: 0967280686\nPhiên bản v1.0");
         }
     }
 }
