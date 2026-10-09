@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using MiningVolume.Core.Model;
@@ -16,6 +17,8 @@ namespace MiningVolume2023.UI
         private readonly CheckedListBox _types;
         private readonly Label _status;
         private readonly Button _buildPair;
+        private readonly Button _cancelBuild;
+        private CancellationTokenSource _buildCts;
 
         public DataPage()
         {
@@ -137,14 +140,15 @@ namespace MiningVolume2023.UI
             var actions = new TableLayoutPanel
             {
                 Width = 520,
-                Height = 92,
+                Height = 132,
                 ColumnCount = 1,
-                RowCount = 2,
+                RowCount = 3,
                 Margin = new Padding(0),
                 Padding = new Padding(0)
             };
             actions.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
             actions.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
+            actions.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
 
             var refresh = Btn("Làm mới danh sách layer", (s, e) => RefreshLayers());
             refresh.Dock = DockStyle.Fill;
@@ -157,6 +161,18 @@ namespace MiningVolume2023.UI
             _buildPair.Margin = new Padding(0);
             _buildPair.Enabled = false;
             actions.Controls.Add(_buildPair, 0, 1);
+
+            _cancelBuild = Btn("HỦY DỰNG TIN", (s, e) =>
+            {
+                if (_buildCts == null || _buildCts.IsCancellationRequested) return;
+                _status.Text = "Đang yêu cầu hủy dựng TIN...";
+                _buildCts.Cancel();
+            });
+            _cancelBuild.Dock = DockStyle.Fill;
+            _cancelBuild.Margin = new Padding(0, 6, 0, 0);
+            _cancelBuild.Enabled = false;
+            actions.Controls.Add(_cancelBuild, 0, 2);
+
             body.Controls.Add(actions);
 
             body.SizeChanged += (s, e) =>
@@ -266,37 +282,44 @@ namespace MiningVolume2023.UI
                 return;
             }
 
+            _buildCts?.Dispose();
+            _buildCts = new CancellationTokenSource();
+            var token = _buildCts.Token;
+
             try
             {
                 _buildPair.Enabled = false;
+                _cancelBuild.Enabled = true;
                 UseWaitCursor = true;
                 var totalWatch = Stopwatch.StartNew();
 
-                _status.Text = $"Đang dựng TIN hiện trạng từ {st.Existing.ActiveVertexCount:n0} đỉnh...";
-                _status.Refresh();
-                var existing = await Task.Run(() => SurfaceWorkflowService.BuildCoreDetailed(ModelRole.Existing));
+                SetBuildStatus($"Đang dựng TIN hiện trạng từ {st.Existing.ActiveVertexCount:n0} đỉnh...");
+                var existing = await Task.Run(() =>
+                    SurfaceWorkflowService.BuildCoreDetailed(
+                        ModelRole.Existing,
+                        message => SetBuildStatus(message),
+                        token), token);
 
-                _status.Text =
+                SetBuildStatus(
                     $"Hiện trạng xong ({existing.TriangleCount:n0} tam giác, {existing.CoreMilliseconds / 1000.0:0.00}s). " +
-                    $"Đang dựng TIN thiết kế từ {st.Design.ActiveVertexCount:n0} đỉnh...";
-                _status.Refresh();
-                var design = await Task.Run(() => SurfaceWorkflowService.BuildCoreDetailed(ModelRole.Design));
+                    $"Đang dựng TIN thiết kế từ {st.Design.ActiveVertexCount:n0} đỉnh...");
+                var design = await Task.Run(() =>
+                    SurfaceWorkflowService.BuildCoreDetailed(
+                        ModelRole.Design,
+                        message => SetBuildStatus(message),
+                        token), token);
 
+                token.ThrowIfCancellationRequested();
                 var builds = new[] { existing, design };
                 var cadWatch = Stopwatch.StartNew();
-                SurfaceWorkflowService.DrawTinPair(builds, message =>
-                {
-                    _status.Text = message;
-                    _status.Refresh();
-                    Application.DoEvents();
-                });
+                SurfaceWorkflowService.DrawTinPair(builds, message => SetBuildStatus(message));
                 cadWatch.Stop();
                 totalWatch.Stop();
 
-                _status.Text =
+                SetBuildStatus(
                     $"Cặp TIN hợp lệ: {st.Existing.TinLayer} = {existing.TriangleCount:n0}; " +
                     $"{st.Design.TinLayer} = {design.TriangleCount:n0} tam giác. " +
-                    $"Ghi CAD {cadWatch.Elapsed.TotalSeconds:0.00}s; tổng {totalWatch.Elapsed.TotalSeconds:0.00}s.";
+                    $"Ghi CAD {cadWatch.Elapsed.TotalSeconds:0.00}s; tổng {totalWatch.Elapsed.TotalSeconds:0.00}s.");
 
                 MessageBox.Show(
                     "ĐÃ TẠO ĐỦ 2 TIN DÙNG CHO TÍNH KHỐI LƯỢNG\r\n\r\n" +
@@ -305,6 +328,10 @@ namespace MiningVolume2023.UI
                     "MiningVolume - Cặp TIN hợp lệ",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Information);
+            }
+            catch (OperationCanceledException)
+            {
+                _status.Text = "Đã hủy dựng TIN theo yêu cầu. Dữ liệu nguồn không bị thay đổi.";
             }
             catch (SurfaceValidationException ex)
             {
@@ -327,8 +354,23 @@ namespace MiningVolume2023.UI
             finally
             {
                 UseWaitCursor = false;
+                _cancelBuild.Enabled = false;
+                _buildCts.Dispose();
+                _buildCts = null;
                 RefreshPairButton();
             }
+        }
+
+        private void SetBuildStatus(string message)
+        {
+            if (IsDisposed || Disposing) return;
+            if (InvokeRequired)
+            {
+                try { BeginInvoke(new Action<string>(SetBuildStatus), message); } catch { }
+                return;
+            }
+            _status.Text = message;
+            _status.Refresh();
         }
 
         private void SelectModel(ModelRole role)
