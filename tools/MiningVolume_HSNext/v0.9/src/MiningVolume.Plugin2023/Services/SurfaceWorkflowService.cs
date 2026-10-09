@@ -104,7 +104,7 @@ namespace MiningVolume2023.Services
             if (entities.Count == 0)
                 throw new InvalidOperationException(
                     "Các đối tượng đã chọn không có POINT/LINE/POLYLINE hợp lệ theo loại dữ liệu đang bật, " +
-                    "hoặc chỉ thuộc layer TIN đầu ra của MiningVolume.");
+                    "hoặc chỉ thuộc layer TIN đầu ra của IMSAT VOLUME.");
 
             return CommitLoadedSource(role, null, SourceSelectionMode.ManualSelection, entities, allowedTypes);
         }
