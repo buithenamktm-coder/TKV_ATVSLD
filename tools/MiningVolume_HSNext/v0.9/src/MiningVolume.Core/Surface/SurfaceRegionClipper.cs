@@ -27,6 +27,11 @@ namespace MiningVolume.Core.Surface
             var result = new SurfaceModel(source.Name + " - vùng chọn");
             int generated = 0;
 
+            // Giữ thêm một dải dữ liệu đệm quanh vùng chọn để TIN tại mép không
+            // bị thiếu tam giác hoặc biến dạng do loại sạch điểm nằm ngay ngoài biên.
+            // Phần TIN đầu ra vẫn được cắt theo polygon người dùng chọn.
+            var support = BuildSupportRectangle(polygon, 0.10, tolerance);
+
             foreach (var entity in source.Entities)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -36,7 +41,7 @@ namespace MiningVolume.Core.Surface
                 {
                     var inside = entity.ActiveVertices()
                         .Select(v => v.Position)
-                        .Where(p => ContainsInclusive(p.XY, polygon, tolerance))
+                        .Where(p => ContainsInclusive(p.XY, support, tolerance))
                         .ToList();
 
                     if (inside.Count > 0)
@@ -55,7 +60,7 @@ namespace MiningVolume.Core.Surface
                 foreach (var segment in entity.ActiveBreaklineSegments())
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    foreach (var clipped in ClipSegment(segment, polygon, tolerance))
+                    foreach (var clipped in ClipSegment(segment, support, tolerance))
                     {
                         result.Entities.Add(new SourceEntity(
                             entity.Id + "#REG" + (++generated).ToString(),
@@ -70,6 +75,33 @@ namespace MiningVolume.Core.Surface
 
             result.Touch();
             return result;
+        }
+
+        public static IReadOnlyList<Vec2> BuildSupportRectangle(
+            IReadOnlyList<Vec2> polygon,
+            double paddingRatio = 0.10,
+            double tolerance = 1e-9)
+        {
+            if (polygon == null || polygon.Count < 3)
+                throw new ArgumentException("Vùng tạo TIN phải có ít nhất 3 đỉnh.", nameof(polygon));
+
+            double minX = polygon.Min(p => p.X);
+            double maxX = polygon.Max(p => p.X);
+            double minY = polygon.Min(p => p.Y);
+            double maxY = polygon.Max(p => p.Y);
+
+            double spanX = Math.Max(0.0, maxX - minX);
+            double spanY = Math.Max(0.0, maxY - minY);
+            double span = Math.Max(spanX, spanY);
+            double pad = Math.Max(tolerance * 100.0, span * Math.Max(0.0, paddingRatio));
+
+            return new[]
+            {
+                new Vec2(minX - pad, minY - pad),
+                new Vec2(maxX + pad, minY - pad),
+                new Vec2(maxX + pad, maxY + pad),
+                new Vec2(minX - pad, maxY + pad)
+            };
         }
 
         public static bool ContainsInclusive(
