@@ -12,6 +12,9 @@ foreach ($name in $required) {
   if (-not (Test-Path $p)) { throw "Thiếu Release DLL: $name" }
   if ((Get-Item $p).Length -lt 1024) { throw "DLL bất thường/qua nhỏ: $name" }
 }
+$logo = Join-Path $win 'Assets\imsat_logo_64.png'
+if (-not (Test-Path $logo)) { throw 'Thiếu logo IMSAT trong bundle phát hành.' }
+if ((Get-Item $logo).Length -lt 1024) { throw 'Logo IMSAT trong bundle bất thường/qua nhỏ.' }
 $banned = @('AcMgd.dll','AcDbMgd.dll','AcCoreMgd.dll','AcWindows.dll','AdWindows.dll','NetTopologySuite.dll')
 foreach ($name in $banned) {
   if (Test-Path (Join-Path $win $name)) { throw "Không được đóng gói runtime/reference DLL: $name" }
