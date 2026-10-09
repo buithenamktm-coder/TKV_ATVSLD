@@ -10,6 +10,7 @@ using System.Linq;
 namespace MiningVolume2023.Services
 {
     public enum ModelRole { Existing, Design }
+    public enum SourceSelectionMode { Layer = 0, ManualSelection = 1 }
 
     public sealed class ModelSession
     {
@@ -23,6 +24,8 @@ namespace MiningVolume2023.Services
         public ModelRole Role { get; }
         public string Name { get; }
         public string Layer { get; set; }
+        public SourceSelectionMode SourceMode { get; set; } = SourceSelectionMode.Layer;
+        public List<string> SelectedHandles { get; } = new List<string>();
         public string TinLayer { get; }
         public SurfaceModel Source { get; set; }
         public TinSurface Tin { get; set; }
@@ -119,6 +122,8 @@ namespace MiningVolume2023.Services
         private static void ResetModel(ModelSession s)
         {
             s.Layer = null;
+            s.SourceMode = SourceSelectionMode.Layer;
+            s.SelectedHandles.Clear();
             s.Source = new SurfaceModel(s.Name);
             s.Tin = null;
             s.TinBuiltFromSourceUtc = null;
