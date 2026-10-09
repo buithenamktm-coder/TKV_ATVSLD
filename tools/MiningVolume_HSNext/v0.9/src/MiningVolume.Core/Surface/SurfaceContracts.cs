@@ -7,6 +7,26 @@ namespace MiningVolume.Core.Surface
 {
     public enum ValidationSeverity { Info, Warning, Error }
 
+    public enum DuplicateXYConflictPolicy
+    {
+        Stop = 0,
+        UseUpper = 1,
+        UseLower = 2
+    }
+
+    public sealed class DuplicateXYConflictException : Exception
+    {
+        public DuplicateXYConflictException(string modelName, IReadOnlyList<ValidationIssue> issues)
+            : base($"Dữ liệu mô hình {modelName} có các điểm trùng XY nhưng khác cao độ Z.")
+        {
+            ModelName = modelName ?? "Mô hình";
+            Issues = issues ?? Array.Empty<ValidationIssue>();
+        }
+
+        public string ModelName { get; }
+        public IReadOnlyList<ValidationIssue> Issues { get; }
+    }
+
     public sealed class ValidationIssue
     {
         public ValidationIssue(ValidationSeverity severity, string code, string message, string sourceId = null)
@@ -83,6 +103,7 @@ namespace MiningVolume.Core.Surface
         public double XyTolerance { get; set; } = 1e-6;
         public double ZConflictTolerance { get; set; } = 1e-4;
         public double MinimumTriangleArea { get; set; } = 1e-10;
+        public DuplicateXYConflictPolicy DuplicateXYConflictPolicy { get; set; } = DuplicateXYConflictPolicy.Stop;
         public IReadOnlyList<Vec2> ClipBoundary { get; set; }
     }
 
