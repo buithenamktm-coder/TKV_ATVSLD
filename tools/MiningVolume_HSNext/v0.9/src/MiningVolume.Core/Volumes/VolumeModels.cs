@@ -6,7 +6,9 @@ namespace MiningVolume.Core.Volumes
     public enum VolumeFormulaKind
     {
         AverageEndArea,
-        Prismoidal
+        Prismoidal,
+        Frustum,
+        Pyramid
     }
 
     public sealed class LevelBand
