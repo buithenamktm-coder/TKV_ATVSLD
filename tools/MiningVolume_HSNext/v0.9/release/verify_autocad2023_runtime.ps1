@@ -103,14 +103,26 @@ try {
         throw "Không tìm thấy DLL plugin để NETLOAD: $pluginDll"
     }
 
+    # Runtime CI must not block on AutoCAD's unsigned-DLL dialog. The production
+    # bundle still keeps its normal startup behavior; only this temporary runtime
+    # copy is changed to manual NETLOAD. SECURELOAD is disabled only inside the
+    # dedicated CI AutoCAD session, then restored before QUIT.
+    $runtimePackage = Join-Path $target 'PackageContents.xml'
+    $packageText = Get-Content $runtimePackage -Raw
+    $packageText = $packageText -replace 'LoadOnAutoCADStartup="True"', 'LoadOnAutoCADStartup="False"'
+    Set-Content -Path $runtimePackage -Value $packageText -Encoding UTF8
+
     @(
         'FILEDIA'
         '0'
         'CMDDIA'
         '0'
+        '(setq mv_secureload_old (getvar "SECURELOAD"))'
+        '(setvar "SECURELOAD" 0)'
         '_.NETLOAD'
         ('"' + $pluginDll + '"')
         'MVSELFTEST'
+        '(setvar "SECURELOAD" mv_secureload_old)'
         '_.QUIT'
     ) | Set-Content -Path $scriptPath -Encoding ASCII
 
