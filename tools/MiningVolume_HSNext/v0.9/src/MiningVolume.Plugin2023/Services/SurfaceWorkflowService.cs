@@ -39,6 +39,7 @@ namespace MiningVolume2023.Services
         public long CoreMilliseconds => PrepareMilliseconds + TriangulationMilliseconds;
         public bool IsLargeDataset { get; set; }
         public int TileCount { get; set; }
+        public IReadOnlyList<MiningVolume.Core.Geometry.Triangle3> PreviewTriangles { get; set; }
 
         public string Summary =>
             $"{SiteCount:n0} điểm TIN • {BreaklineCount:n0} đoạn breakline • {TriangleCount:n0} tam giác" +
@@ -237,7 +238,8 @@ namespace MiningVolume2023.Services
                     TriangulationMilliseconds = tiled.TriangulationMilliseconds,
                     SourceModel = source,
                     IsLargeDataset = true,
-                    TileCount = tiled.TileCount
+                    TileCount = tiled.TileCount,
+                    PreviewTriangles = tiled.PreviewTriangles
                 };
             }
 
@@ -336,17 +338,29 @@ namespace MiningVolume2023.Services
         {
             if (build == null) throw new ArgumentNullException(nameof(build));
             if (build.Role != role) throw new InvalidOperationException("Kết quả dựng TIN không đúng mô hình cần ghi.");
-            DrawTinInternal(role, build.Tin, build.SourceModel, build.SourceRevision, build.SourceModifiedUtc);
+            DrawTinInternal(
+                role,
+                build.Tin,
+                build.SourceModel,
+                build.SourceRevision,
+                build.SourceModifiedUtc,
+                build.IsLargeDataset ? build.PreviewTriangles : null);
         }
 
         public static void DrawTin(ModelRole role, TinSurface tin)
         {
             var session = ProjectState.Current.Get(role);
             var source = session.Source ?? throw new InvalidOperationException("Mô hình chưa có dữ liệu nguồn.");
-            DrawTinInternal(role, tin, source, source.Revision, source.LastModifiedUtc);
+            DrawTinInternal(role, tin, source, source.Revision, source.LastModifiedUtc, null);
         }
 
-        private static void DrawTinInternal(ModelRole role, TinSurface tin, SurfaceModel sourceModel, long sourceRevision, DateTime sourceModifiedUtc)
+        private static void DrawTinInternal(
+            ModelRole role,
+            TinSurface tin,
+            SurfaceModel sourceModel,
+            long sourceRevision,
+            DateTime sourceModifiedUtc,
+            IReadOnlyList<MiningVolume.Core.Geometry.Triangle3> previewTriangles)
         {
             if (tin == null) throw new ArgumentNullException(nameof(tin));
             if (tin.Triangles == null || tin.Triangles.Count == 0)
@@ -362,25 +376,27 @@ namespace MiningVolume2023.Services
             var doc = Application.DocumentManager.MdiActiveDocument ??
                       throw new InvalidOperationException("Không có bản vẽ AutoCAD đang hoạt động.");
 
+            bool cadPreview = previewTriangles != null && previewTriangles.Count > 0 &&
+                              previewTriangles.Count < tin.Triangles.Count;
+            var cadTin = cadPreview
+                ? new TinSurface(session.Name + " - CAD preview", previewTriangles, Array.Empty<ValidationIssue>())
+                : tin;
+
             int written;
             using (doc.LockDocument())
             {
                 written = TinCadRenderer.Replace(
                     doc.Database,
                     session.TinLayer,
-                    tin,
+                    cadTin,
                     role == ModelRole.Existing ? (short)1 : (short)3);
                 TinCadRenderer.SetVisible(doc.Database, session.TinLayer, true);
             }
 
-            // Replace() validates the reserved layer, erases every previous TIN face and
-            // appends every core triangle inside one locked transaction. If that
-            // transaction commits and the created count matches, the CAD representation
-            // is current by construction. Runtime/self-test still performs an independent
-            // CountFaces check against the DWG.
-            if (written != tin.Triangles.Count)
+            int expectedCadFaces = cadTin.Triangles.Count;
+            if (written != expectedCadFaces)
                 throw new InvalidOperationException(
-                    $"Ghi TIN {session.Name} xuống AutoCAD không đầy đủ: lõi có {tin.Triangles.Count:n0} tam giác, " +
+                    $"Ghi TIN {session.Name} xuống AutoCAD không đầy đủ: cần {expectedCadFaces:n0} mặt CAD, " +
                     $"đã ghi {written:n0}.");
 
             var previousTin = session.Tin;
@@ -393,6 +409,8 @@ namespace MiningVolume2023.Services
             session.TinBuiltFromSourceRevision = sourceRevision;
             session.LastBuiltUtc = DateTime.UtcNow;
             session.TinVisible = true;
+            session.TinCadFaceCount = written;
+            session.TinCadIsPreview = cadPreview;
             state.SectionProfiles.Clear();
             state.VolumeResult = null;
             state.NotifyChanged();
@@ -426,6 +444,8 @@ namespace MiningVolume2023.Services
             session.TinBuiltFromSourceRevision = null;
             session.LastBuiltUtc = null;
             session.TinVisible = false;
+            session.TinCadFaceCount = 0;
+            session.TinCadIsPreview = false;
 
             if (clearCadLayer)
             {
@@ -493,17 +513,46 @@ namespace MiningVolume2023.Services
                     $"Layer {session.TinLayer} có {unexpected:n0} đối tượng không phải 3DFACE. " +
                     "Không dùng layer này để tính nhằm tránh xóa nhầm dữ liệu CAD.");
 
-            if (exists && count == session.Tin.Triangles.Count)
+            int expectedCadFaces = session.TinCadFaceCount > 0
+                ? session.TinCadFaceCount
+                : session.Tin.Triangles.Count;
+            if (exists && count == expectedCadFaces)
                 return;
 
             // If the output layer was deleted/edited manually, rebuild its CAD
             // representation from the verified in-memory TIN before computation.
+            IReadOnlyList<MiningVolume.Core.Geometry.Triangle3> preview = null;
+            if (session.TinCadIsPreview && session.Tin.Triangles is ITiledTriangleSource tiled)
+                preview = BuildCadPreview(tiled, 200000);
+
             DrawTinInternal(
                 role,
                 session.Tin,
                 session.Source,
                 session.TinBuiltFromSourceRevision.Value,
-                session.TinBuiltFromSourceUtc ?? session.Source.LastModifiedUtc);
+                session.TinBuiltFromSourceUtc ?? session.Source.LastModifiedUtc,
+                preview);
+        }
+
+        private static IReadOnlyList<MiningVolume.Core.Geometry.Triangle3> BuildCadPreview(
+            ITiledTriangleSource tiled,
+            int maxFaces)
+        {
+            var result = new List<MiningVolume.Core.Geometry.Triangle3>(
+                Math.Min(maxFaces, tiled.Count));
+            int tileCount = Math.Max(1, tiled.Tiles.Count);
+            int perTile = Math.Max(1, maxFaces / tileCount);
+
+            foreach (var tile in tiled.Tiles)
+            {
+                var tris = tiled.ReadTile(tile.Index);
+                if (tris.Count == 0) continue;
+                int step = Math.Max(1, (int)Math.Ceiling(tris.Count / (double)perTile));
+                for (int i = 0; i < tris.Count && result.Count < maxFaces; i += step)
+                    result.Add(tris[i]);
+                if (result.Count >= maxFaces) break;
+            }
+            return result;
         }
 
         public static string TinStatusText(ModelRole role)
