@@ -144,6 +144,30 @@ namespace MiningVolume.Core.Surface
                     double expected = Geometry2D.InterpolateZOnSegment(site.XY, seg);
                     if (Math.Abs(expected - site.Z) > options.ZConflictTolerance)
                     {
+                        if (options.DuplicateXYConflictPolicy == DuplicateXYConflictPolicy.UseUpper ||
+                            options.DuplicateXYConflictPolicy == DuplicateXYConflictPolicy.UseLower)
+                        {
+                            bool useUpper = options.DuplicateXYConflictPolicy == DuplicateXYConflictPolicy.UseUpper;
+                            double chosenZ = useUpper ? Math.Max(site.Z, expected) : Math.Min(site.Z, expected);
+                            var chosen = new Vec3(site.X, site.Y, chosenZ);
+
+                            // Chỉ thay trong dữ liệu chuẩn hóa của lần dựng TIN hiện tại.
+                            // Không sửa POINT hay breakline nguồn trong bản vẽ CAD.
+                            result.Sites[siteIndex] = chosen;
+                            AddMark(marks[i], t, chosen, options.XyTolerance);
+                            result.Issues.Add(new ValidationIssue(
+                                ValidationSeverity.Warning,
+                                useUpper
+                                    ? "USER_RESOLVE_POINT_ON_BREAKLINE_UPPER"
+                                    : "USER_RESOLVE_POINT_ON_BREAKLINE_LOWER",
+                                $"Điểm tại ({site.X:0.###}, {site.Y:0.###}) có Z={site.Z:0.###}, " +
+                                $"breakline {seg.SourceId} nội suy Z={expected:0.###}; theo lựa chọn người dùng, " +
+                                $"dùng đỉnh {(useUpper ? "trên" : "dưới")} Z={chosenZ:0.###}. " +
+                                "Dữ liệu CAD gốc không bị sửa.",
+                                seg.SourceId));
+                            continue;
+                        }
+
                         result.Issues.Add(new ValidationIssue(
                             ValidationSeverity.Error,
                             "POINT_ON_BREAKLINE_Z_CONFLICT",
@@ -187,6 +211,27 @@ namespace MiningVolume.Core.Surface
                         double zb = Geometry2D.InterpolateZOnSegment(xy, b);
                         if (Math.Abs(za - zb) > options.ZConflictTolerance)
                         {
+                            if (options.DuplicateXYConflictPolicy == DuplicateXYConflictPolicy.UseUpper ||
+                                options.DuplicateXYConflictPolicy == DuplicateXYConflictPolicy.UseLower)
+                            {
+                                bool useUpper = options.DuplicateXYConflictPolicy == DuplicateXYConflictPolicy.UseUpper;
+                                double chosenZ = useUpper ? Math.Max(za, zb) : Math.Min(za, zb);
+                                var chosen = new Vec3(xy.X, xy.Y, chosenZ);
+                                AddMark(marks[i], ParameterOnSegment(xy, a), chosen, options.XyTolerance);
+                                AddMark(marks[j], ParameterOnSegment(xy, b), chosen, options.XyTolerance);
+                                generatedSites.Add(chosen);
+                                result.Issues.Add(new ValidationIssue(
+                                    ValidationSeverity.Warning,
+                                    useUpper
+                                        ? "USER_RESOLVE_BREAKLINE_CROSSING_UPPER"
+                                        : "USER_RESOLVE_BREAKLINE_CROSSING_LOWER",
+                                    $"Hai breakline {a.SourceId} / {b.SourceId} cắt tại ({xy.X:0.###}, {xy.Y:0.###}) " +
+                                    $"có Z1={za:0.###}, Z2={zb:0.###}; theo lựa chọn người dùng, dùng đỉnh " +
+                                    $"{(useUpper ? "trên" : "dưới")} Z={chosenZ:0.###}. Dữ liệu CAD gốc không bị sửa."));
+                                autoCrossings++;
+                                continue;
+                            }
+
                             result.Issues.Add(new ValidationIssue(
                                 ValidationSeverity.Error,
                                 "BREAKLINE_CROSSING_Z_CONFLICT",
@@ -219,6 +264,27 @@ namespace MiningVolume.Core.Surface
                         double zb = Geometry2D.InterpolateZOnSegment(q.XY, b);
                         if (Math.Abs(za - zb) > options.ZConflictTolerance)
                         {
+                            if (options.DuplicateXYConflictPolicy == DuplicateXYConflictPolicy.UseUpper ||
+                                options.DuplicateXYConflictPolicy == DuplicateXYConflictPolicy.UseLower)
+                            {
+                                bool useUpper = options.DuplicateXYConflictPolicy == DuplicateXYConflictPolicy.UseUpper;
+                                double chosenZ = useUpper ? Math.Max(za, zb) : Math.Min(za, zb);
+                                var chosen = new Vec3(q.X, q.Y, chosenZ);
+                                AddMark(marks[i], ParameterOnSegment(q.XY, a), chosen, options.XyTolerance);
+                                AddMark(marks[j], ParameterOnSegment(q.XY, b), chosen, options.XyTolerance);
+                                generatedSites.Add(chosen);
+                                result.Issues.Add(new ValidationIssue(
+                                    ValidationSeverity.Warning,
+                                    useUpper
+                                        ? "USER_RESOLVE_BREAKLINE_OVERLAP_UPPER"
+                                        : "USER_RESOLVE_BREAKLINE_OVERLAP_LOWER",
+                                    $"Hai breakline chồng lấn {a.SourceId} / {b.SourceId} tại " +
+                                    $"({q.X:0.###}, {q.Y:0.###}) có Z1={za:0.###}, Z2={zb:0.###}; " +
+                                    $"theo lựa chọn người dùng, dùng đỉnh {(useUpper ? "trên" : "dưới")} " +
+                                    $"Z={chosenZ:0.###}. Dữ liệu CAD gốc không bị sửa."));
+                                continue;
+                            }
+
                             result.Issues.Add(new ValidationIssue(
                                 ValidationSeverity.Error,
                                 "BREAKLINE_OVERLAP_Z_CONFLICT",
