@@ -67,3 +67,10 @@ def test_manual_selection_is_persisted_by_entity_handle():
     assert "SelectedHandles" in state
     assert "SelectedHandles" in snapshot
     assert "LoadSelectedHandles" in persistence
+
+
+def test_cad_reader_skips_legacy_invalid_entities_instead_of_aborting_layer_load():
+    reader = read("src/MiningVolume.Cad2023/CadLayerSurfaceReader.cs")
+    assert "TryConvertEntity" in reader
+    assert "catch (Autodesk.AutoCAD.Runtime.Exception)" in reader
+    assert "falling back to the segment chord" in reader
