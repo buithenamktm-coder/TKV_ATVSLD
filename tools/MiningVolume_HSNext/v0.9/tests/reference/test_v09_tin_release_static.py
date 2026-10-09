@@ -53,5 +53,6 @@ def test_installer_does_not_run_autocad_selftest_on_end_user_install():
     s = read('installer/main.go')
     install_block = s[s.index('func install()'):s.index('func validatePrebuiltBundle')]
     assert 'runAutoCADSelfTest(cad)' not in install_block
-    assert 'Setup không tự mở AutoCAD' in install_block
+    assert 'Phần mềm đang được tiếp tục cải tiến và hoàn thiện.' in install_block
+    assert 'Bùi Thế Nam' in install_block and '0967280686' in install_block
     assert 'restoreBackup(backup, target)' in s
