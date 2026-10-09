@@ -140,7 +140,10 @@ namespace MiningVolume.Surface
                 var tri = new Triangle3(vertices[t.A], vertices[t.B], vertices[t.C]);
                 if (tri.Area2D <= options.MinimumTriangleArea) continue;
                 if (options.ClipBoundary != null && options.ClipBoundary.Count >= 3 &&
-                    !Geometry2D.PointInPolygon(tri.Centroid2D, options.ClipBoundary, options.XyTolerance))
+                    !Geometry2D.TriangleIntersectsPolygon(
+                        tri,
+                        options.ClipBoundary,
+                        options.XyTolerance))
                     continue;
                 output.Add(tri);
             }
