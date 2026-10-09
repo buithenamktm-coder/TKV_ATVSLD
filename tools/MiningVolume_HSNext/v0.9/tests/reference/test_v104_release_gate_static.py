@@ -39,14 +39,15 @@ def test_release_pipeline_emits_build_verification_and_vets_installer():
     assert "Source commit: $env:SOURCE_SHA" in s
     assert "Compile errors: 0" in s
     assert "AutoCAD 2023 host runtime self-test: NOT EXECUTED ON GITHUB-HOSTED RUNNER" in s
-    assert "Runtime gate: Setup runs MVSELFTEST" in s
+    assert "Runtime gate: final Setup is published only after the self-hosted AutoCAD 2023 workflow PASS." in s
 
 
-def test_installer_requires_current_runtime_selftest_and_persists_proof():
+def test_installer_does_not_launch_autocad_selftest_for_end_users():
     s = read("installer/main.go")
-    assert "MiningVolume HS-Next v0.10.4 runtime self-test" in s
-    assert "writeRuntimeVerification(cad, detail)" in s
-    assert "runtime_verification.txt" in s
+    install_block = s[s.index("func install()"):s.index("func validatePrebuiltBundle")]
+    assert "runAutoCADSelfTest(cad)" not in install_block
+    assert "Setup không tự mở AutoCAD" in install_block
+    assert "runtime verification is a release-pipeline responsibility".lower() in install_block.lower()
 
 
 def test_runtime_gate_has_real_autocad_self_hosted_workflow_and_proof():
@@ -250,7 +251,7 @@ def test_classic_menu_bar_exposes_main_miningvolume_workflow():
         "Mặt cắt",
         "Tính khối lượng",
         "Xuất Excel",
-        "^C^C_TKL ",
+        "^C^CTKL ",
     ]:
         assert token in menu
 
