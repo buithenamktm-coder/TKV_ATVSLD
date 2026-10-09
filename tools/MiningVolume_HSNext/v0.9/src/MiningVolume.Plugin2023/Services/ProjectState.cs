@@ -121,6 +121,7 @@ namespace MiningVolume2023.Services
 
         private static void ResetModel(ModelSession s)
         {
+            try { (s.Tin?.Triangles as IDisposable)?.Dispose(); } catch { }
             s.Layer = null;
             s.SourceMode = SourceSelectionMode.Layer;
             s.SelectedHandles.Clear();
