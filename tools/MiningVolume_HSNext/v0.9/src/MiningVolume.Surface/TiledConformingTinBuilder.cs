@@ -229,14 +229,11 @@ namespace MiningVolume.Surface
 
                             if (conflictIssues.Any(x => x.Severity == ValidationSeverity.Error))
                             {
-                                var first = conflictIssues
-                                    .Where(x => x.Severity == ValidationSeverity.Error)
-                                    .Take(12)
-                                    .Select(x => x.Code + ": " + x.Message);
-                                throw new InvalidOperationException(
-                                    $"Ô TIN ({ix + 1},{iy + 1}) có xung đột cao độ tại cùng XY.\r\n" +
-                                    "TIN địa hình là bề mặt 2,5D nên một XY chỉ được có một Z.\r\n\r\n" +
-                                    string.Join("\r\n", first));
+                                throw new DuplicateXYConflictException(
+                                    name,
+                                    conflictIssues
+                                        .Where(x => x.Severity == ValidationSeverity.Error)
+                                        .ToList());
                             }
 
                             if (points.Count < 3)
@@ -477,11 +474,30 @@ namespace MiningVolume.Surface
                     continue;
                 }
 
+                if (options.DuplicateXYConflictPolicy == DuplicateXYConflictPolicy.UseUpper ||
+                    options.DuplicateXYConflictPolicy == DuplicateXYConflictPolicy.UseLower)
+                {
+                    bool useUpper = options.DuplicateXYConflictPolicy == DuplicateXYConflictPolicy.UseUpper;
+                    bool chooseNew = useUpper ? p.Z > oldZ : p.Z < oldZ;
+                    double chosenZ = useUpper ? Math.Max(oldZ, p.Z) : Math.Min(oldZ, p.Z);
+                    if (chooseNew) match.Winner = item;
+                    match.Position = new Vec3(match.Position.X, match.Position.Y, chosenZ);
+
+                    issues.Add(new ValidationIssue(
+                        ValidationSeverity.Warning,
+                        useUpper ? "USER_RESOLVE_DUPLICATE_XY_UPPER" : "USER_RESOLVE_DUPLICATE_XY_LOWER",
+                        $"XY ({p.X:0.###}, {p.Y:0.###}) có hai Z mâu thuẫn {oldZ:0.###} và {p.Z:0.###}; " +
+                        $"theo lựa chọn người dùng, dùng đỉnh {(useUpper ? "trên" : "dưới")} Z={chosenZ:0.###}. " +
+                        $"Handles: {match.Winner.Entity.Handle} / {item.Entity.Handle}. Dữ liệu CAD gốc không bị sửa.",
+                        match.Winner.Entity.Id));
+                    continue;
+                }
+
                 issues.Add(new ValidationIssue(
                     ValidationSeverity.Error,
                     "DUPLICATE_XY_CONFLICT_Z",
                     $"XY ({p.X:0.###}, {p.Y:0.###}) có hai Z mâu thuẫn " +
-                    $"{match.Position.Z:0.###} và {p.Z:0.###}; cùng mức ưu tiên " +
+                    $"{oldZ:0.###} và {p.Z:0.###}; cùng mức ưu tiên " +
                     $"{TypeLabel(item.Entity.Type)}. Handles: " +
                     $"{match.Winner.Entity.Handle} / {item.Entity.Handle}.",
                     item.Entity.Id));
