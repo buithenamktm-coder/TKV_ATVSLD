@@ -28,12 +28,12 @@ def test_ribbon_failure_is_not_silently_swallowed():
 
 def test_package_autoloads_without_user_commands():
     xml = read("bundle/MiningVolume2023.bundle/PackageContents.xml")
-    assert 'AppVersion="0.10.4"' in xml
+    assert 'AppVersion="1.0.0"' in xml
     assert 'LoadOnAutoCADStartup="True"' in xml
     assert "<Commands" not in xml
 
 def test_installer_message_matches_palette_policy():
     s = read("installer/main.go")
-    assert 'version = "0.10.4"' in s
-    assert "MiningVolume không tự mở bảng theo mặc định" in s
-    assert "bảng MiningVolume sẽ tự hiện" not in s
+    assert 'version = "1.0.0"' in s
+    assert "Phần mềm đang được tiếp tục cải tiến và hoàn thiện." in s
+    assert "Bùi Thế Nam" in s and "0967280686" in s
