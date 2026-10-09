@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using MiningVolume.Core.Geometry;
@@ -126,142 +127,194 @@ namespace MiningVolume.Surface
                 }
             }
 
-            var allTriangles = new List<Triangle3>();
             var allIssues = new List<ValidationIssue>();
+            var tileInfos = new List<TinTileInfo>();
             long prepareMs = 0, triangulateMs = 0;
             int completed = 0;
             int total = nx * ny;
+            int totalTriangles = 0;
             var preparer = new SurfaceInputPreparer();
             var localBuilder = new ConformingTinBuilder();
 
-            for (int iy = 0; iy < ny; iy++)
-            for (int ix = 0; ix < nx; ix++)
+            string storeRoot = Path.Combine(
+                Path.GetTempPath(),
+                "IMSAT_MiningVolume",
+                "TinStore");
+            Directory.CreateDirectory(storeRoot);
+            string storePath = Path.Combine(
+                storeRoot,
+                "tin_" + Guid.NewGuid().ToString("N") + ".bin");
+
+            try
             {
-                cancellationToken.ThrowIfCancellationRequested();
-
-                double coreMinX = minX + ix * dx;
-                double coreMaxX = ix == nx - 1 ? maxX : coreMinX + dx;
-                double coreMinY = minY + iy * dy;
-                double coreMaxY = iy == ny - 1 ? maxY : coreMinY + dy;
-
-                TinSurface accepted = null;
-                PreparedSurfaceInput acceptedInput = null;
-                List<Triangle3> acceptedCore = null;
-
-                foreach (double haloFactor in HaloFactors)
+                using (var fs = new FileStream(
+                    storePath,
+                    FileMode.CreateNew,
+                    FileAccess.Write,
+                    FileShare.Read,
+                    4 << 20,
+                    FileOptions.SequentialScan))
+                using (var bw = new BinaryWriter(fs))
                 {
-                    cancellationToken.ThrowIfCancellationRequested();
-
-                    double hx = Math.Max(dx * haloFactor, options.XyTolerance * 100.0);
-                    double hy = Math.Max(dy * haloFactor, options.XyTolerance * 100.0);
-                    double workMinX = coreMinX - hx, workMaxX = coreMaxX + hx;
-                    double workMinY = coreMinY - hy, workMaxY = coreMaxY + hy;
-
-                    int wx0 = Ix(Math.Max(minX, workMinX));
-                    int wx1 = Ix(Math.Min(maxX, workMaxX));
-                    int wy0 = Iy(Math.Max(minY, workMinY));
-                    int wy1 = Iy(Math.Min(maxY, workMaxY));
-
-                    var points = new List<Vec3>();
-                    var segments = new List<Segment3>();
-                    for (int bx = wx0; bx <= wx1; bx++)
-                    for (int by = wy0; by <= wy1; by++)
+                    for (int iy = 0; iy < ny; iy++)
+                    for (int ix = 0; ix < nx; ix++)
                     {
-                        var b = buckets[Id(bx, by)];
-                        foreach (var p in b.Points)
-                            if (p.X >= workMinX && p.X <= workMaxX &&
-                                p.Y >= workMinY && p.Y <= workMaxY)
-                                points.Add(p);
+                        cancellationToken.ThrowIfCancellationRequested();
 
-                        foreach (var seg in b.Segments)
+                        double coreMinX = minX + ix * dx;
+                        double coreMaxX = ix == nx - 1 ? maxX : coreMinX + dx;
+                        double coreMinY = minY + iy * dy;
+                        double coreMaxY = iy == ny - 1 ? maxY : coreMinY + dy;
+
+                        PreparedSurfaceInput acceptedInput = null;
+                        List<Triangle3> acceptedCore = null;
+
+                        foreach (double haloFactor in HaloFactors)
                         {
-                            Segment3 clipped;
-                            if (TryClip(seg, workMinX, workMinY, workMaxX, workMaxY, out clipped))
-                                segments.Add(clipped);
+                            cancellationToken.ThrowIfCancellationRequested();
+
+                            double hx = Math.Max(dx * haloFactor, options.XyTolerance * 100.0);
+                            double hy = Math.Max(dy * haloFactor, options.XyTolerance * 100.0);
+                            double workMinX = coreMinX - hx, workMaxX = coreMaxX + hx;
+                            double workMinY = coreMinY - hy, workMaxY = coreMaxY + hy;
+
+                            int wx0 = Ix(Math.Max(minX, workMinX));
+                            int wx1 = Ix(Math.Min(maxX, workMaxX));
+                            int wy0 = Iy(Math.Max(minY, workMinY));
+                            int wy1 = Iy(Math.Min(maxY, workMaxY));
+
+                            var points = new List<Vec3>();
+                            var segments = new List<Segment3>();
+                            for (int bx = wx0; bx <= wx1; bx++)
+                            for (int by = wy0; by <= wy1; by++)
+                            {
+                                var b = buckets[Id(bx, by)];
+                                foreach (var p in b.Points)
+                                    if (p.X >= workMinX && p.X <= workMaxX &&
+                                        p.Y >= workMinY && p.Y <= workMaxY)
+                                        points.Add(p);
+
+                                foreach (var seg in b.Segments)
+                                {
+                                    Segment3 clipped;
+                                    if (TryClip(seg, workMinX, workMinY, workMaxX, workMaxY, out clipped))
+                                        segments.Add(clipped);
+                                }
+                            }
+
+                            if (points.Count < 3)
+                            {
+                                acceptedCore = new List<Triangle3>();
+                                break;
+                            }
+
+                            var pw = Stopwatch.StartNew();
+                            var prepared = preparer.PrepareRaw(points, segments, options);
+                            pw.Stop();
+                            prepareMs += pw.ElapsedMilliseconds;
+
+                            if (prepared.HasErrors)
+                            {
+                                var first = prepared.Issues
+                                    .Where(x => x.Severity == ValidationSeverity.Error)
+                                    .Take(10)
+                                    .Select(x => x.Code + ": " + x.Message);
+                                throw new InvalidOperationException(
+                                    $"Ô TIN ({ix + 1},{iy + 1}) có lỗi dữ liệu:\r\n" +
+                                    string.Join("\r\n", first));
+                            }
+
+                            var tw = Stopwatch.StartNew();
+                            var local = localBuilder.Build(name + $" [{ix + 1},{iy + 1}]", prepared, options);
+                            tw.Stop();
+                            triangulateMs += tw.ElapsedMilliseconds;
+
+                            var core = local.Triangles
+                                .Where(t => InCore(
+                                    t.Centroid2D,
+                                    coreMinX, coreMinY, coreMaxX, coreMaxY,
+                                    ix == nx - 1, iy == ny - 1))
+                                .ToList();
+
+                            bool stable = true;
+                            foreach (var t in core)
+                            {
+                                if (!CircumcircleInside(
+                                    t,
+                                    workMinX, workMinY, workMaxX, workMaxY,
+                                    options.XyTolerance))
+                                {
+                                    stable = false;
+                                    break;
+                                }
+                            }
+
+                            acceptedInput = prepared;
+                            acceptedCore = core;
+                            if (stable || haloFactor == HaloFactors[HaloFactors.Length - 1])
+                                break;
                         }
-                    }
 
-                    if (points.Count < 3)
-                    {
-                        acceptedCore = new List<Triangle3>();
-                        break;
-                    }
-
-                    var pw = Stopwatch.StartNew();
-                    var prepared = preparer.PrepareRaw(points, segments, options);
-                    pw.Stop();
-                    prepareMs += pw.ElapsedMilliseconds;
-
-                    if (prepared.HasErrors)
-                    {
-                        var first = prepared.Issues
-                            .Where(x => x.Severity == ValidationSeverity.Error)
-                            .Take(10)
-                            .Select(x => x.Code + ": " + x.Message);
-                        throw new InvalidOperationException(
-                            $"Ô TIN ({ix + 1},{iy + 1}) có lỗi dữ liệu:\r\n" +
-                            string.Join("\r\n", first));
-                    }
-
-                    var tw = Stopwatch.StartNew();
-                    var local = localBuilder.Build(name + $" [{ix + 1},{iy + 1}]", prepared, options);
-                    tw.Stop();
-                    triangulateMs += tw.ElapsedMilliseconds;
-
-                    var core = local.Triangles
-                        .Where(t => InCore(t.Centroid2D, coreMinX, coreMinY, coreMaxX, coreMaxY,
-                            ix == nx - 1, iy == ny - 1))
-                        .ToList();
-
-                    bool stable = true;
-                    foreach (var t in core)
-                    {
-                        if (!CircumcircleInside(t, workMinX, workMinY, workMaxX, workMaxY, options.XyTolerance))
+                        if (acceptedCore != null && acceptedCore.Count > 0)
                         {
-                            stable = false;
-                            break;
-                        }
-                    }
+                            long offset = fs.Position;
+                            foreach (var t in acceptedCore)
+                                FileBackedTiledTriangleList.WriteTriangle(bw, t);
 
-                    accepted = local;
-                    acceptedInput = prepared;
-                    acceptedCore = core;
-                    if (stable || haloFactor == HaloFactors[HaloFactors.Length - 1])
-                        break;
+                            int tileIndex = tileInfos.Count;
+                            tileInfos.Add(new TinTileInfo(
+                                tileIndex,
+                                offset,
+                                acceptedCore.Count,
+                                coreMinX, coreMinY, coreMaxX, coreMaxY));
+                            totalTriangles += acceptedCore.Count;
+                        }
+
+                        if (acceptedInput != null)
+                        {
+                            foreach (var issue in acceptedInput.Issues)
+                            {
+                                if (issue.Severity != ValidationSeverity.Info && allIssues.Count < 5000)
+                                    allIssues.Add(issue);
+                            }
+                        }
+
+                        completed++;
+                        progress?.Invoke(
+                            completed,
+                            total,
+                            $"TIN dữ liệu lớn: ô {completed:n0}/{total:n0} • tổng {totalTriangles:n0} tam giác • lưu ngoài RAM");
+                    }
+                    bw.Flush();
+                    fs.Flush(true);
                 }
 
-                if (acceptedCore != null && acceptedCore.Count > 0)
-                    allTriangles.AddRange(acceptedCore);
+                if (totalTriangles == 0)
+                    throw new InvalidOperationException("TIN dữ liệu lớn không tạo được tam giác hợp lệ.");
 
-                if (acceptedInput != null)
+                var fileBacked = new FileBackedTiledTriangleList(storePath, tileInfos, cacheTiles: 6);
+                storePath = null; // Quyền sở hữu file đã chuyển sang fileBacked.
+
+                return new Result
                 {
-                    foreach (var issue in acceptedInput.Issues)
-                    {
-                        if (issue.Severity != ValidationSeverity.Info && allIssues.Count < 5000)
-                            allIssues.Add(issue);
-                    }
-                }
-
-                completed++;
-                progress?.Invoke(completed, total,
-                    $"TIN dữ liệu lớn: ô {completed:n0}/{total:n0} • tổng {allTriangles.Count:n0} tam giác");
+                    Surface = new TinSurface(name, fileBacked, allIssues),
+                    InputVertexCount = inputVertices,
+                    InputBreaklineCount = inputBreaklines,
+                    TileCount = tileInfos.Count,
+                    WarningCount = allIssues.Count(x => x.Severity == ValidationSeverity.Warning),
+                    MinZ = minZ,
+                    MaxZ = maxZ,
+                    PrepareMilliseconds = prepareMs,
+                    TriangulationMilliseconds = triangulateMs
+                };
             }
-
-            if (allTriangles.Count == 0)
-                throw new InvalidOperationException("TIN dữ liệu lớn không tạo được tam giác hợp lệ.");
-
-            return new Result
+            finally
             {
-                Surface = new TinSurface(name, allTriangles, allIssues),
-                InputVertexCount = inputVertices,
-                InputBreaklineCount = inputBreaklines,
-                TileCount = total,
-                WarningCount = allIssues.Count(x => x.Severity == ValidationSeverity.Warning),
-                MinZ = minZ,
-                MaxZ = maxZ,
-                PrepareMilliseconds = prepareMs,
-                TriangulationMilliseconds = triangulateMs
-            };
+                if (!string.IsNullOrWhiteSpace(storePath))
+                {
+                    try { File.Delete(storePath); } catch { }
+                }
+            }
         }
 
         private static bool InCore(
