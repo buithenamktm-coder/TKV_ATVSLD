@@ -131,8 +131,16 @@ try {
             Start-Sleep -Seconds 1
         }
 
-        if (-not $proc.HasExited) {
-            if (-not $proc.WaitForExit(10000)) { $proc.Kill() }
+        # MVSELFTEST writes its PASS/FAIL proof before AutoCAD needs to exit.
+        # On some user profiles a startup command (for example MASSPROP) can seize
+        # the command line after MVSELFTEST and keep acad.exe waiting for input.
+        # Once the proof file exists, terminate this dedicated CI AutoCAD process
+        # immediately instead of exposing or waiting on unrelated profile commands.
+        if (-not $proc.HasExited -and (Test-Path $SelfTestPath)) {
+            try { $proc.Kill() } catch { }
+            try { $null = $proc.WaitForExit(5000) } catch { }
+        } elseif (-not $proc.HasExited) {
+            if (-not $proc.WaitForExit(5000)) { $proc.Kill() }
         }
 
         if (-not (Test-Path $SelfTestPath)) {
