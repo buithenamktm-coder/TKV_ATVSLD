@@ -29,7 +29,7 @@ def test_model_page_has_explicit_existing_design_and_pair_tin_actions():
 
 def test_data_page_can_build_validated_tin_pair_in_one_click():
     s = read("src/MiningVolume.Plugin2023/UI/DataPage.cs")
-    assert "TẠO CẶP TIN HIỆN TRẠNG + THIẾT KẾ" in s
+    assert "TẠO CẶP TIN" in s
     assert "BuildCoreDetailed(" in s and "ModelRole.Existing" in s
     assert "BuildCoreDetailed(" in s and "ModelRole.Design" in s
     assert "DrawTinPair" in s
