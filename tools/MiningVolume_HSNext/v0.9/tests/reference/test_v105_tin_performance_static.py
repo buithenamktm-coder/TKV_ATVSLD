@@ -110,3 +110,17 @@ def test_section_cad_output_is_batched_to_avoid_one_giant_transaction():
     assert "start == 0" in workflow
     assert "Đang vẽ mặt cắt {done:n0}/{total:n0}" in page
     assert "drawWatch.Elapsed.TotalSeconds" in page
+
+
+def test_large_mine_tin_routes_to_tiled_engine_instead_of_one_global_delaunay():
+    workflow = read("src/MiningVolume.Plugin2023/Services/SurfaceWorkflowService.cs")
+    tiled = read("src/MiningVolume.Surface/TiledConformingTinBuilder.cs")
+    preparer = read("src/MiningVolume.Core/Surface/SurfaceInputPreparer.cs")
+    assert "LargeDatasetVertexThreshold = 200000" in workflow
+    assert "new TiledConformingTinBuilder().Build" in workflow
+    assert "TargetCoreVertices = 25000" in tiled
+    assert "HaloFactors" in tiled
+    assert "CircumcircleInside" in tiled
+    assert "TryClip" in tiled
+    assert "PrepareRaw" in preparer
+    assert "10 triệu đỉnh" in workflow
