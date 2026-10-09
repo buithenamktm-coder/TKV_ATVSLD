@@ -102,8 +102,15 @@ namespace MiningVolume.Core.Volumes
         public double FromLevel { get; set; }
         public double ToLevel { get; set; }
         public double LevelStep { get; set; } = 5.0;
+
+        // Ngưỡng chênh tương đối giữa hai diện tích liền kề.
+        // 0.40 tương ứng 40% và được dùng bởi quy tắc công thức thích ứng V1.0.
+        public double AreaDifferenceThreshold { get; set; } = 0.40;
+
         public double Tolerance { get; set; } = 1e-7;
-        public bool PreferPrismoidal { get; set; } = true;
+
+        // Giữ thuộc tính cũ để đọc dữ liệu/nguồn cũ; V1.0 không ép mọi khoảng dùng prismoid.
+        public bool PreferPrismoidal { get; set; } = false;
     }
 
     public sealed class VolumeResult
