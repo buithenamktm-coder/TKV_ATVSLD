@@ -383,7 +383,12 @@ namespace MiningVolume2023.Services
                     $"Ghi TIN {session.Name} xuống AutoCAD không đầy đủ: lõi có {tin.Triangles.Count:n0} tam giác, " +
                     $"đã ghi {written:n0}.");
 
+            var previousTin = session.Tin;
             session.Tin = tin;
+            if (previousTin != null && !ReferenceEquals(previousTin, tin))
+            {
+                try { (previousTin.Triangles as IDisposable)?.Dispose(); } catch { }
+            }
             session.TinBuiltFromSourceUtc = sourceModifiedUtc;
             session.TinBuiltFromSourceRevision = sourceRevision;
             session.LastBuiltUtc = DateTime.UtcNow;
@@ -411,7 +416,12 @@ namespace MiningVolume2023.Services
         {
             var state = ProjectState.Current;
             var session = state.Get(role);
+            var oldTin = session.Tin;
             session.Tin = null;
+            if (oldTin != null)
+            {
+                try { (oldTin.Triangles as IDisposable)?.Dispose(); } catch { }
+            }
             session.TinBuiltFromSourceUtc = null;
             session.TinBuiltFromSourceRevision = null;
             session.LastBuiltUtc = null;
