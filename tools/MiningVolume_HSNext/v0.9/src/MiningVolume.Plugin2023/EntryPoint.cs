@@ -53,7 +53,7 @@ namespace MiningVolume2023
                     }
                     else
                     {
-                        StartupLog("Startup palette auto-open is OFF. Use Ribbon/menu to open MiningVolume.");
+                        StartupLog("Startup palette auto-open is OFF. Use Ribbon/menu to open IMSAT VOLUME.");
                     }
 
                     StartupUiError = null;
@@ -239,9 +239,9 @@ namespace MiningVolume2023
             var r = Services.SelfTestService.Run();
             var ed = AcApp.DocumentManager.MdiActiveDocument?.Editor;
             if (r.Passed)
-                ed?.WriteMessage("\nMiningVolume v1.0 SELFTEST: PASS (" + r.Checks.Count + " checks). Log: " + r.OutputFile);
+                ed?.WriteMessage("\nIMSAT VOLUME v1.0 SELFTEST: PASS (" + r.Checks.Count + " checks). Log: " + r.OutputFile);
             else
-                ed?.WriteMessage("\nMiningVolume v1.0 SELFTEST: FAIL (" + r.Errors.Count + " errors). Log: " + r.OutputFile);
+                ed?.WriteMessage("\nIMSAT VOLUME v1.0 SELFTEST: FAIL (" + r.Errors.Count + " errors). Log: " + r.OutputFile);
         }
 
         [CommandMethod("MVABOUT")]
