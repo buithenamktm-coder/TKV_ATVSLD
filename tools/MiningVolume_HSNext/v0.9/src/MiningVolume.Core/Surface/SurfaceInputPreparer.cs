@@ -84,6 +84,52 @@ namespace MiningVolume.Core.Surface
             return NormalizePreparedInput(result, options);
         }
 
+        /// <summary>
+        /// Đường chuẩn hóa dành riêng cho TIN phân ô. TiledConformingTinBuilder đã
+        /// giải quyết trùng XY trước khi gọi vào đây, vì vậy không lặp lại vòng
+        /// ResolveDuplicateSites đầu tiên. Sau khi NormalizeBreaklineTopology chạy,
+        /// không quét lại toàn bộ cặp breakline lần thứ hai; nếu còn topology suy
+        /// biến, ConformingTinBuilder sẽ báo đúng ràng buộc không khôi phục được.
+        /// Điều này loại hai lượt quét lớn trên mỗi halo của dữ liệu mỏ dày.
+        /// </summary>
+        public PreparedSurfaceInput PrepareRawForTiledTin(
+            IEnumerable<Vec3> uniqueSites,
+            IEnumerable<Segment3> breaklines,
+            SurfaceBuildOptions options)
+        {
+            options = options ?? new SurfaceBuildOptions();
+            if (options.XyTolerance <= 0) throw new ArgumentOutOfRangeException(nameof(options.XyTolerance));
+
+            var result = new PreparedSurfaceInput();
+            if (uniqueSites != null) result.Sites.AddRange(uniqueSites);
+            if (breaklines != null)
+            {
+                foreach (var seg in breaklines)
+                {
+                    if (seg.Length2D <= options.XyTolerance)
+                    {
+                        result.Issues.Add(new ValidationIssue(
+                            ValidationSeverity.Warning,
+                            "ZERO_LENGTH_BREAKLINE",
+                            "Bỏ qua đoạn breakline có chiều dài XY gần bằng 0.",
+                            seg.SourceId));
+                    }
+                    else result.Breaklines.Add(seg);
+                }
+            }
+
+            NormalizeBreaklineTopology(result, options);
+            ResolveDuplicateSites(result, options);
+
+            if (result.Sites.Count < 3)
+                result.Issues.Add(new ValidationIssue(
+                    ValidationSeverity.Error,
+                    "TOO_FEW_POINTS",
+                    "Mô hình cần ít nhất 3 điểm XY hợp lệ để dựng TIN."));
+
+            return result;
+        }
+
         private static PreparedSurfaceInput NormalizePreparedInput(
             PreparedSurfaceInput result,
             SurfaceBuildOptions options)
@@ -184,7 +230,6 @@ namespace MiningVolume.Core.Surface
 
             // 2) Normalize crossings/overlaps pairwise using the spatial index.
             var segIndex = new SegmentGridIndex(source, options.XyTolerance);
-            var seen = new HashSet<long>();
             var generatedSites = new List<Vec3>();
             int autoCrossings = 0;
             int overlapPairs = 0;
@@ -194,8 +239,6 @@ namespace MiningVolume.Core.Surface
                 foreach (int j in segIndex.Query(i))
                 {
                     if (j <= i) continue;
-                    long pair = ((long)i << 32) | (uint)j;
-                    if (!seen.Add(pair)) continue;
 
                     var a = source[i];
                     var b = source[j];
@@ -424,15 +467,12 @@ namespace MiningVolume.Core.Surface
             if (count < 2) return;
 
             var index = new SegmentGridIndex(result.Breaklines, options.XyTolerance);
-            var seen = new HashSet<long>();
             for (int i = 0; i < count; i++)
             {
                 var a = result.Breaklines[i];
                 foreach (int j in index.Query(i))
                 {
                     if (j <= i) continue;
-                    long pair = ((long)i << 32) | (uint)j;
-                    if (!seen.Add(pair)) continue;
                     var b = result.Breaklines[j];
 
                     if (Geometry2D.ProperIntersection(
@@ -630,7 +670,7 @@ namespace MiningVolume.Core.Surface
 
         private sealed class PointGridIndex
         {
-            private readonly Dictionary<string, List<int>> _cells = new Dictionary<string, List<int>>();
+            private readonly Dictionary<long, List<int>> _cells = new Dictionary<long, List<int>>();
             private readonly double _cell;
             private readonly double _minX, _minY;
 
@@ -651,21 +691,21 @@ namespace MiningVolume.Core.Surface
                 int ix1 = Ix(Math.Max(x0, x1) + pad);
                 int iy0 = Iy(Math.Min(y0, y1) - pad);
                 int iy1 = Iy(Math.Max(y0, y1) + pad);
-                var seen = new HashSet<int>();
 
+                // Mỗi site chỉ nằm trong đúng một cell, nên không cần cấp phát
+                // HashSet cho từng breakline query.
                 for (int ix = ix0; ix <= ix1; ix++)
                 for (int iy = iy0; iy <= iy1; iy++)
                 {
                     List<int> ids;
                     if (!_cells.TryGetValue(Key(ix, iy), out ids)) continue;
-                    foreach (var id in ids)
-                        if (seen.Add(id)) yield return id;
+                    foreach (var id in ids) yield return id;
                 }
             }
 
             private void Add(int i, double x, double y)
             {
-                string key = Key(Ix(x), Iy(y));
+                long key = Key(Ix(x), Iy(y));
                 List<int> ids;
                 if (!_cells.TryGetValue(key, out ids))
                 {
@@ -677,54 +717,72 @@ namespace MiningVolume.Core.Surface
 
             private int Ix(double x) => (int)Math.Floor((x - _minX) / _cell);
             private int Iy(double y) => (int)Math.Floor((y - _minY) / _cell);
-            private static string Key(int x, int y) => x + ":" + y;
+            private static long Key(int x, int y) => ((long)x << 32) ^ (uint)y;
         }
 
         private sealed class SegmentGridIndex
         {
-            private readonly Dictionary<string, List<int>> _cells = new Dictionary<string, List<int>>();
-            private readonly List<List<string>> _segmentCells = new List<List<string>>();
+            private readonly Dictionary<long, List<int>> _cells = new Dictionary<long, List<int>>();
+            private readonly List<List<long>> _segmentCells = new List<List<long>>();
+            private readonly int[] _visited;
+            private int _visitToken;
             private readonly double _cell, _minX, _minY;
 
             public SegmentGridIndex(IReadOnlyList<Segment3> segments, double tol)
             {
                 double maxX, maxY;
                 Bounds(
-                    segments.SelectMany(s => new[] { s.A.X, s.B.X }),
-                    segments.SelectMany(s => new[] { s.A.Y, s.B.Y }),
+                    segments.SelectMany(seg => new[] { seg.A.X, seg.B.X }),
+                    segments.SelectMany(seg => new[] { seg.A.Y, seg.B.Y }),
                     out _minX, out _minY, out maxX, out maxY);
 
                 double span = Math.Max(maxX - _minX, maxY - _minY);
                 _cell = Math.Max(tol * 100.0,
                     span / Math.Max(8.0, Math.Sqrt(Math.Max(1, segments.Count))));
+                _visited = new int[Math.Max(1, segments.Count)];
                 for (int i = 0; i < segments.Count; i++)
                     IndexSegment(i, segments[i], tol);
             }
 
             public IEnumerable<int> Query(int segmentIndex)
             {
-                var seen = new HashSet<int>();
+                int token = NextVisitToken();
                 foreach (var key in _segmentCells[segmentIndex])
                 {
                     List<int> ids;
                     if (!_cells.TryGetValue(key, out ids)) continue;
                     foreach (var id in ids)
-                        if (seen.Add(id)) yield return id;
+                    {
+                        if (_visited[id] == token) continue;
+                        _visited[id] = token;
+                        yield return id;
+                    }
                 }
             }
 
-            private void IndexSegment(int i, Segment3 s, double pad)
+            private int NextVisitToken()
             {
-                int ix0 = Ix(Math.Min(s.A.X, s.B.X) - pad);
-                int ix1 = Ix(Math.Max(s.A.X, s.B.X) + pad);
-                int iy0 = Iy(Math.Min(s.A.Y, s.B.Y) - pad);
-                int iy1 = Iy(Math.Max(s.A.Y, s.B.Y) + pad);
-                var keys = new List<string>();
+                if (_visitToken == int.MaxValue)
+                {
+                    Array.Clear(_visited, 0, _visited.Length);
+                    _visitToken = 1;
+                }
+                else _visitToken++;
+                return _visitToken;
+            }
+
+            private void IndexSegment(int i, Segment3 seg, double pad)
+            {
+                int ix0 = Ix(Math.Min(seg.A.X, seg.B.X) - pad);
+                int ix1 = Ix(Math.Max(seg.A.X, seg.B.X) + pad);
+                int iy0 = Iy(Math.Min(seg.A.Y, seg.B.Y) - pad);
+                int iy1 = Iy(Math.Max(seg.A.Y, seg.B.Y) + pad);
+                var keys = new List<long>();
 
                 for (int ix = ix0; ix <= ix1; ix++)
                 for (int iy = iy0; iy <= iy1; iy++)
                 {
-                    string key = Key(ix, iy);
+                    long key = Key(ix, iy);
                     keys.Add(key);
                     List<int> ids;
                     if (!_cells.TryGetValue(key, out ids))
@@ -739,7 +797,7 @@ namespace MiningVolume.Core.Surface
 
             private int Ix(double x) => (int)Math.Floor((x - _minX) / _cell);
             private int Iy(double y) => (int)Math.Floor((y - _minY) / _cell);
-            private static string Key(int x, int y) => x + ":" + y;
+            private static long Key(int x, int y) => ((long)x << 32) ^ (uint)y;
         }
 
         private static void Bounds(IEnumerable<double> xs, IEnumerable<double> ys,
