@@ -40,6 +40,7 @@ namespace MiningVolume.Surface
             public double MaxZ { get; set; }
             public long PrepareMilliseconds { get; set; }
             public long TriangulationMilliseconds { get; set; }
+            public IReadOnlyList<Triangle3> PreviewTriangles { get; set; }
         }
 
         public Result Build(
@@ -129,10 +130,12 @@ namespace MiningVolume.Surface
 
             var allIssues = new List<ValidationIssue>();
             var tileInfos = new List<TinTileInfo>();
+            var previewTriangles = new List<Triangle3>(200000);
             long prepareMs = 0, triangulateMs = 0;
             int completed = 0;
             int total = nx * ny;
             int totalTriangles = 0;
+            int previewPerTile = Math.Max(1, 200000 / Math.Max(1, total));
             var preparer = new SurfaceInputPreparer();
             var localBuilder = new ConformingTinBuilder();
 
@@ -268,6 +271,14 @@ namespace MiningVolume.Surface
                                 acceptedCore.Count,
                                 coreMinX, coreMinY, coreMaxX, coreMaxY));
                             totalTriangles += acceptedCore.Count;
+
+                            // AutoCAD chỉ cần bản xem trước đủ dày để kiểm tra trực quan.
+                            // TIN tính toán đầy đủ vẫn nằm trong kho tile ngoài RAM.
+                            int step = Math.Max(1, (int)Math.Ceiling(
+                                acceptedCore.Count / (double)previewPerTile));
+                            for (int i = 0; i < acceptedCore.Count &&
+                                previewTriangles.Count < 200000; i += step)
+                                previewTriangles.Add(acceptedCore[i]);
                         }
 
                         if (acceptedInput != null)
@@ -305,7 +316,8 @@ namespace MiningVolume.Surface
                     MinZ = minZ,
                     MaxZ = maxZ,
                     PrepareMilliseconds = prepareMs,
-                    TriangulationMilliseconds = triangulateMs
+                    TriangulationMilliseconds = triangulateMs,
+                    PreviewTriangles = previewTriangles
                 };
             }
             finally
