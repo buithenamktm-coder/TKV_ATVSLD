@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Threading;
 using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
 using System.Globalization;
@@ -36,9 +37,12 @@ namespace MiningVolume2023.Services
         internal SurfaceModel SourceModel { get; set; }
         public int TriangleCount => Tin?.Triangles?.Count ?? 0;
         public long CoreMilliseconds => PrepareMilliseconds + TriangulationMilliseconds;
+        public bool IsLargeDataset { get; set; }
+        public int TileCount { get; set; }
 
         public string Summary =>
             $"{SiteCount:n0} điểm TIN • {BreaklineCount:n0} đoạn breakline • {TriangleCount:n0} tam giác" +
+            (IsLargeDataset ? $" • TIN dữ liệu lớn {TileCount:n0} ô" : string.Empty) +
             $" • Z: {MinZ:0.###} → {MaxZ:0.###}" +
             $" • dựng {CoreMilliseconds / 1000.0:0.00}s" +
             (WarningCount > 0 ? $" • {WarningCount:n0} cảnh báo" : string.Empty);
@@ -169,7 +173,12 @@ namespace MiningVolume2023.Services
             };
         }
 
-        public static SurfaceBuildResult BuildCoreDetailed(ModelRole role)
+        private const int LargeDatasetVertexThreshold = 200000;
+
+        public static SurfaceBuildResult BuildCoreDetailed(
+            ModelRole role,
+            Action<string> progress = null,
+            CancellationToken cancellationToken = default(CancellationToken))
         {
             var state = ProjectState.Current;
             var session = state.Get(role);
@@ -186,12 +195,59 @@ namespace MiningVolume2023.Services
                 MinimumTriangleArea = 1e-10
             };
 
+            cancellationToken.ThrowIfCancellationRequested();
+
+            // Dữ liệu mỏ lớn không được đẩy vào một phép Bowyer-Watson toàn cục.
+            // Từ ngưỡng này chuyển sang TIN phân ô có halo, giữ breakline và kiểm
+            // tra ổn định biên. Kiến trúc này hướng tới cỡ ~10 triệu đỉnh/mô hình.
+            if (session.ActiveVertexCount >= LargeDatasetVertexThreshold)
+            {
+                progress?.Invoke(
+                    $"Dữ liệu lớn: {session.ActiveVertexCount:n0} đỉnh. " +
+                    "Đang dựng TIN phân ô, không giảm điểm âm thầm...");
+
+                var tiled = new TiledConformingTinBuilder().Build(
+                    session.Name,
+                    source,
+                    options,
+                    (done, total, message) => progress?.Invoke(message),
+                    cancellationToken);
+
+                if (tiled.Surface == null || tiled.Surface.Triangles == null ||
+                    tiled.Surface.Triangles.Count == 0)
+                    throw new InvalidOperationException($"TIN {session.Name} không tạo được tam giác hợp lệ.");
+
+                if (!ReferenceEquals(session.Source, source) || source.Revision != sourceRevision)
+                    throw new InvalidOperationException(
+                        $"Dữ liệu {session.Name} đã thay đổi trong lúc đang dựng TIN. " +
+                        "Kết quả tạm bị hủy; hãy tạo/cập nhật TIN lại.");
+
+                return new SurfaceBuildResult
+                {
+                    Role = role,
+                    Tin = tiled.Surface,
+                    SiteCount = tiled.InputVertexCount,
+                    BreaklineCount = tiled.InputBreaklineCount,
+                    WarningCount = tiled.WarningCount,
+                    MinZ = tiled.MinZ,
+                    MaxZ = tiled.MaxZ,
+                    SourceModifiedUtc = sourceModified,
+                    SourceRevision = sourceRevision,
+                    PrepareMilliseconds = tiled.PrepareMilliseconds,
+                    TriangulationMilliseconds = tiled.TriangulationMilliseconds,
+                    SourceModel = source,
+                    IsLargeDataset = true,
+                    TileCount = tiled.TileCount
+                };
+            }
+
             var prepareWatch = Stopwatch.StartNew();
             var prepared = new SurfaceInputPreparer().Prepare(source, options);
             prepareWatch.Stop();
             if (prepared.HasErrors)
                 throw new SurfaceValidationException(session.Name, prepared.Issues);
 
+            cancellationToken.ThrowIfCancellationRequested();
             var triangulationWatch = Stopwatch.StartNew();
             var tin = new ConformingTinBuilder().Build(session.Name, prepared, options);
             triangulationWatch.Stop();
@@ -216,21 +272,29 @@ namespace MiningVolume2023.Services
                 SourceRevision = sourceRevision,
                 PrepareMilliseconds = prepareWatch.ElapsedMilliseconds,
                 TriangulationMilliseconds = triangulationWatch.ElapsedMilliseconds,
-                SourceModel = source
+                SourceModel = source,
+                IsLargeDataset = false,
+                TileCount = 1
             };
         }
 
         // Backward-compatible core entry used by project restore.
         public static TinSurface BuildCore(ModelRole role) => BuildCoreDetailed(role).Tin;
 
-        public static SurfaceBuildResult[] BuildPairCoreDetailed()
+        public static SurfaceBuildResult[] BuildPairCoreDetailed(
+            Action<string> progress = null,
+            CancellationToken cancellationToken = default(CancellationToken))
         {
             // Build both pure-core surfaces before touching the DWG. If either fails,
             // neither CAD TIN is replaced.
             return new[]
             {
-                BuildCoreDetailed(ModelRole.Existing),
-                BuildCoreDetailed(ModelRole.Design)
+                BuildCoreDetailed(ModelRole.Existing,
+                    message => progress?.Invoke("Hiện trạng: " + message),
+                    cancellationToken),
+                BuildCoreDetailed(ModelRole.Design,
+                    message => progress?.Invoke("Thiết kế: " + message),
+                    cancellationToken)
             };
         }
 
