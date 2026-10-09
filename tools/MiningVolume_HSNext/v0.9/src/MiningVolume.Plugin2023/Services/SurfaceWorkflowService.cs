@@ -190,28 +190,56 @@ namespace MiningVolume2023.Services
             var source = session.Source;
             var sourceModified = source.LastModifiedUtc;
             var sourceRevision = source.Revision;
+            var clipBoundary = state.HasTinRegion
+                ? state.TinRegionPolygon.ToArray()
+                : null;
+
             var options = new SurfaceBuildOptions
             {
                 XyTolerance = 1e-6,
                 ZConflictTolerance = 1e-4,
                 MinimumTriangleArea = 1e-10,
-                DuplicateXYConflictPolicy = duplicateXYPolicy
+                DuplicateXYConflictPolicy = duplicateXYPolicy,
+                ClipBoundary = clipBoundary
             };
+
+            cancellationToken.ThrowIfCancellationRequested();
+
+            // V1.0 cho phép chỉ dựng TIN trong vùng người dùng chọn trên CAD.
+            // Việc lọc/cắt nguồn diễn ra trước triangulation để giảm mạnh số điểm
+            // phải xử lý; nguồn gốc trong ProjectState không bị sửa.
+            var buildSource = source;
+            if (clipBoundary != null && clipBoundary.Length >= 3)
+            {
+                progress?.Invoke("Đang lọc dữ liệu theo vùng TIN đã chọn trên CAD...");
+                buildSource = SurfaceRegionClipper.Clip(
+                    source,
+                    clipBoundary,
+                    options.XyTolerance,
+                    cancellationToken);
+            }
+
+            int buildVertexCount = CountActiveVertices(buildSource);
+            if (buildVertexCount < 3)
+                throw new InvalidOperationException(
+                    $"Vùng tạo TIN của {session.Name} không có đủ 3 đỉnh hợp lệ. " +
+                    "Hãy chọn vùng lớn hơn hoặc kiểm tra dữ liệu nguồn.");
 
             cancellationToken.ThrowIfCancellationRequested();
 
             // Dữ liệu mỏ lớn không được đẩy vào một phép Bowyer-Watson toàn cục.
             // Từ ngưỡng này chuyển sang TIN phân ô có halo, giữ breakline và kiểm
             // tra ổn định biên. Kiến trúc này hướng tới cỡ ~10 triệu đỉnh/mô hình.
-            if (session.ActiveVertexCount >= LargeDatasetVertexThreshold)
+            if (buildVertexCount >= LargeDatasetVertexThreshold)
             {
                 progress?.Invoke(
-                    $"Dữ liệu lớn: {session.ActiveVertexCount:n0} đỉnh. " +
+                    $"Dữ liệu cần dựng: {buildVertexCount:n0} đỉnh" +
+                    (clipBoundary != null ? " trong vùng chọn. " : ". ") +
                     "Đang dựng TIN phân ô, không giảm điểm âm thầm...");
 
                 var tiled = new TiledConformingTinBuilder().Build(
                     session.Name,
-                    source,
+                    buildSource,
                     options,
                     (done, total, message) => progress?.Invoke(message),
                     cancellationToken);
@@ -246,7 +274,7 @@ namespace MiningVolume2023.Services
             }
 
             var prepareWatch = Stopwatch.StartNew();
-            var prepared = new SurfaceInputPreparer().Prepare(source, options);
+            var prepared = new SurfaceInputPreparer().Prepare(buildSource, options);
             prepareWatch.Stop();
             if (prepared.HasErrors)
             {
@@ -583,6 +611,17 @@ namespace MiningVolume2023.Services
             if (!s.IsTinCurrent)
                 return $"{s.Name}: TIN CẦN CẬP NHẬT → {s.TinLayer}";
             return $"{s.Name}: TIN HỢP LỆ {s.Tin.Triangles.Count:n0} tam giác → {s.TinLayer}";
+        }
+
+        private static int CountActiveVertices(SurfaceModel model)
+        {
+            if (model == null) return 0;
+            int count = 0;
+            foreach (var entity in model.Entities)
+                if (entity.IsEnabled)
+                    foreach (var vertex in entity.Vertices)
+                        if (vertex.IsEnabled) count++;
+            return count;
         }
 
         public static void SetTinVisible(ModelRole role, bool visible)
