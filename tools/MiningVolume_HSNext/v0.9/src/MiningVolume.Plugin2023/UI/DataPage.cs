@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using MiningVolume.Core.Model;
+using MiningVolume.Core.Surface;
 using MiningVolume2023.Services;
 
 namespace MiningVolume2023.UI
@@ -294,20 +295,12 @@ namespace MiningVolume2023.UI
                 var totalWatch = Stopwatch.StartNew();
 
                 SetBuildStatus($"Đang dựng TIN hiện trạng từ {st.Existing.ActiveVertexCount:n0} đỉnh...");
-                var existing = await Task.Run(() =>
-                    SurfaceWorkflowService.BuildCoreDetailed(
-                        ModelRole.Existing,
-                        message => SetBuildStatus(message),
-                        token), token);
+                var existing = await BuildRoleWithConflictChoiceAsync(ModelRole.Existing, token);
 
                 SetBuildStatus(
                     $"Hiện trạng xong ({existing.TriangleCount:n0} tam giác, {existing.CoreMilliseconds / 1000.0:0.00}s). " +
                     $"Đang dựng TIN thiết kế từ {st.Design.ActiveVertexCount:n0} đỉnh...");
-                var design = await Task.Run(() =>
-                    SurfaceWorkflowService.BuildCoreDetailed(
-                        ModelRole.Design,
-                        message => SetBuildStatus(message),
-                        token), token);
+                var design = await BuildRoleWithConflictChoiceAsync(ModelRole.Design, token);
 
                 token.ThrowIfCancellationRequested();
                 var builds = new[] { existing, design };
@@ -358,6 +351,45 @@ namespace MiningVolume2023.UI
                 _buildCts.Dispose();
                 _buildCts = null;
                 RefreshPairButton();
+            }
+        }
+
+        private async Task<SurfaceBuildResult> BuildRoleWithConflictChoiceAsync(
+            ModelRole role,
+            CancellationToken token)
+        {
+            var policy = DuplicateXYConflictPolicy.Stop;
+            var session = ProjectState.Current.Get(role);
+
+            while (true)
+            {
+                token.ThrowIfCancellationRequested();
+                try
+                {
+                    return await Task.Run(() =>
+                        SurfaceWorkflowService.BuildCoreDetailed(
+                            role,
+                            message => SetBuildStatus(message),
+                            token,
+                            policy), token);
+                }
+                catch (DuplicateXYConflictException ex)
+                {
+                    token.ThrowIfCancellationRequested();
+
+                    var chosen = DuplicateXYConflictUi.Ask(this, ex);
+                    if (!chosen.HasValue)
+                        throw new OperationCanceledException(
+                            "Người dùng dừng tạo TIN do dữ liệu trùng XY khác Z.",
+                            token);
+
+                    policy = chosen.Value;
+                    SetBuildStatus(
+                        $"Đang dựng lại TIN {session.Name}: " +
+                        (policy == DuplicateXYConflictPolicy.UseUpper
+                            ? "dùng đỉnh trên (Z lớn hơn) tại vị trí trùng XY..."
+                            : "dùng đỉnh dưới (Z nhỏ hơn) tại vị trí trùng XY..."));
+                }
             }
         }
 
