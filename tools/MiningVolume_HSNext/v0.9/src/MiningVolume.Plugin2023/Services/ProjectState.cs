@@ -81,6 +81,14 @@ namespace MiningVolume2023.Services
         public ModelSession Design { get; } = new ModelSession(ModelRole.Design, "Thiết kế", "MV_TIN_THIETKE");
         public ModelRole ActiveRole { get; set; } = ModelRole.Existing;
         public string BoundaryHandle { get; set; }
+
+        // V1.0: vùng tùy chọn dùng để chỉ dựng TIN trong khu vực cần tính.
+        // Polygon được chụp tại thời điểm chọn để phần dựng core không gọi AutoCAD API
+        // từ background thread.
+        public string TinRegionHandle { get; set; }
+        public List<Vec2> TinRegionPolygon { get; } = new List<Vec2>();
+        public bool HasTinRegion => TinRegionPolygon.Count >= 3;
+
         public Vec2? SectionDirection { get; set; }
         public SectionSystem SectionSystem { get; set; }
         public List<SectionProfile> SectionProfiles { get; } = new List<SectionProfile>();
@@ -106,6 +114,8 @@ namespace MiningVolume2023.Services
             ResetModel(Design);
             ActiveRole = ModelRole.Existing;
             BoundaryHandle = null;
+            TinRegionHandle = null;
+            TinRegionPolygon.Clear();
             SectionDirection = null;
             SectionSystem = null;
             SectionProfiles.Clear();
