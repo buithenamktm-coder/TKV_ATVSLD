@@ -51,7 +51,7 @@ def test_large_tin_delaunay_uses_x_sweep_and_cached_circumcircles():
 def test_breakline_recovery_reuses_adjacency_and_spatial_edge_index():
     s = read("src/MiningVolume.Surface/ConformingTinBuilder.cs")
     build = s[s.index("public TinSurface Build"):s.index("private static List<Tri> BowyerWatson")]
-    recover = s[s.index("private static void RecoverConstraint"):s.index("private static bool TryFlip")]
+    recover = s[s.index("private static void RecoverConstraint"):s.index("private static int ConstraintVertexDegree")]
     assert "var adjacency = BuildAdjacency(tris)" in build
     assert "var edgeIndex = new EdgeGridIndex" in build
     assert "BuildAdjacency(tris)" not in recover
@@ -234,11 +234,11 @@ def test_breakline_recovery_falls_back_to_collinear_interior_site_chain():
     s = read("src/MiningVolume.Surface/ConformingTinBuilder.cs")
     assert "TryRecoverConstraintThroughInteriorSites" in s
     assert "Geometry2D.PointOnSegment" in s
-    assert "onLineTol = Math.Max(tol * 10.0, 1e-8)" in s
+    assert "onLineTol = Math.Max(tol * 100.0, 1e-4)" in s
     assert "tris, vertices, sub, locked, adjacency, edgeIndex, tol, cancellationToken" in s
     assert "if (adjacency.ContainsKey(sub))" in s
     assert "if (adjacency.ContainsKey(constraint))" in s
-    assert "Không có cạnh cắt và cũng không tìm thấy chuỗi site trung gian" in s
+    assert "không có chuỗi cạnh gần thẳng hàng" in s
 
 
 def test_proper_intersection_uses_dimensionally_correct_tolerance_and_recovery_has_index_fallback():
