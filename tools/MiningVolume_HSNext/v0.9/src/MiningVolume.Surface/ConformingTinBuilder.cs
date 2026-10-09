@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using MiningVolume.Core.Geometry;
 using MiningVolume.Core.Surface;
 
@@ -57,6 +58,14 @@ namespace MiningVolume.Surface
         }
 
         public TinSurface Build(string name, PreparedSurfaceInput input, SurfaceBuildOptions options)
+            => Build(name, input, options, null, default(CancellationToken));
+
+        public TinSurface Build(
+            string name,
+            PreparedSurfaceInput input,
+            SurfaceBuildOptions options,
+            Action<string> progress,
+            CancellationToken cancellationToken)
         {
             if (input == null) throw new ArgumentNullException(nameof(input));
             options = options ?? new SurfaceBuildOptions();
@@ -67,7 +76,12 @@ namespace MiningVolume.Surface
 
             var vertices = new List<Vec3>(input.Sites);
             int realCount = vertices.Count;
-            var tris = BowyerWatson(vertices, realCount, options.XyTolerance);
+            var tris = BowyerWatson(
+                vertices,
+                realCount,
+                options.XyTolerance,
+                progress,
+                cancellationToken);
             if (tris.Count == 0)
                 throw new InvalidOperationException("Không tạo được tam giác Delaunay từ dữ liệu đầu vào.");
 
@@ -81,8 +95,14 @@ namespace MiningVolume.Surface
             var adjacency = BuildAdjacency(tris);
             var edgeIndex = new EdgeGridIndex(vertices, realCount, adjacency.Keys, options.XyTolerance);
 
+            int breaklineDone = 0;
+            int breaklineTotal = input.Breaklines.Count;
             foreach (var seg in input.Breaklines)
             {
+                cancellationToken.ThrowIfCancellationRequested();
+                if ((breaklineDone & 255) == 0)
+                    progress?.Invoke(
+                        $"khôi phục breakline {breaklineDone:n0}/{breaklineTotal:n0}...");
                 int a = siteIndex.Find(seg.A);
                 int b = siteIndex.Find(seg.B);
                 if (a < 0 || b < 0)
@@ -91,14 +111,27 @@ namespace MiningVolume.Surface
 
                 var constraint = new EdgeKey(a, b);
                 if (!adjacency.ContainsKey(constraint))
-                    RecoverConstraint(tris, vertices, constraint, locked, adjacency, edgeIndex, options.XyTolerance);
+                    RecoverConstraint(
+                        tris,
+                        vertices,
+                        constraint,
+                        locked,
+                        adjacency,
+                        edgeIndex,
+                        options.XyTolerance,
+                        cancellationToken);
 
                 // RecoverConstraint có thể biểu diễn một breakline bằng chuỗi cạnh
                 // collinear qua các site trung gian. Chỉ khóa cạnh gốc khi cạnh đó
                 // thực sự tồn tại; các cạnh con đã được khóa ngay trong fallback.
                 if (adjacency.ContainsKey(constraint))
                     locked.Add(constraint);
+
+                breaklineDone++;
             }
+
+            progress?.Invoke(
+                $"khôi phục breakline {breaklineTotal:n0}/{breaklineTotal:n0} • đang xuất tam giác...");
 
             var output = new List<Triangle3>();
             foreach (var t in tris)
@@ -118,7 +151,12 @@ namespace MiningVolume.Surface
             return new TinSurface(name, output, input.Issues.ToArray());
         }
 
-        private static List<Tri> BowyerWatson(List<Vec3> vertices, int realCount, double tol)
+        private static List<Tri> BowyerWatson(
+            List<Vec3> vertices,
+            int realCount,
+            double tol,
+            Action<string> progress,
+            CancellationToken cancellationToken)
         {
             double minX = vertices[0].X, maxX = vertices[0].X;
             double minY = vertices[0].Y, maxY = vertices[0].Y;
@@ -153,8 +191,16 @@ namespace MiningVolume.Surface
             var open = new List<WorkTri> { seedWork };
             var completed = new List<Tri>(Math.Max(4, realCount * 2));
 
-            foreach (int p in order)
+            for (int orderIndex = 0; orderIndex < order.Length; orderIndex++)
             {
+                if ((orderIndex & 1023) == 0)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    progress?.Invoke(
+                        $"Delaunay {orderIndex:n0}/{realCount:n0} điểm...");
+                }
+
+                int p = order[orderIndex];
                 var point = vertices[p];
                 var boundaryCount = new Dictionary<EdgeKey, int>();
                 var next = new List<WorkTri>(open.Count + 8);
@@ -202,6 +248,7 @@ namespace MiningVolume.Surface
             for (int i = 0; i < open.Count; i++) completed.Add(open[i].T);
             completed.RemoveAll(t => t.Has(s0) || t.Has(s1) || t.Has(s2));
             vertices.RemoveRange(realCount, vertices.Count - realCount);
+            progress?.Invoke($"Delaunay {realCount:n0}/{realCount:n0} điểm.");
             return completed;
         }
 
@@ -246,7 +293,8 @@ namespace MiningVolume.Surface
             HashSet<EdgeKey> locked,
             Dictionary<EdgeKey, List<int>> adjacency,
             EdgeGridIndex edgeIndex,
-            double tol)
+            double tol,
+            CancellationToken cancellationToken)
         {
             if (adjacency.ContainsKey(constraint)) return;
 
@@ -270,7 +318,7 @@ namespace MiningVolume.Surface
             if (pending.Count == 0)
             {
                 if (TryRecoverConstraintThroughInteriorSites(
-                    tris, vertices, constraint, locked, adjacency, edgeIndex, tol))
+                    tris, vertices, constraint, locked, adjacency, edgeIndex, tol, cancellationToken))
                     return;
 
                 throw new InvalidOperationException(
@@ -286,6 +334,7 @@ namespace MiningVolume.Surface
 
             while (!adjacency.ContainsKey(constraint))
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 if (pending.Count == 0)
                 {
                     foreach (var crossingEdge in CrossingEdgesOrdered(
@@ -362,7 +411,8 @@ namespace MiningVolume.Surface
             HashSet<EdgeKey> locked,
             Dictionary<EdgeKey, List<int>> adjacency,
             EdgeGridIndex edgeIndex,
-            double tol)
+            double tol,
+            CancellationToken cancellationToken)
         {
             Vec2 a = vertices[constraint.A].XY;
             Vec2 b = vertices[constraint.B].XY;
@@ -387,6 +437,7 @@ namespace MiningVolume.Surface
 
             for (int i = 0; i < vertices.Count; i++)
             {
+                if ((i & 2047) == 0) cancellationToken.ThrowIfCancellationRequested();
                 if (i == constraint.A || i == constraint.B) continue;
                 Vec2 p = vertices[i].XY;
                 if (!Geometry2D.PointOnSegment(p, a, b, onLineTol)) continue;
@@ -424,7 +475,8 @@ namespace MiningVolume.Surface
 
                 var sub = new EdgeKey(u, v);
                 if (!adjacency.ContainsKey(sub))
-                    RecoverConstraint(tris, vertices, sub, locked, adjacency, edgeIndex, tol);
+                    RecoverConstraint(
+                        tris, vertices, sub, locked, adjacency, edgeIndex, tol, cancellationToken);
 
                 if (adjacency.ContainsKey(sub))
                     locked.Add(sub);
