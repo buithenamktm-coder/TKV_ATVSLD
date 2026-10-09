@@ -148,7 +148,7 @@ def test_large_tin_is_file_backed_and_cad_render_is_bounded_preview():
 def test_large_tin_ui_has_progress_and_user_cancel():
     data = read("src/MiningVolume.Plugin2023/UI/DataPage.cs")
     assert "CancellationTokenSource" in data
-    assert "HỦY DỰNG TIN" in data
+    assert 'Btn("Hủy"' in data
     assert "_buildCts.Cancel()" in data
     assert "OperationCanceledException" in data
     assert "SetBuildStatus" in data
@@ -280,3 +280,10 @@ def test_large_tin_processes_independent_tiles_in_parallel_with_bounded_workers(
     assert "Interlocked.Add(ref triangulateMs" in tiled
     assert "AggregateException" in tiled
     assert "TIN dữ liệu lớn: {doneNow:n0}/{total:n0} ô xong" in tiled
+
+
+def test_large_tin_parallel_failure_retries_stable_single_worker():
+    tiled = read("src/MiningVolume.Surface/TiledConformingTinBuilder.cs")
+    assert "ParallelTileRetryException" in tiled
+    assert "forcedWorkerCount: 1" in tiled
+    assert "đang tự chuyển sang chế độ ổn định 1 luồng" in tiled
