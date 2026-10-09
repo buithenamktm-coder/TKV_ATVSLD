@@ -24,7 +24,7 @@ import (
 var payloadFS embed.FS
 
 const (
-    productName = "IMSAT MiningVolume HS-Next for AutoCAD 2023"
+    productName = "IMSAT VOLUME for AutoCAD 2023"
     version = "1.0.0"
     uninstallKey = `HKLM\Software\Microsoft\Windows\CurrentVersion\Uninstall\MiningVolume2023`
 )
@@ -42,7 +42,7 @@ func main() {
 
 func install() {
     if processRunning("acad.exe") {
-        msg("Hãy đóng toàn bộ AutoCAD 2023 trước khi cài MiningVolume.", 0x10); return
+        msg("Hãy đóng toàn bộ AutoCAD 2023 trước khi cài IMSAT VOLUME.", 0x10); return
     }
     cad, err := findAutoCAD2023()
     if err != nil { msg(err.Error(), 0x10); return }
@@ -89,7 +89,7 @@ func install() {
         msg("MiningVolume đã được chép vào AutoCAD nhưng chưa ghi được mục gỡ cài đặt: "+err.Error(), 0x30); return
     }
     writePersistentLog("install", "Status=INSTALLED\r\nAutoCAD="+filepath.Join(cad,"acad.exe"))
-    msg("Cài đặt IMSAT MiningVolume thành công.\n\nPhần mềm đang được tiếp tục cải tiến và hoàn thiện.\nMọi ý kiến đóng góp vui lòng liên hệ:\n\nBùi Thế Nam\nĐiện thoại: 0967280686", 0x40)
+    msg("Cài đặt IMSAT VOLUME thành công.\n\nPhần mềm đang được tiếp tục cải tiến và hoàn thiện.\nMọi ý kiến đóng góp vui lòng liên hệ:\n\nBùi Thế Nam\nĐiện thoại: 0967280686", 0x40)
 }
 
 func validatePrebuiltBundle(root string) error {
@@ -139,13 +139,13 @@ func validatePrebuiltBundle(root string) error {
 }
 
 func uninstall() {
-    if processRunning("acad.exe") { msg("Hãy đóng AutoCAD trước khi gỡ MiningVolume.", 0x10); return }
+    if processRunning("acad.exe") { msg("Hãy đóng AutoCAD trước khi gỡ IMSAT VOLUME.", 0x10); return }
     programData := os.Getenv("ProgramData"); if programData=="" { programData=`C:\ProgramData` }
     target := filepath.Join(programData,"Autodesk","ApplicationPlugins","MiningVolume2023.bundle")
     os.RemoveAll(target)
-    os.Remove(filepath.Join(programData, "Microsoft", "Windows", "Start Menu", "Programs", "IMSAT MiningVolume.lnk"))
+    os.Remove(filepath.Join(programData, "Microsoft", "Windows", "Start Menu", "Programs", "IMSAT VOLUME.lnk"))
     exec.Command("reg","delete",uninstallKey,"/f").Run()
-    msg("Đã gỡ MiningVolume khỏi AutoCAD.", 0x40)
+    msg("Đã gỡ IMSAT VOLUME khỏi AutoCAD.", 0x40)
 }
 
 func runAutoCADSelfTest(cad string) (bool, string) {
@@ -218,12 +218,12 @@ func createStartMenuShortcut(cadDir, iconExe string) error {
     programData := os.Getenv("ProgramData"); if programData=="" { programData=`C:\ProgramData` }
     menuDir := filepath.Join(programData, "Microsoft", "Windows", "Start Menu", "Programs")
     if err := os.MkdirAll(menuDir, 0755); err != nil { return err }
-    shortcut := filepath.Join(menuDir, "IMSAT MiningVolume.lnk")
+    shortcut := filepath.Join(menuDir, "IMSAT VOLUME.lnk")
     target := filepath.Join(cadDir, "acad.exe")
     ps := "$s=(New-Object -ComObject WScript.Shell).CreateShortcut(" + psQuote(shortcut) + ");" +
         "$s.TargetPath=" + psQuote(target) + ";" +
         "$s.WorkingDirectory=" + psQuote(cadDir) + ";" +
-        "$s.Description='IMSAT MiningVolume - Mine Survey & Earthwork';" +
+        "$s.Description='IMSAT VOLUME - Mine Survey & Earthwork';" +
         "$s.IconLocation=" + psQuote(iconExe + ",0") + ";" +
         "$s.Save()"
     return exec.Command("powershell.exe","-NoProfile","-WindowStyle","Hidden","-Command",ps).Run()
