@@ -20,7 +20,7 @@ def test_pair_build_does_not_rescan_just_written_cad_layers():
     draw = s[s.index("private static void DrawTinInternal"):s.index("public static void EnsureOutputLayer")]
     assert "EnsureBothTinsReady(synchronizeCadLayers: false)" in pair
     assert "TinCadRenderer.CountFaces(" not in draw
-    assert "written != tin.Triangles.Count" in draw
+    assert "written != expectedCadFaces" in draw
 
 def test_breakline_endpoint_lookup_uses_spatial_site_index():
     s = read("src/MiningVolume.Surface/ConformingTinBuilder.cs")
