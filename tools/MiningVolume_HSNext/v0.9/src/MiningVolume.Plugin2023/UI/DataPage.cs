@@ -17,6 +17,7 @@ namespace MiningVolume2023.UI
         private readonly ComboBox _designLayer;
         private readonly CheckedListBox _types;
         private readonly Label _status;
+        private readonly Label _tinRegionStatus;
         private readonly Button _buildPair;
         private readonly Button _cancelBuild;
         private CancellationTokenSource _buildCts;
@@ -119,6 +120,38 @@ namespace MiningVolume2023.UI
             typeBox.Controls.Add(typePanel);
             body.Controls.Add(typeBox);
 
+            var regionBox = new GroupBox
+            {
+                Text = "Phạm vi tạo TIN",
+                Width = 520,
+                Height = 92,
+                Margin = new Padding(0, 0, 0, 12)
+            };
+            var regionLayout = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 3,
+                RowCount = 1,
+                Padding = new Padding(10, 8, 10, 8)
+            };
+            regionLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            regionLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 128));
+            regionLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 118));
+            _tinRegionStatus = new Label
+            {
+                Dock = DockStyle.Fill,
+                TextAlign = ContentAlignment.MiddleLeft,
+                ForeColor = UiTheme.Muted,
+                Text = "Toàn bộ dữ liệu đã nạp."
+            };
+            regionLayout.Controls.Add(_tinRegionStatus, 0, 0);
+            regionLayout.Controls.Add(
+                Btn("Chọn vùng trên CAD", (s, e) => SelectTinRegion()), 1, 0);
+            regionLayout.Controls.Add(
+                Btn("Dùng toàn bộ", (s, e) => ClearTinRegion()), 2, 0);
+            regionBox.Controls.Add(regionLayout);
+            body.Controls.Add(regionBox);
+
             var statusBox = new GroupBox
             {
                 Text = "Trạng thái mô hình",
@@ -181,6 +214,7 @@ namespace MiningVolume2023.UI
                 int width = Math.Max(420, body.ClientSize.Width - body.Padding.Horizontal - 4);
                 sourceBox.Width = width;
                 typeBox.Width = width;
+                regionBox.Width = width;
                 statusBox.Width = width;
                 actions.Width = width;
             };
@@ -190,6 +224,7 @@ namespace MiningVolume2023.UI
             header.BringToFront();
 
             RefreshLayers();
+            RefreshTinRegionStatus();
             RefreshPairButton();
         }
 
@@ -294,7 +329,10 @@ namespace MiningVolume2023.UI
                 UseWaitCursor = true;
                 var totalWatch = Stopwatch.StartNew();
 
-                SetBuildStatus($"Đang dựng TIN hiện trạng từ {st.Existing.ActiveVertexCount:n0} đỉnh...");
+                SetBuildStatus(
+                    st.HasTinRegion
+                        ? $"Đang dựng TIN hiện trạng trong vùng chọn ({st.TinRegionPolygon.Count:n0} đỉnh biên)..."
+                        : $"Đang dựng TIN hiện trạng từ {st.Existing.ActiveVertexCount:n0} đỉnh...");
                 var existing = await BuildRoleWithConflictChoiceAsync(ModelRole.Existing, token);
 
                 SetBuildStatus(
@@ -403,6 +441,77 @@ namespace MiningVolume2023.UI
             }
             _status.Text = message;
             _status.Refresh();
+        }
+
+        private void SelectTinRegion()
+        {
+            var handle = SelectionService.PickClosedBoundary();
+            if (string.IsNullOrWhiteSpace(handle))
+            {
+                _status.Text = "Đã hủy chọn vùng tạo TIN.";
+                return;
+            }
+
+            try
+            {
+                var polygon = BoundaryGeometryService.ReadBoundary(handle);
+                if (polygon == null || polygon.Count < 3)
+                    throw new InvalidOperationException("Vùng tạo TIN không có đủ đỉnh hợp lệ.");
+
+                var state = ProjectState.Current;
+                state.TinRegionHandle = handle;
+                state.TinRegionPolygon.Clear();
+                state.TinRegionPolygon.AddRange(polygon);
+
+                // Thay đổi phạm vi tạo TIN làm cả hai TIN cũ mất hiệu lực.
+                SurfaceWorkflowService.InvalidateTin(
+                    ModelRole.Existing, clearCadLayer: true, notify: false);
+                SurfaceWorkflowService.InvalidateTin(
+                    ModelRole.Design, clearCadLayer: true, notify: false);
+                state.NotifyChanged();
+
+                RefreshTinRegionStatus();
+                _status.Text =
+                    $"Đã chọn vùng tạo TIN chung cho Hiện trạng + Thiết kế: " +
+                    $"{polygon.Count:n0} đỉnh biên. Chỉ dữ liệu trong vùng này sẽ được dựng TIN.";
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    ex.Message,
+                    "Không chọn được vùng tạo TIN",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
+                _status.Text = "Chọn vùng tạo TIN thất bại.";
+            }
+        }
+
+        private void ClearTinRegion()
+        {
+            var state = ProjectState.Current;
+            bool hadRegion = state.HasTinRegion;
+            state.TinRegionHandle = null;
+            state.TinRegionPolygon.Clear();
+
+            if (hadRegion)
+            {
+                SurfaceWorkflowService.InvalidateTin(
+                    ModelRole.Existing, clearCadLayer: true, notify: false);
+                SurfaceWorkflowService.InvalidateTin(
+                    ModelRole.Design, clearCadLayer: true, notify: false);
+                state.NotifyChanged();
+            }
+
+            RefreshTinRegionStatus();
+            _status.Text = "Phạm vi tạo TIN: dùng toàn bộ dữ liệu đã nạp.";
+        }
+
+        private void RefreshTinRegionStatus()
+        {
+            var state = ProjectState.Current;
+            _tinRegionStatus.Text = state.HasTinRegion
+                ? $"Vùng CAD: {state.TinRegionPolygon.Count:n0} đỉnh biên • áp dụng cho cả 2 TIN"
+                : "Toàn bộ dữ liệu đã nạp.";
         }
 
         private void SelectModel(ModelRole role)
