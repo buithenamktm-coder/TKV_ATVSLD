@@ -105,7 +105,7 @@ def test_palette_auto_open_is_user_controlled_and_defaults_off():
     assert 'Registry.CurrentUser' in settings
     assert 'if (autoOpen)' in entry
     assert 'Startup palette auto-open is OFF' in entry
-    assert 'Tự động mở bảng MiningVolume khi khởi động AutoCAD' in project
+    assert 'Tự động mở bảng IMSAT VOLUME khi khởi động AutoCAD' in project
     assert 'UserSettingsService.AutoOpenPalette = _autoOpen.Checked' in project
 
 
@@ -136,7 +136,7 @@ def test_palette_has_direct_show_hide_toggle_and_startup_default_off():
     selftest = read("src/MiningVolume.Plugin2023/Services/SelfTestService.cs")
     assert "Bật/tắt palette MiningVolume hoạt động" in selftest
     assert "EntryPoint.TogglePalette();" in selftest
-    assert "Tự động mở bảng MiningVolume khi khởi động AutoCAD" in project
+    assert "Tự động mở bảng IMSAT VOLUME khi khởi động AutoCAD" in project
     assert "if (key == null) return false;" in settings
 
 
@@ -227,7 +227,7 @@ def test_main_palette_shows_fixed_developer_name():
     ui = read("src/MiningVolume.Plugin2023/UI/MainPaletteControl.cs")
     assert 'Phát triển: Bùi Thế Nam' in ui
     assert 'Điện thoại: 0967280686' in ui
-    assert 'Height = 86' in ui
+    assert 'Height = 66' in ui
 
 
 def test_palette_uses_shared_professional_ui_theme():
@@ -235,7 +235,7 @@ def test_palette_uses_shared_professional_ui_theme():
     theme = read("src/MiningVolume.Plugin2023/UI/UiTheme.cs")
     assert "UiTheme.ApplyPage(page)" in ui
     assert 'Text = "QUY TRÌNH"' in ui
-    assert 'Text = "Lệnh nhanh:  TKL\\r\\nHiện / ẩn bảng MiningVolume"' in ui
+    assert 'TKL  •  Hiện / ẩn IMSAT VOLUME' in ui
     assert "UiTheme.Accent" in ui
     assert "StyleGrid(DataGridView grid)" in theme
     assert "StyleButton(Button button)" in theme
@@ -246,9 +246,9 @@ def test_classic_menu_bar_exposes_main_miningvolume_workflow():
     entry = read("src/MiningVolume.Plugin2023/EntryPoint.cs")
     menu = read("src/MiningVolume.Plugin2023/MenuBarBuilder.cs")
     assert "MenuBarBuilder.EnsureMenu();" in entry
-    assert 'MenuName = "MINING VOLUME"' in menu
+    assert 'MenuName = "IMSAT VOLUME"' in menu
     for token in [
-        "Hiện / Ẩn MiningVolume",
+        "Hiện / Ẩn IMSAT VOLUME",
         "Dữ liệu đầu vào",
         "TIN / Mô hình",
         "Mặt cắt",
@@ -272,5 +272,5 @@ def test_imsat_branding_is_packaged_for_ribbon_excel_and_setup():
     assert "Thông tin" in branding and "Tổng khối" in branding
     assert "logo IMSAT" in export_ui
     assert "DisplayIcon" in installer
-    assert "IMSAT MiningVolume.lnk" in installer
+    assert "IMSAT VOLUME.lnk" in installer
     assert "rsrc -ico imsat.ico" in hosted
