@@ -6,7 +6,7 @@ on:
       source_ref:
         description: Branch, tag or commit to verify
         required: true
-        default: miningvolume-v0.10.4-tin-core
+        default: miningvolume-v1.0-tin-core
   issue_comment:
     types: [created]
 
@@ -283,13 +283,13 @@ jobs:
           $env:GOARCH='amd64'
           $env:CGO_ENABLED='0'
           go vet main.go
-          go build -trimpath -ldflags '-s -w -H=windowsgui' -o ../dist/MiningVolume_HSNext_AutoCAD2023_Setup_v0.10.4_RUNTIME_PASS.exe main.go
+          go build -trimpath -ldflags '-s -w -H=windowsgui' -o ../dist/MiningVolume_HSNext_AutoCAD2023_Setup_v1.0_RUNTIME_PASS.exe main.go
           Set-Location ..
 
-          $setup = 'dist/MiningVolume_HSNext_AutoCAD2023_Setup_v0.10.4_RUNTIME_PASS.exe'
+          $setup = 'dist/MiningVolume_HSNext_AutoCAD2023_Setup_v1.0_RUNTIME_PASS.exe'
           $hash = (Get-FileHash $setup -Algorithm SHA256).Hash.ToLowerInvariant()
           @(
-            'MiningVolume HS-Next v0.10.4 - RUNTIME-PASS RELEASE VERIFICATION'
+            'MiningVolume HS-Next v1.0 - RUNTIME-PASS RELEASE VERIFICATION'
             ('Timestamp=' + (Get-Date).ToString('o'))
             'Status=PASS'
             ('SourceCommit=' + $env:SOURCE_SHA)
@@ -314,10 +314,10 @@ jobs:
       - name: Upload runtime-passed release
         uses: actions/upload-artifact@v4
         with:
-          name: MiningVolume-HSNext-AutoCAD2023-v0.10.4-RUNTIME-PASS
+          name: MiningVolume-HSNext-AutoCAD2023-v1.0-RUNTIME-PASS
           if-no-files-found: error
           path: |
-            tools/MiningVolume_HSNext/v0.9/dist/MiningVolume_HSNext_AutoCAD2023_Setup_v0.10.4_RUNTIME_PASS.exe
+            tools/MiningVolume_HSNext/v0.9/dist/MiningVolume_HSNext_AutoCAD2023_Setup_v1.0_RUNTIME_PASS.exe
             tools/MiningVolume_HSNext/v0.9/dist/RUNTIME_RELEASE_VERIFICATION.txt
             tools/MiningVolume_HSNext/v0.9/dist/RUNTIME_RELEASE_SHA256.txt
             tools/MiningVolume_HSNext/v0.9/dist/RUNTIME_VERIFICATION.txt
@@ -329,7 +329,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: MiningVolume-AutoCAD2023-Runtime-Diagnostics-v0.10.4
+          name: MiningVolume-AutoCAD2023-Runtime-Diagnostics-v1.0
           if-no-files-found: warn
           path: |
             tools/MiningVolume_HSNext/v0.9/dist/RUNTIME_VERIFICATION.txt
