@@ -12,8 +12,8 @@ namespace MiningVolume2023.Services
     [DataContract]
     public sealed class ProjectSnapshot
     {
-        [DataMember(Order = 1)] public int FormatVersion { get; set; } = 1;
-        [DataMember(Order = 2)] public string ProductVersion { get; set; } = "0.10.4";
+        [DataMember(Order = 1)] public int FormatVersion { get; set; } = 2;
+        [DataMember(Order = 2)] public string ProductVersion { get; set; } = "1.0.0";
         [DataMember(Order = 3)] public DateTime SavedUtc { get; set; }
         [DataMember(Order = 4)] public ModelSnapshot Existing { get; set; }
         [DataMember(Order = 5)] public ModelSnapshot Design { get; set; }
@@ -33,6 +33,8 @@ namespace MiningVolume2023.Services
         [DataMember(Order = 19)] public List<SectionLineSnapshot> SectionLines { get; set; } = new List<SectionLineSnapshot>();
         [DataMember(Order = 20)] public bool HadProfiles { get; set; }
         [DataMember(Order = 21)] public bool HadVolumeResult { get; set; }
+        [DataMember(Order = 22)] public string TinRegionHandle { get; set; }
+        [DataMember(Order = 23)] public List<Point2Snapshot> TinRegion { get; set; } = new List<Point2Snapshot>();
     }
 
     [DataContract]
@@ -43,6 +45,8 @@ namespace MiningVolume2023.Services
         [DataMember(Order = 3)] public List<int> AllowedTypes { get; set; } = new List<int>();
         [DataMember(Order = 4)] public List<EntityEditSnapshot> Edits { get; set; } = new List<EntityEditSnapshot>();
         [DataMember(Order = 5)] public bool HadTin { get; set; }
+        [DataMember(Order = 6)] public int SourceMode { get; set; }
+        [DataMember(Order = 7)] public List<string> SelectedHandles { get; set; } = new List<string>();
     }
 
     [DataContract]

@@ -7,9 +7,11 @@ using MiningVolume.Core.Surface;
 namespace MiningVolume.Core.Volumes
 {
     /// <summary>
-    /// Tính khối lượng giữa các mặt cắt song song. Khi lấy được mặt cắt giữa thực từ hai TIN,
-    /// dùng công thức prismoid V=L/6*(F1+4*Fm+F2). Chỉ khi không xác định được mặt cắt giữa
-    /// mới hạ cấp sang trung bình diện tích hai đầu V=L/2*(F1+F2) và ghi cảnh báo.
+    /// Tính khối lượng giữa các mặt cắt song song theo quy tắc thích ứng V1.0:
+    /// - một đầu bằng 0: hình chóp;
+    /// - hai đầu > 0 và chênh tương đối <= ngưỡng: trung bình diện tích hai đầu;
+    /// - hai đầu > 0 và chênh tương đối > ngưỡng: hình chóp cụt.
+    /// Mặt cắt giữa vẫn được lấy để kiểm tra/hồ sơ nhưng không ép mọi khoảng dùng một công thức cố định.
     /// Khối lượng chi tiết được tính trên đúng các dải cao độ nên tổng chi tiết và tổng theo tầng
     /// là hai phép cộng của cùng một tập giá trị.
     /// </summary>
@@ -75,7 +77,15 @@ namespace MiningVolume.Core.Volumes
                     if (pm.HasData) am = areaCalc.Calculate(pm, bands, options.Tolerance);
                 }
 
-                bool prism = options.PreferPrismoidal && am != null;
+                var cutFormula = SelectFormula(
+                    aa.CutArea, ab.CutArea,
+                    options.AreaDifferenceThreshold,
+                    options.Tolerance);
+                var fillFormula = SelectFormula(
+                    aa.FillArea, ab.FillArea,
+                    options.AreaDifferenceThreshold,
+                    options.Tolerance);
+
                 var row = new SectionIntervalVolume
                 {
                     Index = intervalRows.Count + 1,
@@ -88,24 +98,27 @@ namespace MiningVolume.Core.Volumes
                     FillAreaStart = aa.FillArea,
                     FillAreaMid = am?.FillArea ?? 0,
                     FillAreaEnd = ab.FillArea,
-                    CutFormula = prism ? VolumeFormulaKind.Prismoidal : VolumeFormulaKind.AverageEndArea,
-                    FillFormula = prism ? VolumeFormulaKind.Prismoidal : VolumeFormulaKind.AverageEndArea,
-                    Note = prism ? "Prismoid từ mặt cắt giữa nội suy trực tiếp trên hai TIN" : "Không có mặt cắt giữa hợp lệ; dùng trung bình diện tích hai đầu"
+                    CutFormula = cutFormula,
+                    FillFormula = fillFormula,
+                    Note = $"V1.0 tự chọn công thức theo chênh diện tích hai mặt cắt; ngưỡng {options.AreaDifferenceThreshold:P0}."
                 };
 
-                row.CutVolume = Volume(aa.CutArea, am?.CutArea, ab.CutArea, distance, prism);
-                row.FillVolume = Volume(aa.FillArea, am?.FillArea, ab.FillArea, distance, prism);
+                row.CutVolume = VolumeByFormula(
+                    aa.CutArea, ab.CutArea, distance, cutFormula);
+                row.FillVolume = VolumeByFormula(
+                    aa.FillArea, ab.FillArea, distance, fillFormula);
                 intervalRows.Add(row);
-                if (!prism) warnings.Add($"{a.Name}-{b.Name}: không lấy được mặt cắt giữa; đã dùng công thức trung bình diện tích hai đầu.");
 
                 for (int k = 0; k < bands.Count; k++)
                 {
                     double c1 = aa.Bands[k].CutArea, c2 = ab.Bands[k].CutArea;
                     double f1 = aa.Bands[k].FillArea, f2 = ab.Bands[k].FillArea;
-                    double? cm = am == null ? (double?)null : am.Bands[k].CutArea;
-                    double? fm = am == null ? (double?)null : am.Bands[k].FillArea;
-                    levelCut[k] += Volume(c1, cm, c2, distance, prism);
-                    levelFill[k] += Volume(f1, fm, f2, distance, prism);
+                    var cFormula = SelectFormula(
+                        c1, c2, options.AreaDifferenceThreshold, options.Tolerance);
+                    var fFormula = SelectFormula(
+                        f1, f2, options.AreaDifferenceThreshold, options.Tolerance);
+                    levelCut[k] += VolumeByFormula(c1, c2, distance, cFormula);
+                    levelFill[k] += VolumeByFormula(f1, f2, distance, fFormula);
                 }
             }
 
@@ -143,13 +156,49 @@ namespace MiningVolume.Core.Volumes
             return r;
         }
 
-        private static double Volume(double a1, double? am, double a2, double length, bool prismoid)
+        public static VolumeFormulaKind SelectFormula(
+            double a1,
+            double a2,
+            double areaDifferenceThreshold = 0.40,
+            double tolerance = 1e-9)
         {
-            a1 = Math.Max(0, a1); a2 = Math.Max(0, a2);
+            a1 = Math.Max(0, a1);
+            a2 = Math.Max(0, a2);
+
+            double max = Math.Max(a1, a2);
+            double min = Math.Min(a1, a2);
+            if (max <= tolerance) return VolumeFormulaKind.AverageEndArea;
+            if (min <= tolerance) return VolumeFormulaKind.Pyramid;
+
+            double relativeDifference = Math.Abs(a1 - a2) / max;
+            return relativeDifference <= areaDifferenceThreshold
+                ? VolumeFormulaKind.AverageEndArea
+                : VolumeFormulaKind.Frustum;
+        }
+
+        public static double VolumeByFormula(
+            double a1,
+            double a2,
+            double length,
+            VolumeFormulaKind formula)
+        {
+            a1 = Math.Max(0, a1);
+            a2 = Math.Max(0, a2);
             if (length <= 0) return 0;
-            if (prismoid && am.HasValue)
-                return length * (a1 + 4.0 * Math.Max(0, am.Value) + a2) / 6.0;
-            return length * (a1 + a2) * 0.5;
+
+            switch (formula)
+            {
+                case VolumeFormulaKind.Pyramid:
+                    return length * (a1 + a2) / 3.0;
+                case VolumeFormulaKind.Frustum:
+                    return length * (a1 + a2 + Math.Sqrt(a1 * a2)) / 3.0;
+                case VolumeFormulaKind.Prismoidal:
+                    // Chỉ giữ enum cũ để tương thích dữ liệu; V1.0 không chọn
+                    // Prismoid chỉ từ hai diện tích đầu-cuối.
+                    return length * (a1 + a2) * 0.5;
+                default:
+                    return length * (a1 + a2) * 0.5;
+            }
         }
     }
 }

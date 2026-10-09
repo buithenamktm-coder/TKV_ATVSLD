@@ -88,7 +88,7 @@ namespace MiningVolume2023.Services
             }
             var snapshot = ProjectSnapshotCodec.Decode(encoded);
             if (snapshot == null) return new ProjectLoadResult { Found = false, Message = "Không đọc được dữ liệu Project trong DWG." };
-            if (snapshot.FormatVersion > 1) throw new InvalidOperationException("Project được tạo bởi phiên bản mới hơn, bản hiện tại chưa hỗ trợ.");
+            if (snapshot.FormatVersion > 2) throw new InvalidOperationException("Project được tạo bởi phiên bản mới hơn, bản hiện tại chưa hỗ trợ.");
 
             var result = new ProjectLoadResult { Found = true, SavedUtc = snapshot.SavedUtc };
             Restore(snapshot, rebuildDerived, result.Warnings);
@@ -140,8 +140,11 @@ namespace MiningVolume2023.Services
                 DeveloperName = state.DeveloperName,
                 DeveloperContact = state.DeveloperContact,
                 HadProfiles = state.SectionProfiles.Count > 0,
-                HadVolumeResult = state.VolumeResult != null
+                HadVolumeResult = state.VolumeResult != null,
+                TinRegionHandle = state.TinRegionHandle
             };
+            foreach (var p in state.TinRegionPolygon)
+                s.TinRegion.Add(new Point2Snapshot { X = p.X, Y = p.Y });
             if (state.SectionSystem != null)
             {
                 foreach (var p in state.SectionSystem.Boundary) s.Boundary.Add(new Point2Snapshot { X = p.X, Y = p.Y });
@@ -166,8 +169,10 @@ namespace MiningVolume2023.Services
             {
                 Layer = session.Layer,
                 TinVisible = session.TinVisible,
-                HadTin = session.IsTinCurrent
+                HadTin = session.IsTinCurrent,
+                SourceMode = (int)session.SourceMode
             };
+            foreach (var handle in session.SelectedHandles) s.SelectedHandles.Add(handle);
             foreach (var t in session.AllowedTypes) s.AllowedTypes.Add((int)t);
             if (session.Source == null) return s;
             foreach (var e in session.Source.Entities)
@@ -195,8 +200,12 @@ namespace MiningVolume2023.Services
             state.HorizontalScale = PositiveOr(snap.HorizontalScale, 1000);
             state.VerticalScale = PositiveOr(snap.VerticalScale, 500);
             state.DeveloperName = string.IsNullOrWhiteSpace(snap.DeveloperName) ? "Bùi Thế Nam" : snap.DeveloperName;
-            state.DeveloperContact = snap.DeveloperContact ?? string.Empty;
+            state.DeveloperContact = string.IsNullOrWhiteSpace(snap.DeveloperContact) ? "Điện thoại: 0967280686" : snap.DeveloperContact;
             state.BoundaryHandle = snap.BoundaryHandle;
+            state.TinRegionHandle = snap.TinRegionHandle;
+            if (snap.TinRegion != null)
+                foreach (var p in snap.TinRegion)
+                    state.TinRegionPolygon.Add(new Vec2(p.X, p.Y));
             if (snap.HasDirection) state.SectionDirection = new Vec2(snap.DirectionX, snap.DirectionY);
 
             RestoreModel(ModelRole.Existing, snap.Existing, warnings);
@@ -237,12 +246,22 @@ namespace MiningVolume2023.Services
 
         private static void RestoreModel(ModelRole role, ModelSnapshot snap, List<string> warnings)
         {
-            if (snap == null || string.IsNullOrWhiteSpace(snap.Layer)) return;
+            if (snap == null) return;
             var types = new HashSet<SourceEntityType>((snap.AllowedTypes ?? new List<int>()).Where(x => Enum.IsDefined(typeof(SourceEntityType), x)).Select(x => (SourceEntityType)x));
             if (types.Count == 0) foreach (SourceEntityType t in Enum.GetValues(typeof(SourceEntityType))) types.Add(t);
             try
             {
-                SurfaceWorkflowService.LoadLayer(role, snap.Layer, types);
+                var sourceMode = Enum.IsDefined(typeof(SourceSelectionMode), snap.SourceMode)
+                    ? (SourceSelectionMode)snap.SourceMode
+                    : SourceSelectionMode.Layer;
+
+                if (sourceMode == SourceSelectionMode.ManualSelection && snap.SelectedHandles != null && snap.SelectedHandles.Count > 0)
+                    SurfaceWorkflowService.LoadSelectedHandles(role, snap.SelectedHandles, types);
+                else if (!string.IsNullOrWhiteSpace(snap.Layer))
+                    SurfaceWorkflowService.LoadLayer(role, snap.Layer, types);
+                else
+                    return;
+
                 var session = ProjectState.Current.Get(role);
                 var byHandle = session.Source.Entities.GroupBy(e => e.Handle, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
                 foreach (var edit in snap.Edits ?? new List<EntityEditSnapshot>())

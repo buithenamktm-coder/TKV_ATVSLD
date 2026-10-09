@@ -10,6 +10,7 @@ using System.Linq;
 namespace MiningVolume2023.Services
 {
     public enum ModelRole { Existing, Design }
+    public enum SourceSelectionMode { Layer = 0, ManualSelection = 1 }
 
     public sealed class ModelSession
     {
@@ -23,12 +24,16 @@ namespace MiningVolume2023.Services
         public ModelRole Role { get; }
         public string Name { get; }
         public string Layer { get; set; }
+        public SourceSelectionMode SourceMode { get; set; } = SourceSelectionMode.Layer;
+        public List<string> SelectedHandles { get; } = new List<string>();
         public string TinLayer { get; }
         public SurfaceModel Source { get; set; }
         public TinSurface Tin { get; set; }
         public DateTime? TinBuiltFromSourceUtc { get; set; }
         public long? TinBuiltFromSourceRevision { get; set; }
         public bool TinVisible { get; set; } = true;
+        public int TinCadFaceCount { get; set; }
+        public bool TinCadIsPreview { get; set; }
         public bool IsTinCurrent
         {
             get
@@ -76,6 +81,14 @@ namespace MiningVolume2023.Services
         public ModelSession Design { get; } = new ModelSession(ModelRole.Design, "Thiết kế", "MV_TIN_THIETKE");
         public ModelRole ActiveRole { get; set; } = ModelRole.Existing;
         public string BoundaryHandle { get; set; }
+
+        // V1.0: vùng tùy chọn dùng để chỉ dựng TIN trong khu vực cần tính.
+        // Polygon được chụp tại thời điểm chọn để phần dựng core không gọi AutoCAD API
+        // từ background thread.
+        public string TinRegionHandle { get; set; }
+        public List<Vec2> TinRegionPolygon { get; } = new List<Vec2>();
+        public bool HasTinRegion => TinRegionPolygon.Count >= 3;
+
         public Vec2? SectionDirection { get; set; }
         public SectionSystem SectionSystem { get; set; }
         public List<SectionProfile> SectionProfiles { get; } = new List<SectionProfile>();
@@ -87,7 +100,7 @@ namespace MiningVolume2023.Services
         public double HorizontalScale { get; set; } = 1000.0;
         public double VerticalScale { get; set; } = 500.0;
         public string DeveloperName { get; set; } = "Bùi Thế Nam";
-        public string DeveloperContact { get; set; } = string.Empty;
+        public string DeveloperContact { get; set; } = "Điện thoại: 0967280686";
         public DateTime? LastProjectSavedUtc { get; set; }
         public event EventHandler Changed;
 
@@ -101,6 +114,8 @@ namespace MiningVolume2023.Services
             ResetModel(Design);
             ActiveRole = ModelRole.Existing;
             BoundaryHandle = null;
+            TinRegionHandle = null;
+            TinRegionPolygon.Clear();
             SectionDirection = null;
             SectionSystem = null;
             SectionProfiles.Clear();
@@ -112,18 +127,23 @@ namespace MiningVolume2023.Services
             HorizontalScale = 1000.0;
             VerticalScale = 500.0;
             DeveloperName = "Bùi Thế Nam";
-            DeveloperContact = string.Empty;
+            DeveloperContact = "Điện thoại: 0967280686";
             LastProjectSavedUtc = null;
         }
 
         private static void ResetModel(ModelSession s)
         {
+            try { (s.Tin?.Triangles as IDisposable)?.Dispose(); } catch { }
             s.Layer = null;
+            s.SourceMode = SourceSelectionMode.Layer;
+            s.SelectedHandles.Clear();
             s.Source = new SurfaceModel(s.Name);
             s.Tin = null;
             s.TinBuiltFromSourceUtc = null;
             s.TinBuiltFromSourceRevision = null;
             s.TinVisible = true;
+            s.TinCadFaceCount = 0;
+            s.TinCadIsPreview = false;
             s.LastBuiltUtc = null;
             s.AllowedTypes.Clear();
         }

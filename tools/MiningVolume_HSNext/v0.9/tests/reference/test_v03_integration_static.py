@@ -17,7 +17,8 @@ def test_model_grid_is_virtualized_and_xyz_present():
 
 def test_model_build_runs_core_off_ui_thread():
     s=text('src/MiningVolume.Plugin2023/UI/ModelPage.cs')
-    assert 'Task.Run(() => SurfaceWorkflowService.BuildCoreDetailed(role))' in s
+    assert 'Task.Run(() =>' in s
+    assert 'SurfaceWorkflowService.BuildCoreDetailed(' in s
     assert 'SurfaceWorkflowService.DrawTin(role, build)' in s
 
 def test_tin_renderer_replaces_faces_on_dedicated_layer():

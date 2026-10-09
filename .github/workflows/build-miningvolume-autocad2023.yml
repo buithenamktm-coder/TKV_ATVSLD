@@ -81,6 +81,8 @@ jobs:
           Copy-Item 'src/MiningVolume.Core/bin/Release/net48/MiningVolume.Core.dll' $out
           Copy-Item 'src/MiningVolume.Surface/bin/Release/net48/MiningVolume.Surface.dll' $out
           Copy-Item 'src/MiningVolume.Cad2023/bin/Release/net48/MiningVolume.Cad2023.dll' $out
+          New-Item -ItemType Directory -Force "$out/Assets" | Out-Null
+          Copy-Item 'src/MiningVolume.Plugin2023/Assets/imsat_logo_64.png' "$out/Assets/imsat_logo_64.png"
 
       - name: Verify release bundle policy
         shell: pwsh
@@ -126,17 +128,43 @@ jobs:
           $env:GOOS='windows'
           $env:GOARCH='amd64'
           $env:CGO_ENABLED='0'
-          go build -trimpath -ldflags '-s -w -H=windowsgui' -o ../dist/MiningVolume_HSNext_AutoCAD2023_Setup_v0.10.4_PRE_RELEASE.exe main.go
+
+          # Embed the official IMSAT icon into the Setup executable.
+          go install github.com/akavel/rsrc@latest
+          $rsrc = Join-Path ((go env GOPATH).Trim()) 'bin/rsrc.exe'
+          if (-not (Test-Path $rsrc)) { throw "Không tìm thấy rsrc.exe sau khi cài." }
+          & $rsrc -ico imsat.ico -arch amd64 -o rsrc_windows_amd64.syso
+          if ($LASTEXITCODE -ne 0) { throw "Không nhúng được icon IMSAT vào Setup." }
+
+          # Build the directory package (not a single .go file) so the Windows
+          # resource .syso is linked into the executable.
+          $createdGoMod = $false
+          if (-not (Test-Path go.mod)) {
+            go mod init miningvolume-installer
+            if ($LASTEXITCODE -ne 0) { throw "Không tạo được go.mod tạm để build Setup." }
+            $createdGoMod = $true
+          }
+          try {
+            go build -trimpath -ldflags '-s -w -H=windowsgui' -o ../dist/MiningVolume_HSNext_AutoCAD2023_Setup_v1.0_PRE_RELEASE.exe .
+            if ($LASTEXITCODE -ne 0) { throw "Build Setup thất bại." }
+          }
+          finally {
+            Remove-Item rsrc_windows_amd64.syso -Force -ErrorAction SilentlyContinue
+            if ($createdGoMod) {
+              Remove-Item go.mod -Force -ErrorAction SilentlyContinue
+              Remove-Item go.sum -Force -ErrorAction SilentlyContinue
+            }
+          }
 
       - name: Create checksums and source archive
         shell: pwsh
         run: |
           Set-Location $env:MV_ROOT
-          $setup = 'dist/MiningVolume_HSNext_AutoCAD2023_Setup_v0.10.4_PRE_RELEASE.exe'
+          $setup = 'dist/MiningVolume_HSNext_AutoCAD2023_Setup_v1.0_PRE_RELEASE.exe'
           $hash = (Get-FileHash $setup -Algorithm SHA256).Hash.ToLowerInvariant()
           "SHA256  $hash  $(Split-Path $setup -Leaf)" | Set-Content -Encoding ascii dist/SHA256SUMS.txt
           @(
-            'MiningVolume HS-Next v0.10.4 - BUILD VERIFICATION'
+            'MiningVolume HS-Next v1.0 - BUILD VERIFICATION'
             "Source commit: $env:SOURCE_SHA"
             "Checked out commit: $env:CHECKED_OUT_SHA"
             "Workflow commit: $env:GITHUB_SHA"
@@ -150,20 +178,20 @@ jobs:
             'Release status: PRE-RELEASE ONLY - AutoCAD 2023 runtime not verified'
             "Setup SHA256: $hash"
             'AutoCAD 2023 host runtime self-test: NOT EXECUTED ON GITHUB-HOSTED RUNNER'
-            'Runtime gate: Setup runs MVSELFTEST in AutoCAD 2023 and rolls back unless Status=PASS.'
+            'Runtime gate: final Setup is published only after the self-hosted AutoCAD 2023 workflow PASS.'
           ) | Set-Content -Encoding utf8 dist/BUILD_VERIFICATION.txt
           @(
-            'MININGVOLUME HS-NEXT v0.10.4 - PRE-RELEASE'
+            'MININGVOLUME HS-NEXT v1.0 - PRE-RELEASE'
             'This artifact was built on GitHub-hosted Windows CI.'
             'AutoCAD 2023 host runtime MVSELFTEST has NOT been executed for this artifact.'
             'Do not treat this package as the final release.'
             'The final artifact is created only by the AutoCAD 2023 runtime workflow after Status=PASS.'
           ) | Set-Content -Encoding utf8 dist/PRE_RELEASE_NOTICE.txt
-          $sourceZip = Join-Path $env:GITHUB_WORKSPACE "$env:MV_ROOT/dist/MiningVolume_HSNext_Source_v0.10.4.zip"
+          $sourceZip = Join-Path $env:GITHUB_WORKSPACE "$env:MV_ROOT/dist/MiningVolume_HSNext_Source_v1.0.zip"
           Remove-Item $sourceZip -Force -ErrorAction SilentlyContinue
           Push-Location $env:GITHUB_WORKSPACE
           try {
-            git archive --format=zip --prefix=MiningVolume_HSNext_v0.10.4/ -o $sourceZip HEAD tools/MiningVolume_HSNext/v0.9
+            git archive --format=zip --prefix=MiningVolume_HSNext_v1.0/ -o $sourceZip HEAD tools/MiningVolume_HSNext/v0.9
             if ($LASTEXITCODE -ne 0 -or -not (Test-Path $sourceZip)) {
               throw 'Không tạo được source archive sạch từ Git HEAD.'
             }
@@ -202,11 +230,11 @@ jobs:
       - name: Upload pre-release candidate
         uses: actions/upload-artifact@v4
         with:
-          name: MiningVolume-HSNext-AutoCAD2023-v0.10.4-PRE-RELEASE
+          name: MiningVolume-HSNext-AutoCAD2023-v1.0-PRE-RELEASE
           if-no-files-found: error
           path: |
-            tools/MiningVolume_HSNext/v0.9/dist/MiningVolume_HSNext_AutoCAD2023_Setup_v0.10.4_PRE_RELEASE.exe
-            tools/MiningVolume_HSNext/v0.9/dist/MiningVolume_HSNext_Source_v0.10.4.zip
+            tools/MiningVolume_HSNext/v0.9/dist/MiningVolume_HSNext_AutoCAD2023_Setup_v1.0_PRE_RELEASE.exe
+            tools/MiningVolume_HSNext/v0.9/dist/MiningVolume_HSNext_Source_v1.0.zip
             tools/MiningVolume_HSNext/v0.9/dist/PRE_RELEASE_NOTICE.txt
             tools/MiningVolume_HSNext/v0.9/dist/SHA256SUMS.txt
             tools/MiningVolume_HSNext/v0.9/dist/BUILD_VERIFICATION.txt

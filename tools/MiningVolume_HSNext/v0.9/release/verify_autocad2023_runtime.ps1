@@ -103,14 +103,26 @@ try {
         throw "Không tìm thấy DLL plugin để NETLOAD: $pluginDll"
     }
 
+    # Runtime CI must not block on AutoCAD's unsigned-DLL dialog. The production
+    # bundle still keeps its normal startup behavior; only this temporary runtime
+    # copy is changed to manual NETLOAD. SECURELOAD is disabled only inside the
+    # dedicated CI AutoCAD session, then restored before QUIT.
+    $runtimePackage = Join-Path $target 'PackageContents.xml'
+    $packageText = Get-Content $runtimePackage -Raw
+    $packageText = $packageText -replace 'LoadOnAutoCADStartup="True"', 'LoadOnAutoCADStartup="False"'
+    Set-Content -Path $runtimePackage -Value $packageText -Encoding UTF8
+
     @(
         'FILEDIA'
         '0'
         'CMDDIA'
         '0'
+        '(setq mv_secureload_old (getvar "SECURELOAD"))'
+        '(setvar "SECURELOAD" 0)'
         '_.NETLOAD'
         ('"' + $pluginDll + '"')
         'MVSELFTEST'
+        '(setvar "SECURELOAD" mv_secureload_old)'
         '_.QUIT'
     ) | Set-Content -Path $scriptPath -Encoding ASCII
 
@@ -131,8 +143,16 @@ try {
             Start-Sleep -Seconds 1
         }
 
-        if (-not $proc.HasExited) {
-            if (-not $proc.WaitForExit(10000)) { $proc.Kill() }
+        # MVSELFTEST writes its PASS/FAIL proof before AutoCAD needs to exit.
+        # On some user profiles a startup command (for example MASSPROP) can seize
+        # the command line after MVSELFTEST and keep acad.exe waiting for input.
+        # Once the proof file exists, terminate this dedicated CI AutoCAD process
+        # immediately instead of exposing or waiting on unrelated profile commands.
+        if (-not $proc.HasExited -and (Test-Path $SelfTestPath)) {
+            try { $proc.Kill() } catch { }
+            try { $null = $proc.WaitForExit(5000) } catch { }
+        } elseif (-not $proc.HasExited) {
+            if (-not $proc.WaitForExit(5000)) { $proc.Kill() }
         }
 
         if (-not (Test-Path $SelfTestPath)) {
@@ -147,7 +167,7 @@ $startupDetail"
         }
         $result = Get-Content $SelfTestPath -Raw
         if ($result -notmatch 'MiningVolume HS-Next v0\.10\.4 runtime self-test') {
-            throw 'MVSELFTEST log không đúng phiên bản v0.10.4.'
+            throw 'MVSELFTEST log không đúng phiên bản v1.0.'
         }
         if ($result -notmatch 'Status=PASS') {
             throw "MVSELFTEST không PASS.\n\n$result"
@@ -176,7 +196,7 @@ $startupDetail"
 
         $sourceCommit = if ($env:SOURCE_SHA) { $env:SOURCE_SHA } elseif ($env:GITHUB_SHA) { $env:GITHUB_SHA } else { 'local' }
         $lines = @(
-            'MiningVolume HS-Next v0.10.4 - AUTOCAD 2023 RUNTIME VERIFICATION',
+            'MiningVolume HS-Next v1.0 - AUTOCAD 2023 RUNTIME VERIFICATION',
             ('Timestamp=' + (Get-Date).ToString('o')),
             'Status=PASS',
             ('SourceCommit=' + $sourceCommit),

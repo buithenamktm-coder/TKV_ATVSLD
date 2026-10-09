@@ -22,7 +22,7 @@ namespace MiningVolume2023
 
         public void Initialize()
         {
-            StartupLog("Initialize: MiningVolume v0.10.4");
+            StartupLog("Initialize: MiningVolume v1.0");
             TryRibbon();
             HookIdle();
         }
@@ -103,6 +103,7 @@ namespace MiningVolume2023
             try
             {
                 RibbonBuilder.EnsureRibbon();
+                MenuBarBuilder.EnsureMenu();
             }
             catch (System.Exception ex)
             {
@@ -137,8 +138,8 @@ namespace MiningVolume2023
                 Palette = new PaletteSet("MINING VOLUME", new Guid("8C96DC13-BC65-4A2C-8B34-2D7644FD1C62"))
                 {
                     Style = PaletteSetStyles.ShowAutoHideButton | PaletteSetStyles.ShowCloseButton | PaletteSetStyles.ShowPropertiesMenu,
-                    MinimumSize = new System.Drawing.Size(580, 620),
-                    Size = new System.Drawing.Size(820, 760)
+                    MinimumSize = new System.Drawing.Size(700, 660),
+                    Size = new System.Drawing.Size(940, 800)
                 };
                 MainControl = new MainPaletteControl();
                 Palette.Add("Phần mềm", MainControl);
@@ -161,8 +162,12 @@ namespace MiningVolume2023
             StartupLog("Palette visibility toggled: " + (Palette.Visible ? "ON" : "OFF"));
         }
 
-        [CommandMethod("MV_TOGGLE", CommandFlags.Session)]
+        [CommandMethod("TKL", CommandFlags.Session)]
         public static void TogglePaletteCommand() => TogglePalette();
+
+        // Legacy alias kept for compatibility with previous builds/scripts.
+        [CommandMethod("MV_TOGGLE", CommandFlags.Session)]
+        public static void TogglePaletteLegacyCommand() => TogglePalette();
 
         [CommandMethod("MV_AUTOPEN", CommandFlags.Session)]
         public static void ToggleAutoOpen()
@@ -234,15 +239,15 @@ namespace MiningVolume2023
             var r = Services.SelfTestService.Run();
             var ed = AcApp.DocumentManager.MdiActiveDocument?.Editor;
             if (r.Passed)
-                ed?.WriteMessage("\nMiningVolume v0.10.4 SELFTEST: PASS (" + r.Checks.Count + " checks). Log: " + r.OutputFile);
+                ed?.WriteMessage("\nMiningVolume v1.0 SELFTEST: PASS (" + r.Checks.Count + " checks). Log: " + r.OutputFile);
             else
-                ed?.WriteMessage("\nMiningVolume v0.10.4 SELFTEST: FAIL (" + r.Errors.Count + " errors). Log: " + r.OutputFile);
+                ed?.WriteMessage("\nMiningVolume v1.0 SELFTEST: FAIL (" + r.Errors.Count + " errors). Log: " + r.OutputFile);
         }
 
         [CommandMethod("MVABOUT")]
         public void About()
         {
-            AcApp.ShowAlertDialog("MiningVolume 2023\nHS-Next • Mine Survey & Earthwork\nGUI-first v0.10.4");
+            AcApp.ShowAlertDialog("IMSAT MINING VOLUME\nMine Survey & Earthwork for AutoCAD\nPhát triển: Bùi Thế Nam\nĐiện thoại: 0967280686\nPhiên bản v1.0");
         }
     }
 }

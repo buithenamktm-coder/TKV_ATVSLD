@@ -97,3 +97,28 @@ def test_sum_of_band_prismoids_equals_prismoid_of_summed_band_areas():
     by_band=sum(volume(a,m,b,L,True) for a,m,b in bands)
     summed=volume(sum(x[0] for x in bands),sum(x[1] for x in bands),sum(x[2] for x in bands),L,True)
     assert math.isclose(by_band,summed,rel_tol=1e-12,abs_tol=1e-12)
+
+def adaptive_formula(a1,a2,threshold=0.40,tol=1e-9):
+    a1=max(0.0,a1); a2=max(0.0,a2)
+    mx=max(a1,a2); mn=min(a1,a2)
+    if mx <= tol: return "average"
+    if mn <= tol: return "pyramid"
+    return "average" if abs(a1-a2)/mx <= threshold else "frustum"
+
+
+def adaptive_volume(a1,a2,L,threshold=0.40):
+    method=adaptive_formula(a1,a2,threshold)
+    if method=="pyramid":
+        return L*(a1+a2)/3.0
+    if method=="frustum":
+        return L*(a1+a2+math.sqrt(a1*a2))/3.0
+    return L*(a1+a2)/2.0
+
+
+def test_v1_adaptive_formula_threshold_and_pyramid_cases():
+    assert adaptive_formula(100,70) == "average"     # 30% difference
+    assert adaptive_formula(100,60) == "average"     # exactly 40%
+    assert adaptive_formula(100,59) == "frustum"     # over 40%
+    assert adaptive_formula(100,0) == "pyramid"
+    assert math.isclose(adaptive_volume(100,0,30),1000.0)
+    assert math.isclose(adaptive_volume(100,100,30),3000.0)

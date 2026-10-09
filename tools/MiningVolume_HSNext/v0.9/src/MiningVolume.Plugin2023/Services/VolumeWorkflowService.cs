@@ -23,7 +23,8 @@ namespace MiningVolume2023.Services
                     FromLevel = fromLevel,
                     ToLevel = toLevel,
                     LevelStep = levelStep,
-                    PreferPrismoidal = true,
+                    AreaDifferenceThreshold = 0.40,
+                    PreferPrismoidal = false,
                     Tolerance = 1e-7
                 });
         }

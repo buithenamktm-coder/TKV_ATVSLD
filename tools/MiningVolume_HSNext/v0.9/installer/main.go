@@ -24,8 +24,8 @@ import (
 var payloadFS embed.FS
 
 const (
-    productName = "MiningVolume HS-Next for AutoCAD 2023"
-    version = "0.10.4"
+    productName = "IMSAT MiningVolume HS-Next for AutoCAD 2023"
+    version = "1.0.0"
     uninstallKey = `HKLM\Software\Microsoft\Windows\CurrentVersion\Uninstall\MiningVolume2023`
 )
 
@@ -47,7 +47,7 @@ func install() {
     cad, err := findAutoCAD2023()
     if err != nil { msg(err.Error(), 0x10); return }
 
-    temp := filepath.Join(os.TempDir(), fmt.Sprintf("MiningVolume_v0104_%d", os.Getpid()))
+    temp := filepath.Join(os.TempDir(), fmt.Sprintf("MiningVolume_v100_%d", os.Getpid()))
     os.RemoveAll(temp)
     if err := os.MkdirAll(temp, 0755); err != nil { msg(err.Error(), 0x10); return }
     defer os.RemoveAll(temp)
@@ -61,7 +61,7 @@ func install() {
     programData := os.Getenv("ProgramData"); if programData == "" { programData = `C:\ProgramData` }
     appPlugins := filepath.Join(programData, "Autodesk", "ApplicationPlugins")
     target := filepath.Join(appPlugins, "MiningVolume2023.bundle")
-    backup := target + ".v0104bak"
+    backup := target + ".v100bak"
     os.MkdirAll(appPlugins, 0755)
 
     // Recover conservatively from an interrupted previous install before starting
@@ -80,18 +80,16 @@ func install() {
         msg("Không cài được bundle: "+err.Error(), 0x10); return
     }
 
-    ok, detail := runAutoCADSelfTest(cad)
-    if !ok {
-        os.RemoveAll(target); _ = restoreBackup(backup, target)
-        writePersistentLog("selftest_failed", detail)
-        msg("MiningVolume đã tự rollback vì kiểm thử trong AutoCAD 2023 không đạt.\n\n"+detail, 0x10); return
-    }
+    // Runtime verification is a release-pipeline responsibility. The end-user
+    // installer must never launch AutoCAD automatically or expose development
+    // self-test behavior. A RUNTIME-PASS artifact has already been verified on
+    // a real AutoCAD 2023 runner before this Setup is published.
     os.RemoveAll(backup)
-    writeRuntimeVerification(cad, detail)
-    if err := registerUninstall(target); err != nil {
-        msg("Add-in đã PASS trong AutoCAD nhưng chưa ghi được mục gỡ cài đặt: "+err.Error(), 0x30); return
+    if err := registerUninstall(target, cad); err != nil {
+        msg("MiningVolume đã được chép vào AutoCAD nhưng chưa ghi được mục gỡ cài đặt: "+err.Error(), 0x30); return
     }
-    msg("Cài đặt MiningVolume v0.10.4 thành công.\n\nAutoCAD 2023 runtime self-test: PASS.\nMáy không cần Visual Studio/Build Tools.\nMở AutoCAD: MiningVolume không tự mở bảng theo mặc định; mở từ Ribbon MINING VOLUME hoặc bật tùy chọn tự động mở trong trang Dự án.", 0x40)
+    writePersistentLog("install", "Status=INSTALLED\r\nAutoCAD="+filepath.Join(cad,"acad.exe"))
+    msg("Cài đặt IMSAT MiningVolume thành công.\n\nPhần mềm đang được tiếp tục cải tiến và hoàn thiện.\nMọi ý kiến đóng góp vui lòng liên hệ:\n\nBùi Thế Nam\nĐiện thoại: 0967280686", 0x40)
 }
 
 func validatePrebuiltBundle(root string) error {
@@ -128,7 +126,7 @@ func validatePrebuiltBundle(root string) error {
     if err != nil { return fmt.Errorf("Không đọc được PackageContents.xml: %w", err) }
     xmlText := string(xmlBytes)
     for _, token := range []string{
-        `AppVersion="0.10.4"`,
+        `AppVersion="1.0.0"`,
         `SeriesMin="R24.2"`,
         `SeriesMax="R24.2"`,
         `LoadOnAutoCADStartup="True"`,
@@ -145,6 +143,7 @@ func uninstall() {
     programData := os.Getenv("ProgramData"); if programData=="" { programData=`C:\ProgramData` }
     target := filepath.Join(programData,"Autodesk","ApplicationPlugins","MiningVolume2023.bundle")
     os.RemoveAll(target)
+    os.Remove(filepath.Join(programData, "Microsoft", "Windows", "Start Menu", "Programs", "IMSAT MiningVolume.lnk"))
     exec.Command("reg","delete",uninstallKey,"/f").Run()
     msg("Đã gỡ MiningVolume khỏi AutoCAD.", 0x40)
 }
@@ -152,8 +151,8 @@ func uninstall() {
 func runAutoCADSelfTest(cad string) (bool, string) {
     acad := filepath.Join(cad, "acad.exe")
     if !exists(acad) { return false, "Không tìm thấy acad.exe" }
-    log := filepath.Join(os.TempDir(), "MiningVolume_v0104_selftest.txt"); os.Remove(log)
-    scr := filepath.Join(os.TempDir(), "MiningVolume_v0104_selftest.scr")
+    log := filepath.Join(os.TempDir(), "MiningVolume_v100_selftest.txt"); os.Remove(log)
+    scr := filepath.Join(os.TempDir(), "MiningVolume_v100_selftest.scr")
     os.WriteFile(scr, []byte("FILEDIA\r\n0\r\nCMDDIA\r\n0\r\nMVSELFTEST\r\n_.QUIT\r\n"), 0644)
     defer os.Remove(scr)
 
@@ -165,9 +164,9 @@ func runAutoCADSelfTest(cad string) (bool, string) {
         if b, err := os.ReadFile(log); err == nil {
             txt := string(b)
             if strings.Contains(txt, "Status=PASS") {
-                if !strings.Contains(txt, "MiningVolume HS-Next v0.10.4 runtime self-test") {
+                if !strings.Contains(txt, "MiningVolume HS-Next v1.0 runtime self-test") {
                     _ = cmd.Process.Kill()
-                    return false, "MVSELFTEST trả PASS nhưng log không đúng phiên bản v0.10.4.\n\n"+txt
+                    return false, "MVSELFTEST trả PASS nhưng log không đúng phiên bản v1.0.\n\n"+txt
                 }
                 required := []string{
                     "PASS | Khởi tạo đầy đủ giao diện MiningVolume",
@@ -196,21 +195,38 @@ func runAutoCADSelfTest(cad string) (bool, string) {
     _ = cmd.Process.Kill(); return false, "Hết thời gian 150 giây nhưng không nhận được PASS từ MVSELFTEST."
 }
 
-func registerUninstall(bundlePath string) error {
+func registerUninstall(bundlePath, cadDir string) error {
     programData := os.Getenv("ProgramData"); if programData=="" { programData=`C:\ProgramData` }
     dir := filepath.Join(programData, "MiningVolume2023")
     if err := os.MkdirAll(dir,0755); err != nil { return err }
-    exe, _ := os.Executable(); stored := filepath.Join(dir,"MiningVolume_Setup_v0.10.4.exe")
+    exe, _ := os.Executable(); stored := filepath.Join(dir,"MiningVolume_Setup_v1.0.exe")
     if err := copyFile(exe,stored); err != nil { return err }
     vals := [][]string{
         {"/v","DisplayName","/t","REG_SZ","/d",productName,"/f"},
         {"/v","DisplayVersion","/t","REG_SZ","/d",version,"/f"},
-        {"/v","Publisher","/t","REG_SZ","/d","MiningVolume Development","/f"},
+        {"/v","Publisher","/t","REG_SZ","/d","Viện Khoa học Công nghệ Mỏ - Vinacomin","/f"},
         {"/v","InstallLocation","/t","REG_SZ","/d",bundlePath,"/f"},
+        {"/v","DisplayIcon","/t","REG_SZ","/d",stored+",0","/f"},
         {"/v","UninstallString","/t","REG_SZ","/d","\""+stored+"\" --uninstall","/f"},
     }
     for _,v := range vals { a:=append([]string{"add",uninstallKey},v...); if err:=exec.Command("reg",a...).Run(); err!=nil{return err} }
+    if err := createStartMenuShortcut(cadDir, stored); err != nil { return err }
     return nil
+}
+
+func createStartMenuShortcut(cadDir, iconExe string) error {
+    programData := os.Getenv("ProgramData"); if programData=="" { programData=`C:\ProgramData` }
+    menuDir := filepath.Join(programData, "Microsoft", "Windows", "Start Menu", "Programs")
+    if err := os.MkdirAll(menuDir, 0755); err != nil { return err }
+    shortcut := filepath.Join(menuDir, "IMSAT MiningVolume.lnk")
+    target := filepath.Join(cadDir, "acad.exe")
+    ps := "$s=(New-Object -ComObject WScript.Shell).CreateShortcut(" + psQuote(shortcut) + ");" +
+        "$s.TargetPath=" + psQuote(target) + ";" +
+        "$s.WorkingDirectory=" + psQuote(cadDir) + ";" +
+        "$s.Description='IMSAT MiningVolume - Mine Survey & Earthwork';" +
+        "$s.IconLocation=" + psQuote(iconExe + ",0") + ";" +
+        "$s.Save()"
+    return exec.Command("powershell.exe","-NoProfile","-WindowStyle","Hidden","-Command",ps).Run()
 }
 
 func findAutoCAD2023() (string,error) {
@@ -244,7 +260,7 @@ func writeRuntimeVerification(cadDir, selfTest string) {
     pd:=os.Getenv("ProgramData"); if pd==""{pd=`C:\ProgramData`}
     dir:=filepath.Join(pd,"MiningVolume2023","Logs"); _=os.MkdirAll(dir,0755)
     content:=fmt.Sprintf(
-        "MiningVolume HS-Next v0.10.4 runtime verification\r\n"+
+        "MiningVolume HS-Next v1.0 runtime verification\r\n"+
         "Timestamp=%s\r\nStatus=PASS\r\nAutoCAD=%s\r\n\r\n%s",
         time.Now().Format(time.RFC3339), filepath.Join(cadDir,"acad.exe"), selfTest)
     _=os.WriteFile(filepath.Join(dir,"runtime_verification.txt"),[]byte(content),0644)

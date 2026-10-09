@@ -99,7 +99,7 @@ namespace MiningVolume2023.UI
         {
             var st = ProjectState.Current;
             _scope.Text = $"{FmtLevel(st.FromLevel)} → {FmtLevel(st.ToLevel)}; bước tầng {st.LevelStep:0.###} m";
-            _formula.Text = "Prismoid V=L/6(F1+4Fm+F2); chỉ fallback V=L/2(F1+F2) khi không lấy được mặt cắt giữa";
+            _formula.Text = "Tự chọn theo F1-F2: 1 đầu = 0 → hình chóp; chênh ≤ 40% → TB hai đầu; chênh > 40% → hình chóp cụt";
             if (st.VolumeResult == null)
             {
                 _totals.Text = "Chưa có kết quả";
@@ -114,7 +114,7 @@ namespace MiningVolume2023.UI
             _detail.Rows.Clear();
             foreach (var x in r.Intervals)
             {
-                string method = x.CutFormula == VolumeFormulaKind.Prismoidal ? "Prismoid" : "TB hai đầu";
+                string method = FormulaName(x.CutFormula) + " / " + FormulaName(x.FillFormula);
                 _detail.Rows.Add(x.Index, x.StartSection, x.EndSection, F3(x.Distance), F2(x.CutAreaStart), F2(x.CutAreaMid), F2(x.CutAreaEnd), F2(x.CutVolume),
                     F2(x.FillAreaStart), F2(x.FillAreaMid), F2(x.FillAreaEnd), F2(x.FillVolume), method);
             }
@@ -146,6 +146,17 @@ namespace MiningVolume2023.UI
         }
         private static string F2(double v) => v.ToString("0.00");
         private static string F3(double v) => v.ToString("0.###");
+        private static string FormulaName(VolumeFormulaKind kind)
+        {
+            switch (kind)
+            {
+                case VolumeFormulaKind.Pyramid: return "Hình chóp";
+                case VolumeFormulaKind.Frustum: return "Hình chóp cụt";
+                case VolumeFormulaKind.Prismoidal: return "Prismoid (cũ)";
+                default: return "TB hai đầu";
+            }
+        }
+
         private static string FmtLevel(double z) => z > 0 ? "+" + z.ToString("0.###") : z.ToString("0.###");
     }
 }

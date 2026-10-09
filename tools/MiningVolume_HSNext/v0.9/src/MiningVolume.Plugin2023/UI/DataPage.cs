@@ -1,9 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Drawing;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using MiningVolume.Core.Model;
+using MiningVolume.Core.Surface;
 using MiningVolume2023.Services;
 
 namespace MiningVolume2023.UI
@@ -14,68 +17,238 @@ namespace MiningVolume2023.UI
         private readonly ComboBox _designLayer;
         private readonly CheckedListBox _types;
         private readonly Label _status;
+        private readonly Label _tinRegionStatus;
         private readonly Button _buildPair;
+        private readonly Button _cancelBuild;
+        private CancellationTokenSource _buildCts;
 
         public DataPage()
         {
             Font = new Font("Arial", 9F);
-            BackColor = Color.White;
-            Controls.Add(new Label { Text = "DỮ LIỆU ĐẦU VÀO", Dock = DockStyle.Top, Height = 32, Font = new Font("Arial", 11F, FontStyle.Bold) });
+            BackColor = UiTheme.Canvas;
+            AutoScroll = true;
+            Padding = new Padding(0);
 
-            var body = new TableLayoutPanel { Dock = DockStyle.Top, Height = 330, ColumnCount = 3, RowCount = 8, Padding = new Padding(4) };
-            body.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 125));
-            body.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            body.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 105));
+            var header = new Panel
+            {
+                Dock = DockStyle.Top,
+                Height = 64,
+                BackColor = UiTheme.Surface,
+                Padding = new Padding(16, 10, 16, 8)
+            };
+            header.Controls.Add(new Label
+            {
+                Text = "DỮ LIỆU ĐẦU VÀO",
+                Dock = DockStyle.Top,
+                Height = 26,
+                Font = new Font("Arial", 12F, FontStyle.Bold),
+                ForeColor = UiTheme.TextStrong
+            });
+            header.Controls.Add(new Label
+            {
+                Text = "Nạp theo layer hoặc chọn trực tiếp POINT / LINE / POLYLINE trên bản vẽ.",
+                Dock = DockStyle.Bottom,
+                Height = 22,
+                Font = new Font("Arial", 8.75F),
+                ForeColor = UiTheme.Muted
+            });
 
-            _existingLayer = new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList };
-            _designLayer = new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList };
-            AddRow(body, 0, "Hiện trạng", _existingLayer, Btn("Nạp dữ liệu", (s, e) => LoadModel(ModelRole.Existing)));
-            AddRow(body, 1, "Thiết kế", _designLayer, Btn("Nạp dữ liệu", (s, e) => LoadModel(ModelRole.Design)));
+            var body = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Top,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                FlowDirection = FlowDirection.TopDown,
+                WrapContents = false,
+                Padding = new Padding(14, 14, 14, 18),
+                BackColor = UiTheme.Canvas
+            };
 
-            _types = new CheckedListBox { Dock = DockStyle.Fill, Height = 120, CheckOnClick = true };
-            foreach (var x in new[] { "POINT", "LINE", "LWPOLYLINE", "2D POLYLINE", "3D POLYLINE", "Đường đồng mức" }) _types.Items.Add(x, true);
-            body.Controls.Add(new Label { Text = "Loại dữ liệu", Dock = DockStyle.Fill, TextAlign = ContentAlignment.TopLeft }, 0, 2);
-            body.Controls.Add(_types, 1, 2);
-            body.SetColumnSpan(_types, 2);
+            var sourceBox = new GroupBox
+            {
+                Text = "Nguồn dữ liệu",
+                Width = 520,
+                Height = 112,
+                Margin = new Padding(0, 0, 0, 12)
+            };
+            var source = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 4,
+                RowCount = 2,
+                Padding = new Padding(10, 8, 10, 8)
+            };
+            source.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 88));
+            source.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            source.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 104));
+            source.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120));
+            source.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
+            source.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
 
-            var refresh = Btn("Làm mới danh sách layer", (s, e) => RefreshLayers());
-            body.Controls.Add(refresh, 1, 4);
-            body.SetColumnSpan(refresh, 2);
+            _existingLayer = new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList, Margin = new Padding(3, 5, 6, 5) };
+            _designLayer = new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList, Margin = new Padding(3, 5, 6, 5) };
+            AddRow(
+                source, 0, "Hiện trạng", _existingLayer,
+                Btn("Nạp layer", (s, e) => LoadModel(ModelRole.Existing)),
+                Btn("Chọn trên CAD", (s, e) => SelectModel(ModelRole.Existing)));
+            AddRow(
+                source, 1, "Thiết kế", _designLayer,
+                Btn("Nạp layer", (s, e) => LoadModel(ModelRole.Design)),
+                Btn("Chọn trên CAD", (s, e) => SelectModel(ModelRole.Design)));
+            sourceBox.Controls.Add(source);
+            body.Controls.Add(sourceBox);
 
+            var typeBox = new GroupBox
+            {
+                Text = "Loại dữ liệu tham gia TIN",
+                Width = 520,
+                Height = 174,
+                Margin = new Padding(0, 0, 0, 12)
+            };
+            _types = new CheckedListBox
+            {
+                Dock = DockStyle.Fill,
+                CheckOnClick = true,
+                IntegralHeight = false,
+                BorderStyle = BorderStyle.FixedSingle,
+                Margin = new Padding(0)
+            };
+            foreach (var x in new[] { "POINT", "LINE", "LWPOLYLINE", "2D POLYLINE", "3D POLYLINE", "Đường đồng mức" })
+                _types.Items.Add(x, true);
+            var typePanel = new Panel { Dock = DockStyle.Fill, Padding = new Padding(10, 8, 10, 10) };
+            typePanel.Controls.Add(_types);
+            typeBox.Controls.Add(typePanel);
+            body.Controls.Add(typeBox);
+
+            var regionBox = new GroupBox
+            {
+                Text = "Phạm vi tạo TIN",
+                Width = 520,
+                Height = 92,
+                Margin = new Padding(0, 0, 0, 12)
+            };
+            var regionLayout = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 3,
+                RowCount = 1,
+                Padding = new Padding(10, 8, 10, 8)
+            };
+            regionLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            regionLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 128));
+            regionLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 118));
+            _tinRegionStatus = new Label
+            {
+                Dock = DockStyle.Fill,
+                TextAlign = ContentAlignment.MiddleLeft,
+                ForeColor = UiTheme.Muted,
+                Text = "Toàn bộ dữ liệu đã nạp."
+            };
+            regionLayout.Controls.Add(_tinRegionStatus, 0, 0);
+            regionLayout.Controls.Add(
+                Btn("Chọn vùng trên CAD", (s, e) => SelectTinRegion()), 1, 0);
+            regionLayout.Controls.Add(
+                Btn("Dùng toàn bộ", (s, e) => ClearTinRegion()), 2, 0);
+            regionBox.Controls.Add(regionLayout);
+            body.Controls.Add(regionBox);
+
+            var statusBox = new GroupBox
+            {
+                Text = "Trạng thái mô hình",
+                Width = 520,
+                Height = 104,
+                Margin = new Padding(0, 0, 0, 12)
+            };
             _status = new Label
             {
-                Text = "Chưa nạp dữ liệu",
+                Text = "Chưa nạp dữ liệu.",
                 Dock = DockStyle.Fill,
-                AutoSize = true,
-                ForeColor = Color.DimGray
+                ForeColor = UiTheme.Muted,
+                Padding = new Padding(10, 8, 10, 8),
+                AutoEllipsis = true,
+                TextAlign = ContentAlignment.MiddleLeft
             };
-            body.Controls.Add(_status, 1, 5);
-            body.SetColumnSpan(_status, 2);
+            statusBox.Controls.Add(_status);
+            body.Controls.Add(statusBox);
+
+            var actions = new TableLayoutPanel
+            {
+                Width = 520,
+                Height = 132,
+                ColumnCount = 1,
+                RowCount = 3,
+                Margin = new Padding(0),
+                Padding = new Padding(0)
+            };
+            actions.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
+            actions.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
+            actions.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
+
+            var refresh = Btn("Làm mới danh sách layer", (s, e) => RefreshLayers());
+            refresh.Dock = DockStyle.Fill;
+            refresh.Margin = new Padding(0, 0, 0, 6);
+            actions.Controls.Add(refresh, 0, 0);
 
             _buildPair = Btn("TẠO CẶP TIN HIỆN TRẠNG + THIẾT KẾ", async (s, e) => await BuildPairTinAsync());
             _buildPair.Font = new Font("Arial", 9F, FontStyle.Bold);
+            _buildPair.Dock = DockStyle.Fill;
+            _buildPair.Margin = new Padding(0);
             _buildPair.Enabled = false;
-            body.Controls.Add(_buildPair, 1, 6);
-            body.SetColumnSpan(_buildPair, 2);
+            actions.Controls.Add(_buildPair, 0, 1);
+
+            _cancelBuild = Btn("HỦY DỰNG TIN", (s, e) =>
+            {
+                if (_buildCts == null || _buildCts.IsCancellationRequested) return;
+                _status.Text = "Đang yêu cầu hủy dựng TIN...";
+                _buildCts.Cancel();
+            });
+            _cancelBuild.Dock = DockStyle.Fill;
+            _cancelBuild.Margin = new Padding(0, 6, 0, 0);
+            _cancelBuild.Enabled = false;
+            actions.Controls.Add(_cancelBuild, 0, 2);
+
+            body.Controls.Add(actions);
+
+            body.SizeChanged += (s, e) =>
+            {
+                int width = Math.Max(420, body.ClientSize.Width - body.Padding.Horizontal - 4);
+                sourceBox.Width = width;
+                typeBox.Width = width;
+                regionBox.Width = width;
+                statusBox.Width = width;
+                actions.Width = width;
+            };
 
             Controls.Add(body);
-            body.BringToFront();
+            Controls.Add(header);
+            header.BringToFront();
+
             RefreshLayers();
+            RefreshTinRegionStatus();
             RefreshPairButton();
         }
 
         private static Button Btn(string text, EventHandler h)
         {
-            var b = new Button { Text = text, Dock = DockStyle.Fill, Height = 28 };
+            var b = new Button
+            {
+                Text = text,
+                Dock = DockStyle.Fill,
+                Height = 34,
+                MinimumSize = new Size(0, 34),
+                Margin = new Padding(3, 4, 3, 4),
+                UseCompatibleTextRendering = true
+            };
             b.Click += h;
             return b;
         }
 
-        private static void AddRow(TableLayoutPanel p, int r, string label, Control main, Control button)
+        private static void AddRow(TableLayoutPanel p, int r, string label, Control main, Control layerButton, Control selectButton)
         {
             p.Controls.Add(new Label { Text = label, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 0, r);
             p.Controls.Add(main, 1, r);
-            p.Controls.Add(button, 2, r);
+            p.Controls.Add(layerButton, 2, r);
+            p.Controls.Add(selectButton, 3, r);
         }
 
         private void RefreshLayers()
@@ -145,19 +318,39 @@ namespace MiningVolume2023.UI
                 return;
             }
 
+            _buildCts?.Dispose();
+            _buildCts = new CancellationTokenSource();
+            var token = _buildCts.Token;
+
             try
             {
                 _buildPair.Enabled = false;
+                _cancelBuild.Enabled = true;
                 UseWaitCursor = true;
-                _status.Text = "Đang kiểm tra và dựng cặp TIN hiện trạng / thiết kế...";
-                _status.Refresh();
+                var totalWatch = Stopwatch.StartNew();
 
-                var builds = await Task.Run(() => SurfaceWorkflowService.BuildPairCoreDetailed());
-                SurfaceWorkflowService.DrawTinPair(builds);
+                SetBuildStatus(
+                    st.HasTinRegion
+                        ? $"Đang dựng TIN hiện trạng trong vùng chọn ({st.TinRegionPolygon.Count:n0} đỉnh biên)..."
+                        : $"Đang dựng TIN hiện trạng từ {st.Existing.ActiveVertexCount:n0} đỉnh...");
+                var existing = await BuildRoleWithConflictChoiceAsync(ModelRole.Existing, token);
 
-                _status.Text =
-                    $"Cặp TIN hợp lệ: {st.Existing.TinLayer} = {builds[0].TriangleCount:n0} tam giác; " +
-                    $"{st.Design.TinLayer} = {builds[1].TriangleCount:n0} tam giác.";
+                SetBuildStatus(
+                    $"Hiện trạng xong ({existing.TriangleCount:n0} tam giác, {existing.CoreMilliseconds / 1000.0:0.00}s). " +
+                    $"Đang dựng TIN thiết kế từ {st.Design.ActiveVertexCount:n0} đỉnh...");
+                var design = await BuildRoleWithConflictChoiceAsync(ModelRole.Design, token);
+
+                token.ThrowIfCancellationRequested();
+                var builds = new[] { existing, design };
+                var cadWatch = Stopwatch.StartNew();
+                SurfaceWorkflowService.DrawTinPair(builds, message => SetBuildStatus(message));
+                cadWatch.Stop();
+                totalWatch.Stop();
+
+                SetBuildStatus(
+                    $"Cặp TIN hợp lệ: {st.Existing.TinLayer} = {existing.TriangleCount:n0}; " +
+                    $"{st.Design.TinLayer} = {design.TriangleCount:n0} tam giác. " +
+                    $"Ghi CAD {cadWatch.Elapsed.TotalSeconds:0.00}s; tổng {totalWatch.Elapsed.TotalSeconds:0.00}s.");
 
                 MessageBox.Show(
                     "ĐÃ TẠO ĐỦ 2 TIN DÙNG CHO TÍNH KHỐI LƯỢNG\r\n\r\n" +
@@ -166,6 +359,10 @@ namespace MiningVolume2023.UI
                     "MiningVolume - Cặp TIN hợp lệ",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Information);
+            }
+            catch (OperationCanceledException)
+            {
+                _status.Text = "Đã hủy dựng TIN theo yêu cầu. Dữ liệu nguồn không bị thay đổi.";
             }
             catch (SurfaceValidationException ex)
             {
@@ -188,14 +385,185 @@ namespace MiningVolume2023.UI
             finally
             {
                 UseWaitCursor = false;
+                _cancelBuild.Enabled = false;
+                _buildCts.Dispose();
+                _buildCts = null;
                 RefreshPairButton();
+            }
+        }
+
+        private async Task<SurfaceBuildResult> BuildRoleWithConflictChoiceAsync(
+            ModelRole role,
+            CancellationToken token)
+        {
+            var policy = DuplicateXYConflictPolicy.Stop;
+            var session = ProjectState.Current.Get(role);
+
+            while (true)
+            {
+                token.ThrowIfCancellationRequested();
+                try
+                {
+                    return await Task.Run(() =>
+                        SurfaceWorkflowService.BuildCoreDetailed(
+                            role,
+                            message => SetBuildStatus(message),
+                            token,
+                            policy), token);
+                }
+                catch (DuplicateXYConflictException ex)
+                {
+                    token.ThrowIfCancellationRequested();
+
+                    var chosen = DuplicateXYConflictUi.Ask(this, ex);
+                    if (!chosen.HasValue)
+                        throw new OperationCanceledException(
+                            "Người dùng dừng tạo TIN do dữ liệu trùng XY khác Z.",
+                            token);
+
+                    policy = chosen.Value;
+                    SetBuildStatus(
+                        $"Đang dựng lại TIN {session.Name}: " +
+                        (policy == DuplicateXYConflictPolicy.UseUpper
+                            ? "dùng đỉnh trên (Z lớn hơn) tại vị trí trùng XY..."
+                            : "dùng đỉnh dưới (Z nhỏ hơn) tại vị trí trùng XY..."));
+                }
+            }
+        }
+
+        private void SetBuildStatus(string message)
+        {
+            if (IsDisposed || Disposing) return;
+            if (InvokeRequired)
+            {
+                try { BeginInvoke(new Action<string>(SetBuildStatus), message); } catch { }
+                return;
+            }
+            _status.Text = message;
+            _status.Refresh();
+        }
+
+        private void SelectTinRegion()
+        {
+            var handle = SelectionService.PickClosedBoundary();
+            if (string.IsNullOrWhiteSpace(handle))
+            {
+                _status.Text = "Đã hủy chọn vùng tạo TIN.";
+                return;
+            }
+
+            try
+            {
+                var polygon = BoundaryGeometryService.ReadBoundary(handle);
+                if (polygon == null || polygon.Count < 3)
+                    throw new InvalidOperationException("Vùng tạo TIN không có đủ đỉnh hợp lệ.");
+
+                var state = ProjectState.Current;
+                state.TinRegionHandle = handle;
+                state.TinRegionPolygon.Clear();
+                state.TinRegionPolygon.AddRange(polygon);
+
+                // Thay đổi phạm vi tạo TIN làm cả hai TIN cũ mất hiệu lực.
+                SurfaceWorkflowService.InvalidateTin(
+                    ModelRole.Existing, clearCadLayer: true, notify: false);
+                SurfaceWorkflowService.InvalidateTin(
+                    ModelRole.Design, clearCadLayer: true, notify: false);
+                state.NotifyChanged();
+
+                RefreshTinRegionStatus();
+                _status.Text =
+                    $"Đã chọn vùng tạo TIN chung cho Hiện trạng + Thiết kế: " +
+                    $"{polygon.Count:n0} đỉnh biên. TIN chỉ dùng trong vùng này; " +
+                    "phần mềm tự giữ một dải dữ liệu đệm kỹ thuật quanh biên để nội suy ổn định.";
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    ex.Message,
+                    "Không chọn được vùng tạo TIN",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
+                _status.Text = "Chọn vùng tạo TIN thất bại.";
+            }
+        }
+
+        private void ClearTinRegion()
+        {
+            var state = ProjectState.Current;
+            bool hadRegion = state.HasTinRegion;
+            state.TinRegionHandle = null;
+            state.TinRegionPolygon.Clear();
+
+            if (hadRegion)
+            {
+                SurfaceWorkflowService.InvalidateTin(
+                    ModelRole.Existing, clearCadLayer: true, notify: false);
+                SurfaceWorkflowService.InvalidateTin(
+                    ModelRole.Design, clearCadLayer: true, notify: false);
+                state.NotifyChanged();
+            }
+
+            RefreshTinRegionStatus();
+            _status.Text = "Phạm vi tạo TIN: dùng toàn bộ dữ liệu đã nạp.";
+        }
+
+        private void RefreshTinRegionStatus()
+        {
+            var state = ProjectState.Current;
+            _tinRegionStatus.Text = state.HasTinRegion
+                ? $"Vùng CAD: {state.TinRegionPolygon.Count:n0} đỉnh biên • áp dụng cho cả 2 TIN"
+                : "Toàn bộ dữ liệu đã nạp.";
+        }
+
+        private void SelectModel(ModelRole role)
+        {
+            var allowed = AllowedTypes();
+            if (allowed.Count == 0)
+            {
+                MessageBox.Show("Chọn ít nhất một loại dữ liệu.", "Mining Volume");
+                return;
+            }
+
+            var session = ProjectState.Current.Get(role);
+            var picked = SelectionService.PickSurfaceEntities(session.Name);
+            if (picked == null || picked.Count == 0)
+            {
+                _status.Text = "Đã hủy chọn đối tượng cho " + session.Name + ".";
+                return;
+            }
+
+            try
+            {
+                UseWaitCursor = true;
+                _status.Text = $"Đang nạp {picked.Count:n0} đối tượng đã chọn cho {session.Name}...";
+                _status.Refresh();
+
+                var result = SurfaceWorkflowService.LoadSelection(role, picked, allowed);
+                ProjectState.Current.ActiveRole = role;
+                _status.Text =
+                    $"Đã nạp {session.Name} bằng chọn trực tiếp: {result.Summary}. " +
+                    $"Nguồn có thể nằm trên nhiều layer. Đã chuẩn bị layer TIN: {result.OutputTinLayer}.";
+                RefreshPairButton();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.Message, "Không nạp được đối tượng đã chọn", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                _status.Text = "Nạp dữ liệu bằng chọn trực tiếp thất bại.";
+            }
+            finally
+            {
+                UseWaitCursor = false;
             }
         }
 
         private void LoadModel(ModelRole role)
         {
             var cb = role == ModelRole.Existing ? _existingLayer : _designLayer;
-            if (string.IsNullOrWhiteSpace(cb.Text)) { MessageBox.Show("Chọn layer trước khi nạp.", "Mining Volume"); return; }
+            if (string.IsNullOrWhiteSpace(cb.Text))
+            {
+                MessageBox.Show("Chọn layer trước khi nạp, hoặc dùng nút 'Chọn trên CAD'.", "Mining Volume");
+                return;
+            }
             var allowed = AllowedTypes();
             if (allowed.Count == 0) { MessageBox.Show("Chọn ít nhất một loại dữ liệu.", "Mining Volume"); return; }
 

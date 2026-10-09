@@ -43,9 +43,9 @@ namespace MiningVolume2023.Services
                 var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
                 var ms = (BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForWrite);
 
-                // Dedicated TIN layers must contain only MiningVolume 3DFACE entities.
-                // Never erase arbitrary CAD entities just because a layer happens to have
-                // the reserved TIN name.
+                // One ModelSpace pass only: validate the reserved layer and erase the
+                // previous MiningVolume faces in the same transaction. This avoids a
+                // second full scan on large mine drawings.
                 foreach (ObjectId id in ms)
                 {
                     var ent = tr.GetObject(id, OpenMode.ForRead) as Entity;
@@ -55,16 +55,8 @@ namespace MiningVolume2023.Services
                             $"Layer {layerName} chứa đối tượng không phải 3DFACE. " +
                             "MiningVolume không xóa tự động để tránh mất dữ liệu CAD. " +
                             "Hãy chuyển đối tượng đó sang layer khác rồi tạo lại TIN.");
-                }
-
-                foreach (ObjectId id in ms)
-                {
-                    var ent = tr.GetObject(id, OpenMode.ForRead) as Entity;
-                    if (ent is Face && ent.LayerId == layerId)
-                    {
-                        ent.UpgradeOpen();
-                        ent.Erase();
-                    }
+                    ent.UpgradeOpen();
+                    ent.Erase();
                 }
 
                 foreach (var t in tin.Triangles)
@@ -107,6 +99,8 @@ namespace MiningVolume2023.Services
                 var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
                 var ms = (BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForRead);
 
+                // Validate and erase in one pass. A dedicated TIN layer must contain
+                // faces only; foreign CAD entities are never deleted automatically.
                 foreach (ObjectId id in ms)
                 {
                     var ent = tr.GetObject(id, OpenMode.ForRead) as Entity;
@@ -115,17 +109,9 @@ namespace MiningVolume2023.Services
                         throw new InvalidOperationException(
                             $"Layer {layerName} chứa đối tượng không phải 3DFACE; " +
                             "không xóa tự động để tránh mất dữ liệu CAD.");
-                }
-
-                foreach (ObjectId id in ms)
-                {
-                    var ent = tr.GetObject(id, OpenMode.ForRead) as Entity;
-                    if (ent is Face && ent.LayerId == layerId)
-                    {
-                        ent.UpgradeOpen();
-                        ent.Erase();
-                        erased++;
-                    }
+                    ent.UpgradeOpen();
+                    ent.Erase();
+                    erased++;
                 }
 
                 outLayer.IsLocked = true;

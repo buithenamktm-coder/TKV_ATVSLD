@@ -15,13 +15,14 @@ def test_surface_builder_has_no_nettopologysuite_dependency():
         assert token in s
 
 
-def test_breakline_recovery_locks_constraints_and_rejects_crossing_locked_edges():
+def test_breakline_recovery_locks_constraints_and_never_flips_locked_edges():
     s = read('src/MiningVolume.Surface/ConformingTinBuilder.cs')
     assert 'var locked = new HashSet<EdgeKey>()' in s
-    assert 'locked.Add(new EdgeKey(a, b))' in s
+    assert 'var constraint = new EdgeKey(a, b)' in s
+    assert 'locked.Add(constraint)' in s
     assert 'locked.Contains(e)' in s
     assert 'ProperIntersection' in s
-    assert 'Không tạo cạnh mới cắt một breakline đã khóa' in s
+    assert 'new diagonal cannot cross any unrelated' in s
 
 
 def test_autocad2023_official_nuget_reference_is_pinned_for_ci():
@@ -48,9 +49,10 @@ def test_release_policy_bans_autocad_and_old_tin_dlls_from_bundle():
         assert dll in s
 
 
-def test_installer_rolls_back_if_runtime_selftest_fails():
+def test_installer_does_not_run_autocad_selftest_on_end_user_install():
     s = read('installer/main.go')
-    assert 'runAutoCADSelfTest' in s
+    install_block = s[s.index('func install()'):s.index('func validatePrebuiltBundle')]
+    assert 'runAutoCADSelfTest(cad)' not in install_block
+    assert 'Phần mềm đang được tiếp tục cải tiến và hoàn thiện.' in install_block
+    assert 'Bùi Thế Nam' in install_block and '0967280686' in install_block
     assert 'restoreBackup(backup, target)' in s
-    assert 'selftest_failed' in s
-    assert 'Status=PASS' in s and 'Status=FAIL' in s

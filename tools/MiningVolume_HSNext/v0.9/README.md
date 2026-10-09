@@ -76,7 +76,7 @@ CI trigger marker: AutoCAD 2023 Windows release candidate.
 
 ## Classic workspace / Ribbon tắt — v0.10.4
 
-MiningVolume không phụ thuộc Ribbon để được nạp. Khi add-in được AutoCAD 2023 nạp và có bản vẽ hoạt động, phần khởi tạo/TIN layer vẫn được chuẩn bị nhưng palette `MINING VOLUME` **không tự mở theo mặc định**. Người dùng mở bảng từ Ribbon khi cần; nếu đang dùng Classic workspace/Ribbon tắt thì có thể dùng lệnh `MVOPEN` hoặc `MV_TOGGLE`. Tùy chọn tự mở có thể bật lại trong trang Dự án.
+MiningVolume không phụ thuộc Ribbon để được nạp. Khi add-in được AutoCAD 2023 nạp và có bản vẽ hoạt động, phần khởi tạo/TIN layer vẫn được chuẩn bị nhưng palette `MINING VOLUME` **không tự mở theo mặc định**. Người dùng mở bảng từ Ribbon khi cần; nếu đang dùng Classic workspace/Ribbon tắt thì có thể dùng lệnh `MVOPEN` hoặc `TKL`. Tùy chọn tự mở có thể bật lại trong trang Dự án.
 
 Nếu giao diện khởi động thất bại, add-in không bỏ qua lỗi im lặng. Nó hiển thị thông báo và ghi log tại:
 
@@ -186,7 +186,7 @@ Runner **không chạy dưới dạng Windows Service** vì AutoCAD/MVSELFTEST c
 ### Bật/tắt bảng trong khi làm việc
 
 - Ribbon **MINING VOLUME → Dự án** có nút **Ẩn / Hiện bảng** để đóng/mở palette ngay trong phiên AutoCAD.
-- Lệnh kỹ thuật tương ứng: `MV_TOGGLE`.
+- Lệnh kỹ thuật tương ứng: `TKL`.
 - Việc ẩn bảng không làm mất Project, TIN hay kết quả đang làm việc.
 - `MVSELFTEST` trên AutoCAD 2023 thật bắt buộc kiểm tra chuỗi mở → ẩn → hiện lại palette; Setup chỉ PASS khi thao tác này hoạt động.
 
@@ -202,3 +202,6 @@ Runner **không chạy dưới dạng Windows Service** vì AutoCAD/MVSELFTEST c
 ### Kiểm soát quyền của Setup
 
 Setup kiểm tra quyền Administrator bằng cơ chế không phụ thuộc dịch vụ Windows Server; sau cài thành công, thông báo cũng tuân theo chính sách mới: palette MiningVolume không tự mở theo mặc định.
+
+
+> Lệnh cũ `MV_TOGGLE` vẫn được giữ làm alias tương thích; lệnh sử dụng chính thức từ v0.10.5 là `TKL`.
