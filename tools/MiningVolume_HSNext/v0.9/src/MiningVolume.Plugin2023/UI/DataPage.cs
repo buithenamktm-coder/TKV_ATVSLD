@@ -41,7 +41,7 @@ namespace MiningVolume2023.UI
             });
             header.Controls.Add(new Label
             {
-                Text = "Chọn layer hiện trạng, thiết kế và các loại đối tượng tham gia mô hình.",
+                Text = "Nạp theo layer hoặc chọn trực tiếp POINT / LINE / POLYLINE trên bản vẽ.",
                 Dock = DockStyle.Bottom,
                 Height = 22,
                 Font = new Font("Arial", 8.75F),
@@ -69,20 +69,27 @@ namespace MiningVolume2023.UI
             var source = new TableLayoutPanel
             {
                 Dock = DockStyle.Fill,
-                ColumnCount = 3,
+                ColumnCount = 4,
                 RowCount = 2,
                 Padding = new Padding(10, 8, 10, 8)
             };
             source.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 88));
             source.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            source.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 116));
+            source.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 104));
+            source.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120));
             source.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
             source.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
 
             _existingLayer = new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList, Margin = new Padding(3, 5, 6, 5) };
             _designLayer = new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList, Margin = new Padding(3, 5, 6, 5) };
-            AddRow(source, 0, "Hiện trạng", _existingLayer, Btn("Nạp dữ liệu", (s, e) => LoadModel(ModelRole.Existing)));
-            AddRow(source, 1, "Thiết kế", _designLayer, Btn("Nạp dữ liệu", (s, e) => LoadModel(ModelRole.Design)));
+            AddRow(
+                source, 0, "Hiện trạng", _existingLayer,
+                Btn("Nạp layer", (s, e) => LoadModel(ModelRole.Existing)),
+                Btn("Chọn trên CAD", (s, e) => SelectModel(ModelRole.Existing)));
+            AddRow(
+                source, 1, "Thiết kế", _designLayer,
+                Btn("Nạp layer", (s, e) => LoadModel(ModelRole.Design)),
+                Btn("Chọn trên CAD", (s, e) => SelectModel(ModelRole.Design)));
             sourceBox.Controls.Add(source);
             body.Controls.Add(sourceBox);
 
@@ -184,11 +191,12 @@ namespace MiningVolume2023.UI
             return b;
         }
 
-        private static void AddRow(TableLayoutPanel p, int r, string label, Control main, Control button)
+        private static void AddRow(TableLayoutPanel p, int r, string label, Control main, Control layerButton, Control selectButton)
         {
             p.Controls.Add(new Label { Text = label, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 0, r);
             p.Controls.Add(main, 1, r);
-            p.Controls.Add(button, 2, r);
+            p.Controls.Add(layerButton, 2, r);
+            p.Controls.Add(selectButton, 3, r);
         }
 
         private void RefreshLayers()
@@ -323,10 +331,55 @@ namespace MiningVolume2023.UI
             }
         }
 
+        private void SelectModel(ModelRole role)
+        {
+            var allowed = AllowedTypes();
+            if (allowed.Count == 0)
+            {
+                MessageBox.Show("Chọn ít nhất một loại dữ liệu.", "Mining Volume");
+                return;
+            }
+
+            var session = ProjectState.Current.Get(role);
+            var picked = SelectionService.PickSurfaceEntities(session.Name);
+            if (picked == null || picked.Count == 0)
+            {
+                _status.Text = "Đã hủy chọn đối tượng cho " + session.Name + ".";
+                return;
+            }
+
+            try
+            {
+                UseWaitCursor = true;
+                _status.Text = $"Đang nạp {picked.Count:n0} đối tượng đã chọn cho {session.Name}...";
+                _status.Refresh();
+
+                var result = SurfaceWorkflowService.LoadSelection(role, picked, allowed);
+                ProjectState.Current.ActiveRole = role;
+                _status.Text =
+                    $"Đã nạp {session.Name} bằng chọn trực tiếp: {result.Summary}. " +
+                    $"Nguồn có thể nằm trên nhiều layer. Đã chuẩn bị layer TIN: {result.OutputTinLayer}.";
+                RefreshPairButton();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.Message, "Không nạp được đối tượng đã chọn", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                _status.Text = "Nạp dữ liệu bằng chọn trực tiếp thất bại.";
+            }
+            finally
+            {
+                UseWaitCursor = false;
+            }
+        }
+
         private void LoadModel(ModelRole role)
         {
             var cb = role == ModelRole.Existing ? _existingLayer : _designLayer;
-            if (string.IsNullOrWhiteSpace(cb.Text)) { MessageBox.Show("Chọn layer trước khi nạp.", "Mining Volume"); return; }
+            if (string.IsNullOrWhiteSpace(cb.Text))
+            {
+                MessageBox.Show("Chọn layer trước khi nạp, hoặc dùng nút 'Chọn trên CAD'.", "Mining Volume");
+                return;
+            }
             var allowed = AllowedTypes();
             if (allowed.Count == 0) { MessageBox.Show("Chọn ít nhất một loại dữ liệu.", "Mining Volume"); return; }
 
