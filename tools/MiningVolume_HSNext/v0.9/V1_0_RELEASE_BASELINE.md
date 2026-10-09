@@ -10,6 +10,7 @@ V1.0 là bản hoàn thiện đầu tiên để sử dụng thực tế trong Au
 - [ ] Chọn trực tiếp POINT/LINE/LWPOLYLINE/POLYLINE 2D/3D trên CAD; chọn theo layer chỉ là phương án bổ sung.
 - [ ] Quản lý dữ liệu đã nạp: X/Y/Z, loại đối tượng, layer nguồn, loại/bật lại đối tượng và cập nhật mô hình.
 - [ ] TIN hiện trạng + thiết kế: xử lý dữ liệu lớn, có tiến độ, hủy được, không silent-decimate điểm đo.
+- [ ] Phạm vi TIN tùy chọn: người dùng được chọn LWPOLYLINE khép kín trên CAD để chỉ dựng cặp TIN trong vùng cần tính; vẫn có lựa chọn dùng toàn bộ dữ liệu.
 - [ ] Xử lý mềm dẻo các xung đột Z: trùng XY, point trên breakline, breakline cắt/chồng khác Z; người dùng được chọn dừng / đỉnh trên / đỉnh dưới.
 - [ ] Tính khối lượng theo quy tắc hình học thích ứng giữa hai mặt cắt liền kề, không dùng một công thức cố định cho mọi trường hợp.
 - [ ] Excel dùng công thức thực và liên kết ô/sheet; thay đầu vào trong Excel phải tự tính lại.
