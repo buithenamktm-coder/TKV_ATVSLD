@@ -17,7 +17,7 @@ namespace MiningVolume.Core.Surface
     public sealed class DuplicateXYConflictException : Exception
     {
         public DuplicateXYConflictException(string modelName, IReadOnlyList<ValidationIssue> issues)
-            : base($"Dữ liệu mô hình {modelName} có các điểm trùng XY nhưng khác cao độ Z.")
+            : base($"Dữ liệu mô hình {modelName} có xung đột cao độ Z có thể xử lý bằng lựa chọn đỉnh trên/đỉnh dưới.")
         {
             ModelName = modelName ?? "Mô hình";
             Issues = issues ?? Array.Empty<ValidationIssue>();
