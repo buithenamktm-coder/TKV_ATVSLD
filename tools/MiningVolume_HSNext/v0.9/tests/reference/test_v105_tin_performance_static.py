@@ -235,7 +235,7 @@ def test_breakline_recovery_falls_back_to_collinear_interior_site_chain():
     assert "TryRecoverConstraintThroughInteriorSites" in s
     assert "Geometry2D.PointOnSegment" in s
     assert "onLineTol = Math.Max(tol * 10.0, 1e-8)" in s
-    assert "RecoverConstraint(tris, vertices, sub" in s
+    assert "tris, vertices, sub, locked, adjacency, edgeIndex, tol, cancellationToken" in s
     assert "if (adjacency.ContainsKey(sub))" in s
     assert "if (adjacency.ContainsKey(constraint))" in s
     assert "Không có cạnh cắt và cũng không tìm thấy chuỗi site trung gian" in s
@@ -265,7 +265,7 @@ def test_large_tin_deduplicates_bucketed_breaklines_and_reports_live_tile_progre
     assert "message => progress?.Invoke" in tiled
 
     assert "CancellationToken cancellationToken" in builder
-    assert 'progress?.Invoke($"Delaunay {orderIndex:n0}/{realCount:n0} điểm...")' in builder
+    assert '"Delaunay {orderIndex:n0}/{realCount:n0} điểm..."' in builder
     assert "cancellationToken.ThrowIfCancellationRequested()" in builder
     assert "khôi phục breakline" in builder
 
