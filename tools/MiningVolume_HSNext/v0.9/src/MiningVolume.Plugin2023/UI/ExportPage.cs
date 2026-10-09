@@ -41,8 +41,8 @@ namespace MiningVolume2023.UI
             devTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             devTable.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
             devTable.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
-            _developer = new TextBox { Dock = DockStyle.Fill, Text = ProjectState.Current.DeveloperName, Font = new Font("Arial", 9F) };
-            _contact = new TextBox { Dock = DockStyle.Fill, Text = ProjectState.Current.DeveloperContact, Font = new Font("Arial", 9F) };
+            _developer = new TextBox { Dock = DockStyle.Fill, Text = ExportOptions.FixedDeveloperName, ReadOnly = true, Font = new Font("Arial", 9F) };
+            _contact = new TextBox { Dock = DockStyle.Fill, Text = ExportOptions.FixedDeveloperContact, ReadOnly = true, Font = new Font("Arial", 9F) };
             devTable.Controls.Add(LabelCell("Người phát triển phần mềm"), 0, 0);
             devTable.Controls.Add(_developer, 1, 0);
             devTable.Controls.Add(LabelCell("Địa chỉ liên hệ / email / điện thoại"), 0, 1);
@@ -66,7 +66,7 @@ namespace MiningVolume2023.UI
 
             Controls.Add(new Label
             {
-                Text = "Excel: Arial 12 • không tô nền • toàn bộ bảng đóng khung • số liệu 2–3 chữ số thập phân theo loại dữ liệu.",
+                Text = "Excel: Arial 12 • bảng đóng khung • công thức liên kết thật • logo IMSAT ở sheet báo cáo chính.",
                 Dock = DockStyle.Top,
                 Height = 42,
                 ForeColor = Color.DimGray,
@@ -84,8 +84,6 @@ namespace MiningVolume2023.UI
             Controls.Add(bottom);
             bottom.BringToFront();
 
-            _developer.TextChanged += ReportInfoChanged;
-            _contact.TextChanged += ReportInfoChanged;
             ProjectState.Current.Changed += StateChanged;
             RefreshState();
         }
@@ -126,8 +124,8 @@ namespace MiningVolume2023.UI
                     IncludeLevels = _levels.Checked,
                     IncludeSummary = _summary.Checked,
                     IncludeWarnings = _warnings.Checked,
-                    DeveloperName = _developer.Text?.Trim() ?? string.Empty,
-                    DeveloperContact = _contact.Text?.Trim() ?? string.Empty
+                    DeveloperName = ExportOptions.FixedDeveloperName,
+                    DeveloperContact = ExportOptions.FixedDeveloperContact
                 };
 
                 try
@@ -136,7 +134,7 @@ namespace MiningVolume2023.UI
                     UseWaitCursor = true;
                     _status.Text = "Đang lập workbook và ghi file Excel...";
                     var report = await Task.Run(() => ExportWorkflowService.BuildReport(st, opt));
-                    await Task.Run(() => SimpleXlsxWriter.Write(dlg.FileName, report));
+                    await Task.Run(() => ExportWorkflowService.WriteXlsx(dlg.FileName, report));
                     _status.Text = "Đã xuất: " + dlg.FileName;
                     MessageBox.Show("Đã xuất báo cáo Excel thành công.\n\n" + dlg.FileName, "MiningVolume 2023", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
@@ -153,12 +151,6 @@ namespace MiningVolume2023.UI
             }
         }
 
-        private void ReportInfoChanged(object sender, EventArgs e)
-        {
-            ProjectState.Current.DeveloperName = _developer.Text?.Trim() ?? string.Empty;
-            ProjectState.Current.DeveloperContact = _contact.Text?.Trim() ?? string.Empty;
-        }
-
         private void StateChanged(object sender, EventArgs e)
         {
             if (!IsHandleCreated) return;
@@ -168,8 +160,8 @@ namespace MiningVolume2023.UI
         private void RefreshState()
         {
             var st = ProjectState.Current;
-            if (!_developer.Focused) _developer.Text = st.DeveloperName ?? string.Empty;
-            if (!_contact.Focused) _contact.Text = st.DeveloperContact ?? string.Empty;
+            _developer.Text = ExportOptions.FixedDeveloperName;
+            _contact.Text = ExportOptions.FixedDeveloperContact;
             bool ready = st.VolumeResult != null && st.SectionProfiles.Count > 0;
             _export.Enabled = ready;
             if (ready)

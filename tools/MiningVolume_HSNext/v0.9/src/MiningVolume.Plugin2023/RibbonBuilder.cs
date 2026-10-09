@@ -1,6 +1,9 @@
 using Autodesk.Windows;
 using System;
+using System.IO;
 using System.Windows.Input;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using AcApp = Autodesk.AutoCAD.ApplicationServices.Application;
 using MiningVolume2023.UI;
 
@@ -51,7 +54,7 @@ namespace MiningVolume2023
 
         private static RibbonButton Btn(string text, RibbonAction action)
         {
-            return new RibbonButton
+            var button = new RibbonButton
             {
                 Text = text,
                 ShowText = true,
@@ -60,6 +63,33 @@ namespace MiningVolume2023
                 CommandParameter = action,
                 CommandHandler = new DirectHandler()
             };
+            var logo = LoadImsatIcon();
+            if (logo != null)
+            {
+                button.Image = logo;
+                button.LargeImage = logo;
+            }
+            return button;
+        }
+
+        private static ImageSource LoadImsatIcon()
+        {
+            try
+            {
+                string path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Assets", "imsat_logo_64.png");
+                if (!File.Exists(path)) return null;
+                var image = new BitmapImage();
+                image.BeginInit();
+                image.CacheOption = BitmapCacheOption.OnLoad;
+                image.UriSource = new Uri(path, UriKind.Absolute);
+                image.EndInit();
+                image.Freeze();
+                return image;
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         private static void AddPanel(RibbonTab tab, string title, RibbonButton[] buttons)
@@ -122,7 +152,7 @@ namespace MiningVolume2023
                         EntryPoint.Open(AppPage.Export);
                         break;
                     case RibbonAction.About:
-                        AcApp.ShowAlertDialog("MiningVolume 2023\nHS-Next • Mine Survey & Earthwork\nGUI-first v0.10");
+                        AcApp.ShowAlertDialog("IMSAT MINING VOLUME\nMine Survey & Earthwork for AutoCAD\nPhát triển: Bùi Thế Nam\nĐiện thoại: 0967280686");
                         break;
                 }
             }

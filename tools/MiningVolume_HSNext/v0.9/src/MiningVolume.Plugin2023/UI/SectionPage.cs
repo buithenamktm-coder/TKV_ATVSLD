@@ -1,6 +1,8 @@
 using System;
 using System.Drawing;
 using System.Linq;
+using System.Diagnostics;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 using MiningVolume.Core.Geometry;
 using MiningVolume.Core.Sections;
@@ -272,21 +274,80 @@ namespace MiningVolume2023.UI
             catch (Exception ex) { MessageBox.Show(ex.Message, "Xóa tuyến", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
         }
 
-        private void BuildProfiles(object s, EventArgs e)
+        private async void BuildProfiles(object s, EventArgs e)
         {
+            var button = s as Button;
             try
             {
+                if (button != null) button.Enabled = false;
+                UseWaitCursor = true;
                 EnsureSystem();
                 SaveParameters();
-                var profiles = SectionWorkflowService.BuildProfiles();
+
+                _status.Text = "Đang kiểm tra trạng thái hai TIN...";
+                _status.Refresh();
+                SectionWorkflowService.EnsureProfileInputsReady();
+
+                var state = ProjectState.Current;
+                var system = state.SectionSystem;
+                var existing = state.Existing.Tin;
+                var design = state.Design.Tin;
+                var watch = Stopwatch.StartNew();
+                IProgress<string> progress = new Progress<string>(message =>
+                {
+                    _status.Text = message;
+                });
+
+                var profiles = await Task.Run(() =>
+                    SectionWorkflowService.BuildProfilesCore(
+                        system,
+                        existing,
+                        design,
+                        (done, total, name) =>
+                            progress.Report($"Đang tính mặt cắt {done:n0}/{total:n0}: {name}...")));
+
+                watch.Stop();
+                SectionWorkflowService.CommitProfiles(profiles);
+                int valid = profiles.Count(x => x.HasData);
+                _status.Text =
+                    $"Tính xong {profiles.Count:n0} mặt cắt ({valid:n0} đủ hai TIN) trong {watch.Elapsed.TotalSeconds:0.0}s. " +
+                    "Chọn điểm chèn trên CAD.";
+                _status.Refresh();
+
                 var ins = SelectionService.PickInsertionPoint("Chọn điểm chèn hệ mặt cắt: ");
                 if (!ins.HasValue) return;
-                SectionWorkflowService.DrawProfiles(ins.Value, (double)_hScale.Value, (double)_vScale.Value, (double)_levelStep.Value);
-                int valid = profiles.Count(x => x.HasData);
-                _status.Text = $"Đã thành lập {profiles.Count:n0} mặt cắt; {valid:n0} mặt cắt có đủ dữ liệu hai TIN.";
+
+                var drawWatch = Stopwatch.StartNew();
+                _status.Text = $"Đang vẽ mặt cắt 0/{profiles.Count:n0} xuống AutoCAD...";
+                _status.Refresh();
+                SectionWorkflowService.DrawProfiles(
+                    ins.Value,
+                    (double)_hScale.Value,
+                    (double)_vScale.Value,
+                    (double)_levelStep.Value,
+                    (done, total) =>
+                    {
+                        _status.Text = $"Đang vẽ mặt cắt {done:n0}/{total:n0} xuống AutoCAD...";
+                        _status.Refresh();
+                        Application.DoEvents();
+                    });
+                drawWatch.Stop();
+
+                _status.Text =
+                    $"Đã thành lập {profiles.Count:n0} mặt cắt; {valid:n0} mặt cắt có đủ dữ liệu hai TIN. " +
+                    $"Tính {watch.Elapsed.TotalSeconds:0.0}s; vẽ {drawWatch.Elapsed.TotalSeconds:0.0}s.";
                 RefreshGrid();
             }
-            catch (Exception ex) { MessageBox.Show(ex.Message, "Không thành lập được mặt cắt", MessageBoxButtons.OK, MessageBoxIcon.Error); }
+            catch (Exception ex)
+            {
+                _status.Text = "Không thành lập được mặt cắt.";
+                MessageBox.Show(ex.Message, "Không thành lập được mặt cắt", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally
+            {
+                UseWaitCursor = false;
+                if (button != null) button.Enabled = true;
+            }
         }
 
 

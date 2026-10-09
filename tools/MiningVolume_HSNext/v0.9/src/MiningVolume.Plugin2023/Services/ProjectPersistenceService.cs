@@ -166,8 +166,10 @@ namespace MiningVolume2023.Services
             {
                 Layer = session.Layer,
                 TinVisible = session.TinVisible,
-                HadTin = session.IsTinCurrent
+                HadTin = session.IsTinCurrent,
+                SourceMode = (int)session.SourceMode
             };
+            foreach (var handle in session.SelectedHandles) s.SelectedHandles.Add(handle);
             foreach (var t in session.AllowedTypes) s.AllowedTypes.Add((int)t);
             if (session.Source == null) return s;
             foreach (var e in session.Source.Entities)
@@ -237,12 +239,22 @@ namespace MiningVolume2023.Services
 
         private static void RestoreModel(ModelRole role, ModelSnapshot snap, List<string> warnings)
         {
-            if (snap == null || string.IsNullOrWhiteSpace(snap.Layer)) return;
+            if (snap == null) return;
             var types = new HashSet<SourceEntityType>((snap.AllowedTypes ?? new List<int>()).Where(x => Enum.IsDefined(typeof(SourceEntityType), x)).Select(x => (SourceEntityType)x));
             if (types.Count == 0) foreach (SourceEntityType t in Enum.GetValues(typeof(SourceEntityType))) types.Add(t);
             try
             {
-                SurfaceWorkflowService.LoadLayer(role, snap.Layer, types);
+                var sourceMode = Enum.IsDefined(typeof(SourceSelectionMode), snap.SourceMode)
+                    ? (SourceSelectionMode)snap.SourceMode
+                    : SourceSelectionMode.Layer;
+
+                if (sourceMode == SourceSelectionMode.ManualSelection && snap.SelectedHandles != null && snap.SelectedHandles.Count > 0)
+                    SurfaceWorkflowService.LoadSelectedHandles(role, snap.SelectedHandles, types);
+                else if (!string.IsNullOrWhiteSpace(snap.Layer))
+                    SurfaceWorkflowService.LoadLayer(role, snap.Layer, types);
+                else
+                    return;
+
                 var session = ProjectState.Current.Get(role);
                 var byHandle = session.Source.Entities.GroupBy(e => e.Handle, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
                 foreach (var edit in snap.Edits ?? new List<EntityEditSnapshot>())

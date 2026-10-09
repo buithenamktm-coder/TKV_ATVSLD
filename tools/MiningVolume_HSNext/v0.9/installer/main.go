@@ -24,7 +24,7 @@ import (
 var payloadFS embed.FS
 
 const (
-    productName = "MiningVolume HS-Next for AutoCAD 2023"
+    productName = "IMSAT MiningVolume HS-Next for AutoCAD 2023"
     version = "0.10.4"
     uninstallKey = `HKLM\Software\Microsoft\Windows\CurrentVersion\Uninstall\MiningVolume2023`
 )
@@ -80,18 +80,16 @@ func install() {
         msg("Không cài được bundle: "+err.Error(), 0x10); return
     }
 
-    ok, detail := runAutoCADSelfTest(cad)
-    if !ok {
-        os.RemoveAll(target); _ = restoreBackup(backup, target)
-        writePersistentLog("selftest_failed", detail)
-        msg("MiningVolume đã tự rollback vì kiểm thử trong AutoCAD 2023 không đạt.\n\n"+detail, 0x10); return
-    }
+    // Runtime verification is a release-pipeline responsibility. The end-user
+    // installer must never launch AutoCAD automatically or expose development
+    // self-test behavior. A RUNTIME-PASS artifact has already been verified on
+    // a real AutoCAD 2023 runner before this Setup is published.
     os.RemoveAll(backup)
-    writeRuntimeVerification(cad, detail)
-    if err := registerUninstall(target); err != nil {
-        msg("Add-in đã PASS trong AutoCAD nhưng chưa ghi được mục gỡ cài đặt: "+err.Error(), 0x30); return
+    if err := registerUninstall(target, cad); err != nil {
+        msg("MiningVolume đã được chép vào AutoCAD nhưng chưa ghi được mục gỡ cài đặt: "+err.Error(), 0x30); return
     }
-    msg("Cài đặt MiningVolume v0.10.4 thành công.\n\nAutoCAD 2023 runtime self-test: PASS.\nMáy không cần Visual Studio/Build Tools.\nMở AutoCAD: MiningVolume không tự mở bảng theo mặc định; mở từ Ribbon MINING VOLUME hoặc bật tùy chọn tự động mở trong trang Dự án.", 0x40)
+    writePersistentLog("install", "Status=INSTALLED\r\nAutoCAD="+filepath.Join(cad,"acad.exe"))
+    msg("Cài đặt IMSAT MiningVolume v0.10.4 thành công.\n\nSetup không tự mở AutoCAD.\nMáy không cần Visual Studio/Build Tools.\nKhi cần sử dụng, hãy mở AutoCAD 2023 rồi dùng Ribbon MINING VOLUME, Menu Bar MINING VOLUME hoặc lệnh TKL.\nMiningVolume không tự mở bảng theo mặc định.", 0x40)
 }
 
 func validatePrebuiltBundle(root string) error {
@@ -145,6 +143,7 @@ func uninstall() {
     programData := os.Getenv("ProgramData"); if programData=="" { programData=`C:\ProgramData` }
     target := filepath.Join(programData,"Autodesk","ApplicationPlugins","MiningVolume2023.bundle")
     os.RemoveAll(target)
+    os.Remove(filepath.Join(programData, "Microsoft", "Windows", "Start Menu", "Programs", "IMSAT MiningVolume.lnk"))
     exec.Command("reg","delete",uninstallKey,"/f").Run()
     msg("Đã gỡ MiningVolume khỏi AutoCAD.", 0x40)
 }
@@ -196,7 +195,7 @@ func runAutoCADSelfTest(cad string) (bool, string) {
     _ = cmd.Process.Kill(); return false, "Hết thời gian 150 giây nhưng không nhận được PASS từ MVSELFTEST."
 }
 
-func registerUninstall(bundlePath string) error {
+func registerUninstall(bundlePath, cadDir string) error {
     programData := os.Getenv("ProgramData"); if programData=="" { programData=`C:\ProgramData` }
     dir := filepath.Join(programData, "MiningVolume2023")
     if err := os.MkdirAll(dir,0755); err != nil { return err }
@@ -205,12 +204,29 @@ func registerUninstall(bundlePath string) error {
     vals := [][]string{
         {"/v","DisplayName","/t","REG_SZ","/d",productName,"/f"},
         {"/v","DisplayVersion","/t","REG_SZ","/d",version,"/f"},
-        {"/v","Publisher","/t","REG_SZ","/d","MiningVolume Development","/f"},
+        {"/v","Publisher","/t","REG_SZ","/d","Viện Khoa học Công nghệ Mỏ - Vinacomin","/f"},
         {"/v","InstallLocation","/t","REG_SZ","/d",bundlePath,"/f"},
+        {"/v","DisplayIcon","/t","REG_SZ","/d",stored+",0","/f"},
         {"/v","UninstallString","/t","REG_SZ","/d","\""+stored+"\" --uninstall","/f"},
     }
     for _,v := range vals { a:=append([]string{"add",uninstallKey},v...); if err:=exec.Command("reg",a...).Run(); err!=nil{return err} }
+    if err := createStartMenuShortcut(cadDir, stored); err != nil { return err }
     return nil
+}
+
+func createStartMenuShortcut(cadDir, iconExe string) error {
+    programData := os.Getenv("ProgramData"); if programData=="" { programData=`C:\ProgramData` }
+    menuDir := filepath.Join(programData, "Microsoft", "Windows", "Start Menu", "Programs")
+    if err := os.MkdirAll(menuDir, 0755); err != nil { return err }
+    shortcut := filepath.Join(menuDir, "IMSAT MiningVolume.lnk")
+    target := filepath.Join(cadDir, "acad.exe")
+    ps := "$s=(New-Object -ComObject WScript.Shell).CreateShortcut(" + psQuote(shortcut) + ");" +
+        "$s.TargetPath=" + psQuote(target) + ";" +
+        "$s.WorkingDirectory=" + psQuote(cadDir) + ";" +
+        "$s.Description='IMSAT MiningVolume - Mine Survey & Earthwork';" +
+        "$s.IconLocation=" + psQuote(iconExe + ",0") + ";" +
+        "$s.Save()"
+    return exec.Command("powershell.exe","-NoProfile","-WindowStyle","Hidden","-Command",ps).Run()
 }
 
 func findAutoCAD2023() (string,error) {

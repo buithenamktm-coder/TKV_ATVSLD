@@ -2,6 +2,7 @@ using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.EditorInput;
 using MiningVolume.Core.Geometry;
+using System.Collections.Generic;
 
 namespace MiningVolume2023.Services
 {
@@ -14,6 +15,35 @@ namespace MiningVolume2023.Services
 
     public static class SelectionService
     {
+        public static IReadOnlyList<ObjectId> PickSurfaceEntities(string modelName)
+        {
+            var doc = Application.DocumentManager.MdiActiveDocument;
+            if (doc == null) return null;
+
+            var options = new PromptSelectionOptions
+            {
+                MessageForAdding = "\nChọn POINT, LINE, POLYLINE cho mô hình " + modelName + ": ",
+                MessageForRemoval = "\nBỏ đối tượng khỏi lựa chọn: ",
+                AllowDuplicates = false
+            };
+
+            var filter = new SelectionFilter(new[]
+            {
+                new TypedValue((int)DxfCode.Operator, "<OR"),
+                new TypedValue((int)DxfCode.Start, "POINT"),
+                new TypedValue((int)DxfCode.Start, "LINE"),
+                new TypedValue((int)DxfCode.Start, "LWPOLYLINE"),
+                new TypedValue((int)DxfCode.Start, "POLYLINE"),
+                new TypedValue((int)DxfCode.Operator, "OR>")
+            });
+
+            var result = doc.Editor.GetSelection(options, filter);
+            if (result.Status != PromptStatus.OK || result.Value == null)
+                return null;
+
+            return result.Value.GetObjectIds();
+        }
+
         public static string PickClosedBoundary()
         {
             var doc = Application.DocumentManager.MdiActiveDocument;

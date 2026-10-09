@@ -73,32 +73,80 @@ namespace MiningVolume2023.Services
             return state.SectionSystem;
         }
 
-        public static IReadOnlyList<SectionProfile> BuildProfiles()
+        public static void EnsureProfileInputsReady()
         {
-            var state = ProjectState.Current;
             EnsureSystem();
-
             // Profiles are calculation input. Never use a missing/stale/partially drawn TIN.
             SurfaceWorkflowService.EnsureBothTinsReady(synchronizeCadLayers: true);
+        }
+
+        public static IReadOnlyList<SectionProfile> BuildProfilesCore(
+            SectionSystem system,
+            MiningVolume.Core.Surface.TinSurface existing,
+            MiningVolume.Core.Surface.TinSurface design,
+            Action<int, int, string> progress = null)
+        {
+            if (system == null) throw new InvalidOperationException("Chưa có hệ mặt cắt.");
+            if (existing == null || design == null)
+                throw new InvalidOperationException("Chưa có đủ TIN hiện trạng và TIN thiết kế.");
 
             var sampler = new TinSectionSampler();
-            var profiles = new List<SectionProfile>();
-            foreach (var line in state.SectionSystem.Lines)
-                profiles.Add(sampler.BuildProfile(line, state.Existing.Tin, state.Design.Tin));
+            return sampler.BuildProfiles(system.Lines, existing, design, progress);
+        }
+
+        public static void CommitProfiles(IReadOnlyList<SectionProfile> profiles)
+        {
+            if (profiles == null) throw new ArgumentNullException(nameof(profiles));
+            var state = ProjectState.Current;
             state.SectionProfiles.Clear();
             state.SectionProfiles.AddRange(profiles);
             state.VolumeResult = null;
             state.NotifyChanged();
+        }
+
+        public static IReadOnlyList<SectionProfile> BuildProfiles()
+        {
+            EnsureProfileInputsReady();
+            var state = ProjectState.Current;
+            var profiles = BuildProfilesCore(
+                state.SectionSystem,
+                state.Existing.Tin,
+                state.Design.Tin);
+            CommitProfiles(profiles);
             return profiles;
         }
 
-        public static void DrawProfiles(Point3d insertion, double horizontalScale, double verticalScale, double levelStep)
+        public static void DrawProfiles(
+            Point3d insertion,
+            double horizontalScale,
+            double verticalScale,
+            double levelStep,
+            Action<int, int> progress = null)
         {
             var state = ProjectState.Current;
             if (state.SectionProfiles.Count == 0) BuildProfiles();
             var doc = Application.DocumentManager.MdiActiveDocument ?? throw new InvalidOperationException("Không có bản vẽ AutoCAD đang hoạt động.");
+
+            const int batchSize = 20;
+            int total = state.SectionProfiles.Count;
             using (doc.LockDocument())
-                SectionCadRenderer.ReplaceProfiles(doc.Database, state.SectionProfiles, insertion, horizontalScale, verticalScale, levelStep);
+            {
+                for (int start = 0; start < total; start += batchSize)
+                {
+                    int count = Math.Min(batchSize, total - start);
+                    SectionCadRenderer.ReplaceProfilesBatched(
+                        doc.Database,
+                        state.SectionProfiles,
+                        insertion,
+                        horizontalScale,
+                        verticalScale,
+                        levelStep,
+                        start,
+                        count,
+                        start == 0);
+                    progress?.Invoke(start + count, total);
+                }
+            }
         }
 
         public static void ClearPreview()

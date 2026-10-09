@@ -23,6 +23,11 @@
     <Reference Include="PresentationCore" />
     <Reference Include="PresentationFramework" />
     <Reference Include="WindowsBase" />
+    <Reference Include="Microsoft.CSharp" />
+    <Reference Include="System.Xml.Linq" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Assets\imsat_logo_64.png" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup Condition="'$(UseAutoCADNuGet)'=='true'">
     <PackageReference Include="AutoCAD.NET" Version="24.2.0" PrivateAssets="all" ExcludeAssets="runtime" />

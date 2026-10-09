@@ -29,8 +29,21 @@ namespace MiningVolume.Core.Geometry
             double cdA = Vec2.Cross(c, d, a);
             double cdB = Vec2.Cross(c, d, b);
 
-            return ((abC > tol && abD < -tol) || (abC < -tol && abD > tol)) &&
-                   ((cdA > tol && cdB < -tol) || (cdA < -tol && cdB > tol));
+            // Cross product has units length^2, while tol has units length.
+            // Comparing |cross| directly with tol makes the effective geometric
+            // tolerance depend on segment length and misses real crossings on
+            // very short TIN edges. Convert tol to an area tolerance using the
+            // corresponding segment length so it represents perpendicular
+            // distance consistently for dense and sparse mine meshes.
+            double abLen = a.DistanceTo(b);
+            double cdLen = c.DistanceTo(d);
+            if (abLen <= tol || cdLen <= tol) return false;
+
+            double abEps = Math.Max(1e-24, tol * abLen);
+            double cdEps = Math.Max(1e-24, tol * cdLen);
+
+            return ((abC > abEps && abD < -abEps) || (abC < -abEps && abD > abEps)) &&
+                   ((cdA > cdEps && cdB < -cdEps) || (cdA < -cdEps && cdB > cdEps));
         }
 
         public static bool PointInPolygon(Vec2 p, IReadOnlyList<Vec2> poly, double tol = 1e-9)

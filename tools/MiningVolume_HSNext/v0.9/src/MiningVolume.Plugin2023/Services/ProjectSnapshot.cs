@@ -43,6 +43,8 @@ namespace MiningVolume2023.Services
         [DataMember(Order = 3)] public List<int> AllowedTypes { get; set; } = new List<int>();
         [DataMember(Order = 4)] public List<EntityEditSnapshot> Edits { get; set; } = new List<EntityEditSnapshot>();
         [DataMember(Order = 5)] public bool HadTin { get; set; }
+        [DataMember(Order = 6)] public int SourceMode { get; set; }
+        [DataMember(Order = 7)] public List<string> SelectedHandles { get; set; } = new List<string>();
     }
 
     [DataContract]

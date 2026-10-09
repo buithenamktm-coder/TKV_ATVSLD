@@ -15,7 +15,10 @@ namespace MiningVolume.Core.Reporting
         Integer,
         Number2,
         Number3,
-        DateTime
+        DateTime,
+        FormulaInteger,
+        Formula2,
+        Formula3
     }
 
     public sealed class ReportCell
@@ -35,6 +38,9 @@ namespace MiningVolume.Core.Reporting
         public static ReportCell N2(object value, bool bold = false) => new ReportCell(value, ReportCellKind.Number2, bold);
         public static ReportCell N3(object value, bool bold = false) => new ReportCell(value, ReportCellKind.Number3, bold);
         public static ReportCell Date(object value, bool bold = false) => new ReportCell(value, ReportCellKind.DateTime, bold);
+        public static ReportCell FormulaInt(string formula, bool bold = false) => new ReportCell(formula, ReportCellKind.FormulaInteger, bold);
+        public static ReportCell Formula2(string formula, bool bold = false) => new ReportCell(formula, ReportCellKind.Formula2, bold);
+        public static ReportCell Formula3(string formula, bool bold = false) => new ReportCell(formula, ReportCellKind.Formula3, bold);
     }
 
     public sealed class ReportSheet
@@ -102,6 +108,8 @@ namespace MiningVolume.Core.Reporting
                 for (int i = 0; i < report.Sheets.Count; i++)
                     WriteWorksheet(zip, i + 1, report.Sheets[i], normalizedNames[i]);
             }
+
+            ValidatePackage(filePath, report.Sheets.Count);
         }
 
         private static List<string> NormalizeSheetNames(IEnumerable<string> names)
@@ -221,7 +229,13 @@ namespace MiningVolume.Core.Reporting
                     x.WriteAttributeString("r", "id", "http://schemas.openxmlformats.org/officeDocument/2006/relationships", "rId" + (i + 1).ToString(CultureInfo.InvariantCulture));
                     x.WriteEndElement();
                 }
-                x.WriteEndElement(); x.WriteEndElement();
+                x.WriteEndElement();
+                x.WriteStartElement("calcPr");
+                x.WriteAttributeString("calcMode", "auto");
+                x.WriteAttributeString("fullCalcOnLoad", "1");
+                x.WriteAttributeString("forceFullCalc", "1");
+                x.WriteEndElement();
+                x.WriteEndElement();
             }
         }
 
@@ -362,6 +376,12 @@ namespace MiningVolume.Core.Reporting
                 }
                 x.WriteEndElement();
 
+                // OOXML worksheet schema requires autoFilter before mergeCells.
+                // Writing these in the opposite order can make Excel repair/reject the workbook.
+                if (sheet.AutoFilter && sheet.Headers.Count > 0 && lastDataRow >= headerRow)
+                {
+                    x.WriteStartElement("autoFilter"); x.WriteAttributeString("ref", "A" + headerRow.ToString(CultureInfo.InvariantCulture) + ":" + ColumnName(colCount) + Math.Max(headerRow, lastDataRow).ToString(CultureInfo.InvariantCulture)); x.WriteEndElement();
+                }
                 if (colCount > 1 && titleRows + noteRows > 0)
                 {
                     x.WriteStartElement("mergeCells"); x.WriteAttributeString("count", (titleRows + noteRows).ToString(CultureInfo.InvariantCulture));
@@ -369,10 +389,6 @@ namespace MiningVolume.Core.Reporting
                     if (titleRows > 0) { Merge(x, mr, colCount); mr++; }
                     for (int i = 0; i < noteRows; i++, mr++) Merge(x, mr, colCount);
                     x.WriteEndElement();
-                }
-                if (sheet.AutoFilter && sheet.Headers.Count > 0 && lastDataRow >= headerRow)
-                {
-                    x.WriteStartElement("autoFilter"); x.WriteAttributeString("ref", "A" + headerRow.ToString(CultureInfo.InvariantCulture) + ":" + ColumnName(colCount) + Math.Max(headerRow, lastDataRow).ToString(CultureInfo.InvariantCulture)); x.WriteEndElement();
                 }
                 x.WriteStartElement("pageMargins"); x.WriteAttributeString("left", "0.3"); x.WriteAttributeString("right", "0.3"); x.WriteAttributeString("top", "0.5"); x.WriteAttributeString("bottom", "0.5"); x.WriteAttributeString("header", "0.2"); x.WriteAttributeString("footer", "0.2"); x.WriteEndElement();
                 x.WriteStartElement("pageSetup"); x.WriteAttributeString("orientation", sheet.Landscape ? "landscape" : "portrait"); x.WriteAttributeString("fitToWidth", "1"); x.WriteAttributeString("fitToHeight", "0"); x.WriteEndElement();
@@ -394,7 +410,13 @@ namespace MiningVolume.Core.Reporting
             if (cell == null) cell = ReportCell.Text(string.Empty);
             x.WriteStartElement("c"); x.WriteAttributeString("r", ColumnName(col) + row.ToString(CultureInfo.InvariantCulture)); x.WriteAttributeString("s", style.ToString(CultureInfo.InvariantCulture));
             if (cell.Value == null) { x.WriteEndElement(); return; }
-            if (cell.Kind == ReportCellKind.Text)
+            if (cell.Kind == ReportCellKind.FormulaInteger || cell.Kind == ReportCellKind.Formula2 || cell.Kind == ReportCellKind.Formula3)
+            {
+                var formula = Convert.ToString(cell.Value, CultureInfo.InvariantCulture) ?? string.Empty;
+                if (formula.StartsWith("=", StringComparison.Ordinal)) formula = formula.Substring(1);
+                if (!string.IsNullOrWhiteSpace(formula)) x.WriteElementString("f", formula);
+            }
+            else if (cell.Kind == ReportCellKind.Text)
             {
                 x.WriteAttributeString("t", "inlineStr"); x.WriteStartElement("is"); x.WriteStartElement("t"); x.WriteAttributeString("xml", "space", "http://www.w3.org/XML/1998/namespace", "preserve"); x.WriteString(Convert.ToString(cell.Value, CultureInfo.CurrentCulture) ?? string.Empty); x.WriteEndElement(); x.WriteEndElement();
             }
@@ -406,9 +428,47 @@ namespace MiningVolume.Core.Reporting
             else
             {
                 var number = Convert.ToDouble(cell.Value, CultureInfo.InvariantCulture);
-                x.WriteElementString("v", number.ToString("0.###############", CultureInfo.InvariantCulture));
+                // SpreadsheetML numeric cells cannot contain NaN or Infinity.
+                // Boundary/invalid section values are exported as an empty cell
+                // instead of corrupting the whole workbook.
+                if (!double.IsNaN(number) && !double.IsInfinity(number))
+                    x.WriteElementString("v", number.ToString("0.###############", CultureInfo.InvariantCulture));
             }
             x.WriteEndElement();
+        }
+
+        private static void ValidatePackage(string filePath, int sheetCount)
+        {
+            using (var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read))
+            using (var zip = new ZipArchive(fs, ZipArchiveMode.Read, leaveOpen: false, entryNameEncoding: Encoding.UTF8))
+            {
+                var required = new List<string>
+                {
+                    "[Content_Types].xml",
+                    "_rels/.rels",
+                    "docProps/core.xml",
+                    "docProps/app.xml",
+                    "xl/workbook.xml",
+                    "xl/_rels/workbook.xml.rels",
+                    "xl/styles.xml"
+                };
+                for (int i = 1; i <= sheetCount; i++)
+                    required.Add("xl/worksheets/sheet" + i.ToString(CultureInfo.InvariantCulture) + ".xml");
+
+                foreach (var path in required)
+                {
+                    var entry = zip.GetEntry(path);
+                    if (entry == null)
+                        throw new InvalidDataException("Workbook XLSX thiếu thành phần bắt buộc: " + path);
+
+                    using (var stream = entry.Open())
+                    {
+                        var doc = new XmlDocument();
+                        doc.PreserveWhitespace = true;
+                        doc.Load(stream);
+                    }
+                }
+            }
         }
 
         private static int StyleFor(ReportCell cell)
@@ -420,7 +480,10 @@ namespace MiningVolume.Core.Reporting
                 {
                     case ReportCellKind.Integer: return StyleBodyIntegerBold;
                     case ReportCellKind.Number2: return StyleBodyNumber2Bold;
-                    case ReportCellKind.Number3: return StyleBodyNumber3Bold;
+                    case ReportCellKind.Number3:
+                    case ReportCellKind.Formula3: return StyleBodyNumber3Bold;
+                    case ReportCellKind.FormulaInteger: return StyleBodyIntegerBold;
+                    case ReportCellKind.Formula2: return StyleBodyNumber2Bold;
                     default: return StyleBodyTextBold;
                 }
             }
@@ -428,7 +491,10 @@ namespace MiningVolume.Core.Reporting
             {
                 case ReportCellKind.Integer: return StyleBodyInteger;
                 case ReportCellKind.Number2: return StyleBodyNumber2;
-                case ReportCellKind.Number3: return StyleBodyNumber3;
+                case ReportCellKind.Number3:
+                case ReportCellKind.Formula3: return StyleBodyNumber3;
+                case ReportCellKind.FormulaInteger: return StyleBodyInteger;
+                case ReportCellKind.Formula2: return StyleBodyNumber2;
                 case ReportCellKind.DateTime: return StyleBodyDate;
                 default: return StyleBodyText;
             }

@@ -41,3 +41,37 @@ def test_bundle_is_startup_driven_not_command_registered():
     assert 'Global="MV_SECTION"' not in xml
     assert 'Global="MV_VOLUME"' not in xml
     assert 'Global="MV_EXPORT"' not in xml
+
+
+def test_data_page_supports_layer_or_direct_cad_selection():
+    data = read("src/MiningVolume.Plugin2023/UI/DataPage.cs")
+    selection = read("src/MiningVolume.Plugin2023/Services/SelectionService.cs")
+    workflow = read("src/MiningVolume.Plugin2023/Services/SurfaceWorkflowService.cs")
+    reader = read("src/MiningVolume.Cad2023/CadLayerSurfaceReader.cs")
+    assert '"Nạp layer"' in data
+    assert '"Chọn trên CAD"' in data
+    assert "SelectModel(ModelRole.Existing)" in data
+    assert "SelectModel(ModelRole.Design)" in data
+    assert "PickSurfaceEntities" in selection
+    for token in ['"POINT"', '"LINE"', '"LWPOLYLINE"', '"POLYLINE"']:
+        assert token in selection
+    assert "LoadSelection(ModelRole role" in workflow
+    assert "Read(Database db, IEnumerable<ObjectId> objectIds" in reader
+
+
+def test_manual_selection_is_persisted_by_entity_handle():
+    state = read("src/MiningVolume.Plugin2023/Services/ProjectState.cs")
+    snapshot = read("src/MiningVolume.Plugin2023/Services/ProjectSnapshot.cs")
+    persistence = read("src/MiningVolume.Plugin2023/Services/ProjectPersistenceService.cs")
+    assert "SourceSelectionMode" in state
+    assert "SelectedHandles" in state
+    assert "SelectedHandles" in snapshot
+    assert "LoadSelectedHandles" in persistence
+
+
+def test_cad_reader_skips_legacy_invalid_entities_instead_of_aborting_layer_load():
+    reader = read("src/MiningVolume.Cad2023/CadLayerSurfaceReader.cs")
+    assert "TryConvertEntity" in reader
+    assert reader.count("catch (Autodesk.AutoCAD.Runtime.Exception)") >= 3
+    assert "ObjectId is selectable but not readable" in reader
+    assert "falling back to the segment chord" in reader

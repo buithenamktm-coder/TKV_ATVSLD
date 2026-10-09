@@ -10,6 +10,7 @@ using System.Linq;
 namespace MiningVolume2023.Services
 {
     public enum ModelRole { Existing, Design }
+    public enum SourceSelectionMode { Layer = 0, ManualSelection = 1 }
 
     public sealed class ModelSession
     {
@@ -23,12 +24,16 @@ namespace MiningVolume2023.Services
         public ModelRole Role { get; }
         public string Name { get; }
         public string Layer { get; set; }
+        public SourceSelectionMode SourceMode { get; set; } = SourceSelectionMode.Layer;
+        public List<string> SelectedHandles { get; } = new List<string>();
         public string TinLayer { get; }
         public SurfaceModel Source { get; set; }
         public TinSurface Tin { get; set; }
         public DateTime? TinBuiltFromSourceUtc { get; set; }
         public long? TinBuiltFromSourceRevision { get; set; }
         public bool TinVisible { get; set; } = true;
+        public int TinCadFaceCount { get; set; }
+        public bool TinCadIsPreview { get; set; }
         public bool IsTinCurrent
         {
             get
@@ -118,12 +123,17 @@ namespace MiningVolume2023.Services
 
         private static void ResetModel(ModelSession s)
         {
+            try { (s.Tin?.Triangles as IDisposable)?.Dispose(); } catch { }
             s.Layer = null;
+            s.SourceMode = SourceSelectionMode.Layer;
+            s.SelectedHandles.Clear();
             s.Source = new SurfaceModel(s.Name);
             s.Tin = null;
             s.TinBuiltFromSourceUtc = null;
             s.TinBuiltFromSourceRevision = null;
             s.TinVisible = true;
+            s.TinCadFaceCount = 0;
+            s.TinCadIsPreview = false;
             s.LastBuiltUtc = null;
             s.AllowedTypes.Clear();
         }

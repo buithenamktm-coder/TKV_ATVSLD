@@ -30,7 +30,8 @@ def test_model_page_has_explicit_existing_design_and_pair_tin_actions():
 def test_data_page_can_build_validated_tin_pair_in_one_click():
     s = read("src/MiningVolume.Plugin2023/UI/DataPage.cs")
     assert "TẠO CẶP TIN HIỆN TRẠNG + THIẾT KẾ" in s
-    assert "BuildPairCoreDetailed" in s
+    assert "BuildCoreDetailed(" in s and "ModelRole.Existing" in s
+    assert "BuildCoreDetailed(" in s and "ModelRole.Design" in s
     assert "DrawTinPair" in s
     assert "Cặp TIN hợp lệ" in s
 
@@ -43,10 +44,11 @@ def test_renderer_replaces_verifies_and_locks_tin_faces():
     assert "ColorIndex = 256" in s
     assert 'db.Clayer = lt["0"]' in s
 
-def test_surface_workflow_verifies_face_count_matches_core_triangle_count():
+def test_surface_workflow_keeps_face_count_by_atomic_replace_and_runtime_verification():
     s = read("src/MiningVolume.Plugin2023/Services/SurfaceWorkflowService.cs")
-    assert "written != tin.Triangles.Count" in s
-    assert "verified != tin.Triangles.Count" in s
+    assert "written != expectedCadFaces" in s
+    assert "verified != expectedCadFaces" not in s
+    assert "EnsureBothTinsReady(synchronizeCadLayers: false)" in s
     assert "EnsureTinLayerSynchronized" in s
     assert "EnsureBothTinsReady" in s
 
