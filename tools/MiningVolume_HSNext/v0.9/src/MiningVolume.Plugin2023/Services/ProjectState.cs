@@ -100,7 +100,7 @@ namespace MiningVolume2023.Services
         public double HorizontalScale { get; set; } = 1000.0;
         public double VerticalScale { get; set; } = 500.0;
         public string DeveloperName { get; set; } = "Bùi Thế Nam";
-        public string DeveloperContact { get; set; } = string.Empty;
+        public string DeveloperContact { get; set; } = "Điện thoại: 0967280686";
         public DateTime? LastProjectSavedUtc { get; set; }
         public event EventHandler Changed;
 
@@ -127,7 +127,7 @@ namespace MiningVolume2023.Services
             HorizontalScale = 1000.0;
             VerticalScale = 500.0;
             DeveloperName = "Bùi Thế Nam";
-            DeveloperContact = string.Empty;
+            DeveloperContact = "Điện thoại: 0967280686";
             LastProjectSavedUtc = null;
         }
 
