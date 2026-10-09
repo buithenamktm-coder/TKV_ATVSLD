@@ -87,8 +87,8 @@ namespace MiningVolume2023.Services
             AddKV(s, "Mức tính từ", FormatLevel(st.FromLevel));
             AddKV(s, "Mức tính đến", FormatLevel(st.ToLevel));
             AddKV(s, "Bước chia tầng, m", st.LevelStep.ToString("0.###"));
-            AddKV(s, "Công thức chính", "Prismoid: V = L/6 × (F1 + 4Fm + F2)");
-            AddKV(s, "Công thức dự phòng", "Trung bình hai đầu: V = L/2 × (F1 + F2), chỉ dùng khi không lấy được mặt cắt giữa");
+            AddKV(s, "Quy tắc công thức V1.0", "1 đầu bằng 0: hình chóp; chênh F1-F2 ≤ 40%: TB hai đầu; chênh > 40%: hình chóp cụt");
+            AddKV(s, "Nguyên tắc Excel", "Công thức tham chiếu trực tiếp các ô L, F1, F2 và tự đổi nhánh khi dữ liệu ô thay đổi");
             return s;
         }
 
@@ -165,7 +165,8 @@ namespace MiningVolume2023.Services
             var s = NewSheet("Khối lượng chi tiết", "KHỐI LƯỢNG CHI TIẾT GIỮA CÁC MẶT CẮT",
                 new[] { "Đoạn", "MC đầu", "MC cuối", "L, m", "F đào đầu", "F đào giữa", "F đào cuối", "V đào, m³", "F đắp đầu", "F đắp giữa", "F đắp cuối", "V đắp, m³", "Công thức đào", "Công thức đắp", "Ghi chú" },
                 9, 13, 13, 12, 14, 14, 14, 16, 14, 14, 14, 16, 16, 16, 32);
-            s.Notes.Add("Các ô V đào/V đắp là công thức Excel thực. Prismoid được ưu tiên; trung bình hai đầu chỉ dùng khi không lấy được mặt cắt giữa thực từ TIN.");
+            s.Notes.Add("Các ô V đào/V đắp là công thức Excel thực: 1 đầu bằng 0 dùng hình chóp; chênh diện tích ≤ 40% dùng TB hai đầu; chênh > 40% dùng hình chóp cụt.");
+            s.Notes.Add("Công thức tham chiếu trực tiếp L, F1, F2 nên khi sửa số liệu trong Excel, khối lượng tự tính lại và tự chuyển nhánh công thức.");
             const int firstDataRow = 4; // tiêu đề + ghi chú + hàng tiêu đề cột
             int excelRow = firstDataRow;
             foreach (var x in r.Intervals)
@@ -174,9 +175,9 @@ namespace MiningVolume2023.Services
                 {
                     ReportCell.Int(x.Index), ReportCell.Text(x.StartSection), ReportCell.Text(x.EndSection), ReportCell.N3(x.Distance),
                     ReportCell.N2(x.CutAreaStart), ReportCell.N2(x.CutAreaMid), ReportCell.N2(x.CutAreaEnd),
-                    ReportCell.Formula2(VolumeFormula(x.CutFormula, excelRow, "D", "E", "F", "G")),
+                    ReportCell.Formula2(AdaptiveVolumeFormula(excelRow, "D", "E", "G")),
                     ReportCell.N2(x.FillAreaStart), ReportCell.N2(x.FillAreaMid), ReportCell.N2(x.FillAreaEnd),
-                    ReportCell.Formula2(VolumeFormula(x.FillFormula, excelRow, "D", "I", "J", "K")),
+                    ReportCell.Formula2(AdaptiveVolumeFormula(excelRow, "D", "I", "K")),
                     ReportCell.Text(FormulaName(x.CutFormula)), ReportCell.Text(FormulaName(x.FillFormula)), ReportCell.Text(x.Note ?? string.Empty)
                 });
                 excelRow++;
@@ -273,12 +274,43 @@ namespace MiningVolume2023.Services
         }
         private static void AddKV(ReportSheet s, string key, string value) => s.Rows.Add(new[] { ReportCell.Text(key, true), ReportCell.Text(value) });
         private static string EmptyAsNotSet(string s) => string.IsNullOrWhiteSpace(s) ? "Chưa thiết lập" : s.Trim();
-        private static string FormulaName(VolumeFormulaKind x) => x == VolumeFormulaKind.Prismoidal ? "Prismoid" : "TB hai đầu";
-        private static string VolumeFormula(VolumeFormulaKind kind, int row, string lengthCol, string startCol, string midCol, string endCol)
+        private static string FormulaName(VolumeFormulaKind x)
         {
-            if (kind == VolumeFormulaKind.Prismoidal)
-                return "=" + lengthCol + row + "/6*(" + startCol + row + "+4*" + midCol + row + "+" + endCol + row + ")";
-            return "=" + lengthCol + row + "/2*(" + startCol + row + "+" + endCol + row + ")";
+            switch (x)
+            {
+                case VolumeFormulaKind.Pyramid: return "Hình chóp";
+                case VolumeFormulaKind.Frustum: return "Hình chóp cụt";
+                case VolumeFormulaKind.Prismoidal: return "Prismoid (cũ)";
+                default: return "TB hai đầu";
+            }
+        }
+
+        private static string AdaptiveVolumeFormula(
+            int row,
+            string lengthCol,
+            string startCol,
+            string endCol,
+            double threshold = 0.40)
+        {
+            string l = lengthCol + row;
+            string a = startCol + row;
+            string b = endCol + row;
+            string t = threshold.ToString("0.###############", System.Globalization.CultureInfo.InvariantCulture);
+
+            // Công thức Excel tự chọn phương pháp theo chính dữ liệu ô:
+            // - cả hai diện tích bằng 0 => 0
+            // - một đầu bằng 0 => hình chóp
+            // - chênh tương đối <= ngưỡng => TB hai đầu
+            // - chênh tương đối > ngưỡng => hình chóp cụt
+            return "=IF(MAX(" + a + "," + b + ")=0,0," +
+                   "IF(MIN(" + a + "," + b + ")=0," +
+                       l + "/3*(" + a + "+" + b + ")," +
+                       "IF(ABS(" + a + "-" + b + ")/MAX(" + a + "," + b + ")<=" + t + "," +
+                           l + "/2*(" + a + "+" + b + ")," +
+                           l + "/3*(" + a + "+" + b + "+SQRT(" + a + "*" + b + "))" +
+                       ")" +
+                   ")" +
+                   ")";
         }
         private static string SumFormula(string col, int firstRow, int lastRow)
         {
