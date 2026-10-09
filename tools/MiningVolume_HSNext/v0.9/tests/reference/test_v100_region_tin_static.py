@@ -28,7 +28,9 @@ def test_v1_tin_region_is_core_geometry_not_only_ui_filter():
     assert "ClipSegment(" in clipper
     assert "ContainsInclusive(" in clipper
     assert "Interpolate(segment" in clipper
-    assert "Geometry2D.PointInPolygon" in tiled
+    assert "BuildSupportRectangle" in clipper
+    assert "0.10" in clipper
+    assert "Geometry2D.TriangleIntersectsPolygon" in tiled
     assert "options.ClipBoundary" in conforming
 
 
@@ -40,3 +42,12 @@ def test_v1_tin_region_persists_in_dwg_project_snapshot():
     assert "state.TinRegionPolygon" in persistence
     assert "state.TinRegionHandle = snap.TinRegionHandle" in persistence
     assert "FormatVersion { get; set; } = 2" in snap
+
+
+def test_v1_region_tin_keeps_boundary_crossing_triangles():
+    geom = read("src/MiningVolume.Core/Geometry/Geometry2D.cs")
+    conforming = read("src/MiningVolume.Surface/ConformingTinBuilder.cs")
+    assert "TriangleIntersectsPolygon" in geom
+    assert "PointInTriangle" in geom
+    assert "SegmentsTouchOrCross" in geom
+    assert "TriangleIntersectsPolygon" in conforming
