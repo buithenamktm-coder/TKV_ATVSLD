@@ -26,7 +26,7 @@ namespace MiningVolume2023.UI
                 detail +
                 "\r\n\r\nNếu chọn Có, phần mềm sẽ yêu cầu chọn dùng ĐỈNH TRÊN hoặc ĐỈNH DƯỚI. " +
                 "Bản vẽ CAD gốc không bị sửa.",
-                "MiningVolume - Xung đột cao độ tại cùng XY",
+                "IMSAT VOLUME - Xung đột cao độ tại cùng XY",
                 MessageBoxButtons.YesNo,
                 MessageBoxIcon.Warning,
                 MessageBoxDefaultButton.Button2);
@@ -49,7 +49,7 @@ namespace MiningVolume2023.UI
 
         public DuplicateXYChoiceDialog(int conflictCount)
         {
-            Text = "MiningVolume - Chọn cách xử lý cao độ";
+            Text = "IMSAT VOLUME - Chọn cách xử lý cao độ";
             Font = new Font("Arial", 9F);
             StartPosition = FormStartPosition.CenterParent;
             FormBorderStyle = FormBorderStyle.FixedDialog;
