@@ -368,8 +368,8 @@ namespace MiningVolume.Surface
                                     ix == nx - 1, iy == ny - 1))
                                 .Where(t => options.ClipBoundary == null ||
                                     options.ClipBoundary.Count < 3 ||
-                                    Geometry2D.PointInPolygon(
-                                        t.Centroid2D,
+                                    Geometry2D.TriangleIntersectsPolygon(
+                                        t,
                                         options.ClipBoundary,
                                         options.XyTolerance))
                                 .ToList();
