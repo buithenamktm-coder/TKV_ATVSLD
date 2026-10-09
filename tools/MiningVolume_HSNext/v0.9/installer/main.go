@@ -80,18 +80,16 @@ func install() {
         msg("Không cài được bundle: "+err.Error(), 0x10); return
     }
 
-    ok, detail := runAutoCADSelfTest(cad)
-    if !ok {
-        os.RemoveAll(target); _ = restoreBackup(backup, target)
-        writePersistentLog("selftest_failed", detail)
-        msg("MiningVolume đã tự rollback vì kiểm thử trong AutoCAD 2023 không đạt.\n\n"+detail, 0x10); return
-    }
+    // Runtime verification is a release-pipeline responsibility. The end-user
+    // installer must never launch AutoCAD automatically or expose development
+    // self-test behavior. A RUNTIME-PASS artifact has already been verified on
+    // a real AutoCAD 2023 runner before this Setup is published.
     os.RemoveAll(backup)
-    writeRuntimeVerification(cad, detail)
     if err := registerUninstall(target, cad); err != nil {
-        msg("Add-in đã PASS trong AutoCAD nhưng chưa ghi được mục gỡ cài đặt: "+err.Error(), 0x30); return
+        msg("MiningVolume đã được chép vào AutoCAD nhưng chưa ghi được mục gỡ cài đặt: "+err.Error(), 0x30); return
     }
-    msg("Cài đặt MiningVolume v0.10.4 thành công.\n\nAutoCAD 2023 runtime self-test: PASS.\nMáy không cần Visual Studio/Build Tools.\nMở AutoCAD: MiningVolume không tự mở bảng theo mặc định; mở từ Ribbon MINING VOLUME hoặc bật tùy chọn tự động mở trong trang Dự án.", 0x40)
+    writePersistentLog("install", "Status=INSTALLED\r\nAutoCAD="+filepath.Join(cad,"acad.exe"))
+    msg("Cài đặt IMSAT MiningVolume v0.10.4 thành công.\n\nSetup không tự mở AutoCAD.\nMáy không cần Visual Studio/Build Tools.\nKhi cần sử dụng, hãy mở AutoCAD 2023 rồi dùng Ribbon MINING VOLUME, Menu Bar MINING VOLUME hoặc lệnh TKL.\nBảng MiningVolume không tự mở theo mặc định.", 0x40)
 }
 
 func validatePrebuiltBundle(root string) error {
