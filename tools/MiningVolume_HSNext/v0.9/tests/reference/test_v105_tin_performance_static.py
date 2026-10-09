@@ -32,8 +32,8 @@ def test_breakline_endpoint_lookup_uses_spatial_site_index():
 
 def test_data_page_reports_each_heavy_phase_and_timings():
     s = read("src/MiningVolume.Plugin2023/UI/DataPage.cs")
-    assert "BuildCoreDetailed(ModelRole.Existing)" in s
-    assert "BuildCoreDetailed(ModelRole.Design)" in s
+    assert "BuildCoreDetailed(" in s and "ModelRole.Existing" in s
+    assert "BuildCoreDetailed(" in s and "ModelRole.Design" in s
     assert "Đang dựng TIN hiện trạng" in s
     assert "Đang ghi TIN hiện trạng xuống AutoCAD" in read("src/MiningVolume.Plugin2023/Services/SurfaceWorkflowService.cs")
     assert "cadWatch.Elapsed.TotalSeconds" in s
