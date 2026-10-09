@@ -473,7 +473,8 @@ namespace MiningVolume2023.UI
                 RefreshTinRegionStatus();
                 _status.Text =
                     $"Đã chọn vùng tạo TIN chung cho Hiện trạng + Thiết kế: " +
-                    $"{polygon.Count:n0} đỉnh biên. Chỉ dữ liệu trong vùng này sẽ được dựng TIN.";
+                    $"{polygon.Count:n0} đỉnh biên. TIN chỉ dùng trong vùng này; " +
+                    "phần mềm tự giữ một dải dữ liệu đệm kỹ thuật quanh biên để nội suy ổn định.";
             }
             catch (Exception ex)
             {
