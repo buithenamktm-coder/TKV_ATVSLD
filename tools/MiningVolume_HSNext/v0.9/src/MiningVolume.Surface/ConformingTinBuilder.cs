@@ -92,7 +92,12 @@ namespace MiningVolume.Surface
                 var constraint = new EdgeKey(a, b);
                 if (!adjacency.ContainsKey(constraint))
                     RecoverConstraint(tris, vertices, constraint, locked, adjacency, edgeIndex, options.XyTolerance);
-                locked.Add(constraint);
+
+                // RecoverConstraint có thể biểu diễn một breakline bằng chuỗi cạnh
+                // collinear qua các site trung gian. Chỉ khóa cạnh gốc khi cạnh đó
+                // thực sự tồn tại; các cạnh con đã được khóa ngay trong fallback.
+                if (adjacency.ContainsKey(constraint))
+                    locked.Add(constraint);
             }
 
             var output = new List<Triangle3>();
@@ -263,9 +268,16 @@ namespace MiningVolume.Surface
             }
 
             if (pending.Count == 0)
+            {
+                if (TryRecoverConstraintThroughInteriorSites(
+                    tris, vertices, constraint, locked, adjacency, edgeIndex, tol))
+                    return;
+
                 throw new InvalidOperationException(
                     "Không tìm thấy dãy cạnh tam giác cắt breakline " + constraint +
-                    ". Dữ liệu có thể suy biến hoặc breakline nằm ngoài miền TIN cục bộ.");
+                    ". Không có cạnh cắt và cũng không tìm thấy chuỗi site trung gian " +
+                    "nằm trên breakline để tách ràng buộc. Dữ liệu có thể suy biến cục bộ.");
+            }
 
             int initialCrossings = pending.Count;
             int successfulFlips = 0;
@@ -341,6 +353,87 @@ namespace MiningVolume.Surface
                     "Không khôi phục được breakline " + constraint +
                     " sau khi xử lý " + successfulFlips.ToString("n0") +
                     " lần edge-flip.");
+        }
+
+        private static bool TryRecoverConstraintThroughInteriorSites(
+            List<Tri> tris,
+            List<Vec3> vertices,
+            EdgeKey constraint,
+            HashSet<EdgeKey> locked,
+            Dictionary<EdgeKey, List<int>> adjacency,
+            EdgeGridIndex edgeIndex,
+            double tol)
+        {
+            Vec2 a = vertices[constraint.A].XY;
+            Vec2 b = vertices[constraint.B].XY;
+            double dx = b.X - a.X;
+            double dy = b.Y - a.Y;
+            double len2 = dx * dx + dy * dy;
+            if (len2 <= tol * tol) return false;
+
+            // Fallback này chỉ dùng khi không có cạnh nào cắt "properly". Trường
+            // hợp thường gặp là breakline đi chính xác qua một hay nhiều site TIN,
+            // nên ràng buộc hợp lệ thực chất là một chuỗi cạnh collinear thay vì
+            // một cạnh duy nhất. Dùng tolerance hơi nới để hấp thụ sai số số học
+            // do clip tile, nhưng vẫn ở mức rất nhỏ so với đơn vị bản vẽ mỏ.
+            double onLineTol = Math.Max(tol * 10.0, 1e-8);
+            double paramTol = Math.Min(1e-6, onLineTol / Math.Max(Math.Sqrt(len2), onLineTol));
+
+            var chain = new List<Tuple<double, int>>
+            {
+                Tuple.Create(0.0, constraint.A),
+                Tuple.Create(1.0, constraint.B)
+            };
+
+            for (int i = 0; i < vertices.Count; i++)
+            {
+                if (i == constraint.A || i == constraint.B) continue;
+                Vec2 p = vertices[i].XY;
+                if (!Geometry2D.PointOnSegment(p, a, b, onLineTol)) continue;
+
+                double t = ((p.X - a.X) * dx + (p.Y - a.Y) * dy) / len2;
+                if (t <= paramTol || t >= 1.0 - paramTol) continue;
+                chain.Add(Tuple.Create(t, i));
+            }
+
+            if (chain.Count <= 2) return false;
+
+            chain = chain
+                .OrderBy(x => x.Item1)
+                .ThenBy(x => x.Item2)
+                .ToList();
+
+            // Gộp các site gần trùng tham số để tránh tạo đoạn gần zero.
+            var ordered = new List<int>();
+            double lastT = double.NegativeInfinity;
+            foreach (var item in chain)
+            {
+                if (ordered.Count > 0 && Math.Abs(item.Item1 - lastT) <= paramTol)
+                    continue;
+                ordered.Add(item.Item2);
+                lastT = item.Item1;
+            }
+
+            if (ordered.Count <= 2) return false;
+
+            for (int i = 0; i < ordered.Count - 1; i++)
+            {
+                int u = ordered[i];
+                int v = ordered[i + 1];
+                if (u == v) continue;
+
+                var sub = new EdgeKey(u, v);
+                if (!adjacency.ContainsKey(sub))
+                    RecoverConstraint(tris, vertices, sub, locked, adjacency, edgeIndex, tol);
+
+                if (adjacency.ContainsKey(sub))
+                    locked.Add(sub);
+            }
+
+            // Thành công nếu mỗi khoảng liên tiếp đã trở thành cạnh, hoặc đã được
+            // RecoverConstraint tách tiếp thành các cạnh con collinear và khóa chúng.
+            // Không yêu cầu cạnh constraint gốc phải tồn tại.
+            return true;
         }
 
         private static IEnumerable<EdgeKey> CrossingEdgesOrdered(
