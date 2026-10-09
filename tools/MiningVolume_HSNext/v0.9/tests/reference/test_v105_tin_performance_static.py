@@ -226,3 +226,14 @@ def test_breakline_recovery_is_ordered_and_does_not_use_arbitrary_flip_loop():
     assert "maxSuccessfulFlips" in s
     assert "out EdgeKey replacement" in s
     assert "Vượt số vòng lặp khi khôi phục breakline" not in s
+
+
+def test_breakline_recovery_falls_back_to_collinear_interior_site_chain():
+    s = read("src/MiningVolume.Surface/ConformingTinBuilder.cs")
+    assert "TryRecoverConstraintThroughInteriorSites" in s
+    assert "Geometry2D.PointOnSegment" in s
+    assert "onLineTol = Math.Max(tol * 10.0, 1e-8)" in s
+    assert "RecoverConstraint(tris, vertices, sub" in s
+    assert "if (adjacency.ContainsKey(sub))" in s
+    assert "if (adjacency.ContainsKey(constraint))" in s
+    assert "Không có cạnh cắt và cũng không tìm thấy chuỗi site trung gian" in s
