@@ -62,11 +62,17 @@ namespace MiningVolume2023.Services
                         FromLevel = 0,
                         ToLevel = 10,
                         LevelStep = 5,
-                        PreferPrismoidal = true
+                        AreaDifferenceThreshold = 0.40,
+                        PreferPrismoidal = false
                     });
                 Check(r, volume.Intervals.Count == 5, "Tính 5 khoảng khối lượng giữa 6 mặt cắt");
-                Check(r, volume.Intervals.All(x => x.CutFormula == VolumeFormulaKind.Prismoidal),
-                    "Các khoảng dùng prismoid với mặt cắt giữa thực");
+                Check(r, volume.Intervals.All(x => x.CutFormula == VolumeFormulaKind.AverageEndArea),
+                    "Diện tích hai mặt cắt bằng nhau dùng trung bình diện tích hai đầu");
+                Check(r,
+                    SectionVolumeCalculator.SelectFormula(100, 60, 0.40) == VolumeFormulaKind.AverageEndArea &&
+                    SectionVolumeCalculator.SelectFormula(100, 59, 0.40) == VolumeFormulaKind.Frustum &&
+                    SectionVolumeCalculator.SelectFormula(100, 0, 0.40) == VolumeFormulaKind.Pyramid,
+                    "Quy tắc 40% chọn đúng: TB hai đầu / hình chóp cụt / hình chóp");
                 Check(r, Near(volume.TotalCutVolume, 100000.0, 1e-3) && Near(volume.TotalFillVolume, 0.0),
                     "Tổng khối chuẩn: đào 100.000 m3, đắp 0 m3");
                 Check(r, volume.Levels.Count == 2 && Near(volume.Levels.Sum(x => x.CutVolume), 100000.0, 1e-3),
