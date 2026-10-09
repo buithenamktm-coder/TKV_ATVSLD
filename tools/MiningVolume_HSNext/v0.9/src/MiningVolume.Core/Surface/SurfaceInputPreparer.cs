@@ -47,6 +47,47 @@ namespace MiningVolume.Core.Surface
                 }
             }
 
+            return NormalizePreparedInput(result, options);
+        }
+
+        /// <summary>
+        /// Chuẩn hóa dữ liệu thô đã được phân vùng trước. Đường này dùng cho
+        /// large-dataset/tiled TIN để không phải dựng hàng triệu SourceEntity tạm.
+        /// </summary>
+        public PreparedSurfaceInput PrepareRaw(
+            IEnumerable<Vec3> sites,
+            IEnumerable<Segment3> breaklines,
+            SurfaceBuildOptions options)
+        {
+            options = options ?? new SurfaceBuildOptions();
+            if (options.XyTolerance <= 0) throw new ArgumentOutOfRangeException(nameof(options.XyTolerance));
+
+            var result = new PreparedSurfaceInput();
+            if (sites != null) result.Sites.AddRange(sites);
+
+            if (breaklines != null)
+            {
+                foreach (var s in breaklines)
+                {
+                    if (s.Length2D <= options.XyTolerance)
+                    {
+                        result.Issues.Add(new ValidationIssue(
+                            ValidationSeverity.Warning,
+                            "ZERO_LENGTH_BREAKLINE",
+                            "Bỏ qua đoạn breakline có chiều dài XY gần bằng 0.",
+                            s.SourceId));
+                    }
+                    else result.Breaklines.Add(s);
+                }
+            }
+
+            return NormalizePreparedInput(result, options);
+        }
+
+        private static PreparedSurfaceInput NormalizePreparedInput(
+            PreparedSurfaceInput result,
+            SurfaceBuildOptions options)
+        {
             ResolveDuplicateSites(result, options);
             NormalizeBreaklineTopology(result, options);
             ResolveDuplicateSites(result, options);
