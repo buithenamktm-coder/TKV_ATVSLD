@@ -220,7 +220,7 @@ namespace MiningVolume.Surface
                             }
 
                             var conflictIssues = new List<ValidationIssue>();
-                            Dictionary<XYKey, ResolvedSite> resolvedIndex;
+                            Dictionary<XYKey, List<ResolvedSite>> resolvedIndex;
                             var points = ResolveDuplicateInputPoints(
                                 pointRefs,
                                 options,
@@ -396,13 +396,13 @@ namespace MiningVolume.Surface
             IReadOnlyList<VertexRef> source,
             SurfaceBuildOptions options,
             List<ValidationIssue> issues,
-            out Dictionary<XYKey, ResolvedSite> index)
+            out Dictionary<XYKey, List<ResolvedSite>> index)
         {
             // 5 cm chỉ dùng để nhận diện sai khác rất nhỏ tại cùng XY; không trung
             // bình hay tạo cao độ mới. Luôn giữ Z của nguồn ưu tiên cao hơn.
             const double minorZTolerance = 0.05;
             double xyTol = Math.Max(options.XyTolerance, 1e-9);
-            index = new Dictionary<XYKey, ResolvedSite>();
+            index = new Dictionary<XYKey, List<ResolvedSite>>();
             var ordered = new List<ResolvedSite>();
 
             foreach (var item in source)
@@ -412,23 +412,24 @@ namespace MiningVolume.Surface
                 long iy = (long)Math.Floor(p.Y / xyTol);
 
                 ResolvedSite match = null;
-                XYKey matchKey = default(XYKey);
                 double bestD2 = double.PositiveInfinity;
 
                 for (long dx = -1; dx <= 1; dx++)
                 for (long dy = -1; dy <= 1; dy++)
                 {
                     var key = new XYKey(ix + dx, iy + dy);
-                    ResolvedSite candidate;
-                    if (!index.TryGetValue(key, out candidate)) continue;
-                    double px = candidate.Position.X - p.X;
-                    double py = candidate.Position.Y - p.Y;
-                    double d2 = px * px + py * py;
-                    if (d2 <= xyTol * xyTol && d2 < bestD2)
+                    List<ResolvedSite> candidates;
+                    if (!index.TryGetValue(key, out candidates)) continue;
+                    foreach (var candidate in candidates)
                     {
-                        match = candidate;
-                        matchKey = key;
-                        bestD2 = d2;
+                        double px = candidate.Position.X - p.X;
+                        double py = candidate.Position.Y - p.Y;
+                        double d2 = px * px + py * py;
+                        if (d2 <= xyTol * xyTol && d2 < bestD2)
+                        {
+                            match = candidate;
+                            bestD2 = d2;
+                        }
                     }
                 }
 
@@ -436,16 +437,19 @@ namespace MiningVolume.Surface
                 {
                     var key = new XYKey(ix, iy);
                     var site = new ResolvedSite { Position = p, Winner = item };
-                    // Hai điểm có thể rơi cùng cell nhưng xa nhau gần biên; dùng ô
-                    // lân cận phụ để không ghi đè. Hiếm và chỉ trong một tile.
-                    while (index.ContainsKey(key))
-                        key = new XYKey(key.X + 104729, key.Y);
-                    index[key] = site;
+                    List<ResolvedSite> cell;
+                    if (!index.TryGetValue(key, out cell))
+                    {
+                        cell = new List<ResolvedSite>();
+                        index[key] = cell;
+                    }
+                    cell.Add(site);
                     ordered.Add(site);
                     continue;
                 }
 
-                double dz = Math.Abs(match.Position.Z - p.Z);
+                double oldZ = match.Position.Z;
+                double dz = Math.Abs(oldZ - p.Z);
                 if (dz <= options.ZConflictTolerance)
                     continue;
 
@@ -466,7 +470,7 @@ namespace MiningVolume.Surface
                         dz <= minorZTolerance
                             ? "AUTO_RESOLVE_DUPLICATE_XY_MINOR"
                             : "AUTO_RESOLVE_DUPLICATE_XY_BY_PRIORITY",
-                        $"Trùng XY ({p.X:0.###}, {p.Y:0.###}) có Z={match.Position.Z:0.###} / {p.Z:0.###}. " +
+                        $"Trùng XY ({p.X:0.###}, {p.Y:0.###}) có Z={oldZ:0.###} / {p.Z:0.###}. " +
                         $"Giữ nguồn ưu tiên {TypeLabel(match.Winner.Entity.Type)} " +
                         $"(handle {match.Winner.Entity.Handle}); dữ liệu CAD gốc không bị sửa.",
                         match.Winner.Entity.Id));
@@ -488,7 +492,7 @@ namespace MiningVolume.Surface
 
         private static List<Segment3> SnapSegmentEndpoints(
             IReadOnlyList<Segment3> source,
-            Dictionary<XYKey, ResolvedSite> resolved,
+            Dictionary<XYKey, List<ResolvedSite>> resolved,
             double xyTolerance)
         {
             var output = new List<Segment3>(source.Count);
@@ -504,7 +508,7 @@ namespace MiningVolume.Surface
 
         private static Vec3 SnapPoint(
             Vec3 p,
-            Dictionary<XYKey, ResolvedSite> resolved,
+            Dictionary<XYKey, List<ResolvedSite>> resolved,
             double xyTolerance)
         {
             double tol = Math.Max(xyTolerance, 1e-9);
@@ -513,11 +517,12 @@ namespace MiningVolume.Surface
             for (long dx = -1; dx <= 1; dx++)
             for (long dy = -1; dy <= 1; dy++)
             {
-                ResolvedSite site;
-                if (!resolved.TryGetValue(new XYKey(ix + dx, iy + dy), out site))
+                List<ResolvedSite> sites;
+                if (!resolved.TryGetValue(new XYKey(ix + dx, iy + dy), out sites))
                     continue;
-                if (site.Position.XY.DistanceTo(p.XY) <= tol)
-                    return new Vec3(p.X, p.Y, site.Position.Z);
+                foreach (var site in sites)
+                    if (site.Position.XY.DistanceTo(p.XY) <= tol)
+                        return new Vec3(p.X, p.Y, site.Position.Z);
             }
             return p;
         }
