@@ -80,9 +80,9 @@ namespace MiningVolume2023.Services
             using (var tr = doc.Database.TransactionManager.StartOpenCloseTransaction())
             {
                 var nod = (DBDictionary)tr.GetObject(doc.Database.NamedObjectsDictionaryId, OpenMode.ForRead);
-                if (!nod.Contains(DictionaryKey)) return new ProjectLoadResult { Found = false, Message = "Bản vẽ chưa có Project MiningVolume." };
+                if (!nod.Contains(DictionaryKey)) return new ProjectLoadResult { Found = false, Message = "Bản vẽ chưa có Project IMSAT VOLUME." };
                 var dict = tr.GetObject(nod.GetAt(DictionaryKey), OpenMode.ForRead) as DBDictionary;
-                if (dict == null || !dict.Contains(RecordKey)) return new ProjectLoadResult { Found = false, Message = "Bản vẽ chưa có Project MiningVolume." };
+                if (dict == null || !dict.Contains(RecordKey)) return new ProjectLoadResult { Found = false, Message = "Bản vẽ chưa có Project IMSAT VOLUME." };
                 var rec = tr.GetObject(dict.GetAt(RecordKey), OpenMode.ForRead) as Xrecord;
                 encoded = FromBuffer(rec?.Data);
             }
