@@ -23,9 +23,20 @@ namespace MiningVolume.Surface
         private const int TargetCoreVertices = 25000;
         private static readonly double[] HaloFactors = { 0.20, 0.45, 0.90, 1.60 };
 
+        private readonly struct VertexRef
+        {
+            public VertexRef(SourceEntity entity, ModelVertex vertex)
+            {
+                Entity = entity;
+                Vertex = vertex;
+            }
+            public SourceEntity Entity { get; }
+            public ModelVertex Vertex { get; }
+        }
+
         private sealed class Bucket
         {
-            public readonly List<Vec3> Points = new List<Vec3>();
+            public readonly List<VertexRef> Points = new List<VertexRef>();
             public readonly List<Segment3> Segments = new List<Segment3>();
         }
 
@@ -112,7 +123,7 @@ namespace MiningVolume.Surface
                 {
                     cancellationToken.ThrowIfCancellationRequested();
                     var p = v.Position;
-                    buckets[Id(Ix(p.X), Iy(p.Y))].Points.Add(p);
+                    buckets[Id(Ix(p.X), Iy(p.Y))].Points.Add(new VertexRef(e, v));
                 }
 
                 foreach (var seg in e.ActiveBreaklineSegments())
@@ -186,16 +197,19 @@ namespace MiningVolume.Surface
                             int wy0 = Iy(Math.Max(minY, workMinY));
                             int wy1 = Iy(Math.Min(maxY, workMaxY));
 
-                            var points = new List<Vec3>();
+                            var pointRefs = new List<VertexRef>();
                             var segments = new List<Segment3>();
                             for (int bx = wx0; bx <= wx1; bx++)
                             for (int by = wy0; by <= wy1; by++)
                             {
                                 var b = buckets[Id(bx, by)];
-                                foreach (var p in b.Points)
+                                foreach (var pointRef in b.Points)
+                                {
+                                    var p = pointRef.Vertex.Position;
                                     if (p.X >= workMinX && p.X <= workMaxX &&
                                         p.Y >= workMinY && p.Y <= workMaxY)
-                                        points.Add(p);
+                                        pointRefs.Add(pointRef);
+                                }
 
                                 foreach (var seg in b.Segments)
                                 {
@@ -205,14 +219,44 @@ namespace MiningVolume.Surface
                                 }
                             }
 
+                            var conflictIssues = new List<ValidationIssue>();
+                            Dictionary<XYKey, ResolvedSite> resolvedIndex;
+                            var points = ResolveDuplicateInputPoints(
+                                pointRefs,
+                                options,
+                                conflictIssues,
+                                out resolvedIndex);
+
+                            if (conflictIssues.Any(x => x.Severity == ValidationSeverity.Error))
+                            {
+                                var first = conflictIssues
+                                    .Where(x => x.Severity == ValidationSeverity.Error)
+                                    .Take(12)
+                                    .Select(x => x.Code + ": " + x.Message);
+                                throw new InvalidOperationException(
+                                    $"Ô TIN ({ix + 1},{iy + 1}) có xung đột cao độ tại cùng XY.\r\n" +
+                                    "TIN địa hình là bề mặt 2,5D nên một XY chỉ được có một Z.\r\n\r\n" +
+                                    string.Join("\r\n", first));
+                            }
+
                             if (points.Count < 3)
                             {
                                 acceptedCore = new List<Triangle3>();
                                 break;
                             }
 
+                            // Nếu một đỉnh breakline trùng đúng XY với nguồn có độ ưu tiên
+                            // cao hơn (ví dụ POINT đo thực tế), chỉ snap Z của đầu mút trong
+                            // bản dựng tạm. Dữ liệu CAD gốc tuyệt đối không bị sửa.
+                            segments = SnapSegmentEndpoints(
+                                segments,
+                                resolvedIndex,
+                                options.XyTolerance);
+
                             var pw = Stopwatch.StartNew();
                             var prepared = preparer.PrepareRaw(points, segments, options);
+                            foreach (var issue in conflictIssues)
+                                prepared.Issues.Add(issue);
                             pw.Stop();
                             prepareMs += pw.ElapsedMilliseconds;
 
@@ -326,6 +370,183 @@ namespace MiningVolume.Surface
                 {
                     try { File.Delete(storePath); } catch { }
                 }
+            }
+        }
+
+        private readonly struct XYKey : IEquatable<XYKey>
+        {
+            public XYKey(long x, long y) { X = x; Y = y; }
+            public long X { get; }
+            public long Y { get; }
+            public bool Equals(XYKey other) => X == other.X && Y == other.Y;
+            public override bool Equals(object obj) => obj is XYKey && Equals((XYKey)obj);
+            public override int GetHashCode()
+            {
+                unchecked { return (X.GetHashCode() * 397) ^ Y.GetHashCode(); }
+            }
+        }
+
+        private sealed class ResolvedSite
+        {
+            public Vec3 Position;
+            public VertexRef Winner;
+        }
+
+        private static List<Vec3> ResolveDuplicateInputPoints(
+            IReadOnlyList<VertexRef> source,
+            SurfaceBuildOptions options,
+            List<ValidationIssue> issues,
+            out Dictionary<XYKey, ResolvedSite> index)
+        {
+            // 5 cm chỉ dùng để nhận diện sai khác rất nhỏ tại cùng XY; không trung
+            // bình hay tạo cao độ mới. Luôn giữ Z của nguồn ưu tiên cao hơn.
+            const double minorZTolerance = 0.05;
+            double xyTol = Math.Max(options.XyTolerance, 1e-9);
+            index = new Dictionary<XYKey, ResolvedSite>();
+            var ordered = new List<ResolvedSite>();
+
+            foreach (var item in source)
+            {
+                var p = item.Vertex.Position;
+                long ix = (long)Math.Floor(p.X / xyTol);
+                long iy = (long)Math.Floor(p.Y / xyTol);
+
+                ResolvedSite match = null;
+                XYKey matchKey = default(XYKey);
+                double bestD2 = double.PositiveInfinity;
+
+                for (long dx = -1; dx <= 1; dx++)
+                for (long dy = -1; dy <= 1; dy++)
+                {
+                    var key = new XYKey(ix + dx, iy + dy);
+                    ResolvedSite candidate;
+                    if (!index.TryGetValue(key, out candidate)) continue;
+                    double px = candidate.Position.X - p.X;
+                    double py = candidate.Position.Y - p.Y;
+                    double d2 = px * px + py * py;
+                    if (d2 <= xyTol * xyTol && d2 < bestD2)
+                    {
+                        match = candidate;
+                        matchKey = key;
+                        bestD2 = d2;
+                    }
+                }
+
+                if (match == null)
+                {
+                    var key = new XYKey(ix, iy);
+                    var site = new ResolvedSite { Position = p, Winner = item };
+                    // Hai điểm có thể rơi cùng cell nhưng xa nhau gần biên; dùng ô
+                    // lân cận phụ để không ghi đè. Hiếm và chỉ trong một tile.
+                    while (index.ContainsKey(key))
+                        key = new XYKey(key.X + 104729, key.Y);
+                    index[key] = site;
+                    ordered.Add(site);
+                    continue;
+                }
+
+                double dz = Math.Abs(match.Position.Z - p.Z);
+                if (dz <= options.ZConflictTolerance)
+                    continue;
+
+                int oldPriority = SourcePriority(match.Winner.Entity.Type);
+                int newPriority = SourcePriority(item.Entity.Type);
+
+                if (dz <= minorZTolerance || oldPriority != newPriority)
+                {
+                    bool replace = newPriority > oldPriority;
+                    if (replace)
+                    {
+                        match.Position = new Vec3(match.Position.X, match.Position.Y, p.Z);
+                        match.Winner = item;
+                    }
+
+                    issues.Add(new ValidationIssue(
+                        ValidationSeverity.Warning,
+                        dz <= minorZTolerance
+                            ? "AUTO_RESOLVE_DUPLICATE_XY_MINOR"
+                            : "AUTO_RESOLVE_DUPLICATE_XY_BY_PRIORITY",
+                        $"Trùng XY ({p.X:0.###}, {p.Y:0.###}) có Z={match.Position.Z:0.###} / {p.Z:0.###}. " +
+                        $"Giữ nguồn ưu tiên {TypeLabel(match.Winner.Entity.Type)} " +
+                        $"(handle {match.Winner.Entity.Handle}); dữ liệu CAD gốc không bị sửa.",
+                        match.Winner.Entity.Id));
+                    continue;
+                }
+
+                issues.Add(new ValidationIssue(
+                    ValidationSeverity.Error,
+                    "DUPLICATE_XY_CONFLICT_Z",
+                    $"XY ({p.X:0.###}, {p.Y:0.###}) có hai Z mâu thuẫn " +
+                    $"{match.Position.Z:0.###} và {p.Z:0.###}; cùng mức ưu tiên " +
+                    $"{TypeLabel(item.Entity.Type)}. Handles: " +
+                    $"{match.Winner.Entity.Handle} / {item.Entity.Handle}.",
+                    item.Entity.Id));
+            }
+
+            return ordered.Select(x => x.Position).ToList();
+        }
+
+        private static List<Segment3> SnapSegmentEndpoints(
+            IReadOnlyList<Segment3> source,
+            Dictionary<XYKey, ResolvedSite> resolved,
+            double xyTolerance)
+        {
+            var output = new List<Segment3>(source.Count);
+            foreach (var s in source)
+            {
+                Vec3 a = SnapPoint(s.A, resolved, xyTolerance);
+                Vec3 b = SnapPoint(s.B, resolved, xyTolerance);
+                if (a.XY.DistanceTo(b.XY) > xyTolerance)
+                    output.Add(new Segment3(a, b, s.SourceId));
+            }
+            return output;
+        }
+
+        private static Vec3 SnapPoint(
+            Vec3 p,
+            Dictionary<XYKey, ResolvedSite> resolved,
+            double xyTolerance)
+        {
+            double tol = Math.Max(xyTolerance, 1e-9);
+            long ix = (long)Math.Floor(p.X / tol);
+            long iy = (long)Math.Floor(p.Y / tol);
+            for (long dx = -1; dx <= 1; dx++)
+            for (long dy = -1; dy <= 1; dy++)
+            {
+                ResolvedSite site;
+                if (!resolved.TryGetValue(new XYKey(ix + dx, iy + dy), out site))
+                    continue;
+                if (site.Position.XY.DistanceTo(p.XY) <= tol)
+                    return new Vec3(p.X, p.Y, site.Position.Z);
+            }
+            return p;
+        }
+
+        private static int SourcePriority(SourceEntityType type)
+        {
+            switch (type)
+            {
+                case SourceEntityType.Point: return 600;       // điểm đo thực tế
+                case SourceEntityType.Polyline3d: return 500;  // breakline 3D
+                case SourceEntityType.Contour: return 400;     // đường đồng mức
+                case SourceEntityType.LwPolyline: return 300;
+                case SourceEntityType.Polyline2d: return 250;
+                case SourceEntityType.Line: return 200;
+                default: return 100;
+            }
+        }
+
+        private static string TypeLabel(SourceEntityType type)
+        {
+            switch (type)
+            {
+                case SourceEntityType.Point: return "POINT";
+                case SourceEntityType.Polyline3d: return "3D POLYLINE";
+                case SourceEntityType.Contour: return "đường đồng mức";
+                case SourceEntityType.LwPolyline: return "LWPOLYLINE";
+                case SourceEntityType.Polyline2d: return "2D POLYLINE";
+                case SourceEntityType.Line: return "LINE";
+                default: return type.ToString();
             }
         }
 
