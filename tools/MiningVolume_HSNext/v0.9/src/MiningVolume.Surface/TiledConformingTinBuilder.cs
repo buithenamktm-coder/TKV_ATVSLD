@@ -259,6 +259,17 @@ namespace MiningVolume.Surface
 
                             if (prepared.HasErrors)
                             {
+                                var resolvable = prepared.Issues
+                                    .Where(x => x.Severity == ValidationSeverity.Error &&
+                                        (string.Equals(x.Code, "DUPLICATE_XY_CONFLICT_Z", StringComparison.OrdinalIgnoreCase) ||
+                                         string.Equals(x.Code, "POINT_ON_BREAKLINE_Z_CONFLICT", StringComparison.OrdinalIgnoreCase) ||
+                                         string.Equals(x.Code, "BREAKLINE_CROSSING_Z_CONFLICT", StringComparison.OrdinalIgnoreCase) ||
+                                         string.Equals(x.Code, "BREAKLINE_OVERLAP_Z_CONFLICT", StringComparison.OrdinalIgnoreCase)))
+                                    .ToList();
+
+                                if (resolvable.Count > 0)
+                                    throw new DuplicateXYConflictException(name, resolvable);
+
                                 var first = prepared.Issues
                                     .Where(x => x.Severity == ValidationSeverity.Error)
                                     .Take(10)
