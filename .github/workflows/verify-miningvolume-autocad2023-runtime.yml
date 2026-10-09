@@ -211,6 +211,8 @@ jobs:
           Copy-Item 'src/MiningVolume.Core/bin/Release/net48/MiningVolume.Core.dll' $out
           Copy-Item 'src/MiningVolume.Surface/bin/Release/net48/MiningVolume.Surface.dll' $out
           Copy-Item 'src/MiningVolume.Cad2023/bin/Release/net48/MiningVolume.Cad2023.dll' $out
+          New-Item -ItemType Directory -Force "$out/Assets" | Out-Null
+          Copy-Item 'src/MiningVolume.Plugin2023/Assets/imsat_logo_64.png' "$out/Assets/imsat_logo_64.png" -Force
           ./release/verify_release.ps1
 
       - name: Run MVSELFTEST in AutoCAD 2023
