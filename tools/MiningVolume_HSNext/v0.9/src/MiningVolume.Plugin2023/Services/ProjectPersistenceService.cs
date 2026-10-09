@@ -88,7 +88,7 @@ namespace MiningVolume2023.Services
             }
             var snapshot = ProjectSnapshotCodec.Decode(encoded);
             if (snapshot == null) return new ProjectLoadResult { Found = false, Message = "Không đọc được dữ liệu Project trong DWG." };
-            if (snapshot.FormatVersion > 1) throw new InvalidOperationException("Project được tạo bởi phiên bản mới hơn, bản hiện tại chưa hỗ trợ.");
+            if (snapshot.FormatVersion > 2) throw new InvalidOperationException("Project được tạo bởi phiên bản mới hơn, bản hiện tại chưa hỗ trợ.");
 
             var result = new ProjectLoadResult { Found = true, SavedUtc = snapshot.SavedUtc };
             Restore(snapshot, rebuildDerived, result.Warnings);
@@ -140,8 +140,11 @@ namespace MiningVolume2023.Services
                 DeveloperName = state.DeveloperName,
                 DeveloperContact = state.DeveloperContact,
                 HadProfiles = state.SectionProfiles.Count > 0,
-                HadVolumeResult = state.VolumeResult != null
+                HadVolumeResult = state.VolumeResult != null,
+                TinRegionHandle = state.TinRegionHandle
             };
+            foreach (var p in state.TinRegionPolygon)
+                s.TinRegion.Add(new Point2Snapshot { X = p.X, Y = p.Y });
             if (state.SectionSystem != null)
             {
                 foreach (var p in state.SectionSystem.Boundary) s.Boundary.Add(new Point2Snapshot { X = p.X, Y = p.Y });
@@ -199,6 +202,10 @@ namespace MiningVolume2023.Services
             state.DeveloperName = string.IsNullOrWhiteSpace(snap.DeveloperName) ? "Bùi Thế Nam" : snap.DeveloperName;
             state.DeveloperContact = snap.DeveloperContact ?? string.Empty;
             state.BoundaryHandle = snap.BoundaryHandle;
+            state.TinRegionHandle = snap.TinRegionHandle;
+            if (snap.TinRegion != null)
+                foreach (var p in snap.TinRegion)
+                    state.TinRegionPolygon.Add(new Vec2(p.X, p.Y));
             if (snap.HasDirection) state.SectionDirection = new Vec2(snap.DirectionX, snap.DirectionY);
 
             RestoreModel(ModelRole.Existing, snap.Existing, warnings);
