@@ -20,7 +20,9 @@ namespace MiningVolume.Surface
     /// </summary>
     public sealed class TiledConformingTinBuilder
     {
-        private const int TargetCoreVertices = 25000;
+        private const int DefaultTargetCoreVertices = 18000;
+        private const int MillionScaleTargetCoreVertices = 12000;
+        private const int MultiMillionTargetCoreVertices = 8000;
         private static readonly double[] HaloFactors = { 0.20, 0.45, 0.90, 1.60 };
 
         private readonly struct VertexRef
@@ -34,10 +36,21 @@ namespace MiningVolume.Surface
             public ModelVertex Vertex { get; }
         }
 
+        private readonly struct SegmentRef
+        {
+            public SegmentRef(int id, Segment3 segment)
+            {
+                Id = id;
+                Segment = segment;
+            }
+            public int Id { get; }
+            public Segment3 Segment { get; }
+        }
+
         private sealed class Bucket
         {
             public readonly List<VertexRef> Points = new List<VertexRef>();
-            public readonly List<Segment3> Segments = new List<Segment3>();
+            public readonly List<SegmentRef> Segments = new List<SegmentRef>();
         }
 
         public sealed class Result
@@ -91,7 +104,14 @@ namespace MiningVolume.Surface
             if (!(maxX > minX) || !(maxY > minY))
                 throw new InvalidOperationException("Phạm vi XY của dữ liệu không đủ để dựng TIN.");
 
-            int desiredTiles = Math.Max(1, (int)Math.Ceiling(inputVertices / (double)TargetCoreVertices));
+            int targetCoreVertices =
+                inputVertices >= 2000000 ? MultiMillionTargetCoreVertices :
+                inputVertices >= 500000 ? MillionScaleTargetCoreVertices :
+                DefaultTargetCoreVertices;
+
+            int desiredTiles = Math.Max(
+                1,
+                (int)Math.Ceiling(inputVertices / (double)targetCoreVertices));
             double width = maxX - minX, height = maxY - minY;
             double aspect = Math.Max(0.05, Math.Min(20.0, width / Math.Max(height, 1e-12)));
             int nx = Math.Max(1, (int)Math.Ceiling(Math.Sqrt(desiredTiles * aspect)));
@@ -116,6 +136,10 @@ namespace MiningVolume.Surface
             int Id(int ix, int iy) => iy * nx + ix;
 
             // Bucket hóa một lần. Không nhân bản toàn bộ đỉnh sang halo.
+            // Mỗi breakline segment có ID duy nhất: một segment có thể được index
+            // vào nhiều bucket để truy vấn nhanh, nhưng khi dựng một tile chỉ được
+            // đưa vào PrepareRaw đúng một lần.
+            int segmentId = 0;
             foreach (var e in model.Entities)
             {
                 if (!e.IsEnabled) continue;
@@ -129,13 +153,14 @@ namespace MiningVolume.Surface
                 foreach (var seg in e.ActiveBreaklineSegments())
                 {
                     if (seg.Length2D <= options.XyTolerance) continue;
+                    var segmentRef = new SegmentRef(segmentId++, seg);
                     int x0 = Ix(Math.Min(seg.A.X, seg.B.X));
                     int x1 = Ix(Math.Max(seg.A.X, seg.B.X));
                     int y0 = Iy(Math.Min(seg.A.Y, seg.B.Y));
                     int y1 = Iy(Math.Max(seg.A.Y, seg.B.Y));
                     for (int ix = x0; ix <= x1; ix++)
                     for (int iy = y0; iy <= y1; iy++)
-                        buckets[Id(ix, iy)].Segments.Add(seg);
+                        buckets[Id(ix, iy)].Segments.Add(segmentRef);
                 }
             }
 
@@ -159,6 +184,12 @@ namespace MiningVolume.Surface
                 storeRoot,
                 "tin_" + Guid.NewGuid().ToString("N") + ".bin");
 
+            progress?.Invoke(
+                0,
+                total,
+                $"TIN dữ liệu lớn: 0/{total:n0} ô • {inputVertices:n0} đỉnh • " +
+                $"mục tiêu ~{targetCoreVertices:n0} đỉnh/ô • đang chuẩn bị...");
+
             try
             {
                 using (var fs = new FileStream(
@@ -174,6 +205,11 @@ namespace MiningVolume.Surface
                     for (int ix = 0; ix < nx; ix++)
                     {
                         cancellationToken.ThrowIfCancellationRequested();
+
+                        progress?.Invoke(
+                            completed,
+                            total,
+                            $"TIN dữ liệu lớn: ô {completed + 1:n0}/{total:n0} • đang gom dữ liệu...");
 
                         double coreMinX = minX + ix * dx;
                         double coreMaxX = ix == nx - 1 ? maxX : coreMinX + dx;
@@ -199,6 +235,7 @@ namespace MiningVolume.Surface
 
                             var pointRefs = new List<VertexRef>();
                             var segments = new List<Segment3>();
+                            var seenSegmentIds = new HashSet<int>();
                             for (int bx = wx0; bx <= wx1; bx++)
                             for (int by = wy0; by <= wy1; by++)
                             {
@@ -211,13 +248,23 @@ namespace MiningVolume.Surface
                                         pointRefs.Add(pointRef);
                                 }
 
-                                foreach (var seg in b.Segments)
+                                foreach (var segmentRef in b.Segments)
                                 {
+                                    if (!seenSegmentIds.Add(segmentRef.Id)) continue;
                                     Segment3 clipped;
-                                    if (TryClip(seg, workMinX, workMinY, workMaxX, workMaxY, out clipped))
+                                    if (TryClip(
+                                        segmentRef.Segment,
+                                        workMinX, workMinY, workMaxX, workMaxY,
+                                        out clipped))
                                         segments.Add(clipped);
                                 }
                             }
+
+                            progress?.Invoke(
+                                completed,
+                                total,
+                                $"TIN dữ liệu lớn: ô {completed + 1:n0}/{total:n0} • halo {haloFactor:0.00} • " +
+                                $"{pointRefs.Count:n0} đỉnh • {segments.Count:n0} breakline • đang chuẩn hóa...");
 
                             var conflictIssues = new List<ValidationIssue>();
                             Dictionary<XYKey, List<ResolvedSite>> resolvedIndex;
@@ -278,6 +325,12 @@ namespace MiningVolume.Surface
                                     $"Ô TIN ({ix + 1},{iy + 1}) có lỗi dữ liệu:\r\n" +
                                     string.Join("\r\n", first));
                             }
+
+                            progress?.Invoke(
+                                completed,
+                                total,
+                                $"TIN dữ liệu lớn: ô {completed + 1:n0}/{total:n0} • " +
+                                $"{prepared.Sites.Count:n0} site • {prepared.Breaklines.Count:n0} breakline • đang tam giác hóa...");
 
                             var tw = Stopwatch.StartNew();
                             var local = localBuilder.Build(name + $" [{ix + 1},{iy + 1}]", prepared, options);
