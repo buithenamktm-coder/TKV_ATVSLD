@@ -32,25 +32,17 @@ namespace MiningVolume2023.UI
             var header = new Panel
             {
                 Dock = DockStyle.Top,
-                Height = 64,
+                Height = 44,
                 BackColor = UiTheme.Surface,
-                Padding = new Padding(16, 10, 16, 8)
+                Padding = new Padding(12, 10, 12, 6)
             };
             header.Controls.Add(new Label
             {
                 Text = "DỮ LIỆU ĐẦU VÀO",
-                Dock = DockStyle.Top,
-                Height = 26,
-                Font = new Font("Arial", 12F, FontStyle.Bold),
-                ForeColor = UiTheme.TextStrong
-            });
-            header.Controls.Add(new Label
-            {
-                Text = "Nạp theo layer hoặc chọn trực tiếp POINT / LINE / POLYLINE trên bản vẽ.",
-                Dock = DockStyle.Bottom,
-                Height = 22,
-                Font = new Font("Arial", 8.75F),
-                ForeColor = UiTheme.Muted
+                Dock = DockStyle.Fill,
+                Font = new Font("Arial", 11.5F, FontStyle.Bold),
+                ForeColor = UiTheme.TextStrong,
+                TextAlign = ContentAlignment.MiddleLeft
             });
 
             var body = new FlowLayoutPanel
@@ -60,7 +52,7 @@ namespace MiningVolume2023.UI
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 FlowDirection = FlowDirection.TopDown,
                 WrapContents = false,
-                Padding = new Padding(14, 14, 14, 18),
+                Padding = new Padding(8, 8, 8, 10),
                 BackColor = UiTheme.Canvas
             };
 
@@ -68,15 +60,15 @@ namespace MiningVolume2023.UI
             {
                 Text = "Nguồn dữ liệu",
                 Width = 520,
-                Height = 112,
-                Margin = new Padding(0, 0, 0, 12)
+                Height = 96,
+                Margin = new Padding(0, 0, 0, 8)
             };
             var source = new TableLayoutPanel
             {
                 Dock = DockStyle.Fill,
                 ColumnCount = 4,
                 RowCount = 2,
-                Padding = new Padding(10, 8, 10, 8)
+                Padding = new Padding(8, 5, 8, 5)
             };
             source.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 88));
             source.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
@@ -102,20 +94,23 @@ namespace MiningVolume2023.UI
             {
                 Text = "Loại dữ liệu tham gia TIN",
                 Width = 520,
-                Height = 174,
-                Margin = new Padding(0, 0, 0, 12)
+                Height = 108,
+                Margin = new Padding(0, 0, 0, 8)
             };
             _types = new CheckedListBox
             {
                 Dock = DockStyle.Fill,
                 CheckOnClick = true,
                 IntegralHeight = false,
-                BorderStyle = BorderStyle.FixedSingle,
-                Margin = new Padding(0)
+                MultiColumn = true,
+                ColumnWidth = 165,
+                BorderStyle = BorderStyle.None,
+                Margin = new Padding(0),
+                BackColor = UiTheme.Surface
             };
             foreach (var x in new[] { "POINT", "LINE", "LWPOLYLINE", "2D POLYLINE", "3D POLYLINE", "Đường đồng mức" })
                 _types.Items.Add(x, true);
-            var typePanel = new Panel { Dock = DockStyle.Fill, Padding = new Padding(10, 8, 10, 10) };
+            var typePanel = new Panel { Dock = DockStyle.Fill, Padding = new Padding(10, 6, 10, 8) };
             typePanel.Controls.Add(_types);
             typeBox.Controls.Add(typePanel);
             body.Controls.Add(typeBox);
@@ -124,8 +119,8 @@ namespace MiningVolume2023.UI
             {
                 Text = "Phạm vi tạo TIN",
                 Width = 520,
-                Height = 92,
-                Margin = new Padding(0, 0, 0, 12)
+                Height = 72,
+                Margin = new Padding(0, 0, 0, 8)
             };
             var regionLayout = new TableLayoutPanel
             {
@@ -156,8 +151,8 @@ namespace MiningVolume2023.UI
             {
                 Text = "Trạng thái mô hình",
                 Width = 520,
-                Height = 104,
-                Margin = new Padding(0, 0, 0, 12)
+                Height = 72,
+                Margin = new Padding(0, 0, 0, 8)
             };
             _status = new Label
             {
@@ -174,38 +169,38 @@ namespace MiningVolume2023.UI
             var actions = new TableLayoutPanel
             {
                 Width = 520,
-                Height = 132,
-                ColumnCount = 1,
-                RowCount = 3,
+                Height = 44,
+                ColumnCount = 3,
+                RowCount = 1,
                 Margin = new Padding(0),
                 Padding = new Padding(0)
             };
-            actions.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
-            actions.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
-            actions.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
+            actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 27));
+            actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 46));
+            actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 27));
 
-            var refresh = Btn("Làm mới danh sách layer", (s, e) => RefreshLayers());
+            var refresh = Btn("Làm mới layer", (s, e) => RefreshLayers());
             refresh.Dock = DockStyle.Fill;
-            refresh.Margin = new Padding(0, 0, 0, 6);
+            refresh.Margin = new Padding(0, 0, 6, 0);
             actions.Controls.Add(refresh, 0, 0);
 
-            _buildPair = Btn("TẠO CẶP TIN HIỆN TRẠNG + THIẾT KẾ", async (s, e) => await BuildPairTinAsync());
+            _buildPair = Btn("TẠO CẶP TIN", async (s, e) => await BuildPairTinAsync());
             _buildPair.Font = new Font("Arial", 9F, FontStyle.Bold);
             _buildPair.Dock = DockStyle.Fill;
             _buildPair.Margin = new Padding(0);
             _buildPair.Enabled = false;
-            actions.Controls.Add(_buildPair, 0, 1);
+            actions.Controls.Add(_buildPair, 1, 0);
 
-            _cancelBuild = Btn("HỦY DỰNG TIN", (s, e) =>
+            _cancelBuild = Btn("Hủy", (s, e) =>
             {
                 if (_buildCts == null || _buildCts.IsCancellationRequested) return;
                 _status.Text = "Đang yêu cầu hủy dựng TIN...";
                 _buildCts.Cancel();
             });
             _cancelBuild.Dock = DockStyle.Fill;
-            _cancelBuild.Margin = new Padding(0, 6, 0, 0);
+            _cancelBuild.Margin = new Padding(6, 0, 0, 0);
             _cancelBuild.Enabled = false;
-            actions.Controls.Add(_cancelBuild, 0, 2);
+            actions.Controls.Add(_cancelBuild, 2, 0);
 
             body.Controls.Add(actions);
 
@@ -312,7 +307,7 @@ namespace MiningVolume2023.UI
             {
                 MessageBox.Show(
                     "Phải nạp đủ dữ liệu Hiện trạng và Thiết kế trước khi tạo cặp TIN.",
-                    "MiningVolume - TIN",
+                    "IMSAT VOLUME - TIN",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Warning);
                 return;
@@ -356,7 +351,7 @@ namespace MiningVolume2023.UI
                     "ĐÃ TẠO ĐỦ 2 TIN DÙNG CHO TÍNH KHỐI LƯỢNG\r\n\r\n" +
                     $"Hiện trạng → {st.Existing.TinLayer}: {builds[0].Summary}\r\n" +
                     $"Thiết kế → {st.Design.TinLayer}: {builds[1].Summary}",
-                    "MiningVolume - Cặp TIN hợp lệ",
+                    "IMSAT VOLUME - Cặp TIN hợp lệ",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Information);
             }
@@ -379,8 +374,17 @@ namespace MiningVolume2023.UI
             }
             catch (Exception ex)
             {
-                MessageBox.Show(ex.Message, "Không tạo được cặp TIN", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                _status.Text = "Chưa tạo được cặp TIN.";
+                string detail = ex.Message;
+                if (ex.InnerException != null && !string.IsNullOrWhiteSpace(ex.InnerException.Message) &&
+                    !detail.Contains(ex.InnerException.Message))
+                    detail += "\r\n\r\nChi tiết: " + ex.InnerException.Message;
+
+                MessageBox.Show(
+                    detail,
+                    "IMSAT VOLUME - Không tạo được cặp TIN",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
+                _status.Text = "Chưa tạo được cặp TIN. Xem thông báo để biết lỗi dữ liệu hoặc phép dựng.";
             }
             finally
             {
