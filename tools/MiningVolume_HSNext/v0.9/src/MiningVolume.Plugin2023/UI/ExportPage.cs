@@ -105,12 +105,12 @@ namespace MiningVolume2023.UI
 
             using (var dlg = new SaveFileDialog
             {
-                Title = "Xuất báo cáo MiningVolume",
+                Title = "Xuất báo cáo IMSAT VOLUME",
                 Filter = "Excel Workbook (*.xlsx)|*.xlsx",
                 DefaultExt = "xlsx",
                 AddExtension = true,
                 OverwritePrompt = true,
-                FileName = "MiningVolume_KhoiLuong_" + DateTime.Now.ToString("yyyyMMdd_HHmm") + ".xlsx"
+                FileName = "IMSAT_VOLUME_KhoiLuong_" + DateTime.Now.ToString("yyyyMMdd_HHmm") + ".xlsx"
             })
             {
                 if (dlg.ShowDialog(this) != DialogResult.OK) return;
@@ -136,7 +136,7 @@ namespace MiningVolume2023.UI
                     var report = await Task.Run(() => ExportWorkflowService.BuildReport(st, opt));
                     await Task.Run(() => ExportWorkflowService.WriteXlsx(dlg.FileName, report));
                     _status.Text = "Đã xuất: " + dlg.FileName;
-                    MessageBox.Show("Đã xuất báo cáo Excel thành công.\n\n" + dlg.FileName, "MiningVolume 2023", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    MessageBox.Show("Đã xuất báo cáo Excel thành công.\n\n" + dlg.FileName, "IMSAT VOLUME", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
                 catch (Exception ex)
                 {
