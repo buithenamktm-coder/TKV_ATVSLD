@@ -25,7 +25,7 @@ var payloadFS embed.FS
 
 const (
     productName = "IMSAT MiningVolume HS-Next for AutoCAD 2023"
-    version = "0.10.4"
+    version = "1.0.0"
     uninstallKey = `HKLM\Software\Microsoft\Windows\CurrentVersion\Uninstall\MiningVolume2023`
 )
 
@@ -47,7 +47,7 @@ func install() {
     cad, err := findAutoCAD2023()
     if err != nil { msg(err.Error(), 0x10); return }
 
-    temp := filepath.Join(os.TempDir(), fmt.Sprintf("MiningVolume_v0104_%d", os.Getpid()))
+    temp := filepath.Join(os.TempDir(), fmt.Sprintf("MiningVolume_v100_%d", os.Getpid()))
     os.RemoveAll(temp)
     if err := os.MkdirAll(temp, 0755); err != nil { msg(err.Error(), 0x10); return }
     defer os.RemoveAll(temp)
@@ -61,7 +61,7 @@ func install() {
     programData := os.Getenv("ProgramData"); if programData == "" { programData = `C:\ProgramData` }
     appPlugins := filepath.Join(programData, "Autodesk", "ApplicationPlugins")
     target := filepath.Join(appPlugins, "MiningVolume2023.bundle")
-    backup := target + ".v0104bak"
+    backup := target + ".v100bak"
     os.MkdirAll(appPlugins, 0755)
 
     // Recover conservatively from an interrupted previous install before starting
@@ -126,7 +126,7 @@ func validatePrebuiltBundle(root string) error {
     if err != nil { return fmt.Errorf("Không đọc được PackageContents.xml: %w", err) }
     xmlText := string(xmlBytes)
     for _, token := range []string{
-        `AppVersion="0.10.4"`,
+        `AppVersion="1.0.0"`,
         `SeriesMin="R24.2"`,
         `SeriesMax="R24.2"`,
         `LoadOnAutoCADStartup="True"`,
@@ -151,8 +151,8 @@ func uninstall() {
 func runAutoCADSelfTest(cad string) (bool, string) {
     acad := filepath.Join(cad, "acad.exe")
     if !exists(acad) { return false, "Không tìm thấy acad.exe" }
-    log := filepath.Join(os.TempDir(), "MiningVolume_v0104_selftest.txt"); os.Remove(log)
-    scr := filepath.Join(os.TempDir(), "MiningVolume_v0104_selftest.scr")
+    log := filepath.Join(os.TempDir(), "MiningVolume_v100_selftest.txt"); os.Remove(log)
+    scr := filepath.Join(os.TempDir(), "MiningVolume_v100_selftest.scr")
     os.WriteFile(scr, []byte("FILEDIA\r\n0\r\nCMDDIA\r\n0\r\nMVSELFTEST\r\n_.QUIT\r\n"), 0644)
     defer os.Remove(scr)
 
@@ -164,9 +164,9 @@ func runAutoCADSelfTest(cad string) (bool, string) {
         if b, err := os.ReadFile(log); err == nil {
             txt := string(b)
             if strings.Contains(txt, "Status=PASS") {
-                if !strings.Contains(txt, "MiningVolume HS-Next v0.10.4 runtime self-test") {
+                if !strings.Contains(txt, "MiningVolume HS-Next v1.0 runtime self-test") {
                     _ = cmd.Process.Kill()
-                    return false, "MVSELFTEST trả PASS nhưng log không đúng phiên bản v0.10.4.\n\n"+txt
+                    return false, "MVSELFTEST trả PASS nhưng log không đúng phiên bản v1.0.\n\n"+txt
                 }
                 required := []string{
                     "PASS | Khởi tạo đầy đủ giao diện MiningVolume",
@@ -199,7 +199,7 @@ func registerUninstall(bundlePath, cadDir string) error {
     programData := os.Getenv("ProgramData"); if programData=="" { programData=`C:\ProgramData` }
     dir := filepath.Join(programData, "MiningVolume2023")
     if err := os.MkdirAll(dir,0755); err != nil { return err }
-    exe, _ := os.Executable(); stored := filepath.Join(dir,"MiningVolume_Setup_v0.10.4.exe")
+    exe, _ := os.Executable(); stored := filepath.Join(dir,"MiningVolume_Setup_v1.0.exe")
     if err := copyFile(exe,stored); err != nil { return err }
     vals := [][]string{
         {"/v","DisplayName","/t","REG_SZ","/d",productName,"/f"},
@@ -260,7 +260,7 @@ func writeRuntimeVerification(cadDir, selfTest string) {
     pd:=os.Getenv("ProgramData"); if pd==""{pd=`C:\ProgramData`}
     dir:=filepath.Join(pd,"MiningVolume2023","Logs"); _=os.MkdirAll(dir,0755)
     content:=fmt.Sprintf(
-        "MiningVolume HS-Next v0.10.4 runtime verification\r\n"+
+        "MiningVolume HS-Next v1.0 runtime verification\r\n"+
         "Timestamp=%s\r\nStatus=PASS\r\nAutoCAD=%s\r\n\r\n%s",
         time.Now().Format(time.RFC3339), filepath.Join(cadDir,"acad.exe"), selfTest)
     _=os.WriteFile(filepath.Join(dir,"runtime_verification.txt"),[]byte(content),0644)
