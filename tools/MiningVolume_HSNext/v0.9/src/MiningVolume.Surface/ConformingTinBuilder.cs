@@ -446,8 +446,40 @@ namespace MiningVolume.Surface
             EdgeGridIndex edgeIndex,
             double tol)
         {
+            var candidates = CollectCrossingEdges(
+                edgeIndex.Query(ca, cb),
+                ca, cb, constraint, vertices, locked, adjacency, tol);
+
+            // Safety net: the spatial edge index is an accelerator, not a source
+            // of truth. On rare dense/near-grid-boundary cases, if it returns no
+            // crossing candidates, scan current adjacency once so a stale/missed
+            // index bucket cannot falsely report that the breakline is impossible.
+            if (candidates.Count == 0)
+            {
+                candidates = CollectCrossingEdges(
+                    adjacency.Keys,
+                    ca, cb, constraint, vertices, locked, adjacency, tol);
+            }
+
+            return candidates
+                .OrderBy(x => x.Item1)
+                .ThenBy(x => x.Item2.A)
+                .ThenBy(x => x.Item2.B)
+                .Select(x => x.Item2);
+        }
+
+        private static List<Tuple<double, EdgeKey>> CollectCrossingEdges(
+            IEnumerable<EdgeKey> edges,
+            Vec2 ca,
+            Vec2 cb,
+            EdgeKey constraint,
+            List<Vec3> vertices,
+            HashSet<EdgeKey> locked,
+            Dictionary<EdgeKey, List<int>> adjacency,
+            double tol)
+        {
             var candidates = new List<Tuple<double, EdgeKey>>();
-            foreach (var e in edgeIndex.Query(ca, cb))
+            foreach (var e in edges)
             {
                 List<int> owners;
                 if (!adjacency.TryGetValue(e, out owners) || owners.Count != 2) continue;
@@ -461,12 +493,7 @@ namespace MiningVolume.Surface
                     ca, cb, vertices[e.A].XY, vertices[e.B].XY);
                 candidates.Add(Tuple.Create(t, e));
             }
-
-            return candidates
-                .OrderBy(x => x.Item1)
-                .ThenBy(x => x.Item2.A)
-                .ThenBy(x => x.Item2.B)
-                .Select(x => x.Item2);
+            return candidates;
         }
 
         private static double IntersectionParameterAlongFirst(
