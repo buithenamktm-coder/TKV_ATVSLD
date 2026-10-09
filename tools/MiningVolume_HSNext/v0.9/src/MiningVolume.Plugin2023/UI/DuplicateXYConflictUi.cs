@@ -21,7 +21,7 @@ namespace MiningVolume2023.UI
 
             var continueResult = MessageBox.Show(
                 owner,
-                $"Phát hiện {count:n0} vị trí trùng XY nhưng khác cao độ Z trong mô hình {ex?.ModelName ?? "TIN"}.\r\n\r\n" +
+                $"Phát hiện {count:n0} vị trí xung đột cao độ Z trong mô hình {ex?.ModelName ?? "TIN"}.\r\n\r\n" +
                 "Bạn có muốn TIẾP TỤC tạo TIN khi dữ liệu có lỗi này không?" +
                 detail +
                 "\r\n\r\nNếu chọn Có, phần mềm sẽ yêu cầu chọn dùng ĐỈNH TRÊN hoặc ĐỈNH DƯỚI. " +
