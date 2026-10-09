@@ -165,3 +165,28 @@ def test_large_tin_duplicate_xy_uses_conservative_source_priority_resolution():
     assert "Handles:" in tiled
     assert "dữ liệu CAD gốc không bị sửa" in tiled
     assert "SnapSegmentEndpoints" in tiled
+
+
+def test_duplicate_xy_conflicts_can_continue_with_upper_or_lower_vertex():
+    core = read("src/MiningVolume.Core/Surface/SurfaceContracts.cs")
+    prep = read("src/MiningVolume.Core/Surface/SurfaceInputPreparer.cs")
+    tiled = read("src/MiningVolume.Surface/TiledConformingTinBuilder.cs")
+    workflow = read("src/MiningVolume.Plugin2023/Services/SurfaceWorkflowService.cs")
+    ui = read("src/MiningVolume.Plugin2023/UI/DuplicateXYConflictUi.cs")
+    data = read("src/MiningVolume.Plugin2023/UI/DataPage.cs")
+    model = read("src/MiningVolume.Plugin2023/UI/ModelPage.cs")
+
+    assert "DuplicateXYConflictPolicy" in core
+    assert "UseUpper" in core and "UseLower" in core
+    assert "DuplicateXYConflictException" in core
+    assert "USER_RESOLVE_DUPLICATE_XY_UPPER" in prep
+    assert "USER_RESOLVE_DUPLICATE_XY_LOWER" in prep
+    assert "USER_RESOLVE_DUPLICATE_XY_UPPER" in tiled
+    assert "USER_RESOLVE_DUPLICATE_XY_LOWER" in tiled
+    assert "duplicateXYPolicy" in workflow
+    assert "Bạn có muốn TIẾP TỤC tạo TIN" in ui
+    assert "DÙNG ĐỈNH TRÊN (Z LỚN HƠN)" in ui
+    assert "DÙNG ĐỈNH DƯỚI (Z NHỎ HƠN)" in ui
+    assert "BuildRoleWithConflictChoiceAsync" in data
+    assert "DuplicateXYConflictUi.Ask" in data
+    assert "DuplicateXYConflictUi.Ask" in model
