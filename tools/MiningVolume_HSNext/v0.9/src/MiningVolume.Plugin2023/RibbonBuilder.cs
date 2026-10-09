@@ -17,9 +17,14 @@ namespace MiningVolume2023
         {
             var ribbon = ComponentManager.Ribbon;
             if (ribbon == null) return;
-            foreach (var t in ribbon.Tabs) if (t.Id == TabId) return;
+            foreach (var t in ribbon.Tabs)
+            {
+                if (t.Id != TabId) continue;
+                t.Title = "IMSAT VOLUME";
+                return;
+            }
 
-            var tab = new RibbonTab { Title = "MINING VOLUME", Id = TabId };
+            var tab = new RibbonTab { Title = "IMSAT VOLUME", Id = TabId };
             ribbon.Tabs.Add(tab);
 
             AddPanel(tab, "Dự án", new[]
@@ -152,7 +157,7 @@ namespace MiningVolume2023
                         EntryPoint.Open(AppPage.Export);
                         break;
                     case RibbonAction.About:
-                        AcApp.ShowAlertDialog("IMSAT MINING VOLUME\nMine Survey & Earthwork for AutoCAD\nPhát triển: Bùi Thế Nam\nĐiện thoại: 0967280686");
+                        AcApp.ShowAlertDialog("IMSAT VOLUME\nMine Survey & Earthwork for AutoCAD\nPhát triển: Bùi Thế Nam\nĐiện thoại: 0967280686");
                         break;
                 }
             }
