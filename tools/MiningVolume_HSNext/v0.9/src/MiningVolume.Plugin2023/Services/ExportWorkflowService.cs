@@ -50,7 +50,7 @@ namespace MiningVolume2023.Services
             var now = DateTime.Now;
             var report = new SpreadsheetReport
             {
-                Title = "MiningVolume 2023 - Báo cáo mặt cắt và khối lượng",
+                Title = "IMSAT VOLUME - Báo cáo mặt cắt và khối lượng",
                 Creator = ExportOptions.FixedDeveloperName,
                 CreatedAt = now
             };
@@ -68,9 +68,9 @@ namespace MiningVolume2023.Services
 
         private static ReportSheet BuildInfoSheet(ProjectState st, ExportOptions opt, DateTime now)
         {
-            var s = NewSheet("Thông tin", "THÔNG TIN BÁO CÁO MINING VOLUME", new[] { "Nội dung", "Giá trị" }, 32, 60);
+            var s = NewSheet("Thông tin", "THÔNG TIN BÁO CÁO IMSAT VOLUME", new[] { "Nội dung", "Giá trị" }, 32, 60);
             s.Landscape = false;
-            s.Notes.Add("Báo cáo được xuất tự động từ MiningVolume 2023 - HS-Next.");
+            s.Notes.Add("Báo cáo được xuất tự động từ IMSAT VOLUME.");
             AddKV(s, "Thời gian xuất", now.ToString("dd/MM/yyyy HH:mm:ss"));
             AddKV(s, "Người phát triển phần mềm", ExportOptions.FixedDeveloperName);
             AddKV(s, "Điện thoại", "0967280686");
