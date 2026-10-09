@@ -247,40 +247,144 @@ namespace MiningVolume.Surface
 
             Vec2 ca = vertices[constraint.A].XY;
             Vec2 cb = vertices[constraint.B].XY;
-            int initialCandidates = edgeIndex.Query(ca, cb).Count;
-            int maxIter = Math.Max(200, initialCandidates * 8 + 64);
 
-            for (int iter = 0; iter < maxIter; iter++)
+            // Chèn cạnh ràng buộc theo hàng đợi các cạnh đang cắt breakline.
+            // Cách cũ mỗi vòng lại lấy một cạnh bất kỳ từ HashSet nên có thể
+            // flip qua lại cùng một vùng và chạm giới hạn vòng lặp trên dữ liệu
+            // mỏ dày. Hàng đợi có thứ tự dọc theo breakline ổn định hơn và chỉ
+            // thử lại cạnh chưa flip được sau khi topo xung quanh đã thay đổi.
+            var pending = new Queue<EdgeKey>();
+            var queued = new HashSet<EdgeKey>();
+            foreach (var e in CrossingEdgesOrdered(
+                ca, cb, constraint, vertices, locked, adjacency, edgeIndex, tol))
             {
-                if (adjacency.ContainsKey(constraint)) return;
-
-                bool flipped = false;
-                foreach (var e in edgeIndex.Query(ca, cb))
-                {
-                    List<int> owners;
-                    if (!adjacency.TryGetValue(e, out owners) || owners.Count != 2) continue;
-                    if (locked.Contains(e)) continue;
-                    if (e.A == constraint.A || e.A == constraint.B ||
-                        e.B == constraint.A || e.B == constraint.B) continue;
-                    if (!Geometry2D.ProperIntersection(
-                        ca, cb, vertices[e.A].XY, vertices[e.B].XY, tol)) continue;
-
-                    int i1 = owners[0];
-                    int i2 = owners[1];
-                    if (TryFlip(tris, i1, i2, e, vertices, locked, adjacency, edgeIndex, tol))
-                    {
-                        flipped = true;
-                        break;
-                    }
-                }
-
-                if (!flipped)
-                    throw new InvalidOperationException(
-                        "Không thể edge-flip để khôi phục breakline " + constraint +
-                        ". Kiểm tra điểm thẳng hàng, breakline giao nhau hoặc dữ liệu quá suy biến.");
+                pending.Enqueue(e);
+                queued.Add(e);
             }
 
-            throw new InvalidOperationException("Vượt số vòng lặp khi khôi phục breakline " + constraint + ".");
+            if (pending.Count == 0)
+                throw new InvalidOperationException(
+                    "Không tìm thấy dãy cạnh tam giác cắt breakline " + constraint +
+                    ". Dữ liệu có thể suy biến hoặc breakline nằm ngoài miền TIN cục bộ.");
+
+            int initialCrossings = pending.Count;
+            int successfulFlips = 0;
+            int failuresSinceProgress = 0;
+            int maxSuccessfulFlips = Math.Max(4096, initialCrossings * 128 + 2048);
+
+            while (!adjacency.ContainsKey(constraint))
+            {
+                if (pending.Count == 0)
+                {
+                    foreach (var e in CrossingEdgesOrdered(
+                        ca, cb, constraint, vertices, locked, adjacency, edgeIndex, tol))
+                    {
+                        if (queued.Add(e)) pending.Enqueue(e);
+                    }
+
+                    if (pending.Count == 0) break;
+                }
+
+                var e = pending.Dequeue();
+                queued.Remove(e);
+
+                List<int> owners;
+                if (!adjacency.TryGetValue(e, out owners) || owners.Count != 2)
+                    continue;
+                if (locked.Contains(e))
+                    continue;
+                if (!Geometry2D.ProperIntersection(
+                    ca, cb, vertices[e.A].XY, vertices[e.B].XY, tol))
+                    continue;
+
+                EdgeKey replacement;
+                if (TryFlip(
+                    tris, owners[0], owners[1], e, vertices, locked,
+                    adjacency, edgeIndex, tol, out replacement))
+                {
+                    successfulFlips++;
+                    failuresSinceProgress = 0;
+
+                    if (Geometry2D.ProperIntersection(
+                        ca, cb,
+                        vertices[replacement.A].XY,
+                        vertices[replacement.B].XY,
+                        tol) &&
+                        queued.Add(replacement))
+                    {
+                        pending.Enqueue(replacement);
+                    }
+
+                    if (successfulFlips > maxSuccessfulFlips)
+                        throw new InvalidOperationException(
+                            "Không hội tụ khi khôi phục breakline " + constraint +
+                            " sau " + successfulFlips.ToString("n0") +
+                            " lần edge-flip. Cần kiểm tra hình học suy biến cục bộ.");
+                }
+                else
+                {
+                    if (queued.Add(e)) pending.Enqueue(e);
+                    failuresSinceProgress++;
+
+                    // Nếu đã đi hết một vòng hàng đợi mà không flip được cạnh nào
+                    // thì topology hiện tại không thể tiến thêm bằng edge-flip.
+                    if (failuresSinceProgress >= Math.Max(1, pending.Count))
+                        throw new InvalidOperationException(
+                            "Không thể edge-flip để khôi phục breakline " + constraint +
+                            ". Các tam giác lân cận không còn cạnh hợp lệ để flip; " +
+                            "kiểm tra điểm thẳng hàng hoặc hình học suy biến cục bộ.");
+                }
+            }
+
+            if (!adjacency.ContainsKey(constraint))
+                throw new InvalidOperationException(
+                    "Không khôi phục được breakline " + constraint +
+                    " sau khi xử lý " + successfulFlips.ToString("n0") +
+                    " lần edge-flip.");
+        }
+
+        private static IEnumerable<EdgeKey> CrossingEdgesOrdered(
+            Vec2 ca,
+            Vec2 cb,
+            EdgeKey constraint,
+            List<Vec3> vertices,
+            HashSet<EdgeKey> locked,
+            Dictionary<EdgeKey, List<int>> adjacency,
+            EdgeGridIndex edgeIndex,
+            double tol)
+        {
+            var candidates = new List<Tuple<double, EdgeKey>>();
+            foreach (var e in edgeIndex.Query(ca, cb))
+            {
+                List<int> owners;
+                if (!adjacency.TryGetValue(e, out owners) || owners.Count != 2) continue;
+                if (locked.Contains(e)) continue;
+                if (e.A == constraint.A || e.A == constraint.B ||
+                    e.B == constraint.A || e.B == constraint.B) continue;
+                if (!Geometry2D.ProperIntersection(
+                    ca, cb, vertices[e.A].XY, vertices[e.B].XY, tol)) continue;
+
+                double t = IntersectionParameterAlongFirst(
+                    ca, cb, vertices[e.A].XY, vertices[e.B].XY);
+                candidates.Add(Tuple.Create(t, e));
+            }
+
+            return candidates
+                .OrderBy(x => x.Item1)
+                .ThenBy(x => x.Item2.A)
+                .ThenBy(x => x.Item2.B)
+                .Select(x => x.Item2);
+        }
+
+        private static double IntersectionParameterAlongFirst(
+            Vec2 a, Vec2 b, Vec2 c, Vec2 d)
+        {
+            double rx = b.X - a.X, ry = b.Y - a.Y;
+            double sx = d.X - c.X, sy = d.Y - c.Y;
+            double den = rx * sy - ry * sx;
+            if (Math.Abs(den) <= 1e-30) return double.PositiveInfinity;
+            double qx = c.X - a.X, qy = c.Y - a.Y;
+            return (qx * sy - qy * sx) / den;
         }
 
         private static bool TryFlip(
@@ -292,8 +396,10 @@ namespace MiningVolume.Surface
             HashSet<EdgeKey> locked,
             Dictionary<EdgeKey, List<int>> adjacency,
             EdgeGridIndex edgeIndex,
-            double tol)
+            double tol,
+            out EdgeKey replacement)
         {
+            replacement = default(EdgeKey);
             var t1 = tris[i1];
             var t2 = tris[i2];
             int x = OppositeVertex(t1, shared);
@@ -310,6 +416,7 @@ namespace MiningVolume.Surface
 
             var newEdge = new EdgeKey(x, y);
             if (locked.Contains(newEdge)) return false;
+            replacement = newEdge;
 
             var n1 = MakeCcw(x, y, shared.A, vertices);
             var n2 = MakeCcw(y, x, shared.B, vertices);
