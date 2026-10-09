@@ -432,11 +432,34 @@ namespace MiningVolume.Core.Surface
                     var old = unique[match];
                     if (Math.Abs(old.Z - p.Z) > options.ZConflictTolerance)
                     {
-                        result.Issues.Add(new ValidationIssue(
-                            ValidationSeverity.Error,
-                            "DUPLICATE_XY_CONFLICT_Z",
-                            $"Hai điểm trùng XY nhưng khác Z: ({p.X:0.###}, {p.Y:0.###}) " +
-                            $"có Z={old.Z:0.###} và Z={p.Z:0.###}."));
+                        if (options.DuplicateXYConflictPolicy == DuplicateXYConflictPolicy.UseUpper)
+                        {
+                            double chosen = Math.Max(old.Z, p.Z);
+                            unique[match] = new Vec3(old.X, old.Y, chosen);
+                            result.Issues.Add(new ValidationIssue(
+                                ValidationSeverity.Warning,
+                                "USER_RESOLVE_DUPLICATE_XY_UPPER",
+                                $"Hai điểm trùng XY ({p.X:0.###}, {p.Y:0.###}) có Z={old.Z:0.###} và Z={p.Z:0.###}; " +
+                                $"theo lựa chọn người dùng, dùng đỉnh trên Z={chosen:0.###}."));
+                        }
+                        else if (options.DuplicateXYConflictPolicy == DuplicateXYConflictPolicy.UseLower)
+                        {
+                            double chosen = Math.Min(old.Z, p.Z);
+                            unique[match] = new Vec3(old.X, old.Y, chosen);
+                            result.Issues.Add(new ValidationIssue(
+                                ValidationSeverity.Warning,
+                                "USER_RESOLVE_DUPLICATE_XY_LOWER",
+                                $"Hai điểm trùng XY ({p.X:0.###}, {p.Y:0.###}) có Z={old.Z:0.###} và Z={p.Z:0.###}; " +
+                                $"theo lựa chọn người dùng, dùng đỉnh dưới Z={chosen:0.###}."));
+                        }
+                        else
+                        {
+                            result.Issues.Add(new ValidationIssue(
+                                ValidationSeverity.Error,
+                                "DUPLICATE_XY_CONFLICT_Z",
+                                $"Hai điểm trùng XY nhưng khác Z: ({p.X:0.###}, {p.Y:0.###}) " +
+                                $"có Z={old.Z:0.###} và Z={p.Z:0.###}."));
+                        }
                     }
                 }
             }
