@@ -15,7 +15,7 @@ V1.0 là bản hoàn thiện đầu tiên để sử dụng thực tế trong Au
 - [ ] Tính khối lượng theo quy tắc hình học thích ứng giữa hai mặt cắt liền kề, không dùng một công thức cố định cho mọi trường hợp.
 - [ ] Excel dùng công thức thực và liên kết ô/sheet; thay đầu vào trong Excel phải tự tính lại.
 - [ ] Excel Arial, không tô nền, bảng đóng khung; có logo IMSAT và thông tin người phát triển.
-- [ ] Bộ cài hoàn chỉnh, không tự mở AutoCAD sau cài.
+- [ ] Bộ cài hoàn chỉnh, không tự mở AutoCAD sau cài; file Setup runtime-pass phải mang icon IMSAT chính thức.
 - [ ] Thông báo cài đặt chỉ nêu phần mềm đang tiếp tục cải tiến/hoàn thiện và thông tin liên hệ.
 - [ ] Runtime gate AutoCAD 2023 PASS trước khi phát hành installer.
 - [ ] Kiểm thử file nhỏ, file mỏ thực tế lớn, dữ liệu bẩn, xuất Excel, đóng/mở lại project.
