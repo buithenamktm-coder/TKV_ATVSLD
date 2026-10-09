@@ -215,3 +215,14 @@ def test_resolvable_tin_elevation_conflicts_use_same_upper_lower_dialog():
     assert "USER_RESOLVE_BREAKLINE_OVERLAP_LOWER" in prep
     assert "xung đột cao độ Z" in ui
     assert "Bạn có muốn TIẾP TỤC tạo TIN" in ui
+
+
+def test_breakline_recovery_is_ordered_and_does_not_use_arbitrary_flip_loop():
+    s = read("src/MiningVolume.Surface/ConformingTinBuilder.cs")
+    assert "CrossingEdgesOrdered" in s
+    assert "IntersectionParameterAlongFirst" in s
+    assert "var pending = new Queue<EdgeKey>()" in s
+    assert "failuresSinceProgress" in s
+    assert "maxSuccessfulFlips" in s
+    assert "out EdgeKey replacement" in s
+    assert "Vượt số vòng lặp khi khôi phục breakline" not in s
