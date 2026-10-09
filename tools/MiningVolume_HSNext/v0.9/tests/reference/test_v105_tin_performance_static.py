@@ -297,3 +297,13 @@ def test_tiled_tin_avoids_redundant_large_normalization_work():
     assert "int[] _visited" in prep
     assert "HashSet cho từng breakline query" in prep
     assert "HaloFactors = { 0.12, 0.25, 0.45, 0.65 }" in tiled
+
+
+def test_breakline_recovery_repairs_omitted_sites_and_near_collinear_paths():
+    tin = read("src/MiningVolume.Surface/ConformingTinBuilder.cs")
+    assert "EnsureAllSitesReferenced" in tin
+    assert "đã phục hồi {repairedSites:n0} site suy biến" in tin
+    assert "TryLockNearCollinearEdgePath" in tin
+    assert "ConstraintVertexDegree" in tin
+    assert "corridor = Math.Max(tol * 100.0, 1e-4)" in tin
+    assert "Không tìm thấy dãy cạnh tam giác cắt breakline" not in tin
