@@ -150,3 +150,18 @@ def test_large_tin_ui_has_progress_and_user_cancel():
     assert "_buildCts.Cancel()" in data
     assert "OperationCanceledException" in data
     assert "SetBuildStatus" in data
+
+
+def test_large_tin_duplicate_xy_uses_conservative_source_priority_resolution():
+    tiled = read("src/MiningVolume.Surface/TiledConformingTinBuilder.cs")
+    assert "ResolveDuplicateInputPoints" in tiled
+    assert "AUTO_RESOLVE_DUPLICATE_XY_MINOR" in tiled
+    assert "AUTO_RESOLVE_DUPLICATE_XY_BY_PRIORITY" in tiled
+    assert "SourcePriority" in tiled
+    assert "case SourceEntityType.Point: return 600" in tiled
+    assert "case SourceEntityType.Polyline3d: return 500" in tiled
+    assert "case SourceEntityType.Contour: return 400" in tiled
+    assert "cùng mức ưu tiên" in tiled
+    assert "Handles:" in tiled
+    assert "dữ liệu CAD gốc không bị sửa" in tiled
+    assert "SnapSegmentEndpoints" in tiled
