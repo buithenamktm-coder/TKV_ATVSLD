@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 using MiningVolume.Core.Geometry;
 using MiningVolume.Core.Model;
 using MiningVolume.Core.Surface;
@@ -172,8 +173,10 @@ namespace MiningVolume.Surface
             int total = nx * ny;
             int totalTriangles = 0;
             int previewPerTile = Math.Max(1, 200000 / Math.Max(1, total));
-            var preparer = new SurfaceInputPreparer();
-            var localBuilder = new ConformingTinBuilder();
+            int workerCount = Math.Max(
+                1,
+                Math.Min(4, Math.Max(1, Environment.ProcessorCount - 1)));
+            var writeGate = new object();
 
             string storeRoot = Path.Combine(
                 Path.GetTempPath(),
@@ -188,7 +191,7 @@ namespace MiningVolume.Surface
                 0,
                 total,
                 $"TIN dữ liệu lớn: 0/{total:n0} ô • {inputVertices:n0} đỉnh • " +
-                $"mục tiêu ~{targetCoreVertices:n0} đỉnh/ô • đang chuẩn bị...");
+                $"mục tiêu ~{targetCoreVertices:n0} đỉnh/ô • {workerCount:n0} luồng • đang chuẩn bị...");
 
             try
             {
@@ -201,15 +204,28 @@ namespace MiningVolume.Surface
                     FileOptions.SequentialScan))
                 using (var bw = new BinaryWriter(fs))
                 {
-                    for (int iy = 0; iy < ny; iy++)
-                    for (int ix = 0; ix < nx; ix++)
+                    var parallelOptions = new ParallelOptions
                     {
-                        cancellationToken.ThrowIfCancellationRequested();
+                        CancellationToken = cancellationToken,
+                        MaxDegreeOfParallelism = workerCount
+                    };
 
-                        progress?.Invoke(
-                            completed,
-                            total,
-                            $"TIN dữ liệu lớn: ô {completed + 1:n0}/{total:n0} • đang gom dữ liệu...");
+                    try
+                    {
+                        Parallel.For(0, total, parallelOptions, tileOrdinal =>
+                        {
+                            int iy = tileOrdinal / nx;
+                            int ix = tileOrdinal % nx;
+
+                            cancellationToken.ThrowIfCancellationRequested();
+                            var preparer = new SurfaceInputPreparer();
+                            var localBuilder = new ConformingTinBuilder();
+                            int doneSnapshot = Volatile.Read(ref completed);
+
+                            progress?.Invoke(
+                                doneSnapshot,
+                                total,
+                                $"TIN dữ liệu lớn: ô {tileOrdinal + 1:n0}/{total:n0} • đang gom dữ liệu...");
 
                         double coreMinX = minX + ix * dx;
                         double coreMaxX = ix == nx - 1 ? maxX : coreMinX + dx;
@@ -261,9 +277,9 @@ namespace MiningVolume.Surface
                             }
 
                             progress?.Invoke(
-                                completed,
+                                Volatile.Read(ref completed),
                                 total,
-                                $"TIN dữ liệu lớn: ô {completed + 1:n0}/{total:n0} • halo {haloFactor:0.00} • " +
+                                $"TIN dữ liệu lớn: ô {tileOrdinal + 1:n0}/{total:n0} • halo {haloFactor:0.00} • " +
                                 $"{pointRefs.Count:n0} đỉnh • {segments.Count:n0} breakline • đang chuẩn hóa...");
 
                             var conflictIssues = new List<ValidationIssue>();
@@ -302,7 +318,7 @@ namespace MiningVolume.Surface
                             foreach (var issue in conflictIssues)
                                 prepared.Issues.Add(issue);
                             pw.Stop();
-                            prepareMs += pw.ElapsedMilliseconds;
+                            Interlocked.Add(ref prepareMs, pw.ElapsedMilliseconds);
 
                             if (prepared.HasErrors)
                             {
@@ -327,9 +343,9 @@ namespace MiningVolume.Surface
                             }
 
                             progress?.Invoke(
-                                completed,
+                                Volatile.Read(ref completed),
                                 total,
-                                $"TIN dữ liệu lớn: ô {completed + 1:n0}/{total:n0} • " +
+                                $"TIN dữ liệu lớn: ô {tileOrdinal + 1:n0}/{total:n0} • " +
                                 $"{prepared.Sites.Count:n0} site • {prepared.Breaklines.Count:n0} breakline • đang tam giác hóa...");
 
                             var tw = Stopwatch.StartNew();
@@ -338,12 +354,12 @@ namespace MiningVolume.Surface
                                 prepared,
                                 options,
                                 message => progress?.Invoke(
-                                    completed,
+                                    Volatile.Read(ref completed),
                                     total,
-                                    $"TIN dữ liệu lớn: ô {completed + 1:n0}/{total:n0} • {message}"),
+                                    $"TIN dữ liệu lớn: ô {tileOrdinal + 1:n0}/{total:n0} • {message}"),
                                 cancellationToken);
                             tw.Stop();
-                            triangulateMs += tw.ElapsedMilliseconds;
+                            Interlocked.Add(ref triangulateMs, tw.ElapsedMilliseconds);
 
                             var core = local.Triangles
                                 .Where(t => InCore(
@@ -371,44 +387,65 @@ namespace MiningVolume.Surface
                                 break;
                         }
 
-                        if (acceptedCore != null && acceptedCore.Count > 0)
+                        int doneNow;
+                        int trianglesNow;
+                        lock (writeGate)
                         {
-                            long offset = fs.Position;
-                            foreach (var t in acceptedCore)
-                                FileBackedTiledTriangleList.WriteTriangle(bw, t);
-
-                            int tileIndex = tileInfos.Count;
-                            tileInfos.Add(new TinTileInfo(
-                                tileIndex,
-                                offset,
-                                acceptedCore.Count,
-                                coreMinX, coreMinY, coreMaxX, coreMaxY));
-                            totalTriangles += acceptedCore.Count;
-
-                            // AutoCAD chỉ cần bản xem trước đủ dày để kiểm tra trực quan.
-                            // TIN tính toán đầy đủ vẫn nằm trong kho tile ngoài RAM.
-                            int step = Math.Max(1, (int)Math.Ceiling(
-                                acceptedCore.Count / (double)previewPerTile));
-                            for (int i = 0; i < acceptedCore.Count &&
-                                previewTriangles.Count < 200000; i += step)
-                                previewTriangles.Add(acceptedCore[i]);
-                        }
-
-                        if (acceptedInput != null)
-                        {
-                            foreach (var issue in acceptedInput.Issues)
+                            if (acceptedCore != null && acceptedCore.Count > 0)
                             {
-                                if (issue.Severity != ValidationSeverity.Info && allIssues.Count < 5000)
-                                    allIssues.Add(issue);
+                                long offset = fs.Position;
+                                foreach (var t in acceptedCore)
+                                    FileBackedTiledTriangleList.WriteTriangle(bw, t);
+
+                                int tileIndex = tileInfos.Count;
+                                tileInfos.Add(new TinTileInfo(
+                                    tileIndex,
+                                    offset,
+                                    acceptedCore.Count,
+                                    coreMinX, coreMinY, coreMaxX, coreMaxY));
+                                totalTriangles += acceptedCore.Count;
+
+                                // AutoCAD chỉ cần bản xem trước đủ dày để kiểm tra trực quan.
+                                // TIN tính toán đầy đủ vẫn nằm trong kho tile ngoài RAM.
+                                int step = Math.Max(1, (int)Math.Ceiling(
+                                    acceptedCore.Count / (double)previewPerTile));
+                                for (int i = 0; i < acceptedCore.Count &&
+                                    previewTriangles.Count < 200000; i += step)
+                                    previewTriangles.Add(acceptedCore[i]);
                             }
+
+                            if (acceptedInput != null)
+                            {
+                                foreach (var issue in acceptedInput.Issues)
+                                {
+                                    if (issue.Severity != ValidationSeverity.Info && allIssues.Count < 5000)
+                                        allIssues.Add(issue);
+                                }
+                            }
+
+                            completed++;
+                            doneNow = completed;
+                            trianglesNow = totalTriangles;
                         }
 
-                        completed++;
                         progress?.Invoke(
-                            completed,
+                            doneNow,
                             total,
-                            $"TIN dữ liệu lớn: ô {completed:n0}/{total:n0} • tổng {totalTriangles:n0} tam giác • lưu ngoài RAM");
+                            $"TIN dữ liệu lớn: {doneNow:n0}/{total:n0} ô xong • tổng {trianglesNow:n0} tam giác • {workerCount:n0} luồng");
+                        });
                     }
+                    catch (AggregateException ex)
+                    {
+                        var flat = ex.Flatten();
+                        var cancel = flat.InnerExceptions.OfType<OperationCanceledException>().FirstOrDefault();
+                        if (cancel != null) throw cancel;
+                        var duplicate = flat.InnerExceptions.OfType<DuplicateXYConflictException>().FirstOrDefault();
+                        if (duplicate != null) throw duplicate;
+                        if (flat.InnerExceptions.Count == 1) throw flat.InnerExceptions[0];
+                        throw new InvalidOperationException(
+                            "Lỗi khi dựng TIN song song theo ô.", flat);
+                    }
+
                     bw.Flush();
                     fs.Flush(true);
                 }
