@@ -290,8 +290,13 @@ jobs:
           & $rsrc -ico imsat.ico -arch amd64 -o rsrc_windows_amd64.syso
           if ($LASTEXITCODE -ne 0) { throw 'Không nhúng được icon IMSAT vào Setup V1.0 runtime-pass.' }
 
+          # Installer là package Go đơn lẻ, không có go.mod. Chuyển riêng bước
+          # build package sang GOPATH mode để Go lấy cả file .syso chứa icon IMSAT.
+          $env:GO111MODULE='off'
           go vet .
+          if ($LASTEXITCODE -ne 0) { throw 'go vet installer V1.0 thất bại.' }
           go build -trimpath -ldflags '-s -w -H=windowsgui' -o ../dist/MiningVolume_HSNext_AutoCAD2023_Setup_v1.0_RUNTIME_PASS.exe .
+          if ($LASTEXITCODE -ne 0) { throw 'go build installer V1.0 runtime-pass thất bại.' }
           Remove-Item rsrc_windows_amd64.syso -Force -ErrorAction SilentlyContinue
           Set-Location ..
 
