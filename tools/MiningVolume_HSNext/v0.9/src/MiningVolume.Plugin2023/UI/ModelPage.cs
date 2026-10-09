@@ -297,7 +297,7 @@ namespace MiningVolume2023.UI
                     $"TIN {ProjectState.Current.Get(role).Name} đã tạo thành công.\r\n\r\n" +
                     $"Layer TIN: {ProjectState.Current.Get(role).TinLayer}\r\n" +
                     build.Summary,
-                    "MiningVolume - TIN",
+                    "IMSAT VOLUME - TIN",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Information);
             }
@@ -321,7 +321,7 @@ namespace MiningVolume2023.UI
             {
                 MessageBox.Show(
                     "Phải nạp đủ dữ liệu Hiện trạng và Thiết kế trước khi tạo cặp TIN.",
-                    "MiningVolume - TIN",
+                    "IMSAT VOLUME - TIN",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Warning);
                 return;
@@ -370,7 +370,7 @@ namespace MiningVolume2023.UI
                     "ĐÃ TẠO ĐỦ 2 TIN DÙNG CHO TÍNH KHỐI LƯỢNG\r\n\r\n" +
                     $"Hiện trạng → {st.Existing.TinLayer}: {builds[0].Summary}\r\n" +
                     $"Thiết kế → {st.Design.TinLayer}: {builds[1].Summary}",
-                    "MiningVolume - Cặp TIN hợp lệ",
+                    "IMSAT VOLUME - Cặp TIN hợp lệ",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Information);
             }
