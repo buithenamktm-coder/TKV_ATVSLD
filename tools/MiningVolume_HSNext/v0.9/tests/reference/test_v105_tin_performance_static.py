@@ -268,3 +268,15 @@ def test_large_tin_deduplicates_bucketed_breaklines_and_reports_live_tile_progre
     assert 'progress?.Invoke($"Delaunay {orderIndex:n0}/{realCount:n0} điểm...")' in builder
     assert "cancellationToken.ThrowIfCancellationRequested()" in builder
     assert "khôi phục breakline" in builder
+
+
+def test_large_tin_processes_independent_tiles_in_parallel_with_bounded_workers():
+    tiled = read("src/MiningVolume.Surface/TiledConformingTinBuilder.cs")
+    assert "Parallel.For(0, total, parallelOptions" in tiled
+    assert "MaxDegreeOfParallelism = workerCount" in tiled
+    assert "Math.Min(4, Math.Max(1, Environment.ProcessorCount - 1))" in tiled
+    assert "lock (writeGate)" in tiled
+    assert "Interlocked.Add(ref prepareMs" in tiled
+    assert "Interlocked.Add(ref triangulateMs" in tiled
+    assert "AggregateException" in tiled
+    assert "TIN dữ liệu lớn: {doneNow:n0}/{total:n0} ô xong" in tiled
