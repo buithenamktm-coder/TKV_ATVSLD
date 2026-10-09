@@ -72,7 +72,7 @@ namespace MiningVolume2023.Services
                 Check(r, volume.Levels.Count == 2 && Near(volume.Levels.Sum(x => x.CutVolume), 100000.0, 1e-3),
                     "Tổng theo 2 tầng bằng tổng khối chi tiết");
 
-                string xlsx = Path.Combine(Path.GetTempPath(), "MiningVolume_v0104_selftest.xlsx");
+                string xlsx = Path.Combine(Path.GetTempPath(), "MiningVolume_v100_selftest.xlsx");
                 WriteSmokeWorkbook(xlsx, profiles, volume);
                 Check(r, File.Exists(xlsx) && new FileInfo(xlsx).Length > 1000, "Sinh được XLSX độc lập Excel/COM");
                 try { File.Delete(xlsx); } catch { }
@@ -296,8 +296,8 @@ namespace MiningVolume2023.Services
 
         private static void WriteSmokeWorkbook(string path, IReadOnlyList<SectionProfile> profiles, VolumeResult volume)
         {
-            var report = new SpreadsheetReport { Title = "MiningVolume v0.10.4 Self-test", Creator = "MiningVolume HS-Next" };
-            var sheet = new ReportSheet { Name = "SelfTest", Title = "MININGVOLUME V0.10.4 - SELF TEST" };
+            var report = new SpreadsheetReport { Title = "MiningVolume v1.0 Self-test", Creator = "MiningVolume HS-Next" };
+            var sheet = new ReportSheet { Name = "SelfTest", Title = "MININGVOLUME V1.0 - SELF TEST" };
             sheet.Headers.AddRange(new[] { "Mục", "Giá trị" });
             sheet.Rows.Add(new[] { ReportCell.Text("Số mặt cắt"), ReportCell.Int(profiles.Count) });
             sheet.Rows.Add(new[] { ReportCell.Text("Tổng đào, m3"), ReportCell.N2(volume.TotalCutVolume) });
@@ -320,7 +320,7 @@ namespace MiningVolume2023.Services
         private static string ResolveOutputPath()
         {
             string p = Environment.GetEnvironmentVariable("MININGVOLUME_SELFTEST_FILE");
-            if (string.IsNullOrWhiteSpace(p)) p = Path.Combine(Path.GetTempPath(), "MiningVolume_v0104_selftest.txt");
+            if (string.IsNullOrWhiteSpace(p)) p = Path.Combine(Path.GetTempPath(), "MiningVolume_v100_selftest.txt");
             return p;
         }
 
@@ -330,7 +330,7 @@ namespace MiningVolume2023.Services
             {
                 var lines = new List<string>
                 {
-                    "MiningVolume HS-Next v0.10.4 runtime self-test",
+                    "MiningVolume HS-Next v1.0 runtime self-test",
                     "Timestamp=" + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture),
                     "Status=" + (r.Passed ? "PASS" : "FAIL")
                 };
