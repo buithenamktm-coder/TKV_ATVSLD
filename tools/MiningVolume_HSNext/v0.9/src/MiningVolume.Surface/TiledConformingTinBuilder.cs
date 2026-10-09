@@ -333,7 +333,15 @@ namespace MiningVolume.Surface
                                 $"{prepared.Sites.Count:n0} site • {prepared.Breaklines.Count:n0} breakline • đang tam giác hóa...");
 
                             var tw = Stopwatch.StartNew();
-                            var local = localBuilder.Build(name + $" [{ix + 1},{iy + 1}]", prepared, options);
+                            var local = localBuilder.Build(
+                                name + $" [{ix + 1},{iy + 1}]",
+                                prepared,
+                                options,
+                                message => progress?.Invoke(
+                                    completed,
+                                    total,
+                                    $"TIN dữ liệu lớn: ô {completed + 1:n0}/{total:n0} • {message}"),
+                                cancellationToken);
                             tw.Stop();
                             triangulateMs += tw.ElapsedMilliseconds;
 
