@@ -75,6 +75,29 @@ namespace MiningVolume.Surface
             Action<int, int, string> progress = null,
             CancellationToken cancellationToken = default(CancellationToken))
         {
+            try
+            {
+                return BuildInternal(name, model, options, progress, cancellationToken, forcedWorkerCount: 0);
+            }
+            catch (ParallelTileRetryException ex)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                progress?.Invoke(
+                    0,
+                    1,
+                    "TIN phân ô gặp lỗi khi chạy nhiều luồng. IMSAT VOLUME đang tự chuyển sang chế độ ổn định 1 luồng...");
+                return BuildInternal(name, model, options, progress, cancellationToken, forcedWorkerCount: 1);
+            }
+        }
+
+        private Result BuildInternal(
+            string name,
+            SurfaceModel model,
+            SurfaceBuildOptions options,
+            Action<int, int, string> progress,
+            CancellationToken cancellationToken,
+            int forcedWorkerCount)
+        {
             if (model == null) throw new ArgumentNullException(nameof(model));
             options = options ?? new SurfaceBuildOptions();
 
@@ -173,9 +196,9 @@ namespace MiningVolume.Surface
             int total = nx * ny;
             int totalTriangles = 0;
             int previewPerTile = Math.Max(1, 200000 / Math.Max(1, total));
-            int workerCount = Math.Max(
-                1,
-                Math.Min(4, Math.Max(1, Environment.ProcessorCount - 1)));
+            int workerCount = forcedWorkerCount > 0
+                ? Math.Max(1, forcedWorkerCount)
+                : Math.Max(1, Math.Min(4, Math.Max(1, Environment.ProcessorCount - 1)));
             var writeGate = new object();
 
             string storeRoot = Path.Combine(
@@ -448,8 +471,26 @@ namespace MiningVolume.Surface
                         var duplicate = flat.InnerExceptions.OfType<DuplicateXYConflictException>().FirstOrDefault();
                         if (duplicate != null) throw duplicate;
                         if (flat.InnerExceptions.Count == 1) throw flat.InnerExceptions[0];
+
+                        // Nhiều worker có thể đồng thời phát sinh lỗi ở các ô halo lân cận.
+                        // Không trả về thông báo chung và bỏ dở: thử lại toàn bộ phép dựng
+                        // theo 1 luồng. Nếu dữ liệu thật sự lỗi, lần chạy ổn định sẽ ném ra
+                        // đúng lỗi gốc của ô để người dùng biết cần xử lý gì.
+                        if (workerCount > 1)
+                            throw new ParallelTileRetryException(flat);
+
+                        var distinct = flat.InnerExceptions
+                            .Select(x => x.Message)
+                            .Where(x => !string.IsNullOrWhiteSpace(x))
+                            .Distinct(StringComparer.OrdinalIgnoreCase)
+                            .Take(6)
+                            .ToArray();
                         throw new InvalidOperationException(
-                            "Lỗi khi dựng TIN song song theo ô.", flat);
+                            "Không dựng được TIN phân ô." +
+                            (distinct.Length > 0
+                                ? "\r\n\r\n" + string.Join("\r\n", distinct)
+                                : string.Empty),
+                            flat);
                     }
 
                     bw.Flush();
@@ -482,6 +523,14 @@ namespace MiningVolume.Surface
                 {
                     try { File.Delete(storePath); } catch { }
                 }
+            }
+        }
+
+        private sealed class ParallelTileRetryException : Exception
+        {
+            public ParallelTileRetryException(Exception inner)
+                : base("TIN phân ô cần chạy lại ở chế độ ổn định.", inner)
+            {
             }
         }
 
