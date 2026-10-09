@@ -179,7 +179,8 @@ namespace MiningVolume2023.Services
         public static SurfaceBuildResult BuildCoreDetailed(
             ModelRole role,
             Action<string> progress = null,
-            CancellationToken cancellationToken = default(CancellationToken))
+            CancellationToken cancellationToken = default(CancellationToken),
+            DuplicateXYConflictPolicy duplicateXYPolicy = DuplicateXYConflictPolicy.Stop)
         {
             var state = ProjectState.Current;
             var session = state.Get(role);
@@ -193,7 +194,8 @@ namespace MiningVolume2023.Services
             {
                 XyTolerance = 1e-6,
                 ZConflictTolerance = 1e-4,
-                MinimumTriangleArea = 1e-10
+                MinimumTriangleArea = 1e-10,
+                DuplicateXYConflictPolicy = duplicateXYPolicy
             };
 
             cancellationToken.ThrowIfCancellationRequested();
@@ -247,7 +249,16 @@ namespace MiningVolume2023.Services
             var prepared = new SurfaceInputPreparer().Prepare(source, options);
             prepareWatch.Stop();
             if (prepared.HasErrors)
+            {
+                var duplicateIssues = prepared.Issues
+                    .Where(x => x.Severity == ValidationSeverity.Error &&
+                                string.Equals(x.Code, "DUPLICATE_XY_CONFLICT_Z", StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+                if (duplicateIssues.Count > 0)
+                    throw new DuplicateXYConflictException(session.Name, duplicateIssues);
+
                 throw new SurfaceValidationException(session.Name, prepared.Issues);
+            }
 
             cancellationToken.ThrowIfCancellationRequested();
             var triangulationWatch = Stopwatch.StartNew();
@@ -285,7 +296,9 @@ namespace MiningVolume2023.Services
 
         public static SurfaceBuildResult[] BuildPairCoreDetailed(
             Action<string> progress = null,
-            CancellationToken cancellationToken = default(CancellationToken))
+            CancellationToken cancellationToken = default(CancellationToken),
+            DuplicateXYConflictPolicy existingPolicy = DuplicateXYConflictPolicy.Stop,
+            DuplicateXYConflictPolicy designPolicy = DuplicateXYConflictPolicy.Stop)
         {
             // Build both pure-core surfaces before touching the DWG. If either fails,
             // neither CAD TIN is replaced.
@@ -293,10 +306,12 @@ namespace MiningVolume2023.Services
             {
                 BuildCoreDetailed(ModelRole.Existing,
                     message => progress?.Invoke("Hiện trạng: " + message),
-                    cancellationToken),
+                    cancellationToken,
+                    existingPolicy),
                 BuildCoreDetailed(ModelRole.Design,
                     message => progress?.Invoke("Thiết kế: " + message),
-                    cancellationToken)
+                    cancellationToken,
+                    designPolicy)
             };
         }
 
