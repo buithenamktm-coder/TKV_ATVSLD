@@ -151,9 +151,8 @@ namespace MiningVolume.Core.Sections
         {
             Vec2 a = line.PointAt(span.StartT);
             Vec2 b = line.PointAt(span.EndT);
-            foreach (int triIndex in index.QuerySegment(a, b))
+            foreach (var tri in index.QuerySegmentTriangles(a, b))
             {
-                var tri = index.Triangles[triIndex];
                 AddEdgeIntersection(a, b, tri.A.XY, tri.B.XY, span.StartT, span.EndT, output, tol);
                 AddEdgeIntersection(a, b, tri.B.XY, tri.C.XY, span.StartT, span.EndT, output, tol);
                 AddEdgeIntersection(a, b, tri.C.XY, tri.A.XY, span.StartT, span.EndT, output, tol);
@@ -262,6 +261,7 @@ namespace MiningVolume.Core.Sections
         private sealed class TriangleGridIndex
         {
             private readonly IReadOnlyList<Triangle3> _triangles;
+            private readonly ITiledTriangleSource _tiled;
             private readonly Dictionary<long, List<int>> _cells =
                 new Dictionary<long, List<int>>();
             private readonly double[] _minX;
@@ -275,7 +275,20 @@ namespace MiningVolume.Core.Sections
             public TriangleGridIndex(TinSurface tin)
             {
                 _triangles = tin.Triangles ?? Array.Empty<Triangle3>();
+                _tiled = _triangles as ITiledTriangleSource;
                 int count = _triangles.Count;
+
+                // Large-mine TIN is already spatially partitioned on disk. Do not
+                // allocate four double arrays + a global triangle grid for millions
+                // of faces; query only intersecting tiles on demand.
+                if (_tiled != null)
+                {
+                    _minX = _maxX = _minY = _maxY = Array.Empty<double>();
+                    _originX = _originY = 0;
+                    _cell = 1;
+                    return;
+                }
+
                 _minX = new double[count];
                 _maxX = new double[count];
                 _minY = new double[count];
@@ -330,6 +343,21 @@ namespace MiningVolume.Core.Sections
 
             public bool TryElevation(Vec2 p, double tol, out double z)
             {
+                if (_tiled != null)
+                {
+                    double pad = Math.Max(tol * 50.0, 1e-9);
+                    foreach (int tileIndex in _tiled.QueryTiles(
+                        p.X - pad, p.Y - pad, p.X + pad, p.Y + pad))
+                    {
+                        var tris = _tiled.ReadTile(tileIndex);
+                        foreach (var tri in tris)
+                            if (TryElevationOnTriangle(tri, p, tol, out z))
+                                return true;
+                    }
+                    z = 0;
+                    return false;
+                }
+
                 int ix = Ix(p.X), iy = Iy(p.Y);
                 for (int radius = 0; radius <= 1; radius++)
                 {
@@ -352,6 +380,36 @@ namespace MiningVolume.Core.Sections
                 }
                 z = 0;
                 return false;
+            }
+
+            public IEnumerable<Triangle3> QuerySegmentTriangles(Vec2 a, Vec2 b)
+            {
+                if (_tiled != null)
+                {
+                    double minX = Math.Min(a.X, b.X);
+                    double maxX = Math.Max(a.X, b.X);
+                    double minY = Math.Min(a.Y, b.Y);
+                    double maxY = Math.Max(a.Y, b.Y);
+
+                    foreach (int tileIndex in _tiled.QueryTiles(minX, minY, maxX, maxY))
+                    {
+                        var tris = _tiled.ReadTile(tileIndex);
+                        foreach (var tri in tris)
+                        {
+                            double tMinX = Math.Min(tri.A.X, Math.Min(tri.B.X, tri.C.X));
+                            double tMaxX = Math.Max(tri.A.X, Math.Max(tri.B.X, tri.C.X));
+                            double tMinY = Math.Min(tri.A.Y, Math.Min(tri.B.Y, tri.C.Y));
+                            double tMaxY = Math.Max(tri.A.Y, Math.Max(tri.B.Y, tri.C.Y));
+                            if (tMaxX < minX || tMinX > maxX || tMaxY < minY || tMinY > maxY)
+                                continue;
+                            yield return tri;
+                        }
+                    }
+                    yield break;
+                }
+
+                foreach (int triIndex in QuerySegment(a, b))
+                    yield return _triangles[triIndex];
             }
 
             public HashSet<int> QuerySegment(Vec2 a, Vec2 b)
