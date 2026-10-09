@@ -22,10 +22,19 @@ namespace MiningVolume.Cad2023
                 var ms = (BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForRead);
                 foreach (ObjectId id in ms)
                 {
-                    var ent = tr.GetObject(id, OpenMode.ForRead) as Entity;
-                    if (ent == null || !string.Equals(ent.Layer, layerName, StringComparison.OrdinalIgnoreCase)) continue;
-                    var rec = TryConvertEntity(ent, tr, arcChord);
-                    if (rec != null) output.Add(rec);
+                    try
+                    {
+                        if (id.IsNull || !id.IsValid || id.IsErased) continue;
+                        var ent = tr.GetObject(id, OpenMode.ForRead, false) as Entity;
+                        if (ent == null || !string.Equals(ent.Layer, layerName, StringComparison.OrdinalIgnoreCase)) continue;
+                        var rec = TryConvertEntity(ent, tr, arcChord);
+                        if (rec != null) output.Add(rec);
+                    }
+                    catch (Autodesk.AutoCAD.Runtime.Exception)
+                    {
+                        // Skip one unreadable legacy/proxy database object. A single bad
+                        // object must not abort loading the rest of a production drawing.
+                    }
                 }
                 tr.Commit();
             }
@@ -40,11 +49,20 @@ namespace MiningVolume.Cad2023
             {
                 foreach (ObjectId id in objectIds)
                 {
-                    if (id.IsNull || id.IsErased || !id.IsValid) continue;
-                    var ent = tr.GetObject(id, OpenMode.ForRead, false) as Entity;
-                    if (ent == null) continue;
-                    var rec = TryConvertEntity(ent, tr, arcChord);
-                    if (rec != null) output.Add(rec);
+                    try
+                    {
+                        if (id.IsNull || !id.IsValid || id.IsErased) continue;
+                        var ent = tr.GetObject(id, OpenMode.ForRead, false) as Entity;
+                        if (ent == null) continue;
+                        var rec = TryConvertEntity(ent, tr, arcChord);
+                        if (rec != null) output.Add(rec);
+                    }
+                    catch (Autodesk.AutoCAD.Runtime.Exception)
+                    {
+                        // Direct CAD selections can include legacy/proxy objects whose
+                        // ObjectId is selectable but not readable through the .NET API.
+                        // Ignore that object and continue with the remaining selection.
+                    }
                 }
                 tr.Commit();
             }
