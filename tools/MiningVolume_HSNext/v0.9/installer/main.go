@@ -89,7 +89,7 @@ func install() {
         msg("MiningVolume đã được chép vào AutoCAD nhưng chưa ghi được mục gỡ cài đặt: "+err.Error(), 0x30); return
     }
     writePersistentLog("install", "Status=INSTALLED\r\nAutoCAD="+filepath.Join(cad,"acad.exe"))
-    msg("Cài đặt IMSAT MiningVolume v0.10.4 thành công.\n\nSetup không tự mở AutoCAD.\nMáy không cần Visual Studio/Build Tools.\nKhi cần sử dụng, hãy mở AutoCAD 2023 rồi dùng Ribbon MINING VOLUME, Menu Bar MINING VOLUME hoặc lệnh TKL.\nBảng MiningVolume không tự mở theo mặc định.", 0x40)
+    msg("Cài đặt IMSAT MiningVolume v0.10.4 thành công.\n\nSetup không tự mở AutoCAD.\nMáy không cần Visual Studio/Build Tools.\nKhi cần sử dụng, hãy mở AutoCAD 2023 rồi dùng Ribbon MINING VOLUME, Menu Bar MINING VOLUME hoặc lệnh TKL.\nMiningVolume không tự mở bảng theo mặc định.", 0x40)
 }
 
 func validatePrebuiltBundle(root string) error {
