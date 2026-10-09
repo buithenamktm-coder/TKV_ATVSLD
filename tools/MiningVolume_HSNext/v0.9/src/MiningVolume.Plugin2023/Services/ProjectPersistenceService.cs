@@ -200,7 +200,7 @@ namespace MiningVolume2023.Services
             state.HorizontalScale = PositiveOr(snap.HorizontalScale, 1000);
             state.VerticalScale = PositiveOr(snap.VerticalScale, 500);
             state.DeveloperName = string.IsNullOrWhiteSpace(snap.DeveloperName) ? "Bùi Thế Nam" : snap.DeveloperName;
-            state.DeveloperContact = snap.DeveloperContact ?? string.Empty;
+            state.DeveloperContact = string.IsNullOrWhiteSpace(snap.DeveloperContact) ? "Điện thoại: 0967280686" : snap.DeveloperContact;
             state.BoundaryHandle = snap.BoundaryHandle;
             state.TinRegionHandle = snap.TinRegionHandle;
             if (snap.TinRegion != null)
