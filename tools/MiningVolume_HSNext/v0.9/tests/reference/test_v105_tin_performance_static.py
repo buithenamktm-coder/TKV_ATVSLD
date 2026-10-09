@@ -237,3 +237,14 @@ def test_breakline_recovery_falls_back_to_collinear_interior_site_chain():
     assert "if (adjacency.ContainsKey(sub))" in s
     assert "if (adjacency.ContainsKey(constraint))" in s
     assert "Không có cạnh cắt và cũng không tìm thấy chuỗi site trung gian" in s
+
+
+def test_proper_intersection_uses_dimensionally_correct_tolerance_and_recovery_has_index_fallback():
+    geom = read("src/MiningVolume.Core/Geometry/Geometry2D.cs")
+    tin = read("src/MiningVolume.Surface/ConformingTinBuilder.cs")
+
+    assert "double abEps = Math.Max(1e-24, tol * abLen)" in geom
+    assert "double cdEps = Math.Max(1e-24, tol * cdLen)" in geom
+    assert "CollectCrossingEdges" in tin
+    assert "adjacency.Keys" in tin
+    assert "spatial edge index is an accelerator, not a source" in tin
