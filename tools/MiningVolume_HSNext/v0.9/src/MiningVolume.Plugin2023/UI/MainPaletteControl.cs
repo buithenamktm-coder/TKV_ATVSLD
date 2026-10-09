@@ -26,7 +26,7 @@ namespace MiningVolume2023.UI
             _content = new Panel
             {
                 Dock = DockStyle.Fill,
-                Padding = new Padding(18, 14, 18, 18),
+                Padding = new Padding(10),
                 BackColor = UiTheme.Canvas
             };
 
@@ -62,11 +62,11 @@ namespace MiningVolume2023.UI
             var header = new Panel
             {
                 Dock = DockStyle.Top,
-                Height = 86,
-                BackColor = UiTheme.Sidebar
+                Height = 66,
+                BackColor = UiTheme.Surface
             };
 
-            int textLeft = 16;
+            int textLeft = 14;
             try
             {
                 string logoPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Assets", "imsat_logo_64.png");
@@ -76,39 +76,38 @@ namespace MiningVolume2023.UI
                     {
                         Image = Image.FromFile(logoPath),
                         SizeMode = PictureBoxSizeMode.Zoom,
-                        Size = new Size(58, 58),
-                        Location = new Point(14, 13),
+                        Size = new Size(48, 48),
+                        Location = new Point(12, 8),
                         BackColor = Color.Transparent
                     };
                     header.Controls.Add(logo);
-                    textLeft = 82;
+                    textLeft = 70;
                 }
             }
             catch { }
 
             header.Controls.Add(new Label
             {
-                Text = "IMSAT MINING VOLUME",
+                Text = "IMSAT VOLUME",
                 AutoSize = true,
-                Font = new Font("Arial", 13F, FontStyle.Bold),
-                ForeColor = Color.White,
-                Location = new Point(textLeft, 9)
-            });
-            header.Controls.Add(new Label
-            {
-                Text = "Mine Survey & Earthwork • AutoCAD",
-                AutoSize = true,
-                Font = new Font("Arial", 8.5F),
-                ForeColor = Color.FromArgb(190, 204, 216),
-                Location = new Point(textLeft + 1, 35)
+                Font = new Font("Arial", 14F, FontStyle.Bold),
+                ForeColor = UiTheme.TextStrong,
+                Location = new Point(textLeft, 8)
             });
             header.Controls.Add(new Label
             {
                 Text = "Phát triển: Bùi Thế Nam  •  Điện thoại: 0967280686",
                 AutoSize = true,
-                Font = new Font("Arial", 8.5F, FontStyle.Bold),
-                ForeColor = Color.FromArgb(122, 213, 181),
-                Location = new Point(textLeft + 1, 58)
+                Font = new Font("Arial", 8.5F),
+                ForeColor = UiTheme.Muted,
+                Location = new Point(textLeft + 1, 37)
+            });
+
+            header.Controls.Add(new Panel
+            {
+                Dock = DockStyle.Bottom,
+                Height = 1,
+                BackColor = UiTheme.Border
             });
             return header;
         }
@@ -118,7 +117,7 @@ namespace MiningVolume2023.UI
             var sidebar = new Panel
             {
                 Dock = DockStyle.Left,
-                Width = 178,
+                Width = 152,
                 BackColor = UiTheme.Sidebar
             };
 
@@ -126,21 +125,21 @@ namespace MiningVolume2023.UI
             {
                 Text = "QUY TRÌNH",
                 Dock = DockStyle.Top,
-                Height = 34,
-                Padding = new Padding(12, 12, 0, 0),
+                Height = 30,
+                Padding = new Padding(10, 10, 0, 0),
                 Font = new Font("Arial", 8F, FontStyle.Bold),
-                ForeColor = Color.FromArgb(151, 169, 184)
+                ForeColor = UiTheme.Muted
             };
 
             var footer = new Label
             {
-                Text = "Lệnh nhanh:  TKL\r\nHiện / ẩn bảng MiningVolume",
+                Text = "TKL  •  Hiện / ẩn IMSAT VOLUME",
                 Dock = DockStyle.Bottom,
-                Height = 62,
-                Padding = new Padding(12, 8, 6, 6),
-                Font = new Font("Arial", 8F),
-                ForeColor = Color.FromArgb(151, 169, 184),
-                BackColor = Color.FromArgb(23, 35, 47)
+                Height = 42,
+                Padding = new Padding(10, 9, 6, 6),
+                Font = new Font("Arial", 7.75F),
+                ForeColor = UiTheme.Muted,
+                BackColor = UiTheme.Sidebar
             };
 
             nav = new FlowLayoutPanel
@@ -148,7 +147,7 @@ namespace MiningVolume2023.UI
                 Dock = DockStyle.Fill,
                 FlowDirection = FlowDirection.TopDown,
                 WrapContents = false,
-                Padding = new Padding(8, 7, 8, 7),
+                Padding = new Padding(7, 6, 7, 6),
                 BackColor = UiTheme.Sidebar
             };
 
@@ -163,20 +162,20 @@ namespace MiningVolume2023.UI
             var b = new Button
             {
                 Text = number + "   " + text,
-                Width = 162,
-                Height = 46,
+                Width = 138,
+                Height = 40,
                 FlatStyle = FlatStyle.Flat,
                 TextAlign = ContentAlignment.MiddleLeft,
-                Margin = new Padding(0, 0, 0, 6),
-                Padding = new Padding(9, 0, 0, 0),
+                Margin = new Padding(0, 0, 0, 4),
+                Padding = new Padding(8, 0, 0, 0),
                 Font = new Font("Arial", 9F),
-                ForeColor = Color.FromArgb(224, 231, 237),
+                ForeColor = UiTheme.Text,
                 BackColor = UiTheme.Sidebar,
                 Cursor = Cursors.Hand
             };
             b.FlatAppearance.BorderSize = 0;
             b.FlatAppearance.MouseOverBackColor = UiTheme.SidebarHover;
-            b.FlatAppearance.MouseDownBackColor = UiTheme.AccentDark;
+            b.FlatAppearance.MouseDownBackColor = UiTheme.Soft;
             b.Click += (s, e) => ShowPage(page);
             parent.Controls.Add(b);
             _buttons[page] = b;
@@ -196,7 +195,7 @@ namespace MiningVolume2023.UI
             {
                 bool active = kv.Key == page;
                 kv.Value.BackColor = active ? UiTheme.Accent : UiTheme.Sidebar;
-                kv.Value.ForeColor = active ? Color.White : Color.FromArgb(224, 231, 237);
+                kv.Value.ForeColor = active ? Color.White : UiTheme.Text;
                 kv.Value.Font = new Font("Arial", 9F, active ? FontStyle.Bold : FontStyle.Regular);
             }
         }
