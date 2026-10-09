@@ -120,13 +120,13 @@ def test_large_mine_tin_routes_to_tiled_engine_instead_of_one_global_delaunay():
     preparer = read("src/MiningVolume.Core/Surface/SurfaceInputPreparer.cs")
     assert "LargeDatasetVertexThreshold = 200000" in workflow
     assert "new TiledConformingTinBuilder().Build" in workflow
-    assert "DefaultTargetCoreVertices = 18000" in tiled
-    assert "MillionScaleTargetCoreVertices = 12000" in tiled
-    assert "MultiMillionTargetCoreVertices = 8000" in tiled
+    assert "DefaultTargetCoreVertices = 4000" in tiled
+    assert "MillionScaleTargetCoreVertices = 2200" in tiled
+    assert "MultiMillionTargetCoreVertices = 1600" in tiled
     assert "HaloFactors" in tiled
     assert "CircumcircleInside" in tiled
     assert "TryClip" in tiled
-    assert "PrepareRaw" in preparer
+    assert "PrepareRawForTiledTin" in preparer
     assert "10 triệu đỉnh" in workflow
 
 
@@ -287,3 +287,13 @@ def test_large_tin_parallel_failure_retries_stable_single_worker():
     assert "ParallelTileRetryException" in tiled
     assert "forcedWorkerCount: 1" in tiled
     assert "đang tự chuyển sang chế độ ổn định 1 luồng" in tiled
+
+
+def test_tiled_tin_avoids_redundant_large_normalization_work():
+    prep = read("src/MiningVolume.Core/Surface/SurfaceInputPreparer.cs")
+    tiled = read("src/MiningVolume.Surface/TiledConformingTinBuilder.cs")
+    assert "PrepareRawForTiledTin" in tiled
+    assert "Dictionary<long, List<int>> _cells" in prep
+    assert "int[] _visited" in prep
+    assert "HashSet cho từng breakline query" in prep
+    assert "HaloFactors = { 0.12, 0.25, 0.45, 0.65 }" in tiled
