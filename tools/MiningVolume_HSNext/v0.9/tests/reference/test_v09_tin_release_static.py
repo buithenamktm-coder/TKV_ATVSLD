@@ -49,9 +49,9 @@ def test_release_policy_bans_autocad_and_old_tin_dlls_from_bundle():
         assert dll in s
 
 
-def test_installer_rolls_back_if_runtime_selftest_fails():
+def test_installer_does_not_run_autocad_selftest_on_end_user_install():
     s = read('installer/main.go')
-    assert 'runAutoCADSelfTest' in s
+    install_block = s[s.index('func install()'):s.index('func validatePrebuiltBundle')]
+    assert 'runAutoCADSelfTest(cad)' not in install_block
+    assert 'Setup không tự mở AutoCAD' in install_block
     assert 'restoreBackup(backup, target)' in s
-    assert 'selftest_failed' in s
-    assert 'Status=PASS' in s and 'Status=FAIL' in s
