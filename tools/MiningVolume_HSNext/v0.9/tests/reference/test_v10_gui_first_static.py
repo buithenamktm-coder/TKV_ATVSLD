@@ -72,5 +72,6 @@ def test_manual_selection_is_persisted_by_entity_handle():
 def test_cad_reader_skips_legacy_invalid_entities_instead_of_aborting_layer_load():
     reader = read("src/MiningVolume.Cad2023/CadLayerSurfaceReader.cs")
     assert "TryConvertEntity" in reader
-    assert "catch (Autodesk.AutoCAD.Runtime.Exception)" in reader
+    assert reader.count("catch (Autodesk.AutoCAD.Runtime.Exception)") >= 3
+    assert "ObjectId is selectable but not readable" in reader
     assert "falling back to the segment chord" in reader
