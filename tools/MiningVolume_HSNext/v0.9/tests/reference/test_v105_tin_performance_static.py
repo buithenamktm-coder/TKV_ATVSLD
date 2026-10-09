@@ -120,7 +120,9 @@ def test_large_mine_tin_routes_to_tiled_engine_instead_of_one_global_delaunay():
     preparer = read("src/MiningVolume.Core/Surface/SurfaceInputPreparer.cs")
     assert "LargeDatasetVertexThreshold = 200000" in workflow
     assert "new TiledConformingTinBuilder().Build" in workflow
-    assert "TargetCoreVertices = 25000" in tiled
+    assert "DefaultTargetCoreVertices = 18000" in tiled
+    assert "MillionScaleTargetCoreVertices = 12000" in tiled
+    assert "MultiMillionTargetCoreVertices = 8000" in tiled
     assert "HaloFactors" in tiled
     assert "CircumcircleInside" in tiled
     assert "TryClip" in tiled
@@ -248,3 +250,21 @@ def test_proper_intersection_uses_dimensionally_correct_tolerance_and_recovery_h
     assert "CollectCrossingEdges" in tin
     assert "adjacency.Keys" in tin
     assert "spatial edge index is an accelerator, not a source" in tin
+
+
+def test_large_tin_deduplicates_bucketed_breaklines_and_reports_live_tile_progress():
+    tiled = read("src/MiningVolume.Surface/TiledConformingTinBuilder.cs")
+    builder = read("src/MiningVolume.Surface/ConformingTinBuilder.cs")
+
+    assert "private readonly struct SegmentRef" in tiled
+    assert "var seenSegmentIds = new HashSet<int>()" in tiled
+    assert "if (!seenSegmentIds.Add(segmentRef.Id)) continue" in tiled
+    assert "mục tiêu ~{targetCoreVertices:n0} đỉnh/ô" in tiled
+    assert "đang chuẩn hóa" in tiled
+    assert "đang tam giác hóa" in tiled
+    assert "message => progress?.Invoke" in tiled
+
+    assert "CancellationToken cancellationToken" in builder
+    assert 'progress?.Invoke($"Delaunay {orderIndex:n0}/{realCount:n0} điểm...")' in builder
+    assert "cancellationToken.ThrowIfCancellationRequested()" in builder
+    assert "khôi phục breakline" in builder
