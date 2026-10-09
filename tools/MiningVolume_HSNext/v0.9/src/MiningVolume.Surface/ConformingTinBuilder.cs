@@ -85,6 +85,15 @@ namespace MiningVolume.Surface
             if (tris.Count == 0)
                 throw new InvalidOperationException("Không tạo được tam giác Delaunay từ dữ liệu đầu vào.");
 
+            // Một số tập điểm mỏ gần thẳng hàng hoặc có tọa độ lớn có thể làm
+            // Bowyer-Watson bỏ sót site khỏi danh sách tam giác do sai số số học.
+            // Breakline đi qua site bị bỏ sót sẽ không có cạnh cắt để khôi phục.
+            // Sửa topology cục bộ trước khi khóa breakline.
+            int repairedSites = EnsureAllSitesReferenced(
+                tris, vertices, realCount, options.XyTolerance, cancellationToken);
+            if (repairedSites > 0)
+                progress?.Invoke($"đã phục hồi {repairedSites:n0} site suy biến trước khi khôi phục breakline...");
+
             var locked = new HashSet<EdgeKey>();
             var siteIndex = new SiteIndex(vertices, realCount, options.XyTolerance);
 
@@ -324,10 +333,17 @@ namespace MiningVolume.Surface
                     tris, vertices, constraint, locked, adjacency, edgeIndex, tol, cancellationToken))
                     return;
 
+                if (TryLockNearCollinearEdgePath(
+                    vertices, constraint, locked, adjacency, tol, cancellationToken))
+                    return;
+
+                int degreeA = ConstraintVertexDegree(adjacency, constraint.A);
+                int degreeB = ConstraintVertexDegree(adjacency, constraint.B);
                 throw new InvalidOperationException(
-                    "Không tìm thấy dãy cạnh tam giác cắt breakline " + constraint +
-                    ". Không có cạnh cắt và cũng không tìm thấy chuỗi site trung gian " +
-                    "nằm trên breakline để tách ràng buộc. Dữ liệu có thể suy biến cục bộ.");
+                    "Không khôi phục được breakline " + constraint +
+                    ". Không có cạnh cắt, không có chuỗi site trung gian và không có " +
+                    "chuỗi cạnh gần thẳng hàng trong sai số hình học cho phép. " +
+                    "Bậc topology hai đầu = " + degreeA + " / " + degreeB + ".");
             }
 
             int initialCrossings = pending.Count;
@@ -393,18 +409,30 @@ namespace MiningVolume.Surface
                     // Nếu đã đi hết một vòng hàng đợi mà không flip được cạnh nào
                     // thì topology hiện tại không thể tiến thêm bằng edge-flip.
                     if (failuresSinceProgress >= Math.Max(1, pending.Count))
+                    {
+                        if (TryLockNearCollinearEdgePath(
+                            vertices, constraint, locked, adjacency, tol, cancellationToken))
+                            return;
+
                         throw new InvalidOperationException(
                             "Không thể edge-flip để khôi phục breakline " + constraint +
-                            ". Các tam giác lân cận không còn cạnh hợp lệ để flip; " +
-                            "kiểm tra điểm thẳng hàng hoặc hình học suy biến cục bộ.");
+                            ". Các tam giác lân cận không còn cạnh hợp lệ để flip và " +
+                            "không có chuỗi cạnh gần thẳng hàng thay thế.");
+                    }
                 }
             }
 
             if (!adjacency.ContainsKey(constraint))
+            {
+                if (TryLockNearCollinearEdgePath(
+                    vertices, constraint, locked, adjacency, tol, cancellationToken))
+                    return;
+
                 throw new InvalidOperationException(
                     "Không khôi phục được breakline " + constraint +
                     " sau khi xử lý " + successfulFlips.ToString("n0") +
                     " lần edge-flip.");
+            }
         }
 
         private static bool TryRecoverConstraintThroughInteriorSites(
@@ -429,7 +457,7 @@ namespace MiningVolume.Surface
             // nên ràng buộc hợp lệ thực chất là một chuỗi cạnh collinear thay vì
             // một cạnh duy nhất. Dùng tolerance hơi nới để hấp thụ sai số số học
             // do clip tile, nhưng vẫn ở mức rất nhỏ so với đơn vị bản vẽ mỏ.
-            double onLineTol = Math.Max(tol * 10.0, 1e-8);
+            double onLineTol = Math.Max(tol * 100.0, 1e-4);
             double paramTol = Math.Min(1e-6, onLineTol / Math.Max(Math.Sqrt(len2), onLineTol));
 
             var chain = new List<Tuple<double, int>>
@@ -560,6 +588,282 @@ namespace MiningVolume.Surface
             if (Math.Abs(den) <= 1e-30) return double.PositiveInfinity;
             double qx = c.X - a.X, qy = c.Y - a.Y;
             return (qx * sy - qy * sx) / den;
+        }
+
+        private static int ConstraintVertexDegree(
+            Dictionary<EdgeKey, List<int>> adjacency,
+            int vertex)
+        {
+            int count = 0;
+            foreach (var edge in adjacency.Keys)
+                if (edge.A == vertex || edge.B == vertex) count++;
+            return count;
+        }
+
+        private static bool TryLockNearCollinearEdgePath(
+            List<Vec3> vertices,
+            EdgeKey constraint,
+            HashSet<EdgeKey> locked,
+            Dictionary<EdgeKey, List<int>> adjacency,
+            double tol,
+            CancellationToken cancellationToken)
+        {
+            Vec2 a = vertices[constraint.A].XY;
+            Vec2 b = vertices[constraint.B].XY;
+            double dx = b.X - a.X;
+            double dy = b.Y - a.Y;
+            double len2 = dx * dx + dy * dy;
+            if (len2 <= tol * tol) return false;
+            double len = Math.Sqrt(len2);
+
+            // Đây chỉ là fallback số học: tối đa 0,1 mm nếu bản vẽ dùng mét
+            // với tolerance mặc định 1e-6. Không làm đơn giản hóa dữ liệu và
+            // không thay đổi tọa độ site.
+            double corridor = Math.Max(tol * 100.0, 1e-4);
+            double paramTol = Math.Min(1e-5, corridor / Math.Max(len, corridor));
+
+            var neighbors = new Dictionary<int, List<int>>();
+            foreach (var edge in adjacency.Keys)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                double ta, da, tb, db;
+                ProjectToConstraint(vertices[edge.A].XY, a, dx, dy, len2, out ta, out da);
+                ProjectToConstraint(vertices[edge.B].XY, a, dx, dy, len2, out tb, out db);
+
+                if (da > corridor || db > corridor) continue;
+                if (ta < -paramTol || ta > 1.0 + paramTol ||
+                    tb < -paramTol || tb > 1.0 + paramTol) continue;
+
+                AddNeighbor(neighbors, edge.A, edge.B);
+                AddNeighbor(neighbors, edge.B, edge.A);
+            }
+
+            var queue = new Queue<int>();
+            var previous = new Dictionary<int, int>();
+            var visited = new HashSet<int>();
+            queue.Enqueue(constraint.A);
+            visited.Add(constraint.A);
+
+            while (queue.Count > 0)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                int u = queue.Dequeue();
+                if (u == constraint.B) break;
+
+                List<int> ns;
+                if (!neighbors.TryGetValue(u, out ns)) continue;
+
+                double tu, du;
+                ProjectToConstraint(vertices[u].XY, a, dx, dy, len2, out tu, out du);
+                foreach (int v in ns)
+                {
+                    if (visited.Contains(v)) continue;
+                    double tv, dv;
+                    ProjectToConstraint(vertices[v].XY, a, dx, dy, len2, out tv, out dv);
+
+                    // Đi dọc theo breakline, không cho path quay ngược và tạo
+                    // đường ziczac dù vẫn nằm trong corridor.
+                    if (tv + paramTol < tu) continue;
+
+                    visited.Add(v);
+                    previous[v] = u;
+                    queue.Enqueue(v);
+                }
+            }
+
+            if (!visited.Contains(constraint.B)) return false;
+
+            int current = constraint.B;
+            var pathEdges = new List<EdgeKey>();
+            while (current != constraint.A)
+            {
+                int prev;
+                if (!previous.TryGetValue(current, out prev)) return false;
+                pathEdges.Add(new EdgeKey(prev, current));
+                current = prev;
+            }
+
+            if (pathEdges.Count == 0) return false;
+            foreach (var edge in pathEdges)
+                if (adjacency.ContainsKey(edge))
+                    locked.Add(edge);
+            return true;
+        }
+
+        private static void AddNeighbor(
+            Dictionary<int, List<int>> neighbors,
+            int from,
+            int to)
+        {
+            List<int> list;
+            if (!neighbors.TryGetValue(from, out list))
+            {
+                list = new List<int>();
+                neighbors[from] = list;
+            }
+            list.Add(to);
+        }
+
+        private static void ProjectToConstraint(
+            Vec2 p,
+            Vec2 a,
+            double dx,
+            double dy,
+            double len2,
+            out double t,
+            out double distance)
+        {
+            t = ((p.X - a.X) * dx + (p.Y - a.Y) * dy) / len2;
+            double qx = a.X + t * dx;
+            double qy = a.Y + t * dy;
+            double ex = p.X - qx;
+            double ey = p.Y - qy;
+            distance = Math.Sqrt(ex * ex + ey * ey);
+        }
+
+        private static int EnsureAllSitesReferenced(
+            List<Tri> tris,
+            List<Vec3> vertices,
+            int realCount,
+            double tol,
+            CancellationToken cancellationToken)
+        {
+            var used = new bool[realCount];
+            foreach (var tri in tris)
+            {
+                if (tri.A < realCount) used[tri.A] = true;
+                if (tri.B < realCount) used[tri.B] = true;
+                if (tri.C < realCount) used[tri.C] = true;
+            }
+
+            int repaired = 0;
+            for (int p = 0; p < realCount; p++)
+            {
+                if (used[p]) continue;
+                cancellationToken.ThrowIfCancellationRequested();
+
+                Vec2 xy = vertices[p].XY;
+                bool inserted = false;
+
+                // Trước hết thử site nằm trên một cạnh hiện hữu.
+                var adjacency = BuildAdjacency(tris);
+                EdgeKey edgeOn = default(EdgeKey);
+                bool foundEdge = false;
+                foreach (var edge in adjacency.Keys)
+                {
+                    if (edge.A == p || edge.B == p) continue;
+                    if (!Geometry2D.PointOnSegment(
+                        xy, vertices[edge.A].XY, vertices[edge.B].XY,
+                        Math.Max(tol * 100.0, 1e-4)))
+                        continue;
+                    edgeOn = edge;
+                    foundEdge = true;
+                    break;
+                }
+
+                if (foundEdge)
+                {
+                    List<int> owners;
+                    if (adjacency.TryGetValue(edgeOn, out owners))
+                    {
+                        var ownerSet = new HashSet<int>(owners);
+                        var rebuilt = new List<Tri>(tris.Count + owners.Count);
+                        for (int i = 0; i < tris.Count; i++)
+                        {
+                            if (!ownerSet.Contains(i))
+                            {
+                                rebuilt.Add(tris[i]);
+                                continue;
+                            }
+
+                            var old = tris[i];
+                            int opposite = OppositeVertex(old, edgeOn);
+                            if (opposite < 0) continue;
+
+                            var t1 = MakeCcw(edgeOn.A, p, opposite, vertices);
+                            var t2 = MakeCcw(p, edgeOn.B, opposite, vertices);
+                            if (TriangleArea2(t1, vertices) > tol * tol) rebuilt.Add(t1);
+                            if (TriangleArea2(t2, vertices) > tol * tol) rebuilt.Add(t2);
+                        }
+                        tris.Clear();
+                        tris.AddRange(rebuilt);
+                        inserted = true;
+                    }
+                }
+
+                // Site nằm trong tam giác: tách 1 tam giác thành 3.
+                if (!inserted)
+                {
+                    for (int i = 0; i < tris.Count; i++)
+                    {
+                        var old = tris[i];
+                        if (!Geometry2D.PointInTriangle(
+                            xy,
+                            vertices[old.A].XY,
+                            vertices[old.B].XY,
+                            vertices[old.C].XY,
+                            Math.Max(tol * 10.0, 1e-5)))
+                            continue;
+
+                        var t1 = MakeCcw(old.A, old.B, p, vertices);
+                        var t2 = MakeCcw(old.B, old.C, p, vertices);
+                        var t3 = MakeCcw(old.C, old.A, p, vertices);
+                        tris[i] = t1;
+                        if (TriangleArea2(t2, vertices) > tol * tol) tris.Add(t2);
+                        if (TriangleArea2(t3, vertices) > tol * tol) tris.Add(t3);
+                        inserted = true;
+                        break;
+                    }
+                }
+
+                // Site ở ngoài hull do sai số Bowyer-Watson: nối với chuỗi cạnh
+                // hull nhìn thấy từ site để mở rộng bao lồi.
+                if (!inserted)
+                {
+                    adjacency = BuildAdjacency(tris);
+                    var visible = new List<EdgeKey>();
+                    foreach (var kv in adjacency)
+                    {
+                        if (kv.Value.Count != 1) continue;
+                        var edge = kv.Key;
+                        var owner = tris[kv.Value[0]];
+                        int opposite = OppositeVertex(owner, edge);
+                        if (opposite < 0) continue;
+
+                        double cp = Vec2.Cross(
+                            vertices[edge.A].XY,
+                            vertices[edge.B].XY,
+                            xy);
+                        double co = Vec2.Cross(
+                            vertices[edge.A].XY,
+                            vertices[edge.B].XY,
+                            vertices[opposite].XY);
+                        double eps = Math.Max(tol * tol, 1e-12);
+                        if (cp * co < -eps)
+                            visible.Add(edge);
+                    }
+
+                    foreach (var edge in visible)
+                    {
+                        var nt = MakeCcw(edge.A, edge.B, p, vertices);
+                        if (TriangleArea2(nt, vertices) > tol * tol)
+                        {
+                            tris.Add(nt);
+                            inserted = true;
+                        }
+                    }
+                }
+
+                if (!inserted)
+                    throw new InvalidOperationException(
+                        "Không thể phục hồi site TIN suy biến " + p +
+                        " vào lưới tam giác. Hãy kiểm tra cụm điểm gần thẳng hàng.");
+
+                used[p] = true;
+                repaired++;
+            }
+
+            return repaired;
         }
 
         private static bool TryFlip(
