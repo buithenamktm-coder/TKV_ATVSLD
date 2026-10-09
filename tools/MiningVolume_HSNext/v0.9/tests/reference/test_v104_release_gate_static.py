@@ -46,7 +46,8 @@ def test_installer_does_not_launch_autocad_selftest_for_end_users():
     s = read("installer/main.go")
     install_block = s[s.index("func install()"):s.index("func validatePrebuiltBundle")]
     assert "runAutoCADSelfTest(cad)" not in install_block
-    assert "Setup không tự mở AutoCAD" in install_block
+    assert "Phần mềm đang được tiếp tục cải tiến và hoàn thiện." in install_block
+    assert "Bùi Thế Nam" in install_block and "0967280686" in install_block
     assert "runtime verification is a release-pipeline responsibility".lower() in install_block.lower()
 
 
@@ -60,8 +61,8 @@ def test_runtime_gate_has_real_autocad_self_hosted_workflow_and_proof():
     assert "Layer TIN đúng màu quy ước" in ps
     assert "runs-on: [self-hosted, Windows, X64, autocad2023]" in wf
     assert "Run MVSELFTEST in AutoCAD 2023" in wf
-    assert "MiningVolume-HSNext-AutoCAD2023-v0.10.4-RUNTIME-PASS" in wf
-    assert "MiningVolume_HSNext_AutoCAD2023_Setup_v0.10.4_RUNTIME_PASS.exe" in wf
+    assert "MiningVolume-HSNext-AutoCAD2023-v1.0-RUNTIME-PASS" in wf
+    assert "MiningVolume_HSNext_AutoCAD2023_Setup_v1.0_RUNTIME_PASS.exe" in wf
     assert "RUNTIME_RELEASE_VERIFICATION.txt" in wf
 
 def test_hosted_ci_parses_runtime_verifier_script():
@@ -142,12 +143,12 @@ def test_palette_has_direct_show_hide_toggle_and_startup_default_off():
 def test_hosted_artifact_is_explicitly_pre_release_and_final_requires_runtime_pass():
     hosted = read("../../../.github/workflows/build-miningvolume-autocad2023.yml")
     runtime = read("../../../.github/workflows/verify-miningvolume-autocad2023-runtime.yml")
-    assert "MiningVolume-HSNext-AutoCAD2023-v0.10.4-PRE-RELEASE" in hosted
-    assert "MiningVolume_HSNext_AutoCAD2023_Setup_v0.10.4_PRE_RELEASE.exe" in hosted
+    assert "MiningVolume-HSNext-AutoCAD2023-v1.0-PRE-RELEASE" in hosted
+    assert "MiningVolume_HSNext_AutoCAD2023_Setup_v1.0_PRE_RELEASE.exe" in hosted
     assert "PRE_RELEASE_NOTICE.txt" in hosted
     assert "Release status: PRE-RELEASE ONLY" in hosted
-    assert "MiningVolume-HSNext-AutoCAD2023-v0.10.4-RUNTIME-PASS" in runtime
-    assert "MiningVolume_HSNext_AutoCAD2023_Setup_v0.10.4_RUNTIME_PASS.exe" in runtime
+    assert "MiningVolume-HSNext-AutoCAD2023-v1.0-RUNTIME-PASS" in runtime
+    assert "MiningVolume_HSNext_AutoCAD2023_Setup_v1.0_RUNTIME_PASS.exe" in runtime
     assert "if ($runtimeProof -notmatch 'Status=PASS')" in runtime
     assert "RUNTIME_RELEASE_VERIFICATION.txt" in runtime
 
@@ -177,8 +178,9 @@ def test_installer_admin_check_and_success_message_match_palette_policy():
     installer = read("installer/main.go")
     assert 'exec.Command("fltmc").Run()==nil' in installer
     assert 'exec.Command("net","session")' not in installer
-    assert "MiningVolume không tự mở bảng theo mặc định" in installer
-    assert "bảng MiningVolume sẽ tự hiện" not in installer
+    assert "Phần mềm đang được tiếp tục cải tiến và hoàn thiện." in installer
+    assert "Điện thoại: 0967280686" in installer
+    assert "Setup không tự mở AutoCAD" not in installer
 
 
 def test_installer_rejects_foreign_dlls_and_wrong_package_metadata():
@@ -192,7 +194,7 @@ def test_installer_rejects_foreign_dlls_and_wrong_package_metadata():
     ]:
         assert dll in installer
     assert "Bundle chứa DLL ngoài danh sách cho phép" in installer
-    assert 'AppVersion="0.10.4"' in installer
+    assert 'AppVersion="1.0.0"' in installer
     assert 'SeriesMin="R24.2"' in installer
     assert 'SeriesMax="R24.2"' in installer
     assert 'LoadOnAutoCADStartup="True"' in installer
