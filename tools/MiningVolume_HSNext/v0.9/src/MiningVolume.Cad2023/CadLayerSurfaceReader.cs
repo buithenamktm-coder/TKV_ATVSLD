@@ -32,6 +32,25 @@ namespace MiningVolume.Cad2023
             return output;
         }
 
+        public IReadOnlyList<SourceEntity> Read(Database db, IEnumerable<ObjectId> objectIds, double arcChord = 0.50)
+        {
+            if (objectIds == null) throw new ArgumentNullException(nameof(objectIds));
+            var output = new List<SourceEntity>();
+            using (var tr = db.TransactionManager.StartTransaction())
+            {
+                foreach (ObjectId id in objectIds)
+                {
+                    if (id.IsNull || id.IsErased || !id.IsValid) continue;
+                    var ent = tr.GetObject(id, OpenMode.ForRead, false) as Entity;
+                    if (ent == null) continue;
+                    var rec = ConvertEntity(ent, tr, arcChord);
+                    if (rec != null) output.Add(rec);
+                }
+                tr.Commit();
+            }
+            return output;
+        }
+
         private static SourceEntity ConvertEntity(Entity ent, Transaction tr, double arcChord)
         {
             string id = ent.Handle.ToString();
