@@ -120,5 +120,7 @@ def test_export_links_summary_to_detail_and_level_sheets():
     assert "'Khối lượng chi tiết'!L" in s
     assert "'Tổng hợp theo tầng'!E" in s
     assert "'Tổng hợp theo tầng'!F" in s
-    assert "VolumeFormula(x.CutFormula" in s
-    assert "VolumeFormula(x.FillFormula" in s
+    assert 'AdaptiveVolumeFormula(excelRow, "D", "E", "G")' in s
+    assert 'AdaptiveVolumeFormula(excelRow, "D", "I", "K")' in s
+    assert 'SQRT(' in s
+    assert 'ABS(' in s and 'MAX(' in s and 'MIN(' in s
