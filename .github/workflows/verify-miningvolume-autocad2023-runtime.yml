@@ -282,8 +282,17 @@ jobs:
           $env:GOOS='windows'
           $env:GOARCH='amd64'
           $env:CGO_ENABLED='0'
-          go vet main.go
-          go build -trimpath -ldflags '-s -w -H=windowsgui' -o ../dist/MiningVolume_HSNext_AutoCAD2023_Setup_v1.0_RUNTIME_PASS.exe main.go
+
+          # Nhúng icon IMSAT chính thức vào đúng bộ cài đã qua runtime gate.
+          go install github.com/akavel/rsrc@latest
+          $rsrc = Join-Path ((go env GOPATH).Trim()) 'bin/rsrc.exe'
+          if (-not (Test-Path $rsrc)) { throw 'Không tìm thấy rsrc.exe để nhúng icon IMSAT.' }
+          & $rsrc -ico imsat.ico -arch amd64 -o rsrc_windows_amd64.syso
+          if ($LASTEXITCODE -ne 0) { throw 'Không nhúng được icon IMSAT vào Setup V1.0 runtime-pass.' }
+
+          go vet .
+          go build -trimpath -ldflags '-s -w -H=windowsgui' -o ../dist/MiningVolume_HSNext_AutoCAD2023_Setup_v1.0_RUNTIME_PASS.exe .
+          Remove-Item rsrc_windows_amd64.syso -Force -ErrorAction SilentlyContinue
           Set-Location ..
 
           $setup = 'dist/MiningVolume_HSNext_AutoCAD2023_Setup_v1.0_RUNTIME_PASS.exe'
