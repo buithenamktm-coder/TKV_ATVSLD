@@ -21,10 +21,10 @@ namespace MiningVolume.Surface
     /// </summary>
     public sealed class TiledConformingTinBuilder
     {
-        private const int DefaultTargetCoreVertices = 18000;
-        private const int MillionScaleTargetCoreVertices = 12000;
-        private const int MultiMillionTargetCoreVertices = 8000;
-        private static readonly double[] HaloFactors = { 0.20, 0.45, 0.90, 1.60 };
+        private const int DefaultTargetCoreVertices = 4000;
+        private const int MillionScaleTargetCoreVertices = 2200;
+        private const int MultiMillionTargetCoreVertices = 1600;
+        private static readonly double[] HaloFactors = { 0.12, 0.25, 0.45, 0.65 };
 
         private readonly struct VertexRef
         {
@@ -337,7 +337,7 @@ namespace MiningVolume.Surface
                                 options.XyTolerance);
 
                             var pw = Stopwatch.StartNew();
-                            var prepared = preparer.PrepareRaw(points, segments, options);
+                            var prepared = preparer.PrepareRawForTiledTin(points, segments, options);
                             foreach (var issue in conflictIssues)
                                 prepared.Issues.Add(issue);
                             pw.Stop();
