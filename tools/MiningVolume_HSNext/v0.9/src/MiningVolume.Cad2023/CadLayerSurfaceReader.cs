@@ -24,7 +24,7 @@ namespace MiningVolume.Cad2023
                 {
                     var ent = tr.GetObject(id, OpenMode.ForRead) as Entity;
                     if (ent == null || !string.Equals(ent.Layer, layerName, StringComparison.OrdinalIgnoreCase)) continue;
-                    var rec = ConvertEntity(ent, tr, arcChord);
+                    var rec = TryConvertEntity(ent, tr, arcChord);
                     if (rec != null) output.Add(rec);
                 }
                 tr.Commit();
@@ -43,12 +43,28 @@ namespace MiningVolume.Cad2023
                     if (id.IsNull || id.IsErased || !id.IsValid) continue;
                     var ent = tr.GetObject(id, OpenMode.ForRead, false) as Entity;
                     if (ent == null) continue;
-                    var rec = ConvertEntity(ent, tr, arcChord);
+                    var rec = TryConvertEntity(ent, tr, arcChord);
                     if (rec != null) output.Add(rec);
                 }
                 tr.Commit();
             }
             return output;
+        }
+
+        private static SourceEntity TryConvertEntity(Entity ent, Transaction tr, double arcChord)
+        {
+            try
+            {
+                return ConvertEntity(ent, tr, arcChord);
+            }
+            catch (Autodesk.AutoCAD.Runtime.Exception)
+            {
+                // Production mine drawings often contain legacy/proxy/partially malformed
+                // entities. One unreadable entity must not abort loading the whole layer
+                // or a manual selection. Unsupported/bad entities are skipped; the
+                // workflow still rejects the source later if no valid geometry remains.
+                return null;
+            }
         }
 
         private static SourceEntity ConvertEntity(Entity ent, Transaction tr, double arcChord)
@@ -120,15 +136,25 @@ namespace MiningVolume.Cad2023
                 }
 
                 // CircularArc3d is in WCS. Segmentize arc instead of silently replacing it by a chord.
-                CircularArc3d arc = pl.GetArcSegmentAt(i);
-                double length = arc.Radius * Math.Abs(arc.EndAngle - arc.StartAngle);
-                int pieces = Math.Max(2, (int)Math.Ceiling(length / Math.Max(0.01, maxChord)));
-                double total = arc.EndAngle - arc.StartAngle;
-                for (int k = 1; k <= pieces; k++)
+                try
                 {
-                    double a = arc.StartAngle + total * k / pieces;
-                    Point3d q = arc.Center + arc.ReferenceVector.RotateBy(a - arc.StartAngle, arc.Normal) * arc.Radius;
-                    if (!(pl.Closed && j == 0 && k == pieces)) pts.Add(ToVec3(q));
+                    CircularArc3d arc = pl.GetArcSegmentAt(i);
+                    double length = arc.Radius * Math.Abs(arc.EndAngle - arc.StartAngle);
+                    int pieces = Math.Max(2, (int)Math.Ceiling(length / Math.Max(0.01, maxChord)));
+                    double total = arc.EndAngle - arc.StartAngle;
+                    for (int k = 1; k <= pieces; k++)
+                    {
+                        double a = arc.StartAngle + total * k / pieces;
+                        Point3d q = arc.Center + arc.ReferenceVector.RotateBy(a - arc.StartAngle, arc.Normal) * arc.Radius;
+                        if (!(pl.Closed && j == 0 && k == pieces)) pts.Add(ToVec3(q));
+                    }
+                }
+                catch (Autodesk.AutoCAD.Runtime.Exception)
+                {
+                    // Some old/malformed LWPOLYLINE records report a non-zero bulge but
+                    // AutoCAD cannot materialize a valid arc segment (eInvalidInput).
+                    // Keep the entity usable by falling back to the segment chord.
+                    if (!(pl.Closed && j == 0)) pts.Add(ToVec3(pl.GetPoint3dAt(j)));
                 }
             }
             return pts;
