@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using Autodesk.AutoCAD.ApplicationServices;
+using Autodesk.AutoCAD.DatabaseServices;
+using System.Globalization;
 using MiningVolume.Cad2023;
 using MiningVolume.Core.Model;
 using MiningVolume.Core.Surface;
@@ -70,20 +72,88 @@ namespace MiningVolume2023.Services
                 throw new InvalidOperationException(
                     $"Layer '{layer}' không có đối tượng POINT/LINE/POLYLINE hợp lệ theo loại dữ liệu đang chọn.");
 
+            return CommitLoadedSource(role, layer, SourceSelectionMode.Layer, entities, allowedTypes);
+        }
+
+        public static SurfaceLoadResult LoadSelection(ModelRole role, IReadOnlyList<ObjectId> objectIds, ISet<SourceEntityType> allowedTypes)
+        {
+            if (objectIds == null || objectIds.Count == 0)
+                throw new InvalidOperationException("Chưa chọn đối tượng CAD nào.");
+
+            var state = ProjectState.Current;
+            var doc = Application.DocumentManager.MdiActiveDocument ??
+                      throw new InvalidOperationException("Không có bản vẽ AutoCAD đang hoạt động.");
+
+            IReadOnlyList<SourceEntity> entities;
+            using (doc.LockDocument())
+            {
+                var reader = new CadLayerSurfaceReader();
+                entities = reader.Read(doc.Database, objectIds, 0.50)
+                    .Where(e =>
+                        !string.Equals(e.Layer, state.Existing.TinLayer, StringComparison.OrdinalIgnoreCase) &&
+                        !string.Equals(e.Layer, state.Design.TinLayer, StringComparison.OrdinalIgnoreCase))
+                    .Where(e => allowedTypes == null || allowedTypes.Count == 0 || allowedTypes.Contains(e.Type))
+                    .ToList();
+            }
+
+            if (entities.Count == 0)
+                throw new InvalidOperationException(
+                    "Các đối tượng đã chọn không có POINT/LINE/POLYLINE hợp lệ theo loại dữ liệu đang bật, " +
+                    "hoặc chỉ thuộc layer TIN đầu ra của MiningVolume.");
+
+            return CommitLoadedSource(role, null, SourceSelectionMode.ManualSelection, entities, allowedTypes);
+        }
+
+        public static SurfaceLoadResult LoadSelectedHandles(ModelRole role, IEnumerable<string> handles, ISet<SourceEntityType> allowedTypes)
+        {
+            var doc = Application.DocumentManager.MdiActiveDocument ??
+                      throw new InvalidOperationException("Không có bản vẽ AutoCAD đang hoạt động.");
+            var ids = new List<ObjectId>();
+            foreach (var text in handles ?? Enumerable.Empty<string>())
+            {
+                if (string.IsNullOrWhiteSpace(text)) continue;
+                try
+                {
+                    long value = long.Parse(text, NumberStyles.HexNumber, CultureInfo.InvariantCulture);
+                    ObjectId id = doc.Database.GetObjectId(false, new Handle(value), 0);
+                    if (!id.IsNull && id.IsValid && !id.IsErased) ids.Add(id);
+                }
+                catch
+                {
+                    // Một handle có thể đã bị xóa/sửa trong DWG; bỏ qua và để bước kiểm tra
+                    // phía dưới quyết định còn đủ dữ liệu để khôi phục mô hình hay không.
+                }
+            }
+            if (ids.Count == 0)
+                throw new InvalidOperationException("Không còn đối tượng CAD đã chọn trước đây để khôi phục mô hình.");
+            return LoadSelection(role, ids, allowedTypes);
+        }
+
+        private static SurfaceLoadResult CommitLoadedSource(
+            ModelRole role,
+            string layer,
+            SourceSelectionMode sourceMode,
+            IReadOnlyList<SourceEntity> entities,
+            ISet<SourceEntityType> allowedTypes)
+        {
             var model = new SurfaceModel(role == ModelRole.Existing ? "Hiện trạng" : "Thiết kế");
             model.Entities.AddRange(entities);
             model.Touch();
 
             var session = ProjectState.Current.Get(role);
-            session.Layer = layer;
+            session.Layer = sourceMode == SourceSelectionMode.Layer ? layer : null;
+            session.SourceMode = sourceMode;
+            session.SelectedHandles.Clear();
+            if (sourceMode == SourceSelectionMode.ManualSelection)
+                foreach (var handle in entities.Select(e => e.Handle).Distinct(StringComparer.OrdinalIgnoreCase))
+                    session.SelectedHandles.Add(handle);
+
             session.AllowedTypes.Clear();
             if (allowedTypes != null)
                 foreach (var t in allowedTypes) session.AllowedTypes.Add(t);
             session.Source = model;
 
-            // Loading/reloading source data invalidates the previous TIN completely.
-            // Clear the dedicated output layer so stale faces can never be mistaken for
-            // the current surface.
+            // Bất kỳ thay đổi nguồn nào cũng làm TIN trước đó mất hiệu lực.
             InvalidateTin(role, clearCadLayer: true, notify: false);
             EnsureOutputLayer(role);
 
