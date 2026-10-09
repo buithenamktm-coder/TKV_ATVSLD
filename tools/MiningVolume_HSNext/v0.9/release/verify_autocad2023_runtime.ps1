@@ -167,7 +167,7 @@ $startupDetail"
         }
         $result = Get-Content $SelfTestPath -Raw
         if ($result -notmatch 'MiningVolume HS-Next v0\.10\.4 runtime self-test') {
-            throw 'MVSELFTEST log không đúng phiên bản v0.10.4.'
+            throw 'MVSELFTEST log không đúng phiên bản v1.0.'
         }
         if ($result -notmatch 'Status=PASS') {
             throw "MVSELFTEST không PASS.\n\n$result"
@@ -196,7 +196,7 @@ $startupDetail"
 
         $sourceCommit = if ($env:SOURCE_SHA) { $env:SOURCE_SHA } elseif ($env:GITHUB_SHA) { $env:GITHUB_SHA } else { 'local' }
         $lines = @(
-            'MiningVolume HS-Next v0.10.4 - AUTOCAD 2023 RUNTIME VERIFICATION',
+            'MiningVolume HS-Next v1.0 - AUTOCAD 2023 RUNTIME VERIFICATION',
             ('Timestamp=' + (Get-Date).ToString('o')),
             'Status=PASS',
             ('SourceCommit=' + $sourceCommit),
