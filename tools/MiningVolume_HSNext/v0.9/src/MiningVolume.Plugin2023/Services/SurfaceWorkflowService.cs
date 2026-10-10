@@ -51,6 +51,45 @@ namespace MiningVolume2023.Services
 
     public static class SurfaceWorkflowService
     {
+        public static SurfaceLoadResult[] LoadVia4Preset(ISet<SourceEntityType> allowedTypes)
+        {
+            // Validate both inputs and the unique boundary before replacing either session.
+            string boundaryHandle = BoundaryGeometryService.FindUniqueBoundaryOnLayer("LO_TINHKL");
+            var polygon = BoundaryGeometryService.ReadBoundary(boundaryHandle);
+            if (polygon.Count < 3) throw new InvalidOperationException("LO_TINHKL không có đủ đỉnh hợp lệ.");
+            var doc = Application.DocumentManager.MdiActiveDocument ??
+                throw new InvalidOperationException("Không có bản vẽ AutoCAD đang hoạt động.");
+            var layers = new[] { "ht", "- nam4" };
+            var sources = new IReadOnlyList<SourceEntity>[2];
+            using (doc.LockDocument())
+            {
+                var reader = new CadLayerSurfaceReader();
+                for (int i = 0; i < layers.Length; i++)
+                {
+                    sources[i] = reader.Read(doc.Database, layers[i], 0.50)
+                        .Where(e => allowedTypes == null || allowedTypes.Count == 0 || allowedTypes.Contains(e.Type)).ToList();
+                    if (sources[i].Count == 0)
+                        throw new InvalidOperationException($"Layer '{layers[i]}' không có dữ liệu hợp lệ theo loại đang chọn.");
+                }
+            }
+            var result = new[]
+            {
+                CommitLoadedSource(ModelRole.Existing, layers[0], SourceSelectionMode.Layer, sources[0], allowedTypes),
+                CommitLoadedSource(ModelRole.Design, layers[1], SourceSelectionMode.Layer, sources[1], allowedTypes)
+            };
+            var state = ProjectState.Current;
+            state.TinRegionHandle = boundaryHandle;
+            state.TinRegionPolygon.Clear();
+            state.TinRegionPolygon.AddRange(polygon);
+            // Use the same boundary for section-based volume calculation.
+            state.BoundaryHandle = boundaryHandle;
+            state.SectionSystem = null;
+            state.SectionProfiles.Clear();
+            state.VolumeResult = null;
+            state.NotifyChanged();
+            return result;
+        }
+
         public static SurfaceLoadResult LoadLayer(ModelRole role, string layer, ISet<SourceEntityType> allowedTypes)
         {
             if (string.IsNullOrWhiteSpace(layer))
@@ -274,7 +313,7 @@ namespace MiningVolume2023.Services
             }
 
             var prepareWatch = Stopwatch.StartNew();
-            var prepared = new SurfaceInputPreparer().Prepare(buildSource, options);
+            var prepared = new SurfaceInputPreparer().Prepare(buildSource, options, progress, cancellationToken);
             prepareWatch.Stop();
             if (prepared.HasErrors)
             {
@@ -293,7 +332,7 @@ namespace MiningVolume2023.Services
 
             cancellationToken.ThrowIfCancellationRequested();
             var triangulationWatch = Stopwatch.StartNew();
-            var tin = new ConformingTinBuilder().Build(session.Name, prepared, options);
+            var tin = new ConformingTinBuilder().Build(session.Name, prepared, options, progress, cancellationToken);
             triangulationWatch.Stop();
             if (tin == null || tin.Triangles == null || tin.Triangles.Count == 0)
                 throw new InvalidOperationException($"TIN {session.Name} không tạo được tam giác hợp lệ.");

@@ -328,16 +328,17 @@ namespace MiningVolume.Surface
                                 break;
                             }
 
-                            // Nếu một đỉnh breakline trùng đúng XY với nguồn có độ ưu tiên
-                            // cao hơn (ví dụ POINT đo thực tế), chỉ snap Z của đầu mút trong
-                            // bản dựng tạm. Dữ liệu CAD gốc tuyệt đối không bị sửa.
+                            // Use the elevation selected explicitly by the user at shared endpoints.
+                            // Only the temporary build data is changed.
                             segments = SnapSegmentEndpoints(
                                 segments,
                                 resolvedIndex,
                                 options.XyTolerance);
 
                             var pw = Stopwatch.StartNew();
-                            var prepared = preparer.PrepareRawForTiledTin(points, segments, options);
+                            var prepared = preparer.PrepareRawForTiledTin(points, segments, options,
+                                message => progress?.Invoke(Volatile.Read(ref completed), total, message),
+                                cancellationToken);
                             foreach (var issue in conflictIssues)
                                 prepared.Issues.Add(issue);
                             pw.Stop();
@@ -559,9 +560,7 @@ namespace MiningVolume.Surface
             List<ValidationIssue> issues,
             out Dictionary<XYKey, List<ResolvedSite>> index)
         {
-            // 5 cm chỉ dùng để nhận diện sai khác rất nhỏ tại cùng XY; không trung
-            // bình hay tạo cao độ mới. Luôn giữ Z của nguồn ưu tiên cao hơn.
-            const double minorZTolerance = 0.05;
+            // Respect the user's explicit Z policy for every source type and conflict size.
             double xyTol = Math.Max(options.XyTolerance, 1e-9);
             index = new Dictionary<XYKey, List<ResolvedSite>>();
             var ordered = new List<ResolvedSite>();
@@ -614,30 +613,6 @@ namespace MiningVolume.Surface
                 if (dz <= options.ZConflictTolerance)
                     continue;
 
-                int oldPriority = SourcePriority(match.Winner.Entity.Type);
-                int newPriority = SourcePriority(item.Entity.Type);
-
-                if (dz <= minorZTolerance || oldPriority != newPriority)
-                {
-                    bool replace = newPriority > oldPriority;
-                    if (replace)
-                    {
-                        match.Position = new Vec3(match.Position.X, match.Position.Y, p.Z);
-                        match.Winner = item;
-                    }
-
-                    issues.Add(new ValidationIssue(
-                        ValidationSeverity.Warning,
-                        dz <= minorZTolerance
-                            ? "AUTO_RESOLVE_DUPLICATE_XY_MINOR"
-                            : "AUTO_RESOLVE_DUPLICATE_XY_BY_PRIORITY",
-                        $"Trùng XY ({p.X:0.###}, {p.Y:0.###}) có Z={oldZ:0.###} / {p.Z:0.###}. " +
-                        $"Giữ nguồn ưu tiên {TypeLabel(match.Winner.Entity.Type)} " +
-                        $"(handle {match.Winner.Entity.Handle}); dữ liệu CAD gốc không bị sửa.",
-                        match.Winner.Entity.Id));
-                    continue;
-                }
-
                 if (options.DuplicateXYConflictPolicy == DuplicateXYConflictPolicy.UseUpper ||
                     options.DuplicateXYConflictPolicy == DuplicateXYConflictPolicy.UseLower)
                 {
@@ -661,7 +636,7 @@ namespace MiningVolume.Surface
                     ValidationSeverity.Error,
                     "DUPLICATE_XY_CONFLICT_Z",
                     $"XY ({p.X:0.###}, {p.Y:0.###}) có hai Z mâu thuẫn " +
-                    $"{oldZ:0.###} và {p.Z:0.###}; cùng mức ưu tiên " +
+                    $"{oldZ:0.###} và {p.Z:0.###}; nguồn " +
                     $"{TypeLabel(item.Entity.Type)}. Handles: " +
                     $"{match.Winner.Entity.Handle} / {item.Entity.Handle}.",
                     item.Entity.Id));
@@ -705,20 +680,6 @@ namespace MiningVolume.Surface
                         return new Vec3(p.X, p.Y, site.Position.Z);
             }
             return p;
-        }
-
-        private static int SourcePriority(SourceEntityType type)
-        {
-            switch (type)
-            {
-                case SourceEntityType.Point: return 600;       // điểm đo thực tế
-                case SourceEntityType.Polyline3d: return 500;  // breakline 3D
-                case SourceEntityType.Contour: return 400;     // đường đồng mức
-                case SourceEntityType.LwPolyline: return 300;
-                case SourceEntityType.Polyline2d: return 250;
-                case SourceEntityType.Line: return 200;
-                default: return 100;
-            }
         }
 
         private static string TypeLabel(SourceEntityType type)

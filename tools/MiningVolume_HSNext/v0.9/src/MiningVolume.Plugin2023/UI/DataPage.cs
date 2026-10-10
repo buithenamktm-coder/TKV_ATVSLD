@@ -20,6 +20,7 @@ namespace MiningVolume2023.UI
         private readonly Label _tinRegionStatus;
         private readonly Button _buildPair;
         private readonly Button _cancelBuild;
+        private readonly Button _via4Preset;
         private CancellationTokenSource _buildCts;
 
         public DataPage()
@@ -60,14 +61,14 @@ namespace MiningVolume2023.UI
             {
                 Text = "Nguồn dữ liệu",
                 Width = 520,
-                Height = 124,
+                Height = 148,
                 Margin = new Padding(0, 0, 0, 8)
             };
             var source = new TableLayoutPanel
             {
                 Dock = DockStyle.Fill,
                 ColumnCount = 4,
-                RowCount = 2,
+                RowCount = 3,
                 Padding = new Padding(0)
             };
             source.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 76));
@@ -76,6 +77,7 @@ namespace MiningVolume2023.UI
             source.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 112));
             source.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
             source.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
+            source.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
 
             _existingLayer = new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList, Margin = new Padding(3, 5, 6, 5) };
             _designLayer = new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList, Margin = new Padding(3, 5, 6, 5) };
@@ -87,6 +89,9 @@ namespace MiningVolume2023.UI
                 source, 1, "Thiết kế", _designLayer,
                 Btn("Nạp layer", (s, e) => LoadModel(ModelRole.Design)),
                 Btn("Chọn trên CAD", (s, e) => SelectModel(ModelRole.Design)));
+            _via4Preset = Btn("Nạp mẫu Vỉa 4: ht / - nam4 / LO_TINHKL", (s, e) => LoadVia4Preset());
+            source.Controls.Add(_via4Preset, 0, 2);
+            source.SetColumnSpan(_via4Preset, 4);
             sourceBox.Controls.Add(source);
             body.Controls.Add(sourceBox);
 
@@ -268,14 +273,40 @@ namespace MiningVolume2023.UI
             try
             {
                 var layers = LayerService.GetSourceLayers();
-                Fill(_existingLayer, layers, ProjectState.Current.Existing.Layer);
-                Fill(_designLayer, layers, ProjectState.Current.Design.Layer);
+                var state = ProjectState.Current;
+                string existing = state.Existing.Layer;
+                string design = state.Design.Layer;
+                bool via4 = layers.Any(x => string.Equals(x, "ht", StringComparison.OrdinalIgnoreCase)) &&
+                    layers.Any(x => string.Equals(x, "- nam4", StringComparison.OrdinalIgnoreCase));
+                if (via4 && _existingLayer.Items.Count == 0 && string.IsNullOrEmpty(existing)) existing = "ht";
+                if (via4 && _designLayer.Items.Count == 0 && string.IsNullOrEmpty(design)) design = "- nam4";
+                Fill(_existingLayer, layers, existing);
+                Fill(_designLayer, layers, design);
+                _via4Preset.Enabled = via4 && layers.Any(x => string.Equals(x, "LO_TINHKL", StringComparison.OrdinalIgnoreCase));
                 _status.Text = layers.Count.ToString("n0") + " layer trong bản vẽ.";
             }
             catch (Exception ex)
             {
                 _status.Text = "Không đọc được layer: " + ex.Message;
             }
+        }
+
+        private void LoadVia4Preset()
+        {
+            if (_buildCts != null) return;
+            try
+            {
+                _via4Preset.Enabled = false;
+                _status.Text = "Đang nạp Vỉa 4: ht → hiện trạng, - nam4 → thiết kế, LO_TINHKL → phạm vi tính...";
+                _status.Refresh();
+                var loaded = SurfaceWorkflowService.LoadVia4Preset(AllowedTypes());
+                RefreshLayers();
+                RefreshTinRegionStatus();
+                RefreshPairButton();
+                _status.Text = $"Vỉa 4 đã nạp • Hiện trạng: {loaded[0].Summary} • Thiết kế: {loaded[1].Summary}. Phạm vi: LO_TINHKL.";
+            }
+            catch (Exception ex) { _status.Text = "Không nạp được mẫu Vỉa 4: " + ex.Message; }
+            finally { _via4Preset.Enabled = true; }
         }
 
         private static void Fill(ComboBox cb, List<string> values, string preferred)

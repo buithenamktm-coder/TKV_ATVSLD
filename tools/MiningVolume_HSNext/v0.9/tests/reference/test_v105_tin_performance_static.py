@@ -154,18 +154,16 @@ def test_large_tin_ui_has_progress_and_user_cancel():
     assert "SetBuildStatus" in data
 
 
-def test_large_tin_duplicate_xy_uses_conservative_source_priority_resolution():
+def test_large_tin_duplicate_xy_requires_explicit_z_policy():
+    # The old source-priority assertions encoded the silent-Z-selection defect.
+    # Executable regressions for mixed source types and 1 cm conflicts live in tests/core.
     tiled = read("src/MiningVolume.Surface/TiledConformingTinBuilder.cs")
-    assert "ResolveDuplicateInputPoints" in tiled
-    assert "AUTO_RESOLVE_DUPLICATE_XY_MINOR" in tiled
-    assert "AUTO_RESOLVE_DUPLICATE_XY_BY_PRIORITY" in tiled
-    assert "SourcePriority" in tiled
-    assert "case SourceEntityType.Point: return 600" in tiled
-    assert "case SourceEntityType.Polyline3d: return 500" in tiled
-    assert "case SourceEntityType.Contour: return 400" in tiled
-    assert "cùng mức ưu tiên" in tiled
-    assert "Handles:" in tiled
-    assert "dữ liệu CAD gốc không bị sửa" in tiled
+    assert "AUTO_RESOLVE_DUPLICATE_XY_MINOR" not in tiled
+    assert "AUTO_RESOLVE_DUPLICATE_XY_BY_PRIORITY" not in tiled
+    assert "SourcePriority" not in tiled
+    assert "DuplicateXYConflictPolicy.UseUpper" in tiled
+    assert "DuplicateXYConflictPolicy.UseLower" in tiled
+    assert "DUPLICATE_XY_CONFLICT_Z" in tiled
     assert "SnapSegmentEndpoints" in tiled
 
 

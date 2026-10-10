@@ -58,6 +58,13 @@ jobs:
           python -m pip install --disable-pip-version-check pytest shapely
           python -m pytest -q tests/reference
 
+      - name: Execute C# geometry regression tests
+        shell: pwsh
+        run: |
+          Set-Location $env:MV_ROOT
+          python tests/core/run_core.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Restore .NET Framework solution
         shell: pwsh
         run: |

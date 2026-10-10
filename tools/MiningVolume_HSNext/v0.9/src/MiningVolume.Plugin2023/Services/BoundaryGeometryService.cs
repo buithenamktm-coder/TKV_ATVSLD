@@ -9,6 +9,30 @@ namespace MiningVolume2023.Services
 {
     internal static class BoundaryGeometryService
     {
+        public static string FindUniqueBoundaryOnLayer(string layer)
+        {
+            var doc = Application.DocumentManager.MdiActiveDocument ??
+                throw new InvalidOperationException("Không có bản vẽ AutoCAD đang hoạt động.");
+            string handle = null;
+            using (doc.LockDocument())
+            using (var tr = doc.Database.TransactionManager.StartOpenCloseTransaction())
+            {
+                var table = (BlockTable)tr.GetObject(doc.Database.BlockTableId, OpenMode.ForRead);
+                var space = (BlockTableRecord)tr.GetObject(table[BlockTableRecord.ModelSpace], OpenMode.ForRead);
+                foreach (ObjectId id in space)
+                {
+                    var pl = tr.GetObject(id, OpenMode.ForRead) as Polyline;
+                    if (pl == null || !pl.Closed || pl.NumberOfVertices < 3 ||
+                        !string.Equals(pl.Layer, layer, StringComparison.OrdinalIgnoreCase)) continue;
+                    if (handle != null)
+                        throw new InvalidOperationException($"Layer {layer} có nhiều đường bao khép kín. Hãy chọn vùng trên CAD.");
+                    handle = pl.Handle.ToString();
+                }
+                tr.Commit();
+            }
+            return handle ?? throw new InvalidOperationException($"Không tìm thấy đường bao khép kín trên layer {layer}.");
+        }
+
         public static IReadOnlyList<Vec2> ReadBoundary(string handleText, double arcChord = 0.5)
         {
             if (string.IsNullOrWhiteSpace(handleText)) throw new InvalidOperationException("Chưa chọn đường bao tính khối lượng.");

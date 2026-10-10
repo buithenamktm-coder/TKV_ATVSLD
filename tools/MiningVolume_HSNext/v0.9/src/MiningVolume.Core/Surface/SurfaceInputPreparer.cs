@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using MiningVolume.Core.Geometry;
 using MiningVolume.Core.Model;
 
@@ -21,20 +22,25 @@ namespace MiningVolume.Core.Surface
     /// </summary>
     public sealed class SurfaceInputPreparer
     {
-        public PreparedSurfaceInput Prepare(SurfaceModel model, SurfaceBuildOptions options)
+        public PreparedSurfaceInput Prepare(SurfaceModel model, SurfaceBuildOptions options,
+            Action<string> progress = null, CancellationToken cancellationToken = default(CancellationToken))
         {
             if (model == null) throw new ArgumentNullException(nameof(model));
             options = options ?? new SurfaceBuildOptions();
             if (options.XyTolerance <= 0) throw new ArgumentOutOfRangeException(nameof(options.XyTolerance));
 
             var result = new PreparedSurfaceInput();
-            var active = model.Entities.Where(e => e.IsEnabled).ToList();
+            cancellationToken.ThrowIfCancellationRequested();
+            progress?.Invoke("Đang đọc điểm và breakline nguồn...");
+            var active = model.Entities.Where(e => e.IsEnabled);
 
             foreach (var e in active)
             {
-                foreach (var v in e.ActiveVertices()) result.Sites.Add(v.Position);
+                cancellationToken.ThrowIfCancellationRequested();
+                foreach (var v in e.ActiveVertices()) { cancellationToken.ThrowIfCancellationRequested(); result.Sites.Add(v.Position); }
                 foreach (var s in e.ActiveBreaklineSegments())
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     if (s.Length2D <= options.XyTolerance)
                     {
                         result.Issues.Add(new ValidationIssue(
@@ -47,7 +53,7 @@ namespace MiningVolume.Core.Surface
                 }
             }
 
-            return NormalizePreparedInput(result, options);
+            return NormalizePreparedInput(result, options, progress, cancellationToken);
         }
 
         /// <summary>
@@ -57,18 +63,20 @@ namespace MiningVolume.Core.Surface
         public PreparedSurfaceInput PrepareRaw(
             IEnumerable<Vec3> sites,
             IEnumerable<Segment3> breaklines,
-            SurfaceBuildOptions options)
+            SurfaceBuildOptions options,
+            Action<string> progress = null, CancellationToken cancellationToken = default(CancellationToken))
         {
             options = options ?? new SurfaceBuildOptions();
             if (options.XyTolerance <= 0) throw new ArgumentOutOfRangeException(nameof(options.XyTolerance));
 
             var result = new PreparedSurfaceInput();
-            if (sites != null) result.Sites.AddRange(sites);
+            if (sites != null) foreach (var p in sites) { cancellationToken.ThrowIfCancellationRequested(); result.Sites.Add(p); }
 
             if (breaklines != null)
             {
                 foreach (var s in breaklines)
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     if (s.Length2D <= options.XyTolerance)
                     {
                         result.Issues.Add(new ValidationIssue(
@@ -81,7 +89,7 @@ namespace MiningVolume.Core.Surface
                 }
             }
 
-            return NormalizePreparedInput(result, options);
+            return NormalizePreparedInput(result, options, progress, cancellationToken);
         }
 
         /// <summary>
@@ -95,17 +103,19 @@ namespace MiningVolume.Core.Surface
         public PreparedSurfaceInput PrepareRawForTiledTin(
             IEnumerable<Vec3> uniqueSites,
             IEnumerable<Segment3> breaklines,
-            SurfaceBuildOptions options)
+            SurfaceBuildOptions options,
+            Action<string> progress = null, CancellationToken cancellationToken = default(CancellationToken))
         {
             options = options ?? new SurfaceBuildOptions();
             if (options.XyTolerance <= 0) throw new ArgumentOutOfRangeException(nameof(options.XyTolerance));
 
             var result = new PreparedSurfaceInput();
-            if (uniqueSites != null) result.Sites.AddRange(uniqueSites);
+            if (uniqueSites != null) foreach (var p in uniqueSites) { cancellationToken.ThrowIfCancellationRequested(); result.Sites.Add(p); }
             if (breaklines != null)
             {
                 foreach (var seg in breaklines)
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     if (seg.Length2D <= options.XyTolerance)
                     {
                         result.Issues.Add(new ValidationIssue(
@@ -118,8 +128,8 @@ namespace MiningVolume.Core.Surface
                 }
             }
 
-            NormalizeBreaklineTopology(result, options);
-            ResolveDuplicateSites(result, options);
+            NormalizeBreaklineTopology(result, options, progress, cancellationToken);
+            ResolveDuplicateSites(result, options, progress, cancellationToken);
 
             if (result.Sites.Count < 3)
                 result.Issues.Add(new ValidationIssue(
@@ -132,12 +142,14 @@ namespace MiningVolume.Core.Surface
 
         private static PreparedSurfaceInput NormalizePreparedInput(
             PreparedSurfaceInput result,
-            SurfaceBuildOptions options)
+            SurfaceBuildOptions options, Action<string> progress, CancellationToken cancellationToken)
         {
-            ResolveDuplicateSites(result, options);
-            NormalizeBreaklineTopology(result, options);
-            ResolveDuplicateSites(result, options);
-            ValidateNormalizedTopology(result, options);
+            ResolveDuplicateSites(result, options, progress, cancellationToken);
+            // Conflicting elevations require a user decision before expensive topology work.
+            if (result.HasErrors) return result;
+            NormalizeBreaklineTopology(result, options, progress, cancellationToken);
+            ResolveDuplicateSites(result, options, progress, cancellationToken);
+            ValidateNormalizedTopology(result, options, progress, cancellationToken);
 
             if (result.Sites.Count < 3)
                 result.Issues.Add(new ValidationIssue(
@@ -155,14 +167,17 @@ namespace MiningVolume.Core.Surface
             public Vec3 Point { get; }
         }
 
-        private static void NormalizeBreaklineTopology(PreparedSurfaceInput result, SurfaceBuildOptions options)
+        private static void NormalizeBreaklineTopology(PreparedSurfaceInput result, SurfaceBuildOptions options, Action<string> progress, CancellationToken cancellationToken)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+            progress?.Invoke("Đang chuẩn hóa giao điểm và breakline chồng lấn...");
             if (result.Breaklines.Count == 0) return;
 
             var source = result.Breaklines.ToList();
             var marks = new List<List<SplitMark>>(source.Count);
             for (int i = 0; i < source.Count; i++)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 marks.Add(new List<SplitMark>
                 {
                     new SplitMark(0.0, source[i].A),
@@ -171,13 +186,15 @@ namespace MiningVolume.Core.Surface
             }
 
             // 1) Split a breakline at every already-existing site lying on its interior.
-            var pointIndex = new PointGridIndex(result.Sites, options.XyTolerance);
+            var pointIndex = new PointGridIndex(result.Sites, options.XyTolerance, cancellationToken);
             for (int i = 0; i < source.Count; i++)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var seg = source[i];
                 foreach (int siteIndex in pointIndex.Query(
                     seg.A.X, seg.A.Y, seg.B.X, seg.B.Y, options.XyTolerance))
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     var site = result.Sites[siteIndex];
                     if (!Geometry2D.PointOnSegment(site.XY, seg.A.XY, seg.B.XY, options.XyTolerance))
                         continue;
@@ -229,15 +246,17 @@ namespace MiningVolume.Core.Surface
             }
 
             // 2) Normalize crossings/overlaps pairwise using the spatial index.
-            var segIndex = new SegmentGridIndex(source, options.XyTolerance);
+            var segIndex = new SegmentGridIndex(source, options.XyTolerance, cancellationToken);
             var generatedSites = new List<Vec3>();
             int autoCrossings = 0;
             int overlapPairs = 0;
 
             for (int i = 0; i < source.Count; i++)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 foreach (int j in segIndex.Query(i))
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     if (j <= i) continue;
 
                     var a = source[i];
@@ -299,6 +318,7 @@ namespace MiningVolume.Core.Surface
                     var candidates = new[] { a.A, a.B, b.A, b.B };
                     foreach (var q in candidates)
                     {
+                        cancellationToken.ThrowIfCancellationRequested();
                         if (!Geometry2D.PointOnSegment(q.XY, a.A.XY, a.B.XY, options.XyTolerance) ||
                             !Geometry2D.PointOnSegment(q.XY, b.A.XY, b.B.XY, options.XyTolerance))
                             continue;
@@ -360,6 +380,7 @@ namespace MiningVolume.Core.Surface
             var rebuilt = new List<Segment3>();
             for (int i = 0; i < source.Count; i++)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var seg = source[i];
                 var ordered = marks[i]
                     .Where(x => x.T >= -1e-10 && x.T <= 1.0 + 1e-10)
@@ -369,6 +390,7 @@ namespace MiningVolume.Core.Surface
                 var unique = new List<SplitMark>();
                 foreach (var m in ordered)
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     if (unique.Count == 0)
                     {
                         unique.Add(m);
@@ -393,6 +415,7 @@ namespace MiningVolume.Core.Surface
 
                 for (int k = 0; k < unique.Count - 1; k++)
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     var p0 = unique[k].Point;
                     var p1 = unique[k + 1].Point;
                     if (p0.XY.DistanceTo(p1.XY) <= options.XyTolerance) continue;
@@ -406,6 +429,7 @@ namespace MiningVolume.Core.Surface
             var buckets = new Dictionary<string, List<int>>();
             foreach (var s in rebuilt)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 string key = SegmentBucketKey(s, options.XyTolerance);
                 List<int> ids;
                 if (!buckets.TryGetValue(key, out ids))
@@ -417,6 +441,7 @@ namespace MiningVolume.Core.Surface
                 int match = -1;
                 foreach (int id in ids)
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     if (SameUndirectedXY(dedup[id], s, options.XyTolerance))
                     {
                         match = id;
@@ -456,22 +481,27 @@ namespace MiningVolume.Core.Surface
             result.Sites.AddRange(generatedSites);
             foreach (var s in dedup)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 result.Sites.Add(s.A);
                 result.Sites.Add(s.B);
             }
         }
 
-        private static void ValidateNormalizedTopology(PreparedSurfaceInput result, SurfaceBuildOptions options)
+        private static void ValidateNormalizedTopology(PreparedSurfaceInput result, SurfaceBuildOptions options, Action<string> progress, CancellationToken cancellationToken)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+            progress?.Invoke("Đang kiểm tra topology sau chuẩn hóa...");
             int count = result.Breaklines.Count;
             if (count < 2) return;
 
-            var index = new SegmentGridIndex(result.Breaklines, options.XyTolerance);
+            var index = new SegmentGridIndex(result.Breaklines, options.XyTolerance, cancellationToken);
             for (int i = 0; i < count; i++)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var a = result.Breaklines[i];
                 foreach (int j in index.Query(i))
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     if (j <= i) continue;
                     var b = result.Breaklines[j];
 
@@ -494,13 +524,16 @@ namespace MiningVolume.Core.Surface
             }
         }
 
-        private static void ResolveDuplicateSites(PreparedSurfaceInput result, SurfaceBuildOptions options)
+        private static void ResolveDuplicateSites(PreparedSurfaceInput result, SurfaceBuildOptions options, Action<string> progress, CancellationToken cancellationToken)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+            progress?.Invoke("Đang kiểm tra điểm trùng XY và cao độ...");
             var unique = new List<Vec3>();
             var grid = new Dictionary<string, List<int>>();
 
             foreach (var p in result.Sites)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 long ix = (long)Math.Floor(p.X / options.XyTolerance);
                 long iy = (long)Math.Floor(p.Y / options.XyTolerance);
                 int match = -1;
@@ -508,11 +541,13 @@ namespace MiningVolume.Core.Surface
                 for (long dx = -1; dx <= 1 && match < 0; dx++)
                 for (long dy = -1; dy <= 1 && match < 0; dy++)
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     string k = (ix + dx) + ":" + (iy + dy);
                     List<int> ids;
                     if (!grid.TryGetValue(k, out ids)) continue;
                     foreach (int id in ids)
                     {
+                        cancellationToken.ThrowIfCancellationRequested();
                         if (unique[id].XY.DistanceTo(p.XY) <= options.XyTolerance)
                         {
                             match = id;
@@ -671,18 +706,20 @@ namespace MiningVolume.Core.Surface
         private sealed class PointGridIndex
         {
             private readonly Dictionary<long, List<int>> _cells = new Dictionary<long, List<int>>();
+            private readonly CancellationToken _cancellationToken;
             private readonly double _cell;
             private readonly double _minX, _minY;
 
-            public PointGridIndex(IReadOnlyList<Vec3> points, double tol)
+            public PointGridIndex(IReadOnlyList<Vec3> points, double tol, CancellationToken cancellationToken)
             {
+                _cancellationToken = cancellationToken;
                 double maxX, maxY;
                 Bounds(points.Select(p => p.X), points.Select(p => p.Y),
                     out _minX, out _minY, out maxX, out maxY);
                 double span = Math.Max(maxX - _minX, maxY - _minY);
                 _cell = Math.Max(tol * 100.0,
                     span / Math.Max(8.0, Math.Sqrt(Math.Max(1, points.Count))));
-                for (int i = 0; i < points.Count; i++) Add(i, points[i].X, points[i].Y);
+                for (int i = 0; i < points.Count; i++) { cancellationToken.ThrowIfCancellationRequested(); Add(i, points[i].X, points[i].Y); }
             }
 
             public IEnumerable<int> Query(double x0, double y0, double x1, double y1, double pad)
@@ -697,6 +734,7 @@ namespace MiningVolume.Core.Surface
                 for (int ix = ix0; ix <= ix1; ix++)
                 for (int iy = iy0; iy <= iy1; iy++)
                 {
+                    _cancellationToken.ThrowIfCancellationRequested();
                     List<int> ids;
                     if (!_cells.TryGetValue(Key(ix, iy), out ids)) continue;
                     foreach (var id in ids) yield return id;
@@ -726,10 +764,12 @@ namespace MiningVolume.Core.Surface
             private readonly List<List<long>> _segmentCells = new List<List<long>>();
             private readonly int[] _visited;
             private int _visitToken;
+            private readonly CancellationToken _cancellationToken;
             private readonly double _cell, _minX, _minY;
 
-            public SegmentGridIndex(IReadOnlyList<Segment3> segments, double tol)
+            public SegmentGridIndex(IReadOnlyList<Segment3> segments, double tol, CancellationToken cancellationToken)
             {
+                _cancellationToken = cancellationToken;
                 double maxX, maxY;
                 Bounds(
                     segments.SelectMany(seg => new[] { seg.A.X, seg.B.X }),
@@ -741,7 +781,8 @@ namespace MiningVolume.Core.Surface
                     span / Math.Max(8.0, Math.Sqrt(Math.Max(1, segments.Count))));
                 _visited = new int[Math.Max(1, segments.Count)];
                 for (int i = 0; i < segments.Count; i++)
-                    IndexSegment(i, segments[i], tol);
+                {
+                    _cancellationToken.ThrowIfCancellationRequested(); cancellationToken.ThrowIfCancellationRequested(); IndexSegment(i, segments[i], tol); }
             }
 
             public IEnumerable<int> Query(int segmentIndex)
@@ -749,10 +790,12 @@ namespace MiningVolume.Core.Surface
                 int token = NextVisitToken();
                 foreach (var key in _segmentCells[segmentIndex])
                 {
+                    _cancellationToken.ThrowIfCancellationRequested();
                     List<int> ids;
                     if (!_cells.TryGetValue(key, out ids)) continue;
                     foreach (var id in ids)
                     {
+                        _cancellationToken.ThrowIfCancellationRequested();
                         if (_visited[id] == token) continue;
                         _visited[id] = token;
                         yield return id;
@@ -782,6 +825,7 @@ namespace MiningVolume.Core.Surface
                 for (int ix = ix0; ix <= ix1; ix++)
                 for (int iy = iy0; iy <= iy1; iy++)
                 {
+                    _cancellationToken.ThrowIfCancellationRequested();
                     long key = Key(ix, iy);
                     keys.Add(key);
                     List<int> ids;
