@@ -254,7 +254,7 @@ def test_classic_menu_bar_exposes_main_miningvolume_workflow():
         "Mặt cắt",
         "Tính khối lượng",
         "Xuất Excel",
-        "^C^CTKL ",
+        'CommandMacro("TKL")',
     ]:
         assert token in menu
 
