@@ -26,13 +26,13 @@ namespace MiningVolume2023.UI
         {
             Font = new Font("Arial", 9F);
             BackColor = UiTheme.Canvas;
-            AutoScroll = true;
+            AutoScroll = false;
             Padding = new Padding(0);
 
             var header = new Panel
             {
                 Dock = DockStyle.Top,
-                Height = 44,
+                Height = 36,
                 BackColor = UiTheme.Surface,
                 Padding = new Padding(12, 10, 12, 6)
             };
@@ -60,7 +60,7 @@ namespace MiningVolume2023.UI
             {
                 Text = "Nguồn dữ liệu",
                 Width = 520,
-                Height = 96,
+                Height = 124,
                 Margin = new Padding(0, 0, 0, 8)
             };
             var source = new TableLayoutPanel
@@ -68,12 +68,12 @@ namespace MiningVolume2023.UI
                 Dock = DockStyle.Fill,
                 ColumnCount = 4,
                 RowCount = 2,
-                Padding = new Padding(8, 5, 8, 5)
+                Padding = new Padding(0)
             };
-            source.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 88));
+            source.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 76));
             source.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            source.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 104));
-            source.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120));
+            source.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 92));
+            source.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 112));
             source.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
             source.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
 
@@ -94,7 +94,7 @@ namespace MiningVolume2023.UI
             {
                 Text = "Loại dữ liệu tham gia TIN",
                 Width = 520,
-                Height = 108,
+                Height = 96,
                 Margin = new Padding(0, 0, 0, 8)
             };
             _types = new CheckedListBox
@@ -119,19 +119,20 @@ namespace MiningVolume2023.UI
             {
                 Text = "Phạm vi tạo TIN",
                 Width = 520,
-                Height = 72,
+                Height = 102,
                 Margin = new Padding(0, 0, 0, 8)
             };
             var regionLayout = new TableLayoutPanel
             {
                 Dock = DockStyle.Fill,
-                ColumnCount = 3,
-                RowCount = 1,
-                Padding = new Padding(10, 8, 10, 8)
+                ColumnCount = 2,
+                RowCount = 2,
+                Padding = new Padding(0)
             };
             regionLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            regionLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 128));
-            regionLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 118));
+            regionLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            regionLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
+            regionLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             _tinRegionStatus = new Label
             {
                 Dock = DockStyle.Fill,
@@ -140,10 +141,11 @@ namespace MiningVolume2023.UI
                 Text = "Toàn bộ dữ liệu đã nạp."
             };
             regionLayout.Controls.Add(_tinRegionStatus, 0, 0);
+            regionLayout.SetColumnSpan(_tinRegionStatus, 2);
             regionLayout.Controls.Add(
-                Btn("Chọn vùng trên CAD", (s, e) => SelectTinRegion()), 1, 0);
+                Btn("Chọn vùng trên CAD", (s, e) => SelectTinRegion()), 0, 1);
             regionLayout.Controls.Add(
-                Btn("Dùng toàn bộ", (s, e) => ClearTinRegion()), 2, 0);
+                Btn("Dùng toàn bộ", (s, e) => ClearTinRegion()), 1, 1);
             regionBox.Controls.Add(regionLayout);
             body.Controls.Add(regionBox);
 
@@ -151,7 +153,7 @@ namespace MiningVolume2023.UI
             {
                 Text = "Trạng thái mô hình",
                 Width = 520,
-                Height = 72,
+                Height = 80,
                 Margin = new Padding(0, 0, 0, 8)
             };
             _status = new Label
@@ -159,7 +161,7 @@ namespace MiningVolume2023.UI
                 Text = "Chưa nạp dữ liệu.",
                 Dock = DockStyle.Fill,
                 ForeColor = UiTheme.Muted,
-                Padding = new Padding(10, 8, 10, 8),
+                Padding = new Padding(2),
                 AutoEllipsis = true,
                 TextAlign = ContentAlignment.MiddleLeft
             };
@@ -204,19 +206,34 @@ namespace MiningVolume2023.UI
 
             body.Controls.Add(actions);
 
-            body.SizeChanged += (s, e) =>
+            // A dedicated scroll viewport prevents the page title from
+            // overlapping the top-docked flow panel at small palette sizes.
+            var viewport = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
+            viewport.Controls.Add(body);
+            var layout = new TableLayoutPanel
             {
-                int width = Math.Max(420, body.ClientSize.Width - body.Padding.Horizontal - 4);
-                sourceBox.Width = width;
-                typeBox.Width = width;
-                regionBox.Width = width;
-                statusBox.Width = width;
-                actions.Width = width;
+                Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2,
+                Margin = new Padding(0), Padding = new Padding(0)
             };
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
+            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            header.Dock = DockStyle.Fill;
+            header.Margin = new Padding(0);
+            viewport.Margin = new Padding(0);
+            layout.Controls.Add(header, 0, 0);
+            layout.Controls.Add(viewport, 0, 1);
+            Controls.Add(layout);
 
-            Controls.Add(body);
-            Controls.Add(header);
-            header.BringToFront();
+            Action resizeCards = () =>
+            {
+                int width = Math.Max(1, viewport.ClientSize.Width -
+                    SystemInformation.VerticalScrollBarWidth - body.Padding.Horizontal - 2);
+                foreach (Control card in body.Controls) card.Width = width;
+                _types.ColumnWidth = Math.Max(120, (_types.ClientSize.Width - 4) / 2);
+            };
+            viewport.SizeChanged += (s, e) => resizeCards();
+            Load += (s, e) => resizeCards();
 
             RefreshLayers();
             RefreshTinRegionStatus();

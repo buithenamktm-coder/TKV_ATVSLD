@@ -28,6 +28,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="Assets\imsat_logo_64.png" CopyToOutputDirectory="PreserveNewest" />
+    <EmbeddedResource Include="Assets\imsat_logo_64.png" LogicalName="MiningVolume2023.Assets.imsat_logo_64.png" />
   </ItemGroup>
   <ItemGroup Condition="'$(UseAutoCADNuGet)'=='true'">
     <PackageReference Include="AutoCAD.NET" Version="24.2.0" PrivateAssets="all" ExcludeAssets="runtime" />

@@ -69,19 +69,27 @@ namespace MiningVolume2023.UI
             int textLeft = 14;
             try
             {
-                string logoPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Assets", "imsat_logo_64.png");
-                if (File.Exists(logoPath))
+                // Load from this add-in, not acad.exe's application directory.
+                using (var stream = typeof(MainPaletteControl).Assembly.GetManifestResourceStream(
+                    "MiningVolume2023.Assets.imsat_logo_64.png"))
                 {
-                    var logo = new PictureBox
+                    if (stream != null)
                     {
-                        Image = Image.FromFile(logoPath),
-                        SizeMode = PictureBoxSizeMode.Zoom,
-                        Size = new Size(48, 48),
-                        Location = new Point(12, 8),
-                        BackColor = Color.Transparent
-                    };
-                    header.Controls.Add(logo);
-                    textLeft = 70;
+                        Image logoImage;
+                        using (var original = Image.FromStream(stream))
+                            logoImage = new Bitmap(original);
+                        var logo = new PictureBox
+                        {
+                            Image = logoImage,
+                            SizeMode = PictureBoxSizeMode.Zoom,
+                            Size = new Size(44, 44),
+                            Location = new Point(14, 10),
+                            BackColor = Color.Transparent
+                        };
+                        logo.Disposed += (s, e) => logoImage.Dispose();
+                        header.Controls.Add(logo);
+                        textLeft = 70;
+                    }
                 }
             }
             catch { }
