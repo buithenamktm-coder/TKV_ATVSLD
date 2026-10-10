@@ -276,13 +276,13 @@ namespace MiningVolume2023.UI
                 var state = ProjectState.Current;
                 string existing = state.Existing.Layer;
                 string design = state.Design.Layer;
-                bool via4 = layers.Any(x => string.Equals(x, "ht", StringComparison.OrdinalIgnoreCase)) &&
-                    layers.Any(x => string.Equals(x, "- nam4", StringComparison.OrdinalIgnoreCase));
+                bool via4 = layers.Exists(x => string.Equals(x, "ht", StringComparison.OrdinalIgnoreCase)) &&
+                    layers.Exists(x => string.Equals(x, "- nam4", StringComparison.OrdinalIgnoreCase));
                 if (via4 && _existingLayer.Items.Count == 0 && string.IsNullOrEmpty(existing)) existing = "ht";
                 if (via4 && _designLayer.Items.Count == 0 && string.IsNullOrEmpty(design)) design = "- nam4";
                 Fill(_existingLayer, layers, existing);
                 Fill(_designLayer, layers, design);
-                _via4Preset.Enabled = via4 && layers.Any(x => string.Equals(x, "LO_TINHKL", StringComparison.OrdinalIgnoreCase));
+                _via4Preset.Enabled = via4 && layers.Exists(x => string.Equals(x, "LO_TINHKL", StringComparison.OrdinalIgnoreCase));
                 _status.Text = layers.Count.ToString("n0") + " layer trong bản vẽ.";
             }
             catch (Exception ex)
