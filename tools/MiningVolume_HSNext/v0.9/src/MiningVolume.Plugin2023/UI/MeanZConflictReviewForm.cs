@@ -7,7 +7,9 @@ namespace MiningVolume2023.UI
     // Official review includes breakline intersections; preview reviews original vertices.
     internal sealed class MeanZConflictReviewForm : ConflictReviewForm
     {
-        internal MeanZConflictReviewForm(ModelRole role, MeanZPreviewPreparer.Result scan)
-            : base(role, scan?.ToConflictReport(ProjectState.Current.Get(role).Source), true) { }
+        internal MeanZConflictReviewForm(ModelRole role, MeanZPreviewPreparer.Result scan,
+            System.Action requestBuildPreview=null)
+            : base(role, scan?.ToConflictReport(ProjectState.Current.Get(role).Source), true,
+                requestBuildPreview) { }
     }
 }
