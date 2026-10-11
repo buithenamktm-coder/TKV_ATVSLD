@@ -46,6 +46,11 @@ try {
     Compress-Archive -Path $stage -DestinationPath (Join-Path $setupDir 'payload.zip') -CompressionLevel Optimal
     Push-Location $setupDir
     try {
+        # Reuse the IMSAT icon resource compiler already installed by the V1 CI step.
+        $rsrc = Join-Path ((go env GOPATH).Trim()) 'bin/rsrc.exe'
+        if (-not (Test-Path $rsrc)) { throw "Không tìm thấy rsrc.exe; không build Setup V2 thiếu icon IMSAT." }
+        & $rsrc -ico (Join-Path $Root 'installer/imsat.ico') -arch amd64 -o 'rsrc_windows_amd64.syso'
+        if ($LASTEXITCODE -ne 0) { throw "Không nhúng được icon IMSAT trong Setup V2." }
         go mod init imsat-v2-qa-candidate | Out-Null
         if ($LASTEXITCODE -ne 0) { throw "go mod init V2 thất bại." }
         $exe = Join-Path $dist "IMSAT_MiningVolume_V2_0_QA_CANDIDATE.exe"
