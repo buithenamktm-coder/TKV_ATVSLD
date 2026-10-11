@@ -40,6 +40,11 @@ def test_user_must_confirm_before_replacing_existing_cad_sections():
     assert method.index("SectionWorkflowService.DrawProfiles(") < method.index(
         "SectionWorkflowService.CommitProfiles(profiles);")
     assert "if (!ins.HasValue) return;" in method
+    # A background TIN calculation must never draw into whichever DWG became
+    # active while the worker was running.
+    assert method.count("!ReferenceEquals(activeDoc, Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument)") >= 2
+    assert "!ReferenceEquals(existing, state.Existing.Tin)" in method
+    assert "!ReferenceEquals(design, state.Design.Tin)" in method
     service = _read(SERVICES / "SectionWorkflowService.cs")
     assert "IReadOnlyList<SectionProfile> profilesToDraw = null" in service
     assert "drawingProfiles" in service
