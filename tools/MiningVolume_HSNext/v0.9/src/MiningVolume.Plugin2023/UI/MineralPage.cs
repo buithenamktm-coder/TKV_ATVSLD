@@ -1,6 +1,8 @@
 using System;
 using System.Drawing;
 using System.Linq;
+using System.IO;
+using MiningVolume.Core.Volumes;
 using MiningVolume.Core.Sections;
 using System.Windows.Forms;
 using MiningVolume2023.Services;
@@ -37,7 +39,7 @@ namespace MiningVolume2023.UI
 
             var commands = new FlowLayoutPanel
             {
-                Dock = DockStyle.Top, Height = 112,
+                Dock = DockStyle.Top, Height = 146,
                 WrapContents = true, Padding = new Padding(4, 3, 4, 3)
             };
             commands.Controls.Add(Action("THÊM VỈA", AddBody));
@@ -49,6 +51,9 @@ namespace MiningVolume2023.UI
             commands.Controls.Add(Action("BỎ CHỌN THIẾT KẾ", (s,e) => Clear(ModelRole.Design)));
             commands.Controls.Add(Action("GÁN VÙNG TRÊN MẶT CẮT", (s,e) => AssignSectionRegion()));
             commands.Controls.Add(Action("CẬP NHẬT MẶT CẮT", (s,e) => UpdateSectionRegions()));
+            commands.Controls.Add(Action("XÁC NHẬN VỈA VẮNG TẠI MC", (s,e) => ToggleAbsentSection()));
+            commands.Controls.Add(Action("TÍNH M³ / TẤN THEO VỈA", (s,e) => CalculateMineralVolumes()));
+            commands.Controls.Add(Action("XUẤT EXCEL KHOÁNG SẢN", (s,e) => ExportMineralExcel()));
             Controls.Add(commands);
             commands.BringToFront();
 
@@ -271,6 +276,95 @@ namespace MiningVolume2023.UI
                     "Diện tích theo vỉa đã kiểm tra nằm trong phần đào, không chồng lấn. "+
                     "Tính thể tích/tấn chỉ được thực hiện khi đủ thông tin hình học giữa các mặt cắt.",
                     "CẬP NHẬT MẶT CẮT",MessageBoxButtons.OK,MessageBoxIcon.Information);
+            }
+            catch(Exception ex){Alert(ex);}
+        }
+
+        private void ToggleAbsentSection()
+        {
+            var body=Selected();
+            if(body==null){MissingSelection();return;}
+            if(!body.HasPairedOutcrops)
+            {
+                MessageBox.Show("Vỉa phải có đủ lộ vỉa hiện trạng và thiết kế.",
+                    "IMSAT VOLUME",MessageBoxButtons.OK,MessageBoxIcon.Warning);
+                return;
+            }
+            string sectionName=ChooseSection();
+            if(sectionName==null)return;
+            try
+            {
+                // Always reread DWG first. Never allow explicit zero while CAD
+                // has polygons belonging to the same seam and section.
+                var areas=MineralSectionRegionService.UpdateAll();
+                if(areas.Any(x=>x.BodyId==body.Id &&
+                    string.Equals(x.SectionName,sectionName,StringComparison.OrdinalIgnoreCase)))
+                    throw new InvalidOperationException(
+                        "Đã có vùng "+body.Name+" trên "+sectionName+
+                        ". Không thể đồng thời xác nhận vỉa vắng mặt.");
+                bool old=body.ConfirmedAbsentSections.Any(x=>string.Equals(x,sectionName,
+                    StringComparison.OrdinalIgnoreCase));
+                string question=old
+                    ? "Bỏ xác nhận vắng mặt của "+body.Name+" trên "+sectionName+"?"
+                    : "Xác nhận KHÔNG có "+body.Name+" trên "+sectionName+
+                      "? Lần tính khối lượng sau sẽ dùng F = 0 m² đúng mặt cắt này.";
+                if(MessageBox.Show(question,"Xác nhận dữ liệu địa chất",
+                    MessageBoxButtons.YesNo,MessageBoxIcon.Question)!=DialogResult.Yes)return;
+                body.SetAbsentAtSection(sectionName,!old);
+                ProjectState.Current.NotifyChanged();
+                _status.Text=old?"Đã bỏ xác nhận vắng mặt tại "+sectionName:
+                    "Đã xác nhận "+body.Name+" vắng mặt tại "+sectionName+".";
+            }
+            catch(Exception ex){Alert(ex);}
+        }
+
+        private void CalculateMineralVolumes()
+        {
+            try
+            {
+                SaveDensity();
+                var result=MineralVolumeWorkflowService.Recalculate();
+                _status.Text="Than/quặng: "+result.TotalMineralCubicMetres.ToString("n2")+" m³, "+
+                    result.TotalMineralTonnes.ToString("n2")+" t; đất đá: "+
+                    result.WasteCubicMetres.ToString("n2")+" m³.";
+                string details=string.Join(Environment.NewLine,result.Bodies.Select(x=>
+                    x.Name+": "+x.VolumeCubicMetres.ToString("n2")+" m³; "+
+                    x.MassTonnes.ToString("n2")+" t"));
+                MessageBox.Show(details+Environment.NewLine+
+                    "Đất đá: "+result.WasteCubicMetres.ToString("n2")+" m³; hệ số bóc: "+
+                    (result.StrippingRatioCubicMetresPerCubicMetre?.ToString("0.###")??"—")+" m³/m³; "+
+                    (result.StrippingRatioCubicMetresPerTonne?.ToString("0.###")??"—")+" m³/t."+
+                    Environment.NewLine+"Phương pháp: diện tích hai đầu mặt cắt; "+
+                    "chưa thay thế mô hình địa chất 3D nếu dự án yêu cầu.",
+                    "KẾT QUẢ KHOÁNG SẢN",MessageBoxButtons.OK,MessageBoxIcon.Information);
+            }
+            catch(Exception ex){Alert(ex);}
+        }
+
+        private void ExportMineralExcel()
+        {
+            try
+            {
+                SaveDensity();
+                // Always recompute from live AutoCAD geometry before export.
+                var result=MineralVolumeWorkflowService.Recalculate();
+                using(var dlg=new SaveFileDialog
+                {
+                    Filter="Excel Workbook (*.xlsx)|*.xlsx",DefaultExt="xlsx",
+                    AddExtension=true,OverwritePrompt=true,
+                    FileName="IMSAT_KhoiLuong_KhoangSan_"+
+                        DateTime.Now.ToString("yyyyMMdd_HHmm")+".xlsx"
+                })
+                {
+                    if(dlg.ShowDialog(this)!=DialogResult.OK)return;
+                    var report=MineralVolumeExcelReportBuilder.Build(result,
+                        ProjectState.Current.MineralBodies);
+                    ExportWorkflowService.WriteXlsx(dlg.FileName,report);
+                    _status.Text="Đã xuất Excel khoáng sản: "+Path.GetFileName(dlg.FileName);
+                    MessageBox.Show(_status.Text+Environment.NewLine+
+                        "Công thức Excel liên kết thể trọng, diện tích, chiều dài, thể tích và tấn.",
+                        "IMSAT VOLUME",MessageBoxButtons.OK,MessageBoxIcon.Information);
+                }
             }
             catch(Exception ex){Alert(ex);}
         }
