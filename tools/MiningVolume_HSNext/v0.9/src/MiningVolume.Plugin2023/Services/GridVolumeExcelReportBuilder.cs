@@ -44,8 +44,18 @@ namespace MiningVolume2023.Services
         {
             var s = Sheet("THÔNG TIN", "THÔNG TIN TÍNH KHỐI LƯỢNG LƯỚI", "Chỉ tiêu", "Giá trị");
             s.Notes.Add("Khối lượng hình học chính thức phải được tính lại trong AutoCAD sau thay đổi TIN/ranh lưới.");
+            var state = ProjectState.Current;
+            Row(s,"Đơn vị khai thác", string.IsNullOrWhiteSpace(state.MiningUnitName) ? "Chưa thiết lập" : state.MiningUnitName);
+            Row(s,"Nhóm khai thác", state.MiningUnitGroup);
+            Row(s,"Kỳ tính khối lượng", state.VolumePeriodLabel);
+            Row(s,"Thời điểm tính lưới", state.GridCalculatedUtc.HasValue
+                ? state.GridCalculatedUtc.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss")
+                : "Chưa xác nhận trong phiên hiện tại");
+            Row(s,"Thời gian thực tính lưới, giây", state.GridCalculationSeconds.HasValue
+                ? state.GridCalculationSeconds.Value.ToString("0.000")
+                : "Chưa xác nhận trong phiên hiện tại");
             Row(s,"Người phát triển","Bùi Thế Nam");
-            Row(s,"Điện thoại","0967280686");
+            Row(s,"ĐT/Zalo","0967280686");
             Row(s,"Phương pháp",grid.Method);
             Row(s,"Gốc lưới X",opt.Origin.X.ToString("0.###"));
             Row(s,"Gốc lưới Y",opt.Origin.Y.ToString("0.###"));
@@ -153,6 +163,21 @@ namespace MiningVolume2023.Services
                 ReportCell.Formula3("B4-B5"),ReportCell.Text("m³")});
             s.Rows.Add(new ReportCell[]{ReportCell.Text("Diện tích thiếu TIN"),
                 ReportCell.Formula3("SUM("+from+"G"+FirstDataRow+":G"+end+")"),ReportCell.Text("m²")});
+            // Sign-off area belongs to the same volume-summary worksheet.
+            // Keep all formula row numbers intact by appending after totals.
+            var state = ProjectState.Current;
+            s.Rows.Add(new ReportCell[]{ReportCell.Text(""), ReportCell.Text(""), ReportCell.Text("")});
+            s.Rows.Add(new ReportCell[]{ReportCell.Text("Đơn vị khai thác",true),
+                ReportCell.Text(""),ReportCell.Text(state.MiningUnitName ?? "")});
+            s.Rows.Add(new ReportCell[]{ReportCell.Text("Kỳ tính khối lượng",true),
+                ReportCell.Text(""),ReportCell.Text(state.VolumePeriodLabel)});
+            s.Rows.Add(new ReportCell[]{ReportCell.Text(""),ReportCell.Text(""),ReportCell.Text("")});
+            s.Rows.Add(new ReportCell[]{ReportCell.Text("NGƯỜI TÍNH TOÁN",true),
+                ReportCell.Text(""),ReportCell.Text("NGƯỜI KIỂM TRA",true)});
+            s.Rows.Add(new ReportCell[]{ReportCell.Text("(Ký, ghi rõ họ tên)"),
+                ReportCell.Text(""),ReportCell.Text("(Ký, ghi rõ họ tên)")});
+            s.Rows.Add(new ReportCell[]{ReportCell.Text(""),ReportCell.Text(""),ReportCell.Text("")});
+            s.Rows.Add(new ReportCell[]{ReportCell.Text(""),ReportCell.Text(""),ReportCell.Text("")});
             return s;
         }
 
