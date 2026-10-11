@@ -13,7 +13,7 @@ namespace MiningVolume2023.Services
     public sealed class ProjectSnapshot
     {
         [DataMember(Order = 1)] public int FormatVersion { get; set; } = 2;
-        [DataMember(Order = 2)] public string ProductVersion { get; set; } = "1.0.0";
+        [DataMember(Order = 2)] public string ProductVersion { get; set; } = "2.0.0";
         [DataMember(Order = 3)] public DateTime SavedUtc { get; set; }
         [DataMember(Order = 4)] public ModelSnapshot Existing { get; set; }
         [DataMember(Order = 5)] public ModelSnapshot Design { get; set; }
