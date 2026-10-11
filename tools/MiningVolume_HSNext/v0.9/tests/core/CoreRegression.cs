@@ -90,6 +90,27 @@ internal static class CoreRegression
                 Check(tin.Triangles.Count>0,"Experimental averaged points should triangulate");
                 Check(!result.ForOfficialVolumes,"Experimental TIN cannot be official");
             },
+            ["mean_z_preview_same_bucket_distinct_xy_and_neighbour_join"] = ()=>{
+                // Distinct points within the same 1µm hash bucket can still
+                // be farther than the Euclidean XY tolerance. The optional
+                // secondary bucket must not omit either site.
+                var a=Entity("a",SourceEntityType.Point,P(5000.0000001,5000.0000001,1));
+                var b=Entity("b",SourceEntityType.Point,P(5000.0000009,5000.0000009,2));
+                var c=Entity("c",SourceEntityType.Point,P(5000.00000095,5000.00000095,3));
+                var d=Entity("d",SourceEntityType.Point,P(5000.0000015,5000.0000015,4));
+                var m=Model(a,b,c,d,Entity("e",SourceEntityType.Point,P(5001,5000,0)),
+                    Entity("f",SourceEntityType.Point,P(5000,5001,0)));
+                var r=MeanZPreviewPreparer.Prepare(m);
+                Check(r.Prepared.Sites.Count==4,"Distinct XY in one bucket accidentally merged");
+                Check(r.Conflicts.Count==1 && r.Conflicts[0].VertexCount==3,
+                    "Neighbor cell duplicate sources omitted");
+                Check(Math.Abs(r.Conflicts[0].MeanZ-3)<1e-9,
+                    "Mean is not arithmetic mean of the matched 3 source Zs");
+                Check(r.Conflicts[0].Members.Count==3,
+                    "Lazy member materialization lost first source provenance");
+                Check(r.Prepared.Sites.Any(p=>p.Z==1),
+                    "First distinct XY site was dropped in hash collision");
+            },
             ["mean_z_preview_disabled_inputs_and_identical_z"] = ()=>{
                 var a=Entity("a",SourceEntityType.Point,P(0,0,10));
                 var b=Entity("b",SourceEntityType.Point,P(0,0,10));
