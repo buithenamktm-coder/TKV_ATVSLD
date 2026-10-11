@@ -250,6 +250,7 @@ namespace MiningVolume2023.UI
                     else
                     {
                         _parameterActions[i].Dock = DockStyle.Fill;
+                        _parameterLayout.SetColumnSpan(_parameterActions[i], 1);
                         _parameterLayout.Controls.Add(_parameterActions[i], 2, row);
                     }
                 }
