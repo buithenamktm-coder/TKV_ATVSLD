@@ -438,6 +438,28 @@ namespace MiningVolume2023.UI
                             MeanZPreviewWorkflowService.ExportCsv(result,dlg.FileName);
                 }
             }
+            catch(MeanZReviewRequiredException ex)
+            {
+                // A >3 m conflict is a REVIEW result, not a triangulation crash.
+                // Open the grouped source-vertex editor on the same drawing.
+                // Its own asynchronous rescan verifies current model revision
+                // before enabling any Edit-Z or Exclude-Vertex action.
+                if (!IsDisposed &&
+                    Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
+                        == startingDocument)
+                {
+                    Autodesk.AutoCAD.ApplicationServices.Application.ShowModelessDialog(
+                        new MeanZConflictReviewForm(role, ex.Analysis));
+                }
+                else if(!IsDisposed)
+                {
+                    MessageBox.Show(this,
+                        "Bản vẽ CAD đã chuyển khi phát hiện chênh Z > 3 m. " +
+                        "Hãy trở lại đúng DWG và quét lại dữ liệu.",
+                        "TIN thử nghiệm – cần kiểm tra cao độ",
+                        MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                }
+            }
             catch(OperationCanceledException)
             {
                 MessageBox.Show(this,"Đã hủy dựng TIN Z trung bình. Không thay TIN chính thức.",
