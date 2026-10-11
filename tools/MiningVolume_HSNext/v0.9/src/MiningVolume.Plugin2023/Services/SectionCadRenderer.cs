@@ -15,6 +15,7 @@ namespace MiningVolume2023.Services
         private const string DesignLayer = "MV_MC_THIETKE";
         private const string AxisLayer = "MV_MC_TRUC";
         private const string TextLayer = "MV_MC_TEXT";
+        internal const string FrameRegApp = "IMSAT_MV2_MC_FRAME";
         private const string ArialStyle = "MV_ARIAL";
 
         public static void ReplacePreview(Database db, SectionSystem system)
@@ -23,6 +24,7 @@ namespace MiningVolume2023.Services
             {
                 ObjectId layerId = EnsureLayer(db, tr, PreviewLayer, 2);
                 ObjectId styleId = EnsureArialStyle(db, tr);
+                EnsureFrameRegApp(db, tr);
                 var ms = ModelSpace(db, tr, true);
                 EraseOnLayers(ms, tr, new[] { layerId });
 
@@ -130,7 +132,17 @@ namespace MiningVolume2023.Services
 
                     AddLine(ms, tr, new Point3d(x0, y0, 0), new Point3d(x0 + width, y0, 0), axLayer);
                     AddLine(ms, tr, new Point3d(x0, y0, 0), new Point3d(x0, y0 + height, 0), axLayer);
-                    AddText(ms, tr, styleId, txLayer, new Point3d(x0, y0 + height + 8, 0), p.Line.Name, 3.0, 0);
+                    var sectionTitle = AddText(ms, tr, styleId, txLayer,
+                        new Point3d(x0, y0 + height + 8, 0), p.Line.Name, 3.0, 0);
+                    // Saved with native CAD text to associate editable seam polygons
+                    // with a stable section coordinate frame after DWG reopen.
+                    sectionTitle.XData = new ResultBuffer(
+                        new TypedValue((int)DxfCode.ExtendedDataRegAppName, FrameRegApp),
+                        new TypedValue((int)DxfCode.ExtendedDataAsciiString, p.Line.Name),
+                        new TypedValue((int)DxfCode.ExtendedDataReal, x0),
+                        new TypedValue((int)DxfCode.ExtendedDataReal, y0),
+                        new TypedValue((int)DxfCode.ExtendedDataReal, baseZ),
+                        new TypedValue((int)DxfCode.ExtendedDataReal, vExag));
                     AddText(ms, tr, styleId, txLayer, new Point3d(x0, y0 + height + 3.5, 0),
                         $"F đào = {p.CutArea:0.00} m²   F đắp = {p.FillArea:0.00} m²", 3.0, 0);
 
@@ -271,10 +283,21 @@ namespace MiningVolume2023.Services
             tr.AddNewlyCreatedDBObject(poly, true);
         }
 
-        private static void AddText(BlockTableRecord ms, Transaction tr, ObjectId style, ObjectId layer, Point3d p, string value, double height, double rotation)
+        private static DBText AddText(BlockTableRecord ms, Transaction tr, ObjectId style, ObjectId layer, Point3d p, string value, double height, double rotation)
         {
             var text = new DBText { Position = p, TextString = value, Height = height, Rotation = rotation, TextStyleId = style, LayerId = layer };
             ms.AppendEntity(text); tr.AddNewlyCreatedDBObject(text, true);
+            return text;
+        }
+
+        private static void EnsureFrameRegApp(Database db, Transaction tr)
+        {
+            var reg = (RegAppTable)tr.GetObject(db.RegAppTableId, OpenMode.ForRead);
+            if (reg.Has(FrameRegApp)) return;
+            reg.UpgradeOpen();
+            var entry = new RegAppTableRecord { Name = FrameRegApp };
+            reg.Add(entry);
+            tr.AddNewlyCreatedDBObject(entry, true);
         }
 
         private static double NiceStep(double raw)
