@@ -63,3 +63,12 @@ def test_grid_rejects_boundary_geometry_and_parameters_changed_mid_task():
         "string.Equals(boundaryHandle, state.GridBoundaryHandle",
     ):
         assert check in service
+
+def test_pair_tin_never_writes_after_switching_active_dwg():
+    page = read(UI / "DataPage.cs")
+    method = page.split("private async Task BuildPairTinAsync()", 1)[1].split(
+        "private async Task<SurfaceBuildResult> BuildRoleWithConflictChoiceAsync(", 1)[0]
+    assert "var activeDoc = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument;" in method
+    assert "ReferenceEquals(activeDoc," in method
+    assert method.index("ReferenceEquals(activeDoc,") < method.index(
+        "SurfaceWorkflowService.DrawTinPair(builds")
