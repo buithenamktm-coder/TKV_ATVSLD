@@ -132,14 +132,18 @@ namespace MiningVolume2023.Services
             double verticalScale,
             double levelStep,
             Action<int, int> progress = null,
-            double layoutGap = 90.0)
+            double layoutGap = 90.0,
+            IReadOnlyList<SectionProfile> profilesToDraw = null)
         {
             var state = ProjectState.Current;
-            if (state.SectionProfiles.Count == 0) BuildProfiles();
+            if (profilesToDraw == null && state.SectionProfiles.Count == 0) BuildProfiles();
+            var drawingProfiles = profilesToDraw ?? state.SectionProfiles;
+            if (drawingProfiles.Count == 0)
+                throw new InvalidOperationException("Không có mặt cắt hợp lệ để xuất.");
             var doc = Application.DocumentManager.MdiActiveDocument ?? throw new InvalidOperationException("Không có bản vẽ AutoCAD đang hoạt động.");
 
             const int batchSize = 20;
-            int total = state.SectionProfiles.Count;
+            int total = drawingProfiles.Count;
             using (doc.LockDocument())
             {
                 for (int start = 0; start < total; start += batchSize)
@@ -147,7 +151,7 @@ namespace MiningVolume2023.Services
                     int count = Math.Min(batchSize, total - start);
                     SectionCadRenderer.ReplaceProfilesBatched(
                         doc.Database,
-                        state.SectionProfiles,
+                        drawingProfiles,
                         insertion,
                         horizontalScale,
                         verticalScale,
