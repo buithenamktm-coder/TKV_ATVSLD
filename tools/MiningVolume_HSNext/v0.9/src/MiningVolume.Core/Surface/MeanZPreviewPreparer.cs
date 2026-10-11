@@ -44,9 +44,21 @@ namespace MiningVolume.Core.Surface
             internal int N;
             internal double AverageZ, MinZ, MaxZ;
             internal string FirstHandle, LastHandle;
-            internal List<Member> Members = new List<Member>();
+            internal SourceEntity FirstEntity;
+            internal int FirstVertexIndex;
+            // Almost every XY in million-vertex mine surveys occurs once.
+            // Allocate per-member audit objects only for duplicate XY groups;
+            // otherwise ~1m lists + member objects needlessly fill AutoCAD RAM.
+            internal List<Member> Members;
             internal void Add(double z,string handle,SourceEntity entity,int vertexIndex)
             {
+                if(Members==null)
+                {
+                    Members=new List<Member>(2) {
+                        new Member { EntityId=FirstEntity.Id,VertexIndex=FirstVertexIndex,
+                            Handle=FirstHandle,Layer=FirstEntity.Layer,Type=FirstEntity.Type,Z=MinZ }
+                    };
+                }
                 N++;
                 AverageZ += (z-AverageZ)/N;
                 if (z<MinZ) MinZ=z;
@@ -169,10 +181,9 @@ namespace MiningVolume.Core.Surface
                     {
                         XY=new Vec2(point.X,point.Y),N=1,
                         AverageZ=point.Z,MinZ=point.Z,MaxZ=point.Z,
-                        FirstHandle=entity.Handle,LastHandle=entity.Handle
+                        FirstHandle=entity.Handle,LastHandle=entity.Handle,
+                        FirstEntity=entity,FirstVertexIndex=vertex.Index
                     };
-                    next.Members.Add(new Member {EntityId=entity.Id,VertexIndex=vertex.Index,
-                        Handle=entity.Handle,Layer=entity.Layer,Type=entity.Type,Z=point.Z});
                     int index=groups.Count;groups.Add(next);
                     if(!cells.TryGetValue(key,out var bucket))cells[key]=bucket=new List<int>();
                     bucket.Add(index);
