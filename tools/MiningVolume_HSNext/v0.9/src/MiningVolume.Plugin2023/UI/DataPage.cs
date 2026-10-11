@@ -22,6 +22,12 @@ namespace MiningVolume2023.UI
         private readonly Button _cancelBuild;
         private readonly Button _via4Preset;
         private CancellationTokenSource _buildCts;
+        private readonly GroupBox _sourceBox;
+        private readonly TableLayoutPanel _sourceTable;
+        private readonly Control[] _sourceLabels = new Control[2];
+        private readonly Control[] _sourceLoad = new Control[2];
+        private readonly Control[] _sourceChoose = new Control[2];
+        private bool _compactSourceLayout;
 
         public DataPage()
         {
@@ -57,14 +63,14 @@ namespace MiningVolume2023.UI
                 BackColor = UiTheme.Canvas
             };
 
-            var sourceBox = new GroupBox
+            var sourceBox = _sourceBox = new GroupBox
             {
                 Text = "Nguồn dữ liệu",
                 Width = 520,
                 Height = 148,
                 Margin = new Padding(0, 0, 0, 8)
             };
-            var source = new TableLayoutPanel
+            var source = _sourceTable = new TableLayoutPanel
             {
                 Dock = DockStyle.Fill,
                 ColumnCount = 4,
@@ -89,6 +95,12 @@ namespace MiningVolume2023.UI
                 source, 1, "Thiết kế", _designLayer,
                 Btn("Nạp layer", (s, e) => LoadModel(ModelRole.Design)),
                 Btn("Chọn trên CAD", (s, e) => SelectModel(ModelRole.Design)));
+            for (int row=0; row<2; row++)
+            {
+                _sourceLabels[row] = source.GetControlFromPosition(0,row);
+                _sourceLoad[row] = source.GetControlFromPosition(2,row);
+                _sourceChoose[row] = source.GetControlFromPosition(3,row);
+            }
             _via4Preset = Btn("Nạp mẫu Vỉa 4: ht / - nam4 / LO_TINHKL", (s, e) => LoadVia4Preset());
             source.Controls.Add(_via4Preset, 0, 2);
             source.SetColumnSpan(_via4Preset, 4);
@@ -240,6 +252,7 @@ namespace MiningVolume2023.UI
                     SystemInformation.VerticalScrollBarWidth - body.Padding.Horizontal - 2);
                 foreach (Control card in body.Controls) card.Width = width;
                 _types.ColumnWidth = Math.Max(120, (_types.ClientSize.Width - 4) / 2);
+                ApplyResponsiveSourceLayout(width);
             };
             viewport.SizeChanged += (s, e) => resizeCards();
             Load += (s, e) => resizeCards();
@@ -247,6 +260,61 @@ namespace MiningVolume2023.UI
             RefreshLayers();
             RefreshTinRegionStatus();
             RefreshPairButton();
+        }
+
+        private void ApplyResponsiveSourceLayout(int width)
+        {
+            bool compact = width < 560;
+            if (_compactSourceLayout == compact) return;
+            _compactSourceLayout = compact;
+            _sourceTable.SuspendLayout();
+            try
+            {
+                _sourceTable.Controls.Clear();
+                _sourceTable.RowStyles.Clear();
+                _sourceTable.ColumnStyles.Clear();
+                _sourceTable.ColumnCount = compact ? 2 : 4;
+                _sourceTable.RowCount = compact ? 5 : 3;
+                if (compact)
+                {
+                    _sourceBox.Height = 233;
+                    _sourceTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 47));
+                    _sourceTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 53));
+                    for (int k=0;k<5;k++)
+                        _sourceTable.RowStyles.Add(new RowStyle(SizeType.Absolute, 39));
+                    _sourceTable.Controls.Add(_sourceLabels[0],0,0);
+                    _sourceTable.Controls.Add(_existingLayer,1,0);
+                    _sourceTable.Controls.Add(_sourceLoad[0],0,1);
+                    _sourceTable.Controls.Add(_sourceChoose[0],1,1);
+                    _sourceTable.Controls.Add(_sourceLabels[1],0,2);
+                    _sourceTable.Controls.Add(_designLayer,1,2);
+                    _sourceTable.Controls.Add(_sourceLoad[1],0,3);
+                    _sourceTable.Controls.Add(_sourceChoose[1],1,3);
+                    _sourceTable.Controls.Add(_via4Preset,0,4);
+                    _sourceTable.SetColumnSpan(_via4Preset,2);
+                }
+                else
+                {
+                    _sourceBox.Height = 148;
+                    _sourceTable.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 76));
+                    _sourceTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+                    _sourceTable.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 92));
+                    _sourceTable.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 112));
+                    _sourceTable.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
+                    _sourceTable.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
+                    _sourceTable.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
+                    for (int row=0;row<2;row++)
+                    {
+                        _sourceTable.Controls.Add(_sourceLabels[row],0,row);
+                        _sourceTable.Controls.Add(row==0 ? (Control)_existingLayer : _designLayer,1,row);
+                        _sourceTable.Controls.Add(_sourceLoad[row],2,row);
+                        _sourceTable.Controls.Add(_sourceChoose[row],3,row);
+                    }
+                    _sourceTable.Controls.Add(_via4Preset,0,2);
+                    _sourceTable.SetColumnSpan(_via4Preset,4);
+                }
+            }
+            finally { _sourceTable.ResumeLayout(true); }
         }
 
         private static Button Btn(string text, EventHandler h)
