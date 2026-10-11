@@ -16,6 +16,7 @@ namespace MiningVolume2023.Services
         private const string AxisLayer = "MV_MC_TRUC";
         private const string TextLayer = "MV_MC_TEXT";
         internal const string FrameRegApp = "IMSAT_MV2_MC_FRAME";
+        internal const string EditRegApp = "IMSAT_MV2_MC_EDIT";
         private const string ArialStyle = "MV_ARIAL";
 
         public static void ReplacePreview(Database db, SectionSystem system)
@@ -233,6 +234,7 @@ namespace MiningVolume2023.Services
             var existing = new List<Point2d>();
             var design = new List<Point2d>();
             double previousS1 = double.NaN;
+            int runIndex = 0;
 
             foreach (var segment in profile.Segments)
             {
@@ -243,8 +245,11 @@ namespace MiningVolume2023.Services
 
                 if (!contiguous)
                 {
-                    FlushProfilePolyline(ms, tr, existing, existingLayer);
-                    FlushProfilePolyline(ms, tr, design, designLayer);
+                    if (existing.Count >= 2)
+                    {
+                        FlushProfilePair(ms, tr, profile.Line.Name, runIndex++,
+                            existing, design, existingLayer, designLayer, x0, y0, baseZ, vExag);
+                    }
                     existing.Clear();
                     design.Clear();
 
@@ -265,22 +270,52 @@ namespace MiningVolume2023.Services
                 previousS1 = segment.S1;
             }
 
-            FlushProfilePolyline(ms, tr, existing, existingLayer);
-            FlushProfilePolyline(ms, tr, design, designLayer);
+            if (existing.Count >= 2)
+                FlushProfilePair(ms, tr, profile.Line.Name, runIndex,
+                    existing, design, existingLayer, designLayer, x0, y0, baseZ, vExag);
         }
 
-        private static void FlushProfilePolyline(
+        private static void FlushProfilePair(
+            BlockTableRecord ms, Transaction tr, string section, int run,
+            List<Point2d> existing, List<Point2d> design,
+            ObjectId existingLayer, ObjectId designLayer,
+            double x0, double y0, double baseZ, double vExag)
+        {
+            var a = FlushProfilePolyline(ms, tr, existing, existingLayer);
+            var c = FlushProfilePolyline(ms, tr, design, designLayer);
+            if (a == null || c == null)
+                throw new InvalidOperationException("Không tạo được hai đường mặt cắt đối ứng.");
+            StampSection(a, section, "HT", run, x0, y0, baseZ, vExag);
+            StampSection(c, section, "TK", run, x0, y0, baseZ, vExag);
+        }
+
+        private static void StampSection(Polyline poly, string section, string role, int run,
+            double x0, double y0, double baseZ, double vExag)
+        {
+            poly.XData = new ResultBuffer(
+                new TypedValue((int)DxfCode.ExtendedDataRegAppName, EditRegApp),
+                new TypedValue((int)DxfCode.ExtendedDataAsciiString, section),
+                new TypedValue((int)DxfCode.ExtendedDataAsciiString, role),
+                new TypedValue((int)DxfCode.ExtendedDataInteger16, run),
+                new TypedValue((int)DxfCode.ExtendedDataReal, x0),
+                new TypedValue((int)DxfCode.ExtendedDataReal, y0),
+                new TypedValue((int)DxfCode.ExtendedDataReal, baseZ),
+                new TypedValue((int)DxfCode.ExtendedDataReal, vExag));
+        }
+
+        private static Polyline FlushProfilePolyline(
             BlockTableRecord ms,
             Transaction tr,
             List<Point2d> points,
             ObjectId layer)
         {
-            if (points == null || points.Count < 2) return;
+            if (points == null || points.Count < 2) return null;
             var poly = new Polyline(points.Count) { LayerId = layer };
             for (int i = 0; i < points.Count; i++)
                 poly.AddVertexAt(i, points[i], 0.0, 0.0, 0.0);
             ms.AppendEntity(poly);
             tr.AddNewlyCreatedDBObject(poly, true);
+            return poly;
         }
 
         private static DBText AddText(BlockTableRecord ms, Transaction tr, ObjectId style, ObjectId layer, Point3d p, string value, double height, double rotation)
@@ -293,11 +328,14 @@ namespace MiningVolume2023.Services
         private static void EnsureFrameRegApp(Database db, Transaction tr)
         {
             var reg = (RegAppTable)tr.GetObject(db.RegAppTableId, OpenMode.ForRead);
-            if (reg.Has(FrameRegApp)) return;
-            reg.UpgradeOpen();
-            var entry = new RegAppTableRecord { Name = FrameRegApp };
-            reg.Add(entry);
-            tr.AddNewlyCreatedDBObject(entry, true);
+            foreach (var name in new[] { FrameRegApp, EditRegApp })
+            {
+                if (reg.Has(name)) continue;
+                if (!reg.IsWriteEnabled) reg.UpgradeOpen();
+                var entry = new RegAppTableRecord { Name = name };
+                reg.Add(entry);
+                tr.AddNewlyCreatedDBObject(entry, true);
+            }
         }
 
         private static double NiceStep(double raw)
