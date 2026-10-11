@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
@@ -189,11 +190,15 @@ namespace MiningVolume2023.UI
                 var progress=new Progress<string>(s=>_status.Text=s);
                 _status.Text="Đang tính giao TIN và lưới ô vuông...";
                 var cts=_cts;
+                var watch = Stopwatch.StartNew();
                 var result=await Task.Run(()=>new GridVolumeCalculator().Calculate(existing,design,
                     options,(done,total)=>((IProgress<string>)progress).Report(
                         "Đang tính ô "+done.ToString("n0")+"/"+total.ToString("n0")),
                     cts.Token));
                 GridWorkflowService.Commit(result,options,existing,design,rx,ry);
+                watch.Stop();
+                st.GridCalculatedUtc = DateTime.UtcNow;
+                st.GridCalculationSeconds = watch.Elapsed.TotalSeconds;
                 _status.Text=result.IsComplete
                     ? "Đã tính "+result.Cells.Count.ToString("n0")+" ô. Đào "+
                         result.TotalCutVolume.ToString("n2")+" m³; đắp "+
