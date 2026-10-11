@@ -241,6 +241,7 @@ namespace MiningVolume2023.UI
 
         private void AssignSectionRegion()
         {
+            if (!LicenseUiGuard.Check()) return;
             var body = Selected();
             if (body == null) { MissingSelection(); return; }
             if (!body.HasPairedOutcrops)
@@ -266,6 +267,7 @@ namespace MiningVolume2023.UI
 
         private void UpdateSectionRegions()
         {
+            if (!LicenseUiGuard.Check()) return;
             try
             {
                 var result=MineralSectionRegionService.UpdateAll();
@@ -282,6 +284,7 @@ namespace MiningVolume2023.UI
 
         private void ToggleAbsentSection()
         {
+            if (!LicenseUiGuard.Check()) return;
             var body=Selected();
             if(body==null){MissingSelection();return;}
             if(!body.HasPairedOutcrops)
@@ -320,6 +323,7 @@ namespace MiningVolume2023.UI
 
         private void CalculateMineralVolumes()
         {
+            if (!LicenseUiGuard.Check()) return;
             try
             {
                 SaveDensity();
@@ -343,6 +347,7 @@ namespace MiningVolume2023.UI
 
         private void ExportMineralExcel()
         {
+            if (!LicenseUiGuard.Check()) return;
             try
             {
                 SaveDensity();
