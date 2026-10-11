@@ -1,0 +1,139 @@
+using System;
+using Autodesk.AutoCAD.Colors;
+using Autodesk.AutoCAD.DatabaseServices;
+using Autodesk.AutoCAD.Geometry;
+using MiningVolume.Core.Volumes;
+
+namespace MiningVolume2023.Services
+{
+    /// <summary>
+    /// Xuất bảng AutoCAD bằng đối tượng TABLE gốc, không render thành ảnh.
+    /// Không tự xóa bảng cũ: kết quả do người dùng có thể đã hiệu chỉnh/bàn giao.
+    /// </summary>
+    internal static class CadVolumeTableService
+    {
+        internal const string OutputLayer = "MV_KL_BANG";
+        private const double RowHeight = 8.0;
+        private const double TableGap = 28.0;
+
+        public static void Insert(Database database, VolumeResult result, Point3d insertion)
+        {
+            if (database == null) throw new ArgumentNullException(nameof(database));
+            if (result == null) throw new InvalidOperationException("Chưa có kết quả khối lượng để xuất CAD.");
+            if (result.Intervals == null || result.Levels == null)
+                throw new InvalidOperationException("Kết quả khối lượng chưa có đầy đủ dữ liệu chi tiết.");
+            if (result.Intervals.Count > 1500 || result.Levels.Count > 1500)
+                throw new InvalidOperationException("Bảng quá 1.500 dòng; hãy xuất Excel hoặc chia phạm vi CAD để tránh quá tải bản vẽ.");
+            if (!IsFinite(result.TotalCutVolume) || !IsFinite(result.TotalFillVolume))
+                throw new InvalidOperationException("Kết quả khối lượng không hợp lệ (NaN/Infinity).");
+
+            using (var tr = database.TransactionManager.StartTransaction())
+            {
+                var layer = EnsureOutputLayer(database, tr);
+                var bt = (BlockTable)tr.GetObject(database.BlockTableId, OpenMode.ForRead);
+                var model = (BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForWrite);
+
+                double x = insertion.X;
+                double y = insertion.Y;
+
+                var summary = NewTable(database, layer, 7, 2, new Point3d(x, y, 0), 54);
+                Set(summary, 0, "IMSAT VOLUME – TỔNG HỢP KHỐI LƯỢNG", "Giá trị");
+                Set(summary, 1, "Thời điểm xuất", DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss"));
+                Set(summary, 2, "Tổng khối lượng đào, m³", F(result.TotalCutVolume));
+                Set(summary, 3, "Tổng khối lượng đắp, m³", F(result.TotalFillVolume));
+                Set(summary, 4, "Chênh lệch đào − đắp, m³", F(result.NetVolume));
+                Set(summary, 5, "Số khoảng mặt cắt", result.Intervals.Count.ToString());
+                Set(summary, 6, "Phát triển", "Bùi Thế Nam · 0967280686");
+                Append(model, tr, summary);
+                y -= RowHeight * 7 + TableGap;
+
+                var interval = NewTable(database, layer, result.Intervals.Count + 1, 9, new Point3d(x, y, 0), 27);
+                Set(interval, 0, "STT", "MC đầu", "MC cuối", "L (m)", "F đào đầu", "F đào cuối",
+                    "V đào (m³)", "V đắp (m³)", "Ghi chú");
+                for (int i = 0; i < result.Intervals.Count; i++)
+                {
+                    var v = result.Intervals[i];
+                    Validate(v.CutVolume, v.FillVolume, v.Distance, v.CutAreaStart, v.CutAreaEnd);
+                    Set(interval, i + 1, (i + 1).ToString(), v.StartSection, v.EndSection, F(v.Distance),
+                        F(v.CutAreaStart), F(v.CutAreaEnd), F(v.CutVolume), F(v.FillVolume), v.Note);
+                }
+                Append(model, tr, interval);
+                y -= RowHeight * (result.Intervals.Count + 1) + TableGap;
+
+                var levels = NewTable(database, layer, result.Levels.Count + 1, 6, new Point3d(x, y, 0), 30);
+                Set(levels, 0, "STT", "Tầng/mức", "Cao độ dưới", "Cao độ trên", "V đào (m³)", "V đắp (m³)");
+                for (int i = 0; i < result.Levels.Count; i++)
+                {
+                    var level = result.Levels[i];
+                    Validate(level.CutVolume, level.FillVolume, level.Band.LowerZ, level.Band.UpperZ);
+                    Set(levels, i + 1, (i + 1).ToString(), level.Band.Name,
+                        F(level.Band.LowerZ), F(level.Band.UpperZ), F(level.CutVolume), F(level.FillVolume));
+                }
+                Append(model, tr, levels);
+                tr.Commit();
+            }
+        }
+
+        private static void Validate(params double[] values)
+        {
+            foreach (double value in values)
+                if (!IsFinite(value)) throw new InvalidOperationException("Bảng khối lượng chứa giá trị không hữu hạn.");
+        }
+
+        private static bool IsFinite(double value)
+        {
+            return !double.IsNaN(value) && !double.IsInfinity(value);
+        }
+
+        private static string F(double value) => value.ToString("0.00");
+
+        private static Autodesk.AutoCAD.DatabaseServices.Table NewTable(Database db, ObjectId layer, int rows, int columns, Point3d point, double width)
+        {
+            var table = new Autodesk.AutoCAD.DatabaseServices.Table
+            {
+                LayerId = layer,
+                TableStyle = db.Tablestyle,
+                Position = point
+            };
+            table.SetSize(rows, columns);
+            table.SetRowHeight(RowHeight);
+            table.SetColumnWidth(width);
+            return table;
+        }
+
+        private static void Set(Autodesk.AutoCAD.DatabaseServices.Table table, int row, params string[] cells)
+        {
+            for (int col = 0; col < cells.Length; col++)
+                table.Cells[row, col].TextString = cells[col] ?? string.Empty;
+        }
+
+        private static void Append(BlockTableRecord model, Transaction tr, Autodesk.AutoCAD.DatabaseServices.Table table)
+        {
+            // Để nguyên đối tượng TABLE native: người dùng vẫn chỉnh được cell trong CAD.
+            table.GenerateLayout();
+            model.AppendEntity(table);
+            tr.AddNewlyCreatedDBObject(table, true);
+        }
+
+        private static ObjectId EnsureOutputLayer(Database db, Transaction tr)
+        {
+            var layers = (LayerTable)tr.GetObject(db.LayerTableId, OpenMode.ForRead);
+            if (layers.Has(OutputLayer))
+            {
+                var existing = (LayerTableRecord)tr.GetObject(layers[OutputLayer], OpenMode.ForRead);
+                if (existing.IsLocked || existing.IsFrozen || existing.IsOff)
+                    throw new InvalidOperationException("Layer MV_KL_BANG đang khóa/đóng băng/tắt. Hãy bật layer trước khi xuất.");
+                return layers[OutputLayer];
+            }
+            layers.UpgradeOpen();
+            var record = new LayerTableRecord
+            {
+                Name = OutputLayer,
+                Color = Color.FromColorIndex(ColorMethod.ByAci, 7)
+            };
+            var id = layers.Add(record);
+            tr.AddNewlyCreatedDBObject(record, true);
+            return id;
+        }
+    }
+}
