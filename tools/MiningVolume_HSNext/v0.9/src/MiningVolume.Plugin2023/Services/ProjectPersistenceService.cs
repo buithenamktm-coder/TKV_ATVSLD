@@ -144,6 +144,12 @@ namespace MiningVolume2023.Services
                 VerticalScale = state.VerticalScale,
                 DeveloperName = state.DeveloperName,
                 DeveloperContact = state.DeveloperContact,
+                MiningUnitGroup = state.MiningUnitGroup,
+                MiningUnitName = state.MiningUnitName,
+                VolumeCalculatedUtc = state.VolumeCalculatedUtc,
+                VolumeCalculationSeconds = state.VolumeCalculationSeconds,
+                GridCalculatedUtc = state.GridCalculatedUtc,
+                GridCalculationSeconds = state.GridCalculationSeconds,
                 HadProfiles = state.SectionProfiles.Count > 0,
                 HadVolumeResult = state.VolumeResult != null,
                 TinRegionHandle = state.TinRegionHandle
@@ -225,8 +231,18 @@ namespace MiningVolume2023.Services
             state.ToLevel = snap.ToLevel;
             state.HorizontalScale = PositiveOr(snap.HorizontalScale, 1000);
             state.VerticalScale = PositiveOr(snap.VerticalScale, 500);
-            state.DeveloperName = string.IsNullOrWhiteSpace(snap.DeveloperName) ? "Bùi Thế Nam" : snap.DeveloperName;
-            state.DeveloperContact = string.IsNullOrWhiteSpace(snap.DeveloperContact) ? "Điện thoại: 0967280686" : snap.DeveloperContact;
+            state.DeveloperName = "Bùi Thế Nam";
+            state.DeveloperContact = "ĐT/Zalo: 0967280686";
+            state.MiningUnitGroup = snap.MiningUnitGroup == MiningUnitCatalog.Mineral
+                ? MiningUnitCatalog.Mineral : MiningUnitCatalog.Coal;
+            state.MiningUnitName = snap.MiningUnitName ?? string.Empty;
+            // A saved calculation timestamp is not proof that the reconstructed
+            // source TIN and resulting geometry will match. Keep its provenance
+            // only if rebuild is enabled and succeeds.
+            state.VolumeCalculatedUtc = null;
+            state.VolumeCalculationSeconds = null;
+            state.GridCalculatedUtc = null;
+            state.GridCalculationSeconds = null;
             if (snap.MineralBodies != null)
             {
                 var seenIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
