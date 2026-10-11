@@ -103,6 +103,79 @@ internal static class CoreRegression
                 Check(v.Cells.Count==1&&!v.IsComplete&&Math.Abs(v.TotalNoDataArea-200)<1e-7,
                     "Grid system hid missing TIN area");
             },
+            ["mineral_volume_multiple_seams_and_stripping"] = ()=>{
+                var band=new LevelBand(1,0,10);
+                var excavation=new VolumeResult(new[]{band},
+                    new[]{new SectionIntervalVolume{StartSection="MC-01",EndSection="MC-02",
+                        Distance=10,CutVolume=40,FillVolume=0}},
+                    Array.Empty<LevelVolumeSummary>(),
+                    new[]{new SectionBandAreas("MC-01",0,new[]{new BandArea(band,10,0)}),
+                        new SectionBandAreas("MC-02",10,new[]{new BandArea(band,10,0)})},
+                    Array.Empty<string>());
+                var seams=new[]{new MineralSeamInput{Id="A",Name="Vỉa 8",DensityTonPerCubicMetre=1.4},
+                    new MineralSeamInput{Id="B",Name="Vỉa 9",DensityTonPerCubicMetre=2.5}};
+                var data=new[]{
+                    new MineralSectionInput{BodyId="A",SectionName="MC-01",AreaSquareMetres=2},
+                    new MineralSectionInput{BodyId="A",SectionName="MC-02",AreaSquareMetres=2},
+                    new MineralSectionInput{BodyId="B",SectionName="MC-01",AreaSquareMetres=1},
+                    new MineralSectionInput{BodyId="B",SectionName="MC-02",AbsentConfirmed=true}
+                };
+                var result=MineralVolumeCalculator.Calculate(excavation,seams,data);
+                Check(Math.Abs(result.Bodies[0].VolumeCubicMetres-20)<1e-9,
+                    "Seam 8 volume 20m3");
+                Check(Math.Abs(result.Bodies[1].VolumeCubicMetres-10.0/3)<1e-9,
+                    "Pyramidal vanishing seam 9 volume 3.3333m3");
+                Check(Math.Abs(result.Bodies[0].MassTonnes-28)<1e-9,
+                    "Seam 8 20m3 times 1.4t/m3");
+                Check(Math.Abs(result.WasteCubicMetres-(40-20-10.0/3))<1e-9,
+                    "Waste should equal excavation minus mineral");
+                Check(result.StrippingRatioCubicMetresPerTonne.HasValue&&result.StrippingRatioCubicMetresPerCubicMetre.HasValue,
+                    "Stripping ratios must be reported distinctly in m3/t and m3/m3");
+            },
+            ["mineral_volume_missing_section_must_not_be_zero"] = ()=>{
+                var band=new LevelBand(1,0,10);
+                var excavation=new VolumeResult(new[]{band},
+                    new[]{new SectionIntervalVolume{StartSection="S1",EndSection="S2",
+                        Distance=20,CutVolume=300}},
+                    Array.Empty<LevelVolumeSummary>(),
+                    new[]{new SectionBandAreas("S1",0,new[]{new BandArea(band,15,0)}),
+                        new SectionBandAreas("S2",20,new[]{new BandArea(band,15,0)})},
+                    Array.Empty<string>());
+                var seam=new[]{new MineralSeamInput{Id="A",Name="Vỉa A",DensityTonPerCubicMetre=1.3}};
+                bool blocked=false;
+                try{
+                    MineralVolumeCalculator.Calculate(excavation,seam,
+                        new[]{new MineralSectionInput{BodyId="A",SectionName="S1",AreaSquareMetres=2}});
+                }catch(InvalidOperationException){blocked=true;}
+                Check(blocked,"Missing section cannot silently count zero");
+                var confirmed=new[]{new MineralSectionInput{BodyId="A",SectionName="S1",AreaSquareMetres=2},
+                    new MineralSectionInput{BodyId="A",SectionName="S2",AbsentConfirmed=true}};
+                var result=MineralVolumeCalculator.Calculate(excavation,seam,confirmed);
+                Check(Math.Abs(result.TotalMineralCubicMetres-40.0/3)<1e-9,
+                    "Confirmed absent end must use pyramid, expected 13.3333m3");
+            },
+            ["mineral_volume_rejects_excess_seam_and_bad_density"] = ()=>{
+                var band=new LevelBand(1,0,10);
+                var excavation=new VolumeResult(new[]{band},
+                    new[]{new SectionIntervalVolume{StartSection="S1",EndSection="S2",
+                        Distance=10,CutVolume=10}},
+                    Array.Empty<LevelVolumeSummary>(),
+                    new[]{new SectionBandAreas("S1",0,new[]{new BandArea(band,10,0)}),
+                        new SectionBandAreas("S2",10,new[]{new BandArea(band,10,0)})},
+                    Array.Empty<string>());
+                var seam=new[]{new MineralSeamInput{Id="A",Name="Vỉa A",DensityTonPerCubicMetre=1.3}};
+                var areas=new[]{new MineralSectionInput{BodyId="A",SectionName="S1",AreaSquareMetres=2},
+                    new MineralSectionInput{BodyId="A",SectionName="S2",AreaSquareMetres=2}};
+                bool overcut=false;
+                try{MineralVolumeCalculator.Calculate(excavation,seam,areas);}
+                catch(InvalidOperationException){overcut=true;}
+                Check(overcut,"Mineral volume exceeding total excavation must block");
+                seam[0].DensityTonPerCubicMetre=0;
+                bool invalid=false;
+                try{MineralVolumeCalculator.Calculate(excavation,seam,areas);}
+                catch(InvalidOperationException){invalid=true;}
+                Check(invalid,"Density zero must not silently convert to 0 tonnes");
+            },
             ["mineral_section_polygon_inside_cut"] = ()=>{
                 var line=new SectionLine(1,"MC-01",0,new Vec2(1,0),new Vec2(0,1),
                     new[]{new SectionSpan(0,20)});
