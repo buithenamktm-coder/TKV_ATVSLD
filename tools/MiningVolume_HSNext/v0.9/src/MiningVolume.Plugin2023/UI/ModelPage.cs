@@ -362,6 +362,14 @@ namespace MiningVolume2023.UI
         {
             if (_busy || !LicenseUiGuard.Check()) return;
             var role=CurrentRole;
+            var startingDocument=Autodesk.AutoCAD.ApplicationServices.Application
+                .DocumentManager.MdiActiveDocument;
+            if(startingDocument==null)
+            {
+                MessageBox.Show(this,"Chưa mở bản vẽ AutoCAD.","IMSAT VOLUME",
+                    MessageBoxButtons.OK,MessageBoxIcon.Warning);
+                return;
+            }
             if (MessageBox.Show(this,
                 "TIN THỬ NGHIỆM – TRUNG BÌNH Z\\r\\n\\r\\n"+
                 "Gộp tất cả đỉnh trùng XY từ đối tượng đang dùng bằng Z trung bình. "+
@@ -387,6 +395,10 @@ namespace MiningVolume2023.UI
                 result=await Task.Run(() =>
                     MeanZPreviewWorkflowService.Build(role, progress, token), token);
                 token.ThrowIfCancellationRequested();
+                if (Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
+                    != startingDocument)
+                    throw new InvalidOperationException(
+                        "Bản vẽ CAD đã chuyển trong khi dựng TIN thử nghiệm; không ghi vào bản vẽ khác.");
                 int count=MeanZPreviewWorkflowService.Draw(result);
                 string info=
                     "Đã tạo TIN THỬ NGHIỆM trên layer: "+result.Layer+
