@@ -41,6 +41,13 @@ namespace MiningVolume2023.Services
         [DataMember(Order = 27)] public double GridSizeX { get; set; }
         [DataMember(Order = 28)] public double GridSizeY { get; set; }
         [DataMember(Order = 29)] public double GridRotationDegrees { get; set; }
+        // Additive fields in format V2: older DWGs still deserialize correctly.
+        [DataMember(Order = 30)] public string MiningUnitGroup { get; set; }
+        [DataMember(Order = 31)] public string MiningUnitName { get; set; }
+        [DataMember(Order = 32)] public DateTime? VolumeCalculatedUtc { get; set; }
+        [DataMember(Order = 33)] public double? VolumeCalculationSeconds { get; set; }
+        [DataMember(Order = 34)] public DateTime? GridCalculatedUtc { get; set; }
+        [DataMember(Order = 35)] public double? GridCalculationSeconds { get; set; }
     }
 
     [DataContract]
