@@ -25,6 +25,7 @@ namespace MiningVolume2023.UI
         private readonly Button _build;
         private readonly Button _buildBoth;
         private readonly Button _toggleTin;
+        private readonly Button _view3D;
         private readonly List<RowRef> _rows = new List<RowRef>();
         private bool _busy;
 
@@ -68,9 +69,12 @@ namespace MiningVolume2023.UI
             _buildBoth.Width = 205;
             _toggleTin = Button("Ẩn TIN", (s, e) => ToggleTin());
             _toggleTin.Width = 90;
+            _view3D = Button("VIEW TIN 3D", (s, e) => ViewTin3D());
+            _view3D.Width = 115;
             second.Controls.Add(_build);
             second.Controls.Add(_buildBoth);
             second.Controls.Add(_toggleTin);
+            second.Controls.Add(_view3D);
             _progress = new ProgressBar { Width = 150, Height = 24, Style = ProgressBarStyle.Marquee, Visible = false, MarqueeAnimationSpeed = 25 };
             second.Controls.Add(_progress);
             Controls.Add(second);
@@ -158,6 +162,7 @@ namespace MiningVolume2023.UI
 
             _toggleTin.Text = s.TinVisible ? "Ẩn TIN" : "Hiện TIN";
             _toggleTin.Enabled = s.Tin != null && !_busy;
+            _view3D.Enabled = s.IsTinCurrent && !_busy;
             _build.Enabled = !_busy && s.Source != null && s.Source.Entities.Count > 0;
             _buildBoth.Enabled = !_busy &&
                 ProjectState.Current.Existing.Source != null && ProjectState.Current.Existing.Source.Entities.Count > 0 &&
@@ -346,6 +351,19 @@ namespace MiningVolume2023.UI
                 MessageBoxIcon.Warning);
         }
 
+        private void ViewTin3D()
+        {
+            if (_busy) return;
+            try
+            {
+                Tin3DViewService.Start(CurrentRole);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.Message, "Xem TIN 3D", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+        }
+
         private void ToggleTin()
         {
             var s = CurrentSession;
@@ -362,6 +380,7 @@ namespace MiningVolume2023.UI
                 ProjectState.Current.Existing.Source != null && ProjectState.Current.Existing.Source.Entities.Count > 0 &&
                 ProjectState.Current.Design.Source != null && ProjectState.Current.Design.Source.Entities.Count > 0;
             _toggleTin.Enabled = !busy && CurrentSession.Tin != null;
+            _view3D.Enabled = !busy && CurrentSession.IsTinCurrent;
             _model.Enabled = !busy;
             _grid.Enabled = !busy;
             _progress.Visible = busy;

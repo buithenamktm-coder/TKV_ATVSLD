@@ -181,6 +181,10 @@ namespace MiningVolume2023
         [CommandMethod("MV_PROJECT", CommandFlags.Session)] public static void OpenProject() => Open(AppPage.Project);
         [CommandMethod("MV_DATA", CommandFlags.Session)] public static void OpenData() => Open(AppPage.Data);
         [CommandMethod("MV_MODEL", CommandFlags.Session)] public static void OpenModel() => Open(AppPage.Model);
+        [CommandMethod("MV_VIEW3D_HT", CommandFlags.Session)]
+        public static void View3DExisting() => Tin3DViewService.Start(ModelRole.Existing);
+        [CommandMethod("MV_VIEW3D_TK", CommandFlags.Session)]
+        public static void View3DDesign() => Tin3DViewService.Start(ModelRole.Design);
         [CommandMethod("MV_SECTION", CommandFlags.Session)] public static void OpenSection() => Open(AppPage.Section);
         [CommandMethod("MV_VOLUME", CommandFlags.Session)] public static void OpenVolume() => Open(AppPage.Volume);
         [CommandMethod("MV_EXPORT", CommandFlags.Session)] public static void OpenExport() => Open(AppPage.Export);
