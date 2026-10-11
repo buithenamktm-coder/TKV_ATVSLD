@@ -43,6 +43,8 @@ namespace MiningVolume2023.Services
         private static ReportSheet Info(GridVolumeReport grid, GridVolumeOptions opt)
         {
             var s = Sheet("THÔNG TIN", "THÔNG TIN TÍNH KHỐI LƯỢNG LƯỚI", "Chỉ tiêu", "Giá trị");
+            s.ColumnWidths[0] = 45;
+            s.ColumnWidths[1] = 45;
             s.Notes.Add("Khối lượng hình học chính thức phải được tính lại trong AutoCAD sau thay đổi TIN/ranh lưới.");
             var state = ProjectState.Current;
             Row(s,"Đơn vị khai thác", string.IsNullOrWhiteSpace(state.MiningUnitName) ? "Chưa thiết lập" : state.MiningUnitName);
@@ -152,6 +154,9 @@ namespace MiningVolume2023.Services
         {
             var s=Sheet("TỔNG HỢP KHỐI LƯỢNG","KHỐI LƯỢNG TỔNG HỢP LƯỚI Ô VUÔNG",
                 "Chỉ tiêu","Giá trị","Đơn vị");
+            s.ColumnWidths[0] = 43;
+            s.ColumnWidths[1] = 22;
+            s.ColumnWidths[2] = 34;
             s.Notes.Add("Không phát hành kết quả chính thức khi còn diện tích thiếu dữ liệu.");
             int end=FirstDataRow+grid.Cells.Count-1;
             string from="'CHI TIẾT Ô LƯỚI'!";
