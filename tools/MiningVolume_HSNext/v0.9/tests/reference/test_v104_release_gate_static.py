@@ -226,7 +226,7 @@ def test_palette_primary_command_is_tkl_with_legacy_alias():
 def test_main_palette_shows_fixed_developer_name():
     ui = read("src/MiningVolume.Plugin2023/UI/MainPaletteControl.cs")
     assert 'Phát triển: Bùi Thế Nam' in ui
-    assert 'Điện thoại: 0967280686' in ui
+    assert 'ĐT/Zalo: 0967280686' in ui
     assert 'Height = 66' in ui
 
 
