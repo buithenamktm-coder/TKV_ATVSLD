@@ -179,7 +179,7 @@ def test_installer_admin_check_and_success_message_match_palette_policy():
     assert 'exec.Command("fltmc").Run()==nil' in installer
     assert 'exec.Command("net","session")' not in installer
     assert "Phần mềm đang được tiếp tục cải tiến và hoàn thiện." in installer
-    assert "Điện thoại: 0967280686" in installer
+    assert "ĐT/Zalo: 0967280686" in installer
     assert "Setup không tự mở AutoCAD" not in installer
 
 
