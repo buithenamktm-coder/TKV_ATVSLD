@@ -8,6 +8,7 @@ using System.Text.Json;
 using System.Threading;
 using MiningVolume.Core.Geometry;
 using MiningVolume.Core.Grid;
+using MiningVolume.Core.Sections;
 using MiningVolume.Core.Model;
 using MiningVolume.Core.Surface;
 using MiningVolume.Surface;
@@ -101,6 +102,47 @@ internal static class CoreRegression
                 var v=new GridVolumeCalculator().Calculate(existing,design,new GridVolumeOptions{Boundary=ring,SizeX=20,SizeY=20});
                 Check(v.Cells.Count==1&&!v.IsComplete&&Math.Abs(v.TotalNoDataArea-200)<1e-7,
                     "Grid system hid missing TIN area");
+            },
+            ["mineral_section_polygon_inside_cut"] = ()=>{
+                var line=new SectionLine(1,"MC-01",0,new Vec2(1,0),new Vec2(0,1),
+                    new[]{new SectionSpan(0,20)});
+                var seg=new SectionProfileSegment(0,20,new Vec2(0,0),new Vec2(20,0),
+                    10,10,0,0);
+                var profile=new SectionProfile(line,new[]{seg},200,0,Array.Empty<string>());
+                var region=new[]{new Vec2(5,2),new Vec2(15,2),new Vec2(15,7),new Vec2(5,7)};
+                double area=MineralSectionPolygonCalculator.ValidateAndMeasure(profile,region);
+                Check(Math.Abs(area-50)<1e-9,"Mineral 10x5 must be 50m2");
+            },
+            ["mineral_section_polygon_outside_cut_blocks"] = ()=>{
+                var line=new SectionLine(1,"MC-01",0,new Vec2(1,0),new Vec2(0,1),
+                    new[]{new SectionSpan(0,20)});
+                var seg=new SectionProfileSegment(0,20,new Vec2(0,0),new Vec2(20,0),
+                    10,10,0,0);
+                var profile=new SectionProfile(line,new[]{seg},200,0,Array.Empty<string>());
+                var region=new[]{new Vec2(5,2),new Vec2(15,2),new Vec2(15,11),new Vec2(5,11)};
+                bool rejected=false;
+                try {MineralSectionPolygonCalculator.ValidateAndMeasure(profile,region);}
+                catch(InvalidOperationException){rejected=true;}
+                Check(rejected,"Mineral region outside excavation must reject");
+            },
+            ["mineral_section_polygon_mixed_zero_crossing"] = ()=>{
+                var line=new SectionLine(1,"MC-01",0,new Vec2(1,0),new Vec2(0,1),
+                    new[]{new SectionSpan(0,20)});
+                var seg=new SectionProfileSegment(0,20,new Vec2(0,0),new Vec2(20,0),
+                    -10,10,0,0);
+                var profile=new SectionProfile(line,new[]{seg},50,50,Array.Empty<string>());
+                var region=new[]{new Vec2(15,0),new Vec2(20,0),new Vec2(20,10),new Vec2(15,5)};
+                double area=MineralSectionPolygonCalculator.ValidateAndMeasure(profile,region);
+                Check(Math.Abs(area-37.5)<1e-8,"Cut-sided trapezoid expected 37.5m2");
+            },
+            ["mineral_section_overlap_detected"] = ()=>{
+                var a=new[]{new Vec2(0,0),new Vec2(10,0),new Vec2(10,10),new Vec2(0,10)};
+                var b=new[]{new Vec2(5,5),new Vec2(15,5),new Vec2(15,15),new Vec2(5,15)};
+                var c=new[]{new Vec2(15,15),new Vec2(25,15),new Vec2(25,25),new Vec2(15,25)};
+                Check(Math.Abs(MineralSectionPolygonCalculator.OverlapArea(a,b)-25)<1e-8,
+                    "Overlap 5x5 must report 25m2");
+                Check(MineralSectionPolygonCalculator.OverlapArea(a,c)<1e-8,
+                    "Unrelated regions falsely overlap");
             },
             ["grid_exact_constant_cut"] = ()=>{
                 var a=new[]{new Triangle3(P(0,0,2),P(20,0,2),P(20,20,2)),
