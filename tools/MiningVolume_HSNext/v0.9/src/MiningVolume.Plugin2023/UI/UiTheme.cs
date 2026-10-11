@@ -1,5 +1,6 @@
 using System;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.Windows.Forms;
 
 namespace MiningVolume2023.UI
@@ -102,6 +103,7 @@ namespace MiningVolume2023.UI
             if (button.MinimumSize.Height < 34)
                 button.MinimumSize = new Size(button.MinimumSize.Width, 34);
             button.UseCompatibleTextRendering = true;
+            ApplyRoundedButtonMask(button);
 
             string text = (button.Text ?? string.Empty).Trim().ToUpperInvariant();
             if (IsPrimary(text))
@@ -125,6 +127,41 @@ namespace MiningVolume2023.UI
                 button.ForeColor = TextStrong;
                 button.FlatAppearance.MouseOverBackColor = Soft;
                 button.FlatAppearance.MouseDownBackColor = Color.FromArgb(225, 233, 239);
+            }
+        }
+
+        /// <summary>
+        /// Bo tròn góc 9 px ở kích thước Windows/Palette hiện tại. Recompute
+        /// Region sau Resize để không bị cắt chữ khi DPI hoặc cửa sổ thay đổi.
+        /// Không vẽ nút thành ảnh; WinForms Button giữ nguyên tương tác.
+        /// </summary>
+        internal static void ApplyRoundedButtonMask(Button button)
+        {
+            if (button == null) return;
+            button.Resize -= RefreshButtonMask;
+            button.Resize += RefreshButtonMask;
+            button.HandleCreated -= RefreshButtonMask;
+            button.HandleCreated += RefreshButtonMask;
+            RefreshButtonMask(button, EventArgs.Empty);
+        }
+
+        private static void RefreshButtonMask(object sender, EventArgs e)
+        {
+            var button = sender as Button;
+            if (button == null || button.Width < 12 || button.Height < 12) return;
+            int radius = Math.Min(9, Math.Min(button.Width, button.Height) / 3);
+            int diameter = radius * 2;
+            using (var path = new GraphicsPath())
+            {
+                var rect = new Rectangle(0, 0, button.Width - 1, button.Height - 1);
+                path.AddArc(rect.Left, rect.Top, diameter, diameter, 180, 90);
+                path.AddArc(rect.Right - diameter, rect.Top, diameter, diameter, 270, 90);
+                path.AddArc(rect.Right - diameter, rect.Bottom - diameter, diameter, diameter, 0, 90);
+                path.AddArc(rect.Left, rect.Bottom - diameter, diameter, diameter, 90, 90);
+                path.CloseFigure();
+                var previous = button.Region;
+                button.Region = new Region(path);
+                if (previous != null) previous.Dispose();
             }
         }
 
