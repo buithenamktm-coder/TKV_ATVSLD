@@ -70,6 +70,7 @@ namespace MiningVolume2023.Services
         {
             var s = NewSheet("Thông tin", "THÔNG TIN BÁO CÁO IMSAT VOLUME", new[] { "Nội dung", "Giá trị" }, 45, 45);
             s.Landscape = false;
+            s.AutoFilter = false;
             s.Notes.Add("Báo cáo được xuất tự động từ IMSAT VOLUME.");
             AddKV(s, "Đơn vị khai thác", EmptyAsNotSet(st.MiningUnitName));
             AddKV(s, "Nhóm khai thác", st.MiningUnitGroup);
@@ -238,6 +239,8 @@ namespace MiningVolume2023.Services
             var s = NewSheet("Tổng khối", "BẢNG TỔNG HỢP KHỐI LƯỢNG",
                 new[] { "Chỉ tiêu", "Đơn vị", "Giá trị" }, 45, 15, 45);
             s.Landscape = false;
+            s.AutoFilter = false;
+            s.HasSignatures = true;
             s.Notes.Add("Người phát triển: " + ExportOptions.FixedDeveloperName);
             s.Notes.Add(ExportOptions.FixedDeveloperContact);
 
