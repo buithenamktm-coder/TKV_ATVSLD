@@ -407,6 +407,12 @@ namespace MiningVolume2023.UI
                             progress.Report($"Đang tính mặt cắt {done:n0}/{total:n0}: {name}...")));
 
                 watch.Stop();
+                if (!ReferenceEquals(activeDoc, Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument) ||
+                    !ReferenceEquals(system, state.SectionSystem) ||
+                    !ReferenceEquals(existing, state.Existing.Tin) ||
+                    !ReferenceEquals(design, state.Design.Tin))
+                    throw new InvalidOperationException(
+                        "Bản vẽ, hệ mặt cắt hoặc TIN đã đổi trong khi tính. Không xuất kết quả cũ sang bản vẽ khác.");
                 int valid = profiles.Count(x => x.HasData);
                 _status.Text =
                     $"Tính xong {profiles.Count:n0} mặt cắt ({valid:n0} đủ hai TIN) trong {watch.Elapsed.TotalSeconds:0.0}s. " +
@@ -415,6 +421,12 @@ namespace MiningVolume2023.UI
 
                 var ins = SelectionService.PickInsertionPoint("Chọn điểm chèn hệ mặt cắt: ");
                 if (!ins.HasValue) return;
+                if (!ReferenceEquals(activeDoc, Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument) ||
+                    !ReferenceEquals(system, state.SectionSystem) ||
+                    !ReferenceEquals(existing, state.Existing.Tin) ||
+                    !ReferenceEquals(design, state.Design.Tin))
+                    throw new InvalidOperationException(
+                        "Bản vẽ hoặc mô hình đã đổi trong khi chọn điểm chèn. Đã giữ nguyên kết quả cũ.");
 
                 var drawWatch = Stopwatch.StartNew();
                 _status.Text = $"Đang vẽ mặt cắt 0/{profiles.Count:n0} xuống AutoCAD...";
