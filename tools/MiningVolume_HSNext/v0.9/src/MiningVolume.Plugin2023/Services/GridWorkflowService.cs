@@ -16,6 +16,12 @@ namespace MiningVolume2023.Services
         private static TinSurface _design;
         private static long _revExisting, _revDesign;
 
+        public static void Invalidate()
+        {
+            _report = null; _options = null; _existing = null; _design = null;
+            _revExisting = 0; _revDesign = 0;
+        }
+
         public static bool IsCurrent
         {
             get
