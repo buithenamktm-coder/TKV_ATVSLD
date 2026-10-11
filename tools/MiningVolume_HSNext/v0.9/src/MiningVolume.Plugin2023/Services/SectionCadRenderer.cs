@@ -151,7 +151,7 @@ namespace MiningVolume2023.Services
                     areaLabel.XData=new ResultBuffer(
                         new TypedValue((int)DxfCode.ExtendedDataRegAppName,AreaRegApp),
                         new TypedValue((int)DxfCode.ExtendedDataAsciiString,p.Line.Name),
-                        new TypedValue((int)DxfCode.ExtendedDataAsciiString,db.FingerprintGuid.ToString("D")),
+                        new TypedValue((int)DxfCode.ExtendedDataAsciiString,db.FingerprintGuid.ToString()),
                         new TypedValue((int)DxfCode.ExtendedDataAsciiString,areaLabel.Handle.ToString()));
 
                     double xTick = NiceStep(width / 5.0);
@@ -308,7 +308,7 @@ namespace MiningVolume2023.Services
                 new TypedValue((int)DxfCode.ExtendedDataReal, y0),
                 new TypedValue((int)DxfCode.ExtendedDataReal, baseZ),
                 new TypedValue((int)DxfCode.ExtendedDataReal, vExag),
-                new TypedValue((int)DxfCode.ExtendedDataAsciiString,poly.Database.FingerprintGuid.ToString("D")),
+                new TypedValue((int)DxfCode.ExtendedDataAsciiString,poly.Database.FingerprintGuid.ToString()),
                 new TypedValue((int)DxfCode.ExtendedDataAsciiString,poly.Handle.ToString()));
         }
 
