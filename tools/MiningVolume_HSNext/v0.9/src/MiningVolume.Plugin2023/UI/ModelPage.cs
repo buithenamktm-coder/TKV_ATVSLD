@@ -383,10 +383,10 @@ namespace MiningVolume2023.UI
                 return;
             }
             if (MessageBox.Show(this,
-                "TIN THỬ NGHIỆM – TRUNG BÌNH Z\\r\\n\\r\\n"+
+                "TIN THỬ NGHIỆM – TRUNG BÌNH Z\r\n\r\n"+
                 "Gộp tất cả đỉnh trùng XY từ đối tượng đang dùng bằng Z trung bình. "+
                 "Đường breakline KHÔNG được giữ như cạnh bắt buộc. "+
-                "Chỉ vẽ trên layer riêng TEST_ONLY, không thay TIN hiện trạng/thiết kế chính thức.\\r\\n\\r\\n"+
+                "Chỉ vẽ trên layer riêng TEST_ONLY, không thay TIN hiện trạng/thiết kế chính thức.\r\n\r\n"+
                 "KẾT QUẢ KHÔNG DÙNG TÍNH KHỐI LƯỢNG. Tiếp tục?",
                 "IMSAT VOLUME – TIN thử nghiệm",
                 MessageBoxButtons.YesNo,MessageBoxIcon.Warning,
@@ -414,16 +414,16 @@ namespace MiningVolume2023.UI
                 int count=MeanZPreviewWorkflowService.Draw(result);
                 string info=
                     "Đã tạo TIN THỬ NGHIỆM trên layer: "+result.Layer+
-                    "\\r\\nĐỉnh nguồn: "+result.Analysis.OriginalVertexCount.ToString("n0")+
+                    "\r\nĐỉnh nguồn: "+result.Analysis.OriginalVertexCount.ToString("n0")+
                     "; đỉnh sau gộp: "+result.Analysis.Prepared.Sites.Count.ToString("n0")+
-                    "\\r\\nNhóm XY trùng: "+result.Analysis.DuplicateGroupCount.ToString("n0")+
+                    "\r\nNhóm XY trùng: "+result.Analysis.DuplicateGroupCount.ToString("n0")+
                     "; nhóm khác Z: "+result.Analysis.Conflicts.Count.ToString("n0")+
-                    "\\r\\nBreakline KHÔNG ràng buộc: "+result.Analysis.IgnoredBreaklineSegments.ToString("n0")+
-                    "\\r\\nSố tam giác toàn bộ: "+result.TotalTriangles.ToString("n0")+
+                    "\r\nBreakline KHÔNG ràng buộc: "+result.Analysis.IgnoredBreaklineSegments.ToString("n0")+
+                    "\r\nSố tam giác toàn bộ: "+result.TotalTriangles.ToString("n0")+
                     "; số mặt CAD minh họa: "+count.ToString("n0")+
                     (result.DrawIsSampled?" (đã lấy mẫu hiển thị để không treo CAD)":"")+
-                    "\\r\\n\\r\\nKHÔNG DÙNG LƯỚI NÀY ĐỂ TÍNH KHỐI LƯỢNG."+
-                    "\\r\\nCó xuất báo cáo chi tiết các vị trí Z đã gộp sang CSV không?";
+                    "\r\n\r\nKHÔNG DÙNG LƯỚI NÀY ĐỂ TÍNH KHỐI LƯỢNG."+
+                    "\r\nCó xuất báo cáo chi tiết các vị trí Z đã gộp sang CSV không?";
                 if(MessageBox.Show(this,info,"TIN Z TB – chỉ so sánh HSMo",
                     MessageBoxButtons.YesNo,MessageBoxIcon.Information)==DialogResult.Yes)
                 {
