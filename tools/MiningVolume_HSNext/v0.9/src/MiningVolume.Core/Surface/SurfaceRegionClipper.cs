@@ -193,6 +193,8 @@ namespace MiningVolume.Core.Surface
 
         private static Vec3 Interpolate(Segment3 s, double t)
         {
+            if(t==0)return s.A;
+            if(t==1)return s.B;
             return new Vec3(
                 s.A.X + (s.B.X - s.A.X) * t,
                 s.A.Y + (s.B.Y - s.A.Y) * t,

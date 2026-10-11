@@ -263,8 +263,10 @@ namespace MiningVolume2023.UI
             foreach (var entity in CurrentSession.Source.Entities)
             {
                 entity.SetEnabled(true);
-                foreach (var v in entity.Vertices) CurrentSession.Source.RestoreVertex(entity.Id,v.Index);
             }
+            CurrentSession.Source.RestoreVertices(CurrentSession.Source.Entities.SelectMany(e=>e.Vertices
+                .Where(v=>!v.IsEnabled||v.Position.Z!=v.Original.Z)
+                .Select(v=>new KeyValuePair<string,int>(e.Id,v.Index))));
             CurrentSession.Source.Touch();
             SurfaceWorkflowService.InvalidateTin(CurrentRole, clearCadLayer: true);
         }
@@ -273,13 +275,15 @@ namespace MiningVolume2023.UI
         {
             var row = SelectedRows().FirstOrDefault();
             if (row == null) { MessageBox.Show("Chọn một đỉnh cần sửa cao độ.", "Mining Volume"); return; }
+            var source=CurrentSession.Source;var role=CurrentRole;long revision=source.Revision;
             using (var form = new NumericInputDialog("Sửa cao độ Z", "Cao độ Z mới:", row.Vertex.Position.Z))
             {
                 if (form.ShowDialog(this) != DialogResult.OK) return;
                 if(!ModelEditConfirmation.Show(this,"Xác nhận sửa Z",
                     "Handle "+row.Entity.Handle+" / đỉnh "+row.Vertex.Index+"\r\nZ cũ "+row.Vertex.Position.Z+
                     " → Z mới "+form.Value+"\r\nChỉ sửa mô hình; CAD gốc giữ nguyên."))return;
-                CurrentSession.Source.OverrideVertexZ(row.Entity.Id, row.Vertex.Index, form.Value);
+                if(CurrentRole!=role || !ReferenceEquals(source,CurrentSession.Source) || source.Revision!=revision)return;
+                source.OverrideVertexZ(row.Entity.Id, row.Vertex.Index, form.Value);
                 SurfaceWorkflowService.InvalidateTin(CurrentRole, clearCadLayer: true);
             }
         }

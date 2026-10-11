@@ -172,7 +172,23 @@ namespace MiningVolume2023.Services
                         Clean(c.FirstHandle),Clean(c.LastHandle)
                     }));
                 }
+                writer.WriteLine();
+                writer.WriteLine("X;Y;Handle;Layer;Loai;Dinh;Z nguon;Delta Z nhom;Trang thai");
+                foreach(var group in data.Conflicts.OrderByDescending(c=>c.DeltaZ))
+                    foreach(var member in group.Members)
+                        writer.WriteLine(string.Join(";",new[]{
+                            group.X.ToString("R",CultureInfo.InvariantCulture),group.Y.ToString("R",CultureInfo.InvariantCulture),
+                            Clean(member.Handle),CsvText(member.Layer),member.Type.ToString(),
+                            member.VertexIndex.ToString(CultureInfo.InvariantCulture),member.Z.ToString("R",CultureInfo.InvariantCulture),
+                            group.DeltaZ.ToString("R",CultureInfo.InvariantCulture),group.NeedsReview?"CAN XU LY":"CHI THU NGHIEM"}));
             }
+        }
+        private static string CsvText(string value)
+        {
+            value=value??"";
+            var trimmed=value.TrimStart();
+            if(trimmed.Length>0 && "=+-@".IndexOf(trimmed[0])>=0)value="'"+value;
+            return "\""+value.Replace("\"","\"\"")+"\"";
         }
         private static string Clean(string value)
         {

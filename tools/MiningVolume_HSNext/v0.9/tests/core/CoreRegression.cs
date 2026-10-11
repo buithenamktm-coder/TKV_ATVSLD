@@ -175,10 +175,14 @@ internal static class CoreRegression
                 Check(m.Entities[0].Vertices[0].IsEnabled&&m.Entities[0].Vertices[1].Position.Z==7,"Restore affected another vertex");
                 Check(SourceFingerprint.Compute(m.Entities[0])==original,"Edits changed original fingerprint");
                 Check(SourceFingerprint.Compute(Entity("a",SourceEntityType.Polyline3d,P(0,0,9),P(10,0,4)))!=original,"Changed geometry accepted");
+                bool invalid=false;try{m.RestoreVertices(new[]{new KeyValuePair<string,int>("a",1),new KeyValuePair<string,int>("a",9)});}catch(ArgumentOutOfRangeException){invalid=true;}
+                Check(invalid&&m.Entities[0].Vertices[1].Position.Z==7,"Bulk restore partially applied invalid selection");
+                m.RestoreVertices(new[]{new KeyValuePair<string,int>("a",0)});
+                Check(m.Entities[0].Vertices[1].Position.Z==7,"Bulk restore reset unrelated edit");
                 var snapshot=new MiningVolume2023.Services.ProjectSnapshot {SavedUtc=DateTime.UtcNow,
                     Existing=new MiningVolume2023.Services.ModelSnapshot {EditHistory=m.EditHistory}};
                 var decoded=MiningVolume2023.Services.ProjectSnapshotCodec.Decode(MiningVolume2023.Services.ProjectSnapshotCodec.Encode(snapshot));
-                Check(decoded.Existing.EditHistory.Count==3&&decoded.Existing.EditHistory[1].NewZ==7&&decoded.Existing.EditHistory[1].VertexIndex==1,"Audit snapshot roundtrip lost data");
+                Check(decoded.Existing.EditHistory.Count==4&&decoded.Existing.EditHistory[1].NewZ==7&&decoded.Existing.EditHistory[1].VertexIndex==1,"Audit snapshot roundtrip lost data");
             },
             ["square_area_no_holes"] = ()=> {var t=Build(Prepare(Corners()));Check(t.Triangles.Count==2&&Math.Abs(t.Triangles.Sum(x=>x.Area2D)-100)<1e-9,"Square area");},
             ["grid_system_rotated_matches_no_rotation"] = ()=>{

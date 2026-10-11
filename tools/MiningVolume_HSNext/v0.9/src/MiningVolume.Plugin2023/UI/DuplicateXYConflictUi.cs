@@ -377,9 +377,8 @@ namespace MiningVolume2023.UI
                 if(!ConfirmModelEdit("Xác nhận khôi phục", "Khôi phục "+indices.Count+
                     " điểm về Z gốc và cho tham gia mô hình?\r\nCAD gốc giữ nguyên. Các kết quả tính cũ hết hiệu lực."))return;
                 if(!Current())return;
-                foreach(var index in indices) {
-                    var item=edits[index];_source.RestoreVertex(item.Entity.Id,item.Vertex.Index);
-                }
+                _source.RestoreVertices(indices.Select(index=>new KeyValuePair<string,int>(
+                    edits[index].Entity.Id,edits[index].Vertex.Index)));
                 SurfaceWorkflowService.InvalidateTin(_role,clearCadLayer:true);
                 await ScanAsync();
             }

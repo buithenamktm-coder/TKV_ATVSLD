@@ -46,3 +46,30 @@ def test_native_core_regressions_are_present():
         'mean_z_preview_strict_mode_still_rejects_conflicts',
     ):
         assert name in src
+
+
+def test_review_has_one_guarded_model_only_edit_flow():
+    ui=code("src/MiningVolume.Plugin2023/UI/DuplicateXYConflictUi.cs")
+    wrapper=code("src/MiningVolume.Plugin2023/UI/MeanZConflictReviewForm.cs")
+    confirm=code("src/MiningVolume.Plugin2023/UI/ModelEditConfirmation.cs")
+    service=code("src/MiningVolume.Plugin2023/Services/MeanZPreviewWorkflowService.cs")
+    assert "MeanZConflictReviewForm : ConflictReviewForm" in wrapper
+    assert "private async Task ExcludeVertexAsync(Row row)" in ui
+    assert "private async Task EditVertexZAsync(Row row)" in ui
+    assert "Bạn có chắc chắn muốn loại điểm này khỏi mô hình không?" in ui
+    assert 'Text="Không"' in confirm and 'Text="Đồng ý"' in confirm
+    assert "dialog.AcceptButton=no;dialog.CancelButton=no;" in confirm
+    assert "_report=null;_rows.Clear();_grid.RowCount=0;_grid.Enabled=false;" in ui
+    assert "foreach(var source in g.Sources.OrderBy" in ui
+    assert "RestoreVertices(" in ui
+    assert "Erase(" not in ui and "OpenMode.ForWrite" not in ui
+    assert service.index("if (prepared.HasBlockingConflicts)") < service.index(".BuildPrepared(")
+
+
+def test_persisted_edits_require_matching_original_geometry():
+    persistence=code("src/MiningVolume.Plugin2023/Services/ProjectPersistenceService.cs")
+    snapshot=code("src/MiningVolume.Plugin2023/Services/ProjectSnapshot.cs")
+    assert "edit.SourceFingerprint!=SourceFingerprint.Compute(entity)" in persistence
+    assert "rebuildDerived=false" in persistence
+    assert "s.EditHistory.AddRange(session.Source.EditHistory)" in persistence
+    assert "128L*1024*1024" in snapshot

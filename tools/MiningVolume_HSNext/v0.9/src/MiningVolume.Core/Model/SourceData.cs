@@ -161,6 +161,18 @@ namespace MiningVolume.Core.Model
             var e=Entities.First(x=>x.Id==id);var v=e.Vertices[vertexIndex];
             Record(e,v,"Restore vertex",v.Original.Z,true);v.Reset();Touch();
         }
+        public void RestoreVertices(IEnumerable<KeyValuePair<string,int>> selection)
+        {
+            var byId=Entities.ToDictionary(e=>e.Id,StringComparer.Ordinal);
+            var vertices=selection.Distinct().Select(item=>new {Entity=byId[item.Key],Index=item.Value}).ToList();
+            // Validate the complete selection before the first mutation.
+            foreach(var item in vertices)if(item.Index<0||item.Index>=item.Entity.Vertices.Count)
+                throw new ArgumentOutOfRangeException(nameof(selection));
+            foreach(var item in vertices) {
+                var v=item.Entity.Vertices[item.Index];Record(item.Entity,v,"Restore vertex",v.Original.Z,true);v.Reset();
+            }
+            if(vertices.Count>0)Touch();
+        }
         private void Record(SourceEntity e,ModelVertex v,string action,double z,bool enabled)
         {
             EditHistory.Add(new ModelEditRecord {Utc=DateTime.UtcNow,User=Environment.UserName,
