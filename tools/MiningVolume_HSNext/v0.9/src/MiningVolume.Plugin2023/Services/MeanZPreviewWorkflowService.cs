@@ -55,8 +55,20 @@ namespace MiningVolume2023.Services
                 throw new InvalidOperationException("Chưa nạp dữ liệu nguồn TIN thử nghiệm.");
 
             long revision = source.Revision;
+            // Honour the same optional CAD boundary as the official surface
+            // workflow. Clip on the core worker; do not touch AutoCAD objects.
+            var boundary=ProjectState.Current.HasTinRegion
+                ? ProjectState.Current.TinRegionPolygon.ToArray()
+                : null;
+            var experimentSource=source;
+            if (boundary != null && boundary.Length>=3)
+            {
+                progress?.Invoke("Giới hạn dữ liệu thử nghiệm trong vùng tạo TIN đã chọn...");
+                experimentSource=SurfaceRegionClipper.Clip(
+                    source,boundary,1e-6,cancellationToken);
+            }
             progress?.Invoke("Gộp các đỉnh trùng XY theo Z trung bình (không thay dữ liệu gốc)...");
-            var prepared = MeanZPreviewPreparer.Prepare(source, 1e-6, 1e-4, cancellationToken);
+            var prepared = MeanZPreviewPreparer.Prepare(experimentSource, 1e-6, 1e-4, cancellationToken);
 
             progress?.Invoke("Tam giác hóa toàn bộ tọa độ XY đã gộp, không ràng buộc breakline...");
             var opts = new SurfaceBuildOptions
