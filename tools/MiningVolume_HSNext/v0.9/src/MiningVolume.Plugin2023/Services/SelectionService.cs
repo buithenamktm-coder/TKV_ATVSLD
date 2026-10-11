@@ -2,6 +2,7 @@ using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.EditorInput;
 using MiningVolume.Core.Geometry;
+using System;
 using System.Collections.Generic;
 
 namespace MiningVolume2023.Services
@@ -11,6 +12,40 @@ namespace MiningVolume2023.Services
         public Vec2 Start { get; set; }
         public Vec2 End { get; set; }
         public Vec2 Vector => new Vec2(End.X - Start.X, End.Y - Start.Y);
+    }
+
+    /// <summary>
+    /// Hide the IMSAT palette only for an interactive AutoCAD prompt. The
+    /// existing controls, input values and scroll position remain intact.
+    /// Always restore after Esc, cancel, failure or success, but do not open
+    /// a palette that was already closed or belongs to another active DWG.
+    /// </summary>
+    internal sealed class CadSelectionPaletteScope : IDisposable
+    {
+        private readonly Autodesk.AutoCAD.Windows.PaletteSet _palette;
+        private readonly Document _document;
+        private readonly bool _restore;
+        private bool _disposed;
+
+        private CadSelectionPaletteScope()
+        {
+            _document = Application.DocumentManager.MdiActiveDocument;
+            _palette = EntryPoint.Palette;
+            _restore = _document != null && _palette != null && _palette.Visible;
+            if (_restore) _palette.Visible = false;
+        }
+        internal static CadSelectionPaletteScope Hide() => new CadSelectionPaletteScope();
+
+        public void Dispose()
+        {
+            if (_disposed) return;
+            _disposed = true;
+            if (!_restore || !ReferenceEquals(Application.DocumentManager.MdiActiveDocument, _document)
+                || !ReferenceEquals(EntryPoint.Palette, _palette)) return;
+            try { _palette.Visible = true; }
+            catch (ObjectDisposedException) { }
+            catch (InvalidOperationException) { }
+        }
     }
 
     public static class SelectionService
@@ -37,7 +72,9 @@ namespace MiningVolume2023.Services
                 new TypedValue((int)DxfCode.Operator, "OR>")
             });
 
-            var result = doc.Editor.GetSelection(options, filter);
+            PromptSelectionResult result;
+            using (CadSelectionPaletteScope.Hide())
+                result = doc.Editor.GetSelection(options, filter);
             if (result.Status != PromptStatus.OK || result.Value == null)
                 return null;
 
@@ -63,7 +100,9 @@ namespace MiningVolume2023.Services
                 new TypedValue((int)DxfCode.Start, "POLYLINE"),
                 new TypedValue((int)DxfCode.Operator, "OR>")
             });
-            var picked = doc.Editor.GetSelection(options, filter);
+            PromptSelectionResult picked;
+            using (CadSelectionPaletteScope.Hide())
+                picked = doc.Editor.GetSelection(options, filter);
             if (picked.Status != PromptStatus.OK || picked.Value == null) return null;
             var handles = new List<string>();
             using (var tr = doc.Database.TransactionManager.StartOpenCloseTransaction())
@@ -84,7 +123,9 @@ namespace MiningVolume2023.Services
             var opt = new PromptEntityOptions("\nChọn đường bao khép kín: ");
             opt.SetRejectMessage("\nĐối tượng phải là Polyline khép kín.");
             opt.AddAllowedClass(typeof(Polyline), true);
-            var res = doc.Editor.GetEntity(opt);
+            PromptEntityResult res;
+            using (CadSelectionPaletteScope.Hide())
+                res = doc.Editor.GetEntity(opt);
             if (res.Status != PromptStatus.OK) return null;
             using (var tr = doc.Database.TransactionManager.StartOpenCloseTransaction())
             {
@@ -102,10 +143,14 @@ namespace MiningVolume2023.Services
         {
             var doc = Application.DocumentManager.MdiActiveDocument;
             if (doc == null) return null;
-            var p1 = doc.Editor.GetPoint("\nChọn điểm thứ nhất xác định hướng mặt cắt: ");
-            if (p1.Status != PromptStatus.OK) return null;
+            PromptPointResult p1, p2;
+            using (CadSelectionPaletteScope.Hide())
+            {
+            p1 = doc.Editor.GetPoint("\nChọn điểm thứ nhất xác định hướng mặt cắt: ");
+                if (p1.Status != PromptStatus.OK) return null;
             var opt = new PromptPointOptions("\nChọn điểm thứ hai xác định hướng mặt cắt: ") { BasePoint = p1.Value, UseBasePoint = true, UseDashedLine = true };
-            var p2 = doc.Editor.GetPoint(opt);
+            p2 = doc.Editor.GetPoint(opt);
+            }
             if (p2.Status != PromptStatus.OK) return null;
             if (p1.Value.DistanceTo(p2.Value) < 1e-8)
             {
@@ -123,7 +168,9 @@ namespace MiningVolume2023.Services
         {
             var doc = Application.DocumentManager.MdiActiveDocument;
             if (doc == null) return null;
-            var p = doc.Editor.GetPoint("\n" + prompt);
+            PromptPointResult p;
+            using (CadSelectionPaletteScope.Hide())
+                p = doc.Editor.GetPoint("\n" + prompt);
             if (p.Status != PromptStatus.OK) return null;
             return new Vec2(p.Value.X, p.Value.Y);
         }
@@ -132,7 +179,9 @@ namespace MiningVolume2023.Services
         {
             var doc = Application.DocumentManager.MdiActiveDocument;
             if (doc == null) return null;
-            var p = doc.Editor.GetPoint("\n" + prompt);
+            PromptPointResult p;
+            using (CadSelectionPaletteScope.Hide())
+                p = doc.Editor.GetPoint("\n" + prompt);
             return p.Status == PromptStatus.OK ? p.Value : (Autodesk.AutoCAD.Geometry.Point3d?)null;
         }
     }
