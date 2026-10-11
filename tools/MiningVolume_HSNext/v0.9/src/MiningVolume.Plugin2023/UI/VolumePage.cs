@@ -1,5 +1,6 @@
 using System;
 using System.Drawing;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -75,8 +76,12 @@ namespace MiningVolume2023.UI
                 var profiles = st.SectionProfiles.ToArray();
                 var existing = st.Existing.Tin;
                 var design = st.Design.Tin;
+                var watch = Stopwatch.StartNew();
                 var result = await Task.Run(() => VolumeWorkflowService.CalculateCore(system, profiles, existing, design, from, to, step));
                 VolumeWorkflowService.Commit(result, from, to, step);
+                watch.Stop();
+                st.VolumeCalculatedUtc = DateTime.UtcNow;
+                st.VolumeCalculationSeconds = watch.Elapsed.TotalSeconds;
                 BindResult(result);
                 _status.Text = result.Warnings.Count == 0
                     ? $"Hoàn thành: {result.Intervals.Count:n0} khoảng mặt cắt; {result.Levels.Count:n0} tầng/mức."
