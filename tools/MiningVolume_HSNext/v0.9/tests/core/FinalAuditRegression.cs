@@ -57,6 +57,36 @@ internal static class FinalAuditRegression
                 Check(rejected,"Invalid/oversized band input accepted");}
             var bands=SectionVolumeCalculator.BuildBands(11,0,5);Check(bands.Count==3,"Descending bands wrong");Near(bands.Last().EndZ,0);
         };
+        tests["rf15_grid_rejects_stale_boundary_and_cell_settings"]=()=>{
+            var st=ProjectState.Current;
+            st.Reset();
+            var existing=Plane(5);
+            var design=Plane(0);
+            st.Existing.Tin=existing;
+            st.Design.Tin=design;
+            st.Existing.TinBuiltFromSourceRevision=st.Existing.Source.Revision;
+            st.Design.TinBuiltFromSourceRevision=st.Design.Source.Revision;
+            st.GridBoundaryHandle="BOUNDARY-1";
+            st.GridSizeX=5;st.GridSizeY=5;st.GridRotationDegrees=15;
+            var options=new GridVolumeOptions{Boundary=Boundary,SizeX=5,SizeY=5,RotationDegrees=15};
+            var report=new GridVolumeCalculator().Calculate(existing,design,options);
+            long er=st.Existing.Source.Revision,dr=st.Design.Source.Revision;
+            GridWorkflowService.Commit(report,options,existing,design,er,dr,"BOUNDARY-1");
+            Check(GridWorkflowService.IsCurrent,"Grid report invalid immediately after a verified commit");
+            st.GridSizeX=10;
+            Check(!GridWorkflowService.IsCurrent,"Changing cell size silently retained stale grid");
+            bool rejected=false;
+            try{GridWorkflowService.Commit(report,options,existing,design,er,dr,"BOUNDARY-1");}
+            catch(InvalidOperationException){rejected=true;}
+            Check(rejected,"Stale grid committed after cell size changed");
+            st.GridSizeX=5;st.GridBoundaryHandle="BOUNDARY-2";
+            Check(!GridWorkflowService.IsCurrent,"Changing boundary silently retained stale grid");
+            rejected=false;
+            try{GridWorkflowService.Commit(report,options,existing,design,er,dr,"BOUNDARY-1");}
+            catch(InvalidOperationException){rejected=true;}
+            Check(rejected,"Stale grid committed after boundary handle changed");
+            GridWorkflowService.Invalidate();
+        };
         tests["rf13_invalidate_volume_clears_success_timing"]=()=>{
             var s=ProjectState.Current;s.VolumeResult=Calculate(Profile(1,5),Profile(2,5));s.VolumeCalculatedUtc=DateTime.UtcNow;s.VolumeCalculationSeconds=1.23;
             s.VolumeResult=null;Check(!s.VolumeCalculatedUtc.HasValue&&!s.VolumeCalculationSeconds.HasValue,"Stale timing survives invalidation");
