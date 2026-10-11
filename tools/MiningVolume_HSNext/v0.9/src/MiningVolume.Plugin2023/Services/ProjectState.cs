@@ -38,6 +38,24 @@ namespace MiningVolume2023.Services
             string.Equals(group, Mineral, StringComparison.Ordinal) ? MineralUnits : CoalUnits;
     }
 
+    /// <summary>A reporting period is not a calculation timestamp.</summary>
+    public static class VolumePeriodCatalog
+    {
+        public const string Month = "Tháng";
+        public const string Quarter = "Quý";
+        public const string Year = "Năm";
+        public static string Display(string type, int number, int year)
+        {
+            if (year < 1900 || year > 2200) throw new ArgumentOutOfRangeException(nameof(year));
+            if (type == Year) return "Năm " + year;
+            if (type == Quarter && number >= 1 && number <= 4)
+                return "Quý " + number + "/" + year;
+            if (type == Month && number >= 1 && number <= 12)
+                return "Tháng " + number.ToString("00") + "/" + year;
+            throw new ArgumentOutOfRangeException(nameof(number), "Kỳ khối lượng chưa hợp lệ.");
+        }
+    }
+
     public sealed class ModelSession
     {
         public ModelSession(ModelRole role, string name, string tinLayer)
@@ -137,6 +155,11 @@ namespace MiningVolume2023.Services
         public string DeveloperContact { get; set; } = "ĐT/Zalo: 0967280686";
         public string MiningUnitGroup { get; set; } = MiningUnitCatalog.Coal;
         public string MiningUnitName { get; set; } = string.Empty;
+        public string VolumePeriodType { get; set; } = VolumePeriodCatalog.Month;
+        public int VolumePeriodNumber { get; set; } = DateTime.Now.Month;
+        public int VolumePeriodYear { get; set; } = DateTime.Now.Year;
+        public string VolumePeriodLabel => VolumePeriodCatalog.Display(
+            VolumePeriodType, VolumePeriodNumber, VolumePeriodYear);
         public DateTime? VolumeCalculatedUtc { get; set; }
         public double? VolumeCalculationSeconds { get; set; }
         public DateTime? GridCalculatedUtc { get; set; }
@@ -166,6 +189,9 @@ namespace MiningVolume2023.Services
             GridCalculationSeconds = null;
             MiningUnitGroup = MiningUnitCatalog.Coal;
             MiningUnitName = string.Empty;
+            VolumePeriodType = VolumePeriodCatalog.Month;
+            VolumePeriodNumber = DateTime.Now.Month;
+            VolumePeriodYear = DateTime.Now.Year;
             MineralBodies.Clear();
             GridBoundaryHandle = null;
             GridSizeX = 20.0;
