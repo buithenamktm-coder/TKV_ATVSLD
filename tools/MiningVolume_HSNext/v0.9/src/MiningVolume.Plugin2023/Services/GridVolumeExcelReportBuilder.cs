@@ -157,6 +157,8 @@ namespace MiningVolume2023.Services
             s.ColumnWidths[0] = 43;
             s.ColumnWidths[1] = 22;
             s.ColumnWidths[2] = 34;
+            s.AutoFilter = false;
+            s.HasSignatures = true;
             s.Notes.Add("Không phát hành kết quả chính thức khi còn diện tích thiếu dữ liệu.");
             int end=FirstDataRow+grid.Cells.Count-1;
             string from="'CHI TIẾT Ô LƯỚI'!";
