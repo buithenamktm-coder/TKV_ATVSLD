@@ -308,8 +308,26 @@ namespace MiningVolume2023.Services
                 RebuildSavedTins(snap, warnings);
                 if (snap.HadProfiles && state.SectionSystem != null && state.Existing.Tin != null && state.Design.Tin != null)
                 {
-                    try { SectionWorkflowService.BuildProfiles(); }
-                    catch (Exception ex) { warnings.Add("Không khôi phục được mặt cắt: " + ex.Message); }
+                    try
+                    {
+                        SectionWorkflowService.BuildProfiles();
+                        var doc = Application.DocumentManager.MdiActiveDocument;
+                        if (doc != null && EditableSectionCadService.HasEditableProfiles(doc.Database))
+                        {
+                            // Persisted CAD polylines are the authoritative edited
+                            // section geometry after DWG reopen. Never silently
+                            // replace user changes with raw TIN resampling.
+                            var edited = EditableSectionCadService.ReadEditedProfiles(
+                                doc.Database, state.SectionProfiles.ToArray());
+                            SectionWorkflowService.CommitProfiles(edited);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        state.SectionProfiles.Clear();
+                        state.VolumeResult = null;
+                        warnings.Add("Không khôi phục được mặt cắt đã sửa trên CAD. Chặn khối lượng cho đến khi xử lý: " + ex.Message);
+                    }
                 }
                 if (snap.HadVolumeResult && state.SectionProfiles.Count > 0 && state.SectionSystem != null && state.Existing.Tin != null && state.Design.Tin != null && state.LevelStep > 0 && Math.Abs(state.FromLevel - state.ToLevel) > 1e-9)
                 {
