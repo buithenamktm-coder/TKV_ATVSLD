@@ -35,6 +35,19 @@ namespace MiningVolume2023.Services
         [DataMember(Order = 21)] public bool HadVolumeResult { get; set; }
         [DataMember(Order = 22)] public string TinRegionHandle { get; set; }
         [DataMember(Order = 23)] public List<Point2Snapshot> TinRegion { get; set; } = new List<Point2Snapshot>();
+        [DataMember(Order = 25)] public List<MineralBodySnapshot> MineralBodies { get; set; } = new List<MineralBodySnapshot>();
+    }
+
+    [DataContract]
+    public sealed class MineralBodySnapshot
+    {
+        [DataMember(Order = 1)] public string Id { get; set; }
+        [DataMember(Order = 2)] public string Name { get; set; }
+        [DataMember(Order = 3)] public double DensityTonPerCubicMetre { get; set; }
+        [DataMember(Order = 4)] public string DensitySource { get; set; }
+        [DataMember(Order = 5)] public bool IsDeleted { get; set; }
+        [DataMember(Order = 6)] public List<string> ExistingOutcropHandles { get; set; } = new List<string>();
+        [DataMember(Order = 7)] public List<string> DesignOutcropHandles { get; set; } = new List<string>();
     }
 
     [DataContract]
