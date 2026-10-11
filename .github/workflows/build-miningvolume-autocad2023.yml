@@ -177,6 +177,20 @@ jobs:
             }
           }
 
+      - name: Build V2.0 QA Candidate Setup (NOT RELEASE)
+        if: github.ref_name == 'miningvolume-v2-qa-candidate' || github.head_ref == 'miningvolume-v2-qa-candidate'
+        shell: pwsh
+        run: |
+          Set-Location $env:MV_ROOT
+          & ./installer/build_v2_qa.ps1
+          if ($LASTEXITCODE -ne 0) { throw "V2 QA Candidate packaging failed." }
+          if (-not (Test-Path "dist/IMSAT_MiningVolume_V2_0_QA_CANDIDATE.exe")) {
+            throw "Missing V2 QA Setup after build."
+          }
+          if (-not (Test-Path "dist/V2_QA_CANDIDATE_NOT_RELEASE.txt")) {
+            throw "Missing non-release warning for V2 QA Setup."
+          }
+
       - name: Create checksums and source archive
         shell: pwsh
         run: |
