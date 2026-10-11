@@ -51,8 +51,8 @@ namespace MiningVolume2023.Services
             string title = role == ModelRole.Existing ? "hiện trạng" : "thiết kế";
             var options = new PromptSelectionOptions
             {
-                MessageForAdding = "\\nChọn các đoạn đường lộ vỉa " + mineralName + " trên bình đồ " + title + ": ",
-                MessageForRemoval = "\\nBỏ đoạn lộ vỉa khỏi lựa chọn: ",
+                MessageForAdding = "\nChọn các đoạn đường lộ vỉa " + mineralName + " trên bình đồ " + title + ": ",
+                MessageForRemoval = "\nBỏ đoạn lộ vỉa khỏi lựa chọn: ",
                 AllowDuplicates = false
             };
             var filter = new SelectionFilter(new[]
