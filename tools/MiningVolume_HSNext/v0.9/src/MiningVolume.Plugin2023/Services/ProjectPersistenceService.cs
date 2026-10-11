@@ -207,6 +207,9 @@ namespace MiningVolume2023.Services
             foreach (var handle in session.SelectedHandles) s.SelectedHandles.Add(handle);
             foreach (var t in session.AllowedTypes) s.AllowedTypes.Add((int)t);
             if (session.Source == null) return s;
+            // Validate all original HT/TK geometry after DWG reopen, not only
+            // handles that have manual point overrides.
+            s.FullSourceFingerprint = SourceFingerprint.ComputeModel(session.Source);
             s.EditHistory.AddRange(session.Source.EditHistory);
             foreach (var e in session.Source.Entities)
             {
@@ -381,6 +384,14 @@ namespace MiningVolume2023.Services
                     return;
 
                 var session = ProjectState.Current.Get(role);
+                if (!string.IsNullOrWhiteSpace(snap.FullSourceFingerprint) &&
+                    !string.Equals(SourceFingerprint.ComputeModel(session.Source),
+                        snap.FullSourceFingerprint, StringComparison.OrdinalIgnoreCase))
+                {
+                    warnings.Add(session.Name +
+                        ": nguồn CAD đã thay đổi so với lúc lưu Project; không áp sửa Z/loại điểm hoặc tính lại khối lượng từ mặt cắt đã chỉnh.");
+                    return;
+                }
                 var byHandle = session.Source.Entities.GroupBy(e => e.Handle, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
                 foreach (var edit in snap.Edits ?? new List<EntityEditSnapshot>())
                 {
