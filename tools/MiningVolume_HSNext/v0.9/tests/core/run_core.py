@@ -22,7 +22,7 @@ def main():
         sources=[p for name in ['MiningVolume.Core','MiningVolume.Surface'] for p in (project/'src'/name).rglob('*.cs') if not any(x in p.parts for x in ('obj','bin'))]
         sources += [project/'src/MiningVolume.Plugin2023/Services'/name for name in (
             'ProjectState.cs','MineralBody.cs','ExportWorkflowService.cs','GridVolumeExcelReportBuilder.cs',
-            'MineralVolumeExcelReportBuilder.cs','XlsxBrandingInjector.cs')]
+            'MineralVolumeExcelReportBuilder.cs','XlsxBrandingInjector.cs','GridWorkflowService.cs')]
         (tmp/'Assets').mkdir()
         shutil.copyfile(project/'src/MiningVolume.Plugin2023/Assets/imsat_logo_64.png',tmp/'Assets/imsat_logo_64.png')
         lines=['-nologo','-target:exe','-out:"'+str(assembly)+'"']
