@@ -196,17 +196,28 @@ internal static class CoreRegression
                 Check(m.Entities[0].Vertices[0].IsEnabled&&m.Entities[0].Vertices[1].Position.Z==7,"Restore affected another vertex");
                 Check(SourceFingerprint.Compute(m.Entities[0])==original,"Edits changed original fingerprint");
                 Check(SourceFingerprint.Compute(Entity("a",SourceEntityType.Polyline3d,P(0,0,9),P(10,0,4)))!=original,"Changed geometry accepted");
+                var modelHash=SourceFingerprint.ComputeModel(m);
+                Check(modelHash==SourceFingerprint.ComputeModel(m),"Full-source hash is nondeterministic");
+                var another=Model(Entity("a",SourceEntityType.Polyline3d,P(0,0,8),P(10,0,4)));
+                Check(modelHash==SourceFingerprint.ComputeModel(another),
+                    "Model-side overrides/exclusions were incorrectly included in original CAD hash");
+                another.Entities.Add(Entity("b",SourceEntityType.Point,P(11,12,13)));
+                Check(modelHash!=SourceFingerprint.ComputeModel(another),
+                    "New unedited CAD object did not invalidate the source fingerprint");
                 bool invalid=false;try{m.RestoreVertices(new[]{new KeyValuePair<string,int>("a",1),new KeyValuePair<string,int>("a",9)});}catch(ArgumentOutOfRangeException){invalid=true;}
                 Check(invalid&&m.Entities[0].Vertices[1].Position.Z==7,"Bulk restore partially applied invalid selection");
                 m.RestoreVertices(new[]{new KeyValuePair<string,int>("a",0)});
                 Check(m.Entities[0].Vertices[1].Position.Z==7,"Bulk restore reset unrelated edit");
                 var snapshot=new MiningVolume2023.Services.ProjectSnapshot {SavedUtc=DateTime.UtcNow,
                     HadProfiles=true,HadVolumeResult=true,HadEditableSectionCad=true,
-                    Existing=new MiningVolume2023.Services.ModelSnapshot {EditHistory=m.EditHistory}};
+                    Existing=new MiningVolume2023.Services.ModelSnapshot {
+                        EditHistory=m.EditHistory,FullSourceFingerprint=modelHash}};
                 var decoded=MiningVolume2023.Services.ProjectSnapshotCodec.Decode(MiningVolume2023.Services.ProjectSnapshotCodec.Encode(snapshot));
                 Check(decoded.Existing.EditHistory.Count==4&&decoded.Existing.EditHistory[1].NewZ==7&&decoded.Existing.EditHistory[1].VertexIndex==1,"Audit snapshot roundtrip lost data");
                 Check(decoded.HadEditableSectionCad && decoded.HadProfiles && decoded.HadVolumeResult,
                     "DWG snapshot silently lost the CAD section preservation gate");
+                Check(decoded.Existing.FullSourceFingerprint==modelHash,
+                    "DWG snapshot silently lost the full HT/TK model source fingerprint");
                 var legacy=new MiningVolume2023.Services.ProjectSnapshot {FormatVersion=2,HadProfiles=true};
                 var legacyRoundtrip=MiningVolume2023.Services.ProjectSnapshotCodec.Decode(MiningVolume2023.Services.ProjectSnapshotCodec.Encode(legacy));
                 Check(!legacyRoundtrip.HadEditableSectionCad,
