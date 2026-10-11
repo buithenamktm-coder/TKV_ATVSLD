@@ -132,6 +132,11 @@ namespace MiningVolume2023.Services
                 DirectionX = state.SectionDirection?.X ?? 0,
                 DirectionY = state.SectionDirection?.Y ?? 0,
                 SectionSpacing = state.SectionSpacing,
+                SectionLayoutGap = state.SectionLayoutGap,
+                GridBoundaryHandle = state.GridBoundaryHandle,
+                GridSizeX = state.GridSizeX,
+                GridSizeY = state.GridSizeY,
+                GridRotationDegrees = state.GridRotationDegrees,
                 LevelStep = state.LevelStep,
                 FromLevel = state.FromLevel,
                 ToLevel = state.ToLevel,
@@ -143,6 +148,18 @@ namespace MiningVolume2023.Services
                 HadVolumeResult = state.VolumeResult != null,
                 TinRegionHandle = state.TinRegionHandle
             };
+            foreach (var body in state.MineralBodies)
+            {
+                var item = new MineralBodySnapshot
+                {
+                    Id = body.Id, Name = body.Name,
+                    DensityTonPerCubicMetre = body.DensityTonPerCubicMetre,
+                    DensitySource = body.DensitySource, IsDeleted = body.IsDeleted
+                };
+                item.ExistingOutcropHandles.AddRange(body.ExistingOutcropHandles);
+                item.DesignOutcropHandles.AddRange(body.DesignOutcropHandles);
+                s.MineralBodies.Add(item);
+            }
             foreach (var p in state.TinRegionPolygon)
                 s.TinRegion.Add(new Point2Snapshot { X = p.X, Y = p.Y });
             if (state.SectionSystem != null)
@@ -194,6 +211,11 @@ namespace MiningVolume2023.Services
             var state = ProjectState.Current;
             state.Reset();
             state.SectionSpacing = PositiveOr(snap.SectionSpacing, 20);
+            state.SectionLayoutGap = Math.Max(30.0, PositiveOr(snap.SectionLayoutGap, 90));
+            state.GridBoundaryHandle = snap.GridBoundaryHandle;
+            state.GridSizeX = PositiveOr(snap.GridSizeX, 20);
+            state.GridSizeY = PositiveOr(snap.GridSizeY, 20);
+            state.GridRotationDegrees = snap.GridRotationDegrees;
             state.LevelStep = PositiveOr(snap.LevelStep, 5);
             state.FromLevel = snap.FromLevel;
             state.ToLevel = snap.ToLevel;
@@ -201,6 +223,26 @@ namespace MiningVolume2023.Services
             state.VerticalScale = PositiveOr(snap.VerticalScale, 500);
             state.DeveloperName = string.IsNullOrWhiteSpace(snap.DeveloperName) ? "Bùi Thế Nam" : snap.DeveloperName;
             state.DeveloperContact = string.IsNullOrWhiteSpace(snap.DeveloperContact) ? "Điện thoại: 0967280686" : snap.DeveloperContact;
+            if (snap.MineralBodies != null)
+            {
+                var seenIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var body in snap.MineralBodies)
+                {
+                    if (body == null) continue;
+                    string id = string.IsNullOrWhiteSpace(body.Id) ? Guid.NewGuid().ToString("N") : body.Id;
+                    if (!seenIds.Add(id)) { warnings.Add("Trùng mã vỉa trong Project; bỏ qua bản ghi trùng."); continue; }
+                    var restored = new MineralBody
+                    {
+                        Id = id, Name = body.Name,
+                        DensityTonPerCubicMetre = body.DensityTonPerCubicMetre,
+                        DensitySource = body.DensitySource,
+                        IsDeleted = body.IsDeleted
+                    };
+                    restored.AddTraces(ModelRole.Existing, body.ExistingOutcropHandles);
+                    restored.AddTraces(ModelRole.Design, body.DesignOutcropHandles);
+                    state.MineralBodies.Add(restored);
+                }
+            }
             state.BoundaryHandle = snap.BoundaryHandle;
             state.TinRegionHandle = snap.TinRegionHandle;
             if (snap.TinRegion != null)

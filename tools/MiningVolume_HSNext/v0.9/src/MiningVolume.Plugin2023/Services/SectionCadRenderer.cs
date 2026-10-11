@@ -66,9 +66,9 @@ namespace MiningVolume2023.Services
         }
 
         public static void ReplaceProfiles(Database db, IReadOnlyList<SectionProfile> profiles, Point3d insertion,
-            double horizontalScale, double verticalScale, double levelStep)
+            double horizontalScale, double verticalScale, double levelStep, double layoutGap = 90.0)
         {
-            ReplaceProfilesBatched(db, profiles, insertion, horizontalScale, verticalScale, levelStep, 0, profiles?.Count ?? 0, true);
+            ReplaceProfilesBatched(db, profiles, insertion, horizontalScale, verticalScale, levelStep, 0, profiles?.Count ?? 0, true, layoutGap);
         }
 
         public static double ReplaceProfilesBatched(
@@ -80,11 +80,14 @@ namespace MiningVolume2023.Services
             double levelStep,
             int startIndex,
             int count,
-            bool clearFirst)
+            bool clearFirst,
+            double layoutGap = 90.0)
         {
             if (profiles == null || profiles.Count == 0) throw new InvalidOperationException("Chưa có dữ liệu mặt cắt.");
             if (horizontalScale <= 0 || verticalScale <= 0) throw new ArgumentOutOfRangeException("Tỷ lệ mặt cắt phải lớn hơn 0.");
             if (levelStep <= 0) levelStep = 5.0;
+            if (double.IsNaN(layoutGap) || double.IsInfinity(layoutGap) || layoutGap < 30.0)
+                throw new ArgumentOutOfRangeException(nameof(layoutGap), "Giãn cách bố trí mặt cắt trên CAD phải từ 30 đơn vị trở lên.");
             double vExag = horizontalScale / verticalScale;
 
             if (startIndex < 0 || startIndex > profiles.Count) throw new ArgumentOutOfRangeException(nameof(startIndex));
@@ -112,7 +115,7 @@ namespace MiningVolume2023.Services
                     double prevBaseZ = Math.Floor(prev.MinZ / levelStep) * levelStep;
                     double prevTopZ = Math.Ceiling(prev.MaxZ / levelStep) * levelStep;
                     if (prevTopZ <= prevBaseZ) prevTopZ = prevBaseZ + levelStep;
-                    currentY -= (prevTopZ - prevBaseZ) * vExag + 45.0;
+                    currentY -= (prevTopZ - prevBaseZ) * vExag + layoutGap;
                 }
 
                 for (int pi = startIndex; pi < startIndex + count; pi++)
@@ -154,7 +157,7 @@ namespace MiningVolume2023.Services
                     // into one Polyline per surface instead.
                     AddProfilePolylines(ms, tr, p, x0, y0, baseZ, vExag, exLayer, deLayer);
 
-                    currentY -= height + 45.0;
+                    currentY -= height + layoutGap;
                 }
                 tr.Commit();
                 return currentY;
