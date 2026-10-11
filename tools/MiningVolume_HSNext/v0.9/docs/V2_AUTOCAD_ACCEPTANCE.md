@@ -20,6 +20,13 @@ Dùng Windows x64 + AutoCAD 2023 có bản quyền, phiên tương tác. Sao ch�
 16. `MV_LICENSE`: 15 ngày, hết hạn không mất DWG, rollback/corrupt ledger; provision public key thực, kích hoạt đúng/sai mã máy/tamper. Máy quản trị thứ hai khôi phục encrypted issuer backup; không đưa private key vào artifact.
 17. Cài nâng cấp V1→V2, lỗi cài đặt/rollback, gỡ; kiểm tra DWG/license khách hàng còn nguyên. Test mở DWG sau gỡ. Không công bố hỗ trợ AutoCAD 2012+.
 
+
+18. **Chống mất sửa tay khi xuất lại MC:** sau khi đã Grip chỉnh đường HT hoặc TK nhưng CHƯA bấm CẬP NHẬT MẶT CẮT, bấm thành lập/xuất mặt cắt lần nữa: phải hiện hộp xác nhận thay thế; mặc định **Không**, Esc/Không giữ nguyên hình CAD, diện tích, khối lượng; chọn Đồng ý chỉ trên bản sao DWG rồi kiểm tra bản mới được vẽ đúng.
+19. **Hủy chọn điểm chèn:** sau khi đã có bộ mặt cắt/chỉ tiêu đã tính, bấm thành lập mặt cắt mới rồi Cancel khi AutoCAD hỏi điểm chèn. Hệ MC có thẩm quyền và kết quả volume trong Palette/Excel phải còn nguyên. Thử vừa thay DPI/dock trái.
+20. **DWG save/reopen bảo toàn sửa tay:** trên bản sao, chỉnh Grip để cả đoạn 10 m tăng Z 1 m → F đào tăng 10 m²; thử chỉ một đầu +1m → F tăng 5 m². Bấm CẬP NHẬT MẶT CẮT, kiểm V chi tiết/vùng tầng và Excel. Lưu IMSAT Project rồi SAVE/SAVEAS/đóng/mở và so cùng giá trị. Trên bản sao khác, xóa TẤT CẢ polyline mặt cắt CAD đã lưu rồi thử nạp Project: phải cảnh báo **không tìm thấy CAD đã chỉnh**, không khôi phục âm thầm volume từ TIN và không sửa source.
+21. **Đổi DWG/TIN khi đang tính:** với ít nhất hai bản vẽ riêng, khởi tạo chạy tính mặt cắt lâu ở A, chuyển B hoặc đổi dữ liệu TIN: phép tính của A không được vẽ vào B, không ghi đè dữ liệu B; phải có thông báo yêu cầu tính lại. Lặp lại khi đang chọn điểm chèn. Kiểm thử hiệu năng ở bộ dữ liệu lớn, không để UI vẽ sai tài liệu.
+22. **Trọn gói Excel và cài đặt:** xuất workbook mặt cắt, lưới, khoáng sản từ đúng một lần tính thành công; Excel Desktop kiểm metadata đơn vị khai thác THAN/QUẶNG, Tháng/Quý/Năm, thời điểm tính, thời gian tính, 2 ô ký, logo IMSAT, font Arial12 không tô nền và công thức thực; đổi tham số cho phép và xác nhận recalc. Test V1→V2 QA Setup và Uninstall: chỉ xóa tệp Setup/bundle/shortcut/registry do IMSAT cài, vẫn giữ DWG/Project/Excel/license khách hàng. Khởi động CAD sau gỡ, không tự nạp. Chỉ dùng bộ QA trên máy thử.
+
 Mỗi ca ghi Expected, Actual, PASS/FAIL/NOT TESTED, ảnh/log, commit, máy chạy và người xác nhận. Mọi mục trên hiện **NOT TESTED trong AutoCAD**; yêu cầu người nghiệm thu ký duyệt trước Release.
 
 Verifier tự động có sẵn: `release/verify_autocad2023_runtime.ps1` (đọc trước khi chạy; cần Administrator, phiên Windows tương tác và AutoCAD 2023). Verifier chỉ là một phần bằng chứng, không tự PASS các thao tác UI/mỏ/bản quyền ở trên.
