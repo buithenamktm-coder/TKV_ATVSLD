@@ -22,7 +22,7 @@ namespace MiningVolume2023
 
         public void Initialize()
         {
-            StartupLog("Initialize: MiningVolume v1.0");
+            StartupLog("Initialize: MiningVolume V2.0 QA");
             TryRibbon();
             HookIdle();
         }
@@ -253,7 +253,7 @@ namespace MiningVolume2023
         [CommandMethod("MVABOUT")]
         public void About()
         {
-            AcApp.ShowAlertDialog("IMSAT VOLUME\nMine Survey & Earthwork for AutoCAD\nPhát triển: Bùi Thế Nam\nĐT/Zalo: 0967280686\nPhiên bản v1.0");
+            AcApp.ShowAlertDialog("IMSAT VOLUME\nMine Survey & Earthwork for AutoCAD\nPhát triển: Bùi Thế Nam\nĐT/Zalo: 0967280686\nPhiên bản V2.0 (QA)");
         }
     }
 }
