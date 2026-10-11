@@ -94,3 +94,19 @@ def test_preview_review_memory_is_allocated_only_for_conflicting_xy():
     assert "if(Members==null)" in core
     assert "FirstEntity=entity,FirstVertexIndex=vertex.Index" in core
     assert "next.Members.Add(" not in core
+
+def test_mean_z_review_can_rebuild_only_after_all_groups_over_three_metres_resolved():
+    ui=code("src/MiningVolume.Plugin2023/UI/ModelPage.cs")
+    review=code("src/MiningVolume.Plugin2023/UI/DuplicateXYConflictUi.cs")
+    wrapper=code("src/MiningVolume.Plugin2023/UI/MeanZConflictReviewForm.cs")
+    svc=code("src/MiningVolume.Plugin2023/Services/MeanZPreviewWorkflowService.cs")
+    assert "DỰNG TIN THỬ SAU KHI XỬ LÝ" in review
+    assert "int remaining=_report.Groups.Count(g=>g.DeltaZ>HighDeltaZMetres)" in review
+    assert "_buildPreview.Enabled=_meanPreview" in review
+    assert "valid && _report!=null && !_report.Groups.Any" in review
+    assert "_requestBuildPreview();" in review
+    assert "Action requestBuildPreview=null" in review
+    assert "System.Action requestBuildPreview=null" in wrapper
+    assert "BuildMeanZPreviewAsync(ModelRole? requestedRole=null)" in ui
+    assert "await BuildMeanZPreviewAsync(role)" in ui
+    assert svc.index("if (prepared.HasBlockingConflicts)") < svc.index(".BuildPrepared(")
