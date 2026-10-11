@@ -81,7 +81,7 @@ def test_z_mean_review_opens_grouped_editor_instead_of_generic_error():
     first=ui.index("catch(MeanZReviewRequiredException ex)")
     fallback=ui.index("catch(Exception ex)",first)
     assert first<fallback
-    assert "new MeanZConflictReviewForm(role, ex.Analysis)" in ui[first:fallback]
+    assert "new MeanZConflictReviewForm(role, ex.Analysis," in ui[first:fallback]
     assert "_document" in editor and "await ScanAsync();" in editor
     assert "ConflictReviewForm" in review
     assert 'if(_highDeltaOnly.Checked && !(g.DeltaZ>HighDeltaZMetres))continue;' in editor
