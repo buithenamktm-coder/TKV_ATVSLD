@@ -66,6 +66,42 @@ internal static class CoreRegression
     {
         var tests=new Dictionary<string,Action> {
             ["square_area_no_holes"] = ()=> {var t=Build(Prepare(Corners()));Check(t.Triangles.Count==2&&Math.Abs(t.Triangles.Sum(x=>x.Area2D)-100)<1e-9,"Square area");},
+            ["grid_system_rotated_matches_no_rotation"] = ()=>{
+                var existing=new TinSurface("tn",new[]{new Triangle3(P(0,0,2),P(20,0,2),P(20,20,2)),
+                    new Triangle3(P(0,0,2),P(20,20,2),P(0,20,2))},Array.Empty<ValidationIssue>());
+                var design=new TinSurface("tk",new[]{new Triangle3(P(0,0),P(20,0),P(20,20)),
+                    new Triangle3(P(0,0),P(20,20),P(0,20))},Array.Empty<ValidationIssue>());
+                var boundary=new[]{new Vec2(0,0),new Vec2(20,0),new Vec2(20,20),new Vec2(0,20)};
+                var grid=new GridVolumeCalculator();
+                var straight=grid.Calculate(existing,design,new GridVolumeOptions{Boundary=boundary,SizeX=20,SizeY=20});
+                var rotated=grid.Calculate(existing,design,new GridVolumeOptions{Boundary=boundary,SizeX=20,SizeY=20,RotationDegrees=45});
+                Check(straight.Cells.Count==1&&rotated.Cells.Count>1,"Grid rotation did not produce multiple partial cells");
+                Check(Math.Abs(straight.TotalCutVolume-800)<1e-7&&Math.Abs(rotated.TotalCutVolume-800)<1e-7,
+                    "Rotating grid must not change total whole-area volume");
+                Check(straight.IsComplete&&rotated.IsComplete,"Rotated grid lost TIN coverage");
+            },
+            ["grid_system_large_survey_xy"] = ()=>{
+                const double x=2300000,y=400000;
+                var existing=new TinSurface("tn",new[]{new Triangle3(P(x,y,2),P(x+20,y,2),P(x+20,y+20,2)),
+                    new Triangle3(P(x,y,2),P(x+20,y+20,2),P(x,y+20,2))},Array.Empty<ValidationIssue>());
+                var design=new TinSurface("tk",new[]{new Triangle3(P(x,y),P(x+20,y),P(x+20,y+20)),
+                    new Triangle3(P(x,y),P(x+20,y+20),P(x,y+20))},Array.Empty<ValidationIssue>());
+                var ring=new[]{new Vec2(x,y),new Vec2(x+20,y),new Vec2(x+20,y+20),new Vec2(x,y+20)};
+                var v=new GridVolumeCalculator().Calculate(existing,design,new GridVolumeOptions{
+                    Boundary=ring,Origin=new Vec2(x,y),SizeX=20,SizeY=20});
+                Check(v.IsComplete&&Math.Abs(v.TotalCutVolume-800)<1e-7,
+                    "Large survey coordinates changed grid volume");
+            },
+            ["grid_system_no_data_flag"] = ()=>{
+                var existing=new TinSurface("tn",new[]{new Triangle3(P(0,0,2),P(10,0,2),P(10,20,2)),
+                    new Triangle3(P(0,0,2),P(10,20,2),P(0,20,2))},Array.Empty<ValidationIssue>());
+                var design=new TinSurface("tk",new[]{new Triangle3(P(0,0),P(20,0),P(20,20)),
+                    new Triangle3(P(0,0),P(20,20),P(0,20))},Array.Empty<ValidationIssue>());
+                var ring=new[]{new Vec2(0,0),new Vec2(20,0),new Vec2(20,20),new Vec2(0,20)};
+                var v=new GridVolumeCalculator().Calculate(existing,design,new GridVolumeOptions{Boundary=ring,SizeX=20,SizeY=20});
+                Check(v.Cells.Count==1&&!v.IsComplete&&Math.Abs(v.TotalNoDataArea-200)<1e-7,
+                    "Grid system hid missing TIN area");
+            },
             ["grid_exact_constant_cut"] = ()=>{
                 var a=new[]{new Triangle3(P(0,0,2),P(20,0,2),P(20,20,2)),
                     new Triangle3(P(0,0,2),P(20,20,2),P(0,20,2))};
