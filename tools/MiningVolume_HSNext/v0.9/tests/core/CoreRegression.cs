@@ -201,9 +201,16 @@ internal static class CoreRegression
                 m.RestoreVertices(new[]{new KeyValuePair<string,int>("a",0)});
                 Check(m.Entities[0].Vertices[1].Position.Z==7,"Bulk restore reset unrelated edit");
                 var snapshot=new MiningVolume2023.Services.ProjectSnapshot {SavedUtc=DateTime.UtcNow,
+                    HadProfiles=true,HadVolumeResult=true,HadEditableSectionCad=true,
                     Existing=new MiningVolume2023.Services.ModelSnapshot {EditHistory=m.EditHistory}};
                 var decoded=MiningVolume2023.Services.ProjectSnapshotCodec.Decode(MiningVolume2023.Services.ProjectSnapshotCodec.Encode(snapshot));
                 Check(decoded.Existing.EditHistory.Count==4&&decoded.Existing.EditHistory[1].NewZ==7&&decoded.Existing.EditHistory[1].VertexIndex==1,"Audit snapshot roundtrip lost data");
+                Check(decoded.HadEditableSectionCad && decoded.HadProfiles && decoded.HadVolumeResult,
+                    "DWG snapshot silently lost the CAD section preservation gate");
+                var legacy=new MiningVolume2023.Services.ProjectSnapshot {FormatVersion=2,HadProfiles=true};
+                var legacyRoundtrip=MiningVolume2023.Services.ProjectSnapshotCodec.Decode(MiningVolume2023.Services.ProjectSnapshotCodec.Encode(legacy));
+                Check(!legacyRoundtrip.HadEditableSectionCad,
+                    "Backward-compatible project without CAD edit marker must remain readable");
             },
             ["square_area_no_holes"] = ()=> {var t=Build(Prepare(Corners()));Check(t.Triangles.Count==2&&Math.Abs(t.Triangles.Sum(x=>x.Area2D)-100)<1e-9,"Square area");},
             ["grid_system_rotated_matches_no_rotation"] = ()=>{
