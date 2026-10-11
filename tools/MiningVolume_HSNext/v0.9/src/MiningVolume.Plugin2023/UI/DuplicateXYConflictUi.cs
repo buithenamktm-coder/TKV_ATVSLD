@@ -28,7 +28,11 @@ namespace MiningVolume2023.UI
 
     internal sealed class ConflictReviewForm : Form
     {
-        private sealed class Row { public ConflictGroup Group; public ConflictSource Source; }
+        private sealed class Row {
+            public ConflictGroup Group;
+            public ConflictSource Source;
+            public bool IsGroupHeader => Source==null;
+        }
         private readonly ModelRole _role;
         private readonly Autodesk.AutoCAD.ApplicationServices.Document _document;
         private readonly DataGridView _grid;
@@ -39,6 +43,9 @@ namespace MiningVolume2023.UI
         private const double HighDeltaZMetres = 3.0;
         private readonly System.Windows.Forms.Timer _documentWatch;
         private readonly List<Row> _rows = new List<Row>();
+        private readonly Dictionary<string,MiningVolume.Core.Model.SourceEntity> _entityById =
+            new Dictionary<string,MiningVolume.Core.Model.SourceEntity>(StringComparer.Ordinal);
+        private readonly Font _groupFont;
         private CancellationTokenSource _scanCts;
         private ConflictReport _report;
         private MiningVolume.Core.Model.SurfaceModel _source;
@@ -50,7 +57,8 @@ namespace MiningVolume2023.UI
             _document=CadApplication.DocumentManager.MdiActiveDocument;
             _source=ProjectState.Current.Get(role).Source; _revision=_source.Revision;
             Text="IMSAT VOLUME — Điểm trùng tọa độ — "+ProjectState.Current.Get(role).Name;
-            Font=new Font("Arial",9F); Size=new Size(1040,590); MinimumSize=new Size(760,430);
+            Font=new Font("Arial",9F); Size=new Size(1220,660); MinimumSize=new Size(800,460);
+            _groupFont=new Font("Arial",9F,FontStyle.Bold);
             StartPosition=FormStartPosition.CenterScreen;
             _status=new Label{Dock=DockStyle.Bottom,Height=58,Padding=new Padding(8)};
             var bar=new FlowLayoutPanel{Dock=DockStyle.Top,AutoSize=true,WrapContents=true,Padding=new Padding(6)};
@@ -75,23 +83,100 @@ namespace MiningVolume2023.UI
             _grid=new DataGridView{Dock=DockStyle.Fill,ReadOnly=true,AllowUserToAddRows=false,AllowUserToDeleteRows=false,
                 AutoGenerateColumns=false,SelectionMode=DataGridViewSelectionMode.FullRowSelect,MultiSelect=false,
                 VirtualMode=true,RowHeadersVisible=false,BackgroundColor=Color.White};
-            foreach(var title in new[]{"Nhóm","X","Y","Z nguồn","ΔZ nhóm","Handle","Layer","Loại","Đỉnh mô hình","Đoạn","Nguồn phát sinh"})
-                _grid.Columns.Add(new DataGridViewTextBoxColumn{HeaderText=title,Width=title=="Nguồn phát sinh"?240:100});
+            foreach(var title in new[]{"Nhóm XY","X","Y","Z nguồn (m)","ΔZ nhóm (m)","Handle","Layer","Loại","Đỉnh","Đoạn","Nguồn phát sinh"})
+                _grid.Columns.Add(new DataGridViewTextBoxColumn{
+                    Name=title,HeaderText=title,Width=title=="Nguồn phát sinh"?205:title=="Nhóm XY"?170:95,
+                    SortMode=DataGridViewColumnSortMode.NotSortable
+                });
+            AddRowAction("row_zoom","Zoom",68);
+            AddRowAction("row_remove","Loại điểm",94);
+            AddRowAction("row_edit_z","Sửa Z",70);
             _grid.CellValueNeeded+=(s,e)=>{
+                if(e.RowIndex<0||e.RowIndex>=_rows.Count||e.ColumnIndex<0)return;
+                var row=_rows[e.RowIndex];var g=row.Group;
+                if(row.IsGroupHeader)
+                {
+                    object[] values={
+                        "▼ "+g.Id+" ("+g.Sources.Count+" nguồn)",
+                        g.Position.X.ToString("0.###"),
+                        g.Position.Y.ToString("0.###"),
+                        "Z: "+g.Sources.Min(x=>x.Z).ToString("0.###")+" → "+
+                            g.Sources.Max(x=>x.Z).ToString("0.###"),
+                        g.DeltaZ.ToString("0.###"),
+                        "","","","","",
+                        "NHÓM XY • chọn điểm ở các dòng bên dưới",
+                        "","",""
+                    };
+                    e.Value=values[e.ColumnIndex];
+                    return;
+                }
+                var a=row.Source;
+                object[] valuesDetail={
+                    "   ↳ "+g.Id,
+                    g.Position.X.ToString("0.###"),
+                    g.Position.Y.ToString("0.###"),
+                    a.Z.ToString("0.###"),
+                    g.DeltaZ.ToString("0.###"),
+                    a.Handle,a.Layer,a.Type.ToString(),
+                    a.VertexIndex<0?"—":a.VertexIndex.ToString(),
+                    a.SegmentIndex<0?"—":a.SegmentIndex.ToString(),a.Origin,
+                    "Zoom", "Loại điểm", "Sửa Z"
+                };
+                e.Value=valuesDetail[e.ColumnIndex];
+            };
+            _grid.CellFormatting+=(s,e)=>{
                 if(e.RowIndex<0||e.RowIndex>=_rows.Count)return;
-                var row=_rows[e.RowIndex];var a=row.Source;var g=row.Group;
-                object[] values={g.Id,g.Position.X,g.Position.Y,a.Z,g.DeltaZ,a.Handle,a.Layer,a.Type,
-                    a.VertexIndex<0?"—":a.VertexIndex.ToString(),a.SegmentIndex<0?"—":a.SegmentIndex.ToString(),a.Origin};
-                e.Value=values[e.ColumnIndex];
+                if(_rows[e.RowIndex].IsGroupHeader)
+                {
+                    e.CellStyle.BackColor=Color.FromArgb(231,239,249);
+                    e.CellStyle.ForeColor=Color.FromArgb(25,48,78);
+                    e.CellStyle.Font=_groupFont;
+                }
+            };
+            _grid.CellContentClick+=async (s,e)=>{
+                if(e.RowIndex<0||e.RowIndex>=_rows.Count||e.ColumnIndex<0)return;
+                var row=_rows[e.RowIndex];
+                if(row.IsGroupHeader)return;
+                var action=_grid.Columns[e.ColumnIndex].Name;
+                if(action=="row_zoom") ZoomRow(row);
+                else if(action=="row_remove") await ExcludeVertexAsync(row);
+                else if(action=="row_edit_z") await EditVertexZAsync(row);
             };
             Controls.Add(_grid);Controls.Add(bar);Controls.Add(_status);
             _grid.SelectionChanged+=(s,e)=>RefreshActions();
             _documentWatch=new System.Windows.Forms.Timer{Interval=300};
             _documentWatch.Tick+=(s,e)=>{if(CadApplication.DocumentManager.MdiActiveDocument!=_document)Close();};
             Shown+=async(s,e)=>{_documentWatch.Start();if(_report==null)await ScanAsync();else BindRows();};
-            FormClosed+=(s,e)=>{_scanCts?.Cancel();_documentWatch.Stop();_documentWatch.Dispose();};
+            FormClosed+=(s,e)=>{
+                _scanCts?.Cancel();_documentWatch.Stop();_documentWatch.Dispose();
+                _groupFont.Dispose();
+            };
         }
-        private Row Selected()=>_grid.CurrentCell==null||_grid.CurrentCell.RowIndex>=_rows.Count?null:_rows[_grid.CurrentCell.RowIndex];
+        private Row Selected()=>_grid.CurrentCell==null || _grid.CurrentCell.RowIndex<0 ||
+            _grid.CurrentCell.RowIndex>=_rows.Count?null:_rows[_grid.CurrentCell.RowIndex];
+
+        private void AddRowAction(string id,string title,int width)
+        {
+            _grid.Columns.Add(new DataGridViewButtonColumn {
+                Name=id,HeaderText=title,Width=width,
+                FlatStyle=FlatStyle.Flat,UseColumnTextForButtonValue=false,
+                SortMode=DataGridViewColumnSortMode.NotSortable
+            });
+        }
+
+        private void ZoomRow(Row row)
+        {
+            Run(()=>{
+                if(row==null)return;
+                if(row.Source==null)CadViewService.ZoomToXY(row.Group.Position.X,row.Group.Position.Y);
+                else
+                {
+                    // Prefer exact conflict XY; a long contour's extent is
+                    // not the point that needs investigation.
+                    CadViewService.ZoomToXY(row.Group.Position.X,row.Group.Position.Y);
+                }
+            });
+        }
         private bool Current()=>_source!=null &&
             CadApplication.DocumentManager.MdiActiveDocument==_document&&
             ReferenceEquals(_source,ProjectState.Current.Get(_role).Source)&&_source.Revision==_revision;
@@ -105,8 +190,9 @@ namespace MiningVolume2023.UI
         private MiningVolume.Core.Model.ModelVertex ResolveOriginalVertex(Row row)
         {
             if(row==null || _source==null || !Current())return null;
-            var candidate=_source.Entities.FirstOrDefault(e=>e.IsEnabled &&
-                string.Equals(e.Id,row.Source.EntityId,StringComparison.Ordinal));
+            if(row.IsGroupHeader)return null;
+            if(!_entityById.TryGetValue(row.Source.EntityId,out var candidate) || !candidate.IsEnabled)
+                return null;
             if(candidate==null)return null;
             double xy=_report?.XyTolerance??1e-6,z=_report?.ZTolerance??1e-4;
             bool Matches(MiningVolume.Core.Model.ModelVertex v)
@@ -133,7 +219,7 @@ namespace MiningVolume2023.UI
             bool valid=Current() && _scanCts==null;
             var row=Selected();
             _excludeVertex.Enabled=valid && ResolveOriginalVertex(row)!=null;
-            _exclude.Enabled=valid && row!=null;
+            _exclude.Enabled=valid && row!=null && !row.IsGroupHeader;
             _zoomPoint.Enabled=valid && row!=null;
         }
         private void Run(Action action){try{if(!Current())throw new InvalidOperationException("Nguồn đã thay đổi. Hãy quét lại trước khi thao tác.");action();}
@@ -141,20 +227,30 @@ namespace MiningVolume2023.UI
         private void BindRows()
         {
             _rows.Clear();var filter=_filter.Text.Trim();
-            int groupsVisible=0;
-            if(_report!=null)foreach(var g in _report.Groups)
+            int groupsVisible=0,sourceRows=0;
+            if(_report!=null)
             {
-                if(_highDeltaOnly.Checked && !(g.DeltaZ>HighDeltaZMetres))continue;
-                int before=_rows.Count;
-                foreach(var s in g.Sources)
-                    if(filter.Length==0||(g.Id+" "+s.Layer+" "+s.Type+" "+s.Handle)
-                        .IndexOf(filter,StringComparison.OrdinalIgnoreCase)>=0)
-                        _rows.Add(new Row{Group=g,Source=s});
-                if(_rows.Count>before)groupsVisible++;
+                foreach(var g in _report.Groups.OrderByDescending(x=>x.DeltaZ).ThenBy(x=>x.Id,StringComparer.Ordinal))
+                {
+                    if(_highDeltaOnly.Checked && !(g.DeltaZ>HighDeltaZMetres))continue;
+                    bool matchGroup=filter.Length==0 || (g.Id+" "+g.Position.X.ToString("R")+
+                        " "+g.Position.Y.ToString("R")).IndexOf(filter,StringComparison.OrdinalIgnoreCase)>=0;
+                    var matching=g.Sources.Where(x=>matchGroup ||
+                        (x.Layer+" "+x.Type+" "+x.Handle+" "+x.Z.ToString("R"))
+                        .IndexOf(filter,StringComparison.OrdinalIgnoreCase)>=0).ToList();
+                    if(matching.Count==0)continue;
+                    _rows.Add(new Row{Group=g});
+                    foreach(var source in matching.OrderBy(x=>x.Z))
+                    {
+                        _rows.Add(new Row{Group=g,Source=source});
+                        sourceRows++;
+                    }
+                    groupsVisible++;
+                }
             }
             _grid.RowCount=_rows.Count;_grid.Invalidate();
             _status.Text=_report==null?"Chưa quét.":
-                $"{groupsVisible:n0}/{_report.Groups.Count:n0} nhóm XY đang hiển thị • {_rows.Count:n0} nguồn • ΔZ > 3 m: "+
+                $"{groupsVisible:n0}/{_report.Groups.Count:n0} nhóm XY • {sourceRows:n0} điểm nguồn đang hiển thị • ΔZ > 3 m: "+
                 (_highDeltaOnly.Checked?"BẬT":"TẮT")+" • dung sai XY="+
                 _report.XyTolerance.ToString("G",CultureInfo.InvariantCulture)+" m."+
                 "\r\nNút LOẠI ĐIỂM chỉ tắt đúng đỉnh thật trong mô hình TIN (không xóa CAD). "+
@@ -165,6 +261,9 @@ namespace MiningVolume2023.UI
         {
             if(_scanCts!=null)return;
             _source=ProjectState.Current.Get(_role).Source;_revision=_source.Revision;
+            _entityById.Clear();
+            foreach(var e in _source.Entities)
+                if(!_entityById.ContainsKey(e.Id))_entityById.Add(e.Id,e);
             var polygon=ProjectState.Current.TinRegionPolygon.ToArray();
             _scanCts=new CancellationTokenSource();var token=_scanCts.Token;
             _scan.Enabled=false;_exclude.Enabled=false;_excludeVertex.Enabled=false;
