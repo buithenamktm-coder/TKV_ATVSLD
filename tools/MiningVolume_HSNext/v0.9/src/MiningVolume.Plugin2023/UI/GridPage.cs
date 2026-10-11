@@ -24,6 +24,12 @@ namespace MiningVolume2023.UI
         private readonly DataGridView _cells;
         private bool _syncing;
         private CancellationTokenSource _cts;
+        private readonly TableLayoutPanel _rootLayout;
+        private readonly TableLayoutPanel _settingsGrid;
+        private readonly FlowLayoutPanel _actionPanel;
+        private readonly Label _scopeCaption, _xCaption, _yCaption, _angleCaption;
+        private readonly Button _pickBoundary;
+        private bool _compactGrid;
 
         public GridPage()
         {
@@ -31,7 +37,7 @@ namespace MiningVolume2023.UI
             Dock = DockStyle.Fill;
             BackColor = Color.White;
 
-            var root = new TableLayoutPanel
+            var root = _rootLayout = new TableLayoutPanel
             {
                 Dock=DockStyle.Fill,ColumnCount=1,RowCount=5,
                 Padding=Padding.Empty,Margin=Padding.Empty
@@ -49,29 +55,33 @@ namespace MiningVolume2023.UI
                 Font=new Font("Arial",11,FontStyle.Bold),TextAlign=ContentAlignment.MiddleLeft
             },0,0);
 
-            var settings=new TableLayoutPanel {Dock=DockStyle.Fill,ColumnCount=6,RowCount=2,Padding=new Padding(2)};
+            var settings=_settingsGrid=new TableLayoutPanel {Dock=DockStyle.Fill,ColumnCount=6,RowCount=2,Padding=new Padding(2)};
             for(int c=0;c<6;c++) settings.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100F/6F));
             settings.RowStyles.Add(new RowStyle(SizeType.Percent,50));
             settings.RowStyles.Add(new RowStyle(SizeType.Percent,50));
             _boundary=new Label{Text="Chưa chọn đường bao",Dock=DockStyle.Fill,
                 TextAlign=ContentAlignment.MiddleLeft,AutoEllipsis=true};
-            settings.Controls.Add(new Label{Text="Phạm vi",Dock=DockStyle.Fill,TextAlign=ContentAlignment.MiddleLeft},0,0);
+            _scopeCaption=new Label{Text="Phạm vi",Dock=DockStyle.Fill,TextAlign=ContentAlignment.MiddleLeft};
+            settings.Controls.Add(_scopeCaption,0,0);
             settings.Controls.Add(_boundary,1,0);
             settings.SetColumnSpan(_boundary,3);
-            var pick=Btn("CHỌN TRÊN CAD",(s,e)=>ChooseBoundary());
+            var pick=_pickBoundary=Btn("CHỌN TRÊN CAD",(s,e)=>ChooseBoundary());
             settings.Controls.Add(pick,4,0);settings.SetColumnSpan(pick,2);
             _sizeX=Num(20,0.1M,100000);
             _sizeY=Num(20,0.1M,100000);
             _angle=Num(0,-180,180);
-            settings.Controls.Add(new Label{Text="Ô X (m)",Dock=DockStyle.Fill},0,1);
+            _xCaption=new Label{Text="Ô X (m)",Dock=DockStyle.Fill};
+            settings.Controls.Add(_xCaption,0,1);
             settings.Controls.Add(_sizeX,1,1);
-            settings.Controls.Add(new Label{Text="Ô Y (m)",Dock=DockStyle.Fill},2,1);
+            _yCaption=new Label{Text="Ô Y (m)",Dock=DockStyle.Fill};
+            settings.Controls.Add(_yCaption,2,1);
             settings.Controls.Add(_sizeY,3,1);
-            settings.Controls.Add(new Label{Text="Góc xoay",Dock=DockStyle.Fill},4,1);
+            _angleCaption=new Label{Text="Góc xoay",Dock=DockStyle.Fill};
+            settings.Controls.Add(_angleCaption,4,1);
             settings.Controls.Add(_angle,5,1);
             root.Controls.Add(settings,0,1);
 
-            var actions=new FlowLayoutPanel {Dock=DockStyle.Fill,WrapContents=true,Padding=new Padding(4,3,4,3)};
+            var actions=_actionPanel=new FlowLayoutPanel {Dock=DockStyle.Fill,WrapContents=true,Padding=new Padding(4,3,4,3)};
             _calculate=Btn("TÍNH LƯỚI",async(s,e)=>await CalculateAsync());
             _cancel=Btn("HỦY TÍNH",(s,e)=>_cts?.Cancel());
             _draw=Btn("VẼ LƯỚI CAD",(s,e)=>DrawCad());
@@ -105,6 +115,57 @@ namespace MiningVolume2023.UI
             _angle.ValueChanged+=ParametersChanged;
             ProjectState.Current.Changed+=ProjectChanged;
             Restore();
+            SizeChanged += (sender,args) => ApplyResponsiveGridLayout();
+            ApplyResponsiveGridLayout();
+        }
+
+        private void ApplyResponsiveGridLayout()
+        {
+            bool compact = ClientSize.Width < 560;
+            if (_compactGrid == compact) return;
+            _compactGrid = compact;
+            _settingsGrid.SuspendLayout();
+            try
+            {
+                _settingsGrid.Controls.Clear();
+                _settingsGrid.RowStyles.Clear();
+                _settingsGrid.ColumnStyles.Clear();
+                _settingsGrid.ColumnCount = compact ? 2 : 6;
+                _settingsGrid.RowCount = compact ? 5 : 2;
+                if (compact)
+                {
+                    _settingsGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 112F));
+                    _settingsGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+                    for (int k=0; k<5; k++)
+                        _settingsGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 36F));
+                    _settingsGrid.Controls.Add(_scopeCaption,0,0);
+                    _settingsGrid.Controls.Add(_boundary,1,0);
+                    _pickBoundary.Dock=DockStyle.Fill;
+                    _settingsGrid.Controls.Add(_pickBoundary,0,1);
+                    _settingsGrid.SetColumnSpan(_pickBoundary,2);
+                    _settingsGrid.Controls.Add(_xCaption,0,2); _settingsGrid.Controls.Add(_sizeX,1,2);
+                    _settingsGrid.Controls.Add(_yCaption,0,3); _settingsGrid.Controls.Add(_sizeY,1,3);
+                    _settingsGrid.Controls.Add(_angleCaption,0,4); _settingsGrid.Controls.Add(_angle,1,4);
+                }
+                else
+                {
+                    for(int c=0;c<6;c++) _settingsGrid.ColumnStyles.Add(
+                        new ColumnStyle(SizeType.Percent,100F/6F));
+                    _settingsGrid.RowStyles.Add(new RowStyle(SizeType.Percent,50));
+                    _settingsGrid.RowStyles.Add(new RowStyle(SizeType.Percent,50));
+                    _settingsGrid.Controls.Add(_scopeCaption,0,0);
+                    _settingsGrid.Controls.Add(_boundary,1,0);
+                    _settingsGrid.SetColumnSpan(_boundary,3);
+                    _settingsGrid.Controls.Add(_pickBoundary,4,0);
+                    _settingsGrid.SetColumnSpan(_pickBoundary,2);
+                    _settingsGrid.Controls.Add(_xCaption,0,1); _settingsGrid.Controls.Add(_sizeX,1,1);
+                    _settingsGrid.Controls.Add(_yCaption,2,1); _settingsGrid.Controls.Add(_sizeY,3,1);
+                    _settingsGrid.Controls.Add(_angleCaption,4,1); _settingsGrid.Controls.Add(_angle,5,1);
+                }
+                _rootLayout.RowStyles[1].Height = compact ? 184F : 80F;
+                _rootLayout.RowStyles[2].Height = compact ? 148F : 83F;
+            }
+            finally { _settingsGrid.ResumeLayout(true); }
         }
 
         private static Button Btn(string text,EventHandler e)
