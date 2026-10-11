@@ -39,7 +39,8 @@ namespace MiningVolume2023.UI
         private readonly DataGridView _grid;
         private readonly Label _status;
         private readonly TextBox _filter;
-        private readonly Button _scan, _exclude, _excludeVertex, _zoomPoint;
+        private readonly Button _scan, _exclude, _excludeVertex, _zoomPoint, _buildPreview;
+        private readonly Action _requestBuildPreview;
         private readonly CheckBox _highDeltaOnly;
         private const double HighDeltaZMetres = 3.0;
         private readonly System.Windows.Forms.Timer _documentWatch;
@@ -52,9 +53,11 @@ namespace MiningVolume2023.UI
         private MiningVolume.Core.Model.SurfaceModel _source;
         private long _revision;
 
-        public ConflictReviewForm(ModelRole role, ConflictReport report, bool meanPreview=false)
+        public ConflictReviewForm(ModelRole role, ConflictReport report, bool meanPreview=false,
+            Action requestBuildPreview=null)
         {
             _role=role; _report=report; _meanPreview=meanPreview;
+            _requestBuildPreview=requestBuildPreview;
             _document=CadApplication.DocumentManager.MdiActiveDocument;
             _source=ProjectState.Current.Get(role).Source; _revision=_source.Revision;
             Text="IMSAT VOLUME — Điểm trùng tọa độ — "+ProjectState.Current.Get(role).Name+
@@ -83,8 +86,13 @@ namespace MiningVolume2023.UI
             _filter=new TextBox{Width=175}; _filter.TextChanged+=(s,e)=>BindRows();
             var restore=new Button {Text="Khôi phục điểm...",AutoSize=true,Height=34};
             restore.Click+=async(s,e)=>await RestoreVerticesAsync();
+            _buildPreview=new Button {
+                Text="DỰNG TIN THỬ SAU KHI XỬ LÝ",AutoSize=true,Height=34,
+                Visible=_meanPreview&&_requestBuildPreview!=null,Enabled=false
+            };
+            _buildPreview.Click+=(s,e)=>BuildPreviewAfterReview();
             bar.Controls.AddRange(new Control[]{_scan,restore,zoom,_zoomPoint,_excludeVertex,_exclude,
-                cancel,_highDeltaOnly,new Label{Text="Lọc nhóm/layer/handle",AutoSize=true},_filter});
+                cancel,_highDeltaOnly,_buildPreview,new Label{Text="Lọc nhóm/layer/handle",AutoSize=true},_filter});
             _grid=new DataGridView{Dock=DockStyle.Fill,ReadOnly=true,AllowUserToAddRows=false,AllowUserToDeleteRows=false,
                 AutoGenerateColumns=false,SelectionMode=DataGridViewSelectionMode.FullRowSelect,MultiSelect=false,
                 VirtualMode=true,RowHeadersVisible=false,BackgroundColor=Color.White};
@@ -230,6 +238,26 @@ namespace MiningVolume2023.UI
             return null;
         }
 
+        private void BuildPreviewAfterReview()
+        {
+            if(!_meanPreview || _requestBuildPreview==null || !Current() ||
+                _scanCts!=null || _report==null) return;
+            int remaining=_report.Groups.Count(g=>g.DeltaZ>HighDeltaZMetres);
+            if(remaining!=0)
+            {
+                MessageBox.Show(this,
+                    "Còn "+remaining.ToString("n0")+
+                    " nhóm trùng XY có ΔZ > 3 m. Hãy sửa/loại các điểm cần kiểm tra rồi quét lại.",
+                    "TIN thử nghiệm - chưa đủ điều kiện",
+                    MessageBoxButtons.OK,MessageBoxIcon.Warning);
+                return;
+            }
+            // Never silently build from a stale or unreviewed model. The caller
+            // repeats the hard gate after this modeless editor closes.
+            Close();
+            _requestBuildPreview();
+        }
+
         private void RefreshActions()
         {
             if(IsDisposed)return;
@@ -238,6 +266,8 @@ namespace MiningVolume2023.UI
             _excludeVertex.Enabled=valid && ResolveOriginalVertex(row)!=null;
             _exclude.Enabled=valid && row!=null && !row.IsGroupHeader;
             _zoomPoint.Enabled=valid && row!=null;
+            _buildPreview.Enabled=_meanPreview && _requestBuildPreview!=null &&
+                valid && _report!=null && !_report.Groups.Any(g=>g.DeltaZ>HighDeltaZMetres);
         }
         private void Run(Action action){try{if(!Current())throw new InvalidOperationException("Nguồn đã thay đổi. Hãy quét lại trước khi thao tác.");action();}
             catch(Exception ex){_status.Text=ex.Message;}}
