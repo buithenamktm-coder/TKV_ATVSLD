@@ -92,7 +92,7 @@ def test_section_renderer_batches_tin_segments_into_polylines():
     assert "AddProfilePolylines" in s
     assert "FlushProfilePolyline" in s
     assert "new Polyline(points.Count)" in s
-    block = s[s.index("AddProfilePolylines(ms, tr, p"):s.index("currentY -= height + 45.0")]
+    block = s[s.index("AddProfilePolylines(ms, tr, p"):s.index("currentY -= height + layoutGap;")]
     assert "AddLine(ms, tr" not in block
 
 
