@@ -54,6 +54,8 @@ namespace MiningVolume.Core.Reporting
         public bool FreezeHeader { get; set; } = true;
         public bool AutoFilter { get; set; } = true;
         public bool Landscape { get; set; } = true;
+        /// <summary>Reserve readable vertical space for two handwritten signatures.</summary>
+        public bool HasSignatures { get; set; }
     }
 
     public sealed class SpreadsheetReport
@@ -368,9 +370,17 @@ namespace MiningVolume.Core.Reporting
                     for (int c = 0; c < sheet.Headers.Count; c++) WriteCell(x, c + 1, row, ReportCell.Text(sheet.Headers[c], true), StyleHeader);
                     x.WriteEndElement(); row++;
                 }
+                bool signatureStarted = false;
                 foreach (var dataRow in sheet.Rows)
                 {
-                    WriteRowStart(x, row, 20);
+                    bool signatureTitle = sheet.HasSignatures && dataRow != null &&
+                        dataRow.Any(c => c != null && string.Equals(Convert.ToString(c.Value),
+                            "NGƯỜI TÍNH TOÁN", StringComparison.Ordinal));
+                    if (signatureTitle) signatureStarted = true;
+                    bool blank = dataRow == null || dataRow.All(c => c == null ||
+                        string.IsNullOrWhiteSpace(Convert.ToString(c.Value)));
+                    int rowHeight = signatureStarted ? (signatureTitle ? 30 : blank ? 38 : 26) : 20;
+                    WriteRowStart(x, row, rowHeight);
                     if (dataRow != null) for (int c = 0; c < dataRow.Count; c++) WriteCell(x, c + 1, row, dataRow[c] ?? ReportCell.Text(string.Empty), StyleFor(dataRow[c]));
                     x.WriteEndElement(); row++;
                 }
