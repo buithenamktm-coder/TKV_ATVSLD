@@ -19,7 +19,7 @@ def test_section_page_has_explicit_draw_sections_button():
 
 def test_section_layout_is_single_explicit_vertical_grid_not_overlapping_top_docks():
     ctor = section_ctor()
-    assert "var root = new TableLayoutPanel" in ctor
+    assert "var root = _rootLayout = new TableLayoutPanel" in ctor
     assert "RowCount = 6" in ctor
     assert "root.RowStyles.Add" in ctor
     assert "BringToFront()" not in ctor
