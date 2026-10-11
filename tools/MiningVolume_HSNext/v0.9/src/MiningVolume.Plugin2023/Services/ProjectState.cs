@@ -32,7 +32,9 @@ namespace MiningVolume2023.Services
         public static readonly IReadOnlyList<string> MineralUnits = new[]
         {
             "Chi nhánh Mỏ tuyển đồng Sin Quyền, Lào Cai - Vimico",
-            "Công ty Cổ phần Đồng Tả Phời - Vinacomin"
+            "Công ty Cổ phần Đồng Tả Phời - Vinacomin",
+            "Chi nhánh TKV - Công ty Nhôm Lâm Đồng - TKV",
+            "Công ty Nhôm Đắk Nông - TKV"
         };
         public static IReadOnlyList<string> ForCategory(string group) =>
             string.Equals(group, Mineral, StringComparison.Ordinal) ? MineralUnits : CoalUnits;
