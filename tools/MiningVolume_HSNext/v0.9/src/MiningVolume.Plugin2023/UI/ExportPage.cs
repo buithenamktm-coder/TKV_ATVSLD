@@ -106,6 +106,7 @@ namespace MiningVolume2023.UI
 
         private async void ExportClicked(object sender, EventArgs e)
         {
+            if (!LicenseUiGuard.Check()) return;
             var st = ProjectState.Current;
             bool exportCad = _toCad.Checked;
             bool exportExcel = _toExcel.Checked;
