@@ -182,6 +182,7 @@ namespace MiningVolume2023.UI
                 Cursor = Cursors.Hand
             };
             b.FlatAppearance.BorderSize = 0;
+            UiTheme.ApplyRoundedButtonMask(b);
             b.FlatAppearance.MouseOverBackColor = UiTheme.SidebarHover;
             b.FlatAppearance.MouseDownBackColor = UiTheme.Soft;
             b.Click += (s, e) => ShowPage(page);
