@@ -26,6 +26,23 @@ namespace MiningVolume2023.Services
             }
         }
 
+        /// <summary>Zoom around a conflict XY, not the extent of a long contour
+        /// whose Handle can be hundreds of metres away.</summary>
+        public static void ZoomToXY(double x,double y,double width=30.0)
+        {
+            if(double.IsNaN(x)||double.IsInfinity(x)||double.IsNaN(y)||
+                double.IsInfinity(y)||width<=0)
+                throw new ArgumentException("Tọa độ/tỷ lệ zoom không hợp lệ.");
+            var doc=Application.DocumentManager.MdiActiveDocument;
+            if(doc==null)throw new InvalidOperationException("Không có bản vẽ AutoCAD.");
+            using(doc.LockDocument())
+            {
+                ZoomWindow(doc.Editor,
+                    new Point3d(x-width/2,y-width/2,0),
+                    new Point3d(x+width/2,y+width/2,0),1.10);
+            }
+        }
+
         private static void ZoomWindow(Editor ed, Point3d min, Point3d max, double margin)
         {
             var view = ed.GetCurrentView();

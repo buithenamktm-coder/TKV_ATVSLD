@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -33,7 +34,9 @@ namespace MiningVolume2023.UI
         private readonly DataGridView _grid;
         private readonly Label _status;
         private readonly TextBox _filter;
-        private readonly Button _scan, _exclude;
+        private readonly Button _scan, _exclude, _excludeVertex, _zoomPoint;
+        private readonly CheckBox _highDeltaOnly;
+        private const double HighDeltaZMetres = 3.0;
         private readonly System.Windows.Forms.Timer _documentWatch;
         private readonly List<Row> _rows = new List<Row>();
         private CancellationTokenSource _scanCts;
@@ -53,14 +56,22 @@ namespace MiningVolume2023.UI
             var bar=new FlowLayoutPanel{Dock=DockStyle.Top,AutoSize=true,WrapContents=true,Padding=new Padding(6)};
             _scan=new Button{Text="Quét lại",AutoSize=true,Height=34};
             _scan.Click+=async(s,e)=>await ScanAsync();
-            var zoom=new Button{Text="Zoom nguồn",AutoSize=true,Height=34};
+            var zoom=new Button{Text="Zoom đối tượng",AutoSize=true,Height=34};
             zoom.Click+=(s,e)=>Run(()=>{var row=Selected();if(row!=null)CadViewService.ZoomToHandle(row.Source.Handle);});
-            _exclude=new Button{Text="Loại toàn bộ đối tượng khỏi mô hình",AutoSize=true,Height=34};
+            _zoomPoint=new Button{Text="Zoom đúng XY",AutoSize=true,Height=34};
+            _zoomPoint.Click+=(s,e)=>Run(()=>{var row=Selected();if(row!=null)CadViewService.ZoomToXY(row.Group.Position.X,row.Group.Position.Y);});
+            _excludeVertex=new Button{Text="LOẠI ĐIỂM KHỎI MÔ HÌNH",AutoSize=true,Height=34};
+            _excludeVertex.Click+=async(s,e)=>await ExcludeVertexAsync();
+            _exclude=new Button{Text="Loại cả đối tượng",AutoSize=true,Height=34};
             _exclude.Click+=async(s,e)=>await ExcludeAsync();
             var cancel=new Button{Text="Hủy quét",AutoSize=true,Height=34};
             cancel.Click+=(s,e)=>_scanCts?.Cancel();
-            _filter=new TextBox{Width=230}; _filter.TextChanged+=(s,e)=>BindRows();
-            bar.Controls.AddRange(new Control[]{_scan,zoom,_exclude,cancel,new Label{Text="Lọc nhóm/layer/loại/handle",AutoSize=true},_filter});
+            _highDeltaOnly=new CheckBox{Text="Chỉ hiện ΔZ > 3 m",Checked=true,AutoSize=true,
+                Padding=new Padding(0,8,0,0)};
+            _highDeltaOnly.CheckedChanged+=(s,e)=>BindRows();
+            _filter=new TextBox{Width=175}; _filter.TextChanged+=(s,e)=>BindRows();
+            bar.Controls.AddRange(new Control[]{_scan,zoom,_zoomPoint,_excludeVertex,_exclude,
+                cancel,_highDeltaOnly,new Label{Text="Lọc nhóm/layer/handle",AutoSize=true},_filter});
             _grid=new DataGridView{Dock=DockStyle.Fill,ReadOnly=true,AllowUserToAddRows=false,AllowUserToDeleteRows=false,
                 AutoGenerateColumns=false,SelectionMode=DataGridViewSelectionMode.FullRowSelect,MultiSelect=false,
                 VirtualMode=true,RowHeadersVisible=false,BackgroundColor=Color.White};
@@ -74,25 +85,81 @@ namespace MiningVolume2023.UI
                 e.Value=values[e.ColumnIndex];
             };
             Controls.Add(_grid);Controls.Add(bar);Controls.Add(_status);
+            _grid.SelectionChanged+=(s,e)=>RefreshActions();
             _documentWatch=new System.Windows.Forms.Timer{Interval=300};
             _documentWatch.Tick+=(s,e)=>{if(CadApplication.DocumentManager.MdiActiveDocument!=_document)Close();};
             Shown+=async(s,e)=>{_documentWatch.Start();if(_report==null)await ScanAsync();else BindRows();};
             FormClosed+=(s,e)=>{_scanCts?.Cancel();_documentWatch.Stop();_documentWatch.Dispose();};
         }
         private Row Selected()=>_grid.CurrentCell==null||_grid.CurrentCell.RowIndex>=_rows.Count?null:_rows[_grid.CurrentCell.RowIndex];
-        private bool Current()=>CadApplication.DocumentManager.MdiActiveDocument==_document&&
+        private bool Current()=>_source!=null &&
+            CadApplication.DocumentManager.MdiActiveDocument==_document&&
             ReferenceEquals(_source,ProjectState.Current.Get(_role).Source)&&_source.Revision==_revision;
+
+        /// <summary>
+        /// Map a conflict row back to a REAL, currently enabled source vertex.
+        /// A clipped/generated CAD intersection has no deletable original vertex.
+        /// Coordinates and elevation are checked against the unmodified input
+        /// before permitting any exclusion.
+        /// </summary>
+        private MiningVolume.Core.Model.ModelVertex ResolveOriginalVertex(Row row)
+        {
+            if(row==null || _source==null || !Current())return null;
+            var candidate=_source.Entities.FirstOrDefault(e=>e.IsEnabled &&
+                string.Equals(e.Id,row.Source.EntityId,StringComparison.Ordinal));
+            if(candidate==null)return null;
+            double xy=_report?.XyTolerance??1e-6,z=_report?.ZTolerance??1e-4;
+            bool Matches(MiningVolume.Core.Model.ModelVertex v)
+            {
+                double dx=v.Position.X-row.Group.Position.X;
+                double dy=v.Position.Y-row.Group.Position.Y;
+                return v.IsEnabled && dx*dx+dy*dy<=xy*xy &&
+                    Math.Abs(v.Position.Z-row.Source.Z)<=z;
+            }
+            if (!row.Source.Generated && row.Source.VertexIndex>=0)
+            {
+                var indexed=candidate.Vertices.FirstOrDefault(v=>v.Index==row.Source.VertexIndex);
+                return indexed!=null && Matches(indexed)?indexed:null;
+            }
+            // Region-clipping may produce a generated copy of an actual
+            // original endpoint; only accept a provable coordinate/Z match.
+            var matches=candidate.Vertices.Where(Matches).Take(2).ToList();
+            return matches.Count==1?matches[0]:null;
+        }
+
+        private void RefreshActions()
+        {
+            if(IsDisposed)return;
+            bool valid=Current() && _scanCts==null;
+            var row=Selected();
+            _excludeVertex.Enabled=valid && ResolveOriginalVertex(row)!=null;
+            _exclude.Enabled=valid && row!=null;
+            _zoomPoint.Enabled=valid && row!=null;
+        }
         private void Run(Action action){try{if(!Current())throw new InvalidOperationException("Nguồn đã thay đổi. Hãy quét lại trước khi thao tác.");action();}
             catch(Exception ex){_status.Text=ex.Message;}}
         private void BindRows()
         {
             _rows.Clear();var filter=_filter.Text.Trim();
-            if(_report!=null)foreach(var g in _report.Groups)foreach(var s in g.Sources)
-                if(filter.Length==0||(g.Id+" "+s.Layer+" "+s.Type+" "+s.Handle).IndexOf(filter,StringComparison.OrdinalIgnoreCase)>=0)
-                    _rows.Add(new Row{Group=g,Source=s});
+            int groupsVisible=0;
+            if(_report!=null)foreach(var g in _report.Groups)
+            {
+                if(_highDeltaOnly.Checked && !(g.DeltaZ>HighDeltaZMetres))continue;
+                int before=_rows.Count;
+                foreach(var s in g.Sources)
+                    if(filter.Length==0||(g.Id+" "+s.Layer+" "+s.Type+" "+s.Handle)
+                        .IndexOf(filter,StringComparison.OrdinalIgnoreCase)>=0)
+                        _rows.Add(new Row{Group=g,Source=s});
+                if(_rows.Count>before)groupsVisible++;
+            }
             _grid.RowCount=_rows.Count;_grid.Invalidate();
-            _status.Text=_report==null?"Chưa quét.":$"{_report.Groups.Count:n0} nhóm xung đột • {_rows.Count:n0} bản ghi hiển thị • dung sai XY={_report.XyTolerance:G}, Z={_report.ZTolerance:G}.\r\n"+
-                "TIN 2.5D cần một Z tại mỗi XY. Không tự chọn cao độ; loại đối tượng chỉ tác động mô hình, không xóa CAD.";
+            _status.Text=_report==null?"Chưa quét.":
+                $"{groupsVisible:n0}/{_report.Groups.Count:n0} nhóm XY đang hiển thị • {_rows.Count:n0} nguồn • ΔZ > 3 m: "+
+                (_highDeltaOnly.Checked?"BẬT":"TẮT")+" • dung sai XY="+
+                _report.XyTolerance.ToString("G",CultureInfo.InvariantCulture)+" m."+
+                "\r\nNút LOẠI ĐIỂM chỉ tắt đúng đỉnh thật trong mô hình TIN (không xóa CAD). "+
+                "Dòng nội suy/giao điểm không có đỉnh gốc hợp lệ phải xử lý ở đối tượng nguồn.";
+            RefreshActions();
         }
         private async Task ScanAsync()
         {
@@ -100,7 +167,9 @@ namespace MiningVolume2023.UI
             _source=ProjectState.Current.Get(_role).Source;_revision=_source.Revision;
             var polygon=ProjectState.Current.TinRegionPolygon.ToArray();
             _scanCts=new CancellationTokenSource();var token=_scanCts.Token;
-            _scan.Enabled=false;_exclude.Enabled=false;_status.Text="Đang quét nguồn tham gia mô hình...";
+            _scan.Enabled=false;_exclude.Enabled=false;_excludeVertex.Enabled=false;
+            _zoomPoint.Enabled=false;
+            _status.Text="Đang quét nguồn tham gia mô hình...";
             try{
                 var source=_source;
                 var result=await Task.Run(()=>{
@@ -112,8 +181,53 @@ namespace MiningVolume2023.UI
                 _report=result;BindRows();
             }catch(OperationCanceledException){if(!IsDisposed)_status.Text="Đã hủy quét. Không thay đổi dữ liệu nguồn.";}
             catch(Exception ex){if(!IsDisposed)_status.Text=ex.Message;}
-            finally{_scanCts.Dispose();_scanCts=null;if(!IsDisposed){_scan.Enabled=true;_exclude.Enabled=true;}}
+            finally{_scanCts.Dispose();_scanCts=null;if(!IsDisposed){_scan.Enabled=true;RefreshActions();}}
         }
+        private async Task ExcludeVertexAsync()
+        {
+            var row=Selected();
+            if(row==null)return;
+            if(!Current())
+            {
+                _status.Text="Nguồn TIN đã thay đổi; phải quét lại trước khi loại điểm.";
+                return;
+            }
+            var vertex=ResolveOriginalVertex(row);
+            if(vertex==null)
+            {
+                _status.Text="Dòng này chỉ là điểm nội suy hoặc không ánh xạ duy nhất đến "+
+                    "đỉnh nguồn. Không xóa nhầm: hãy Zoom XY và kiểm tra đường gốc.";
+                return;
+            }
+            var entity=_source.Entities.First(e=>e.Id==row.Source.EntityId);
+            int index=vertex.Index;
+            if(MessageBox.Show(this,
+                "Loại CHỈ MỘT ĐỈNH khỏi dữ liệu dựng TIN?"+
+                "\r\nLayer: "+entity.Layer+" • Handle: "+entity.Handle+" • Đỉnh: "+index+
+                "\r\nXY: "+row.Group.Position.X.ToString("0.###")+"; "+
+                row.Group.Position.Y.ToString("0.###")+
+                " • Z: "+vertex.Position.Z.ToString("0.###")+" m"+
+                "\r\nΔZ nhóm: "+row.Group.DeltaZ.ToString("0.###")+" m."+
+                "\r\n\r\nKhông xóa/sửa bản vẽ DWG gốc. TIN, mặt cắt và "+
+                "kết quả tính đang lưu sẽ mất hiệu lực. Tiếp tục?",
+                "Xác nhận LOẠI ĐIỂM khỏi mô hình",
+                MessageBoxButtons.YesNo,MessageBoxIcon.Warning,
+                MessageBoxDefaultButton.Button2)!=DialogResult.Yes)return;
+            try
+            {
+                if(!Current())throw new InvalidOperationException("Nguồn đã thay đổi.");
+                // Re-resolve after the modal dialog, to protect against
+                // changes to the original model while the dialog was shown.
+                var confirmed=ResolveOriginalVertex(row);
+                if(confirmed==null || confirmed.Index!=index)
+                    throw new InvalidOperationException("Đỉnh nguồn đã thay đổi, vui lòng quét lại.");
+                _source.SetVertexEnabled(entity.Id,index,false);
+                SurfaceWorkflowService.InvalidateTin(_role,clearCadLayer:true);
+                await ScanAsync();
+            }
+            catch(Exception ex) { if(!IsDisposed)_status.Text=ex.Message; }
+        }
+
         private async Task ExcludeAsync()
         {
             var row=Selected();if(row==null)return;
@@ -126,7 +240,7 @@ namespace MiningVolume2023.UI
             try{
                 if(!Current())throw new InvalidOperationException("Nguồn đã thay đổi; hãy quét lại.");
                 _source.RemoveEntityFromModel(entity.Id);
-                SurfaceWorkflowService.InvalidateTin(_role,clearCadLayer:false);
+                SurfaceWorkflowService.InvalidateTin(_role,clearCadLayer:true);
                 await ScanAsync();
             }catch(Exception ex){_status.Text=ex.Message;}
         }
