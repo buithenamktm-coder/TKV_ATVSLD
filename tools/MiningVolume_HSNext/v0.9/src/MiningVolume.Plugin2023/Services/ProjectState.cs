@@ -93,6 +93,10 @@ namespace MiningVolume2023.Services
         public SectionSystem SectionSystem { get; set; }
         public List<SectionProfile> SectionProfiles { get; } = new List<SectionProfile>();
         public VolumeResult VolumeResult { get; set; }
+        public string GridBoundaryHandle { get; set; }
+        public double GridSizeX { get; set; } = 20.0;
+        public double GridSizeY { get; set; } = 20.0;
+        public double GridRotationDegrees { get; set; }
         public double SectionSpacing { get; set; } = 20.0;
         public double LevelStep { get; set; } = 5.0;
         public double FromLevel { get; set; }
@@ -120,6 +124,10 @@ namespace MiningVolume2023.Services
             SectionSystem = null;
             SectionProfiles.Clear();
             VolumeResult = null;
+            GridBoundaryHandle = null;
+            GridSizeX = 20.0;
+            GridSizeY = 20.0;
+            GridRotationDegrees = 0;
             SectionSpacing = 20.0;
             LevelStep = 5.0;
             FromLevel = 0;

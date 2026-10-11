@@ -11,7 +11,7 @@ def read(rel):
 def test_project_page_is_real_palette_page():
     main = read('src/MiningVolume.Plugin2023/UI/MainPaletteControl.cs')
     page = read('src/MiningVolume.Plugin2023/UI/ProjectPage.cs')
-    assert 'AppPage { Project, Data, Model, Section, Volume, Export }' in main
+    assert 'AppPage { Project, Data, Model, Section, Volume, Grid, Export }' in main
     assert '[AppPage.Project] = new ProjectPage()' in main
     assert 'LƯU PROJECT VÀO DWG' in page
     assert 'NẠP LẠI PROJECT' in page
