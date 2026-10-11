@@ -51,6 +51,10 @@ namespace MiningVolume2023.Services
         [DataMember(Order = 36)] public string VolumePeriodType { get; set; }
         [DataMember(Order = 37)] public int VolumePeriodNumber { get; set; }
         [DataMember(Order = 38)] public int VolumePeriodYear { get; set; }
+        // True if exported CAD section geometry or an accepted manual edit
+        // existed when this project was saved. Missing geometry on reload
+        // must block reconstruction rather than silently using raw TIN.
+        [DataMember(Order = 39)] public bool HadEditableSectionCad { get; set; }
     }
 
     [DataContract]
