@@ -146,6 +146,9 @@ namespace MiningVolume2023.Services
                 DeveloperContact = state.DeveloperContact,
                 MiningUnitGroup = state.MiningUnitGroup,
                 MiningUnitName = state.MiningUnitName,
+                VolumePeriodType = state.VolumePeriodType,
+                VolumePeriodNumber = state.VolumePeriodNumber,
+                VolumePeriodYear = state.VolumePeriodYear,
                 VolumeCalculatedUtc = state.VolumeCalculatedUtc,
                 VolumeCalculationSeconds = state.VolumeCalculationSeconds,
                 GridCalculatedUtc = state.GridCalculatedUtc,
@@ -236,6 +239,15 @@ namespace MiningVolume2023.Services
             state.MiningUnitGroup = snap.MiningUnitGroup == MiningUnitCatalog.Mineral
                 ? MiningUnitCatalog.Mineral : MiningUnitCatalog.Coal;
             state.MiningUnitName = snap.MiningUnitName ?? string.Empty;
+            state.VolumePeriodType = snap.VolumePeriodType == VolumePeriodCatalog.Year
+                ? VolumePeriodCatalog.Year
+                : snap.VolumePeriodType == VolumePeriodCatalog.Quarter
+                    ? VolumePeriodCatalog.Quarter : VolumePeriodCatalog.Month;
+            state.VolumePeriodYear = snap.VolumePeriodYear >= 1900 && snap.VolumePeriodYear <= 2200
+                ? snap.VolumePeriodYear : DateTime.Now.Year;
+            int maxPeriod = state.VolumePeriodType == VolumePeriodCatalog.Quarter ? 4 : 12;
+            state.VolumePeriodNumber = snap.VolumePeriodNumber >= 1 && snap.VolumePeriodNumber <= maxPeriod
+                ? snap.VolumePeriodNumber : 1;
             // A saved calculation timestamp is not proof that the reconstructed
             // source TIN and resulting geometry will match. Keep its provenance
             // only if rebuild is enabled and succeeds.
