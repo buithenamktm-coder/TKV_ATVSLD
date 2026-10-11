@@ -40,6 +40,11 @@ namespace MiningVolume2023.Services
         {
             var doc = Application.DocumentManager.MdiActiveDocument ?? throw new InvalidOperationException("Không có bản vẽ AutoCAD đang hoạt động.");
             var snapshot = Capture(ProjectState.Current);
+            // Record the CAD evidence before persisting. If it later disappears,
+            // never silently recalculate a manually approved section from TIN.
+            snapshot.HadEditableSectionCad =
+                ProjectState.Current.SectionProfiles.Any(x => x != null && x.IsUserEdited) ||
+                EditableSectionCadService.HasEditableProfiles(doc.Database);
             snapshot.SavedUtc = DateTime.UtcNow;
             var encoded = ProjectSnapshotCodec.Encode(snapshot);
             using (doc.LockDocument())
@@ -312,11 +317,17 @@ namespace MiningVolume2023.Services
                     {
                         SectionWorkflowService.BuildProfiles();
                         var doc = Application.DocumentManager.MdiActiveDocument;
-                        if (doc != null && EditableSectionCadService.HasEditableProfiles(doc.Database))
+                        bool cadSectionsAvailable = doc != null &&
+                            EditableSectionCadService.HasEditableProfiles(doc.Database);
+                        if (snap.HadEditableSectionCad && !cadSectionsAvailable)
+                            throw new InvalidOperationException(
+                                "Project đã lưu có hệ mặt cắt CAD hoặc đường đã hiệu chỉnh, nhưng hiện không tìm thấy. " +
+                                "Không được tính lại từ TIN thay cho mặt cắt người dùng đã sửa. Hãy khôi phục bản vẽ hoặc hệ mặt cắt gốc.");
+                        if (cadSectionsAvailable)
                         {
-                            // Persisted CAD polylines are the authoritative edited
-                            // section geometry after DWG reopen. Never silently
-                            // replace user changes with raw TIN resampling.
+                            // Persisted CAD polylines are authoritative. Even when
+                            // only one tagged segment survives, reconstruction
+                            // validates completeness and fails closed.
                             var edited = EditableSectionCadService.ReadEditedProfiles(
                                 doc.Database, state.SectionProfiles.ToArray());
                             SectionWorkflowService.CommitProfiles(edited);
