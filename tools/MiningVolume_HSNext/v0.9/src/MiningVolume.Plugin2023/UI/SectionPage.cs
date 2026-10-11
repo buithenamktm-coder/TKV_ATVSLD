@@ -280,6 +280,7 @@ namespace MiningVolume2023.UI
 
         private async void BuildProfiles(object s, EventArgs e)
         {
+            if (!LicenseUiGuard.Check()) return;
             var button = s as Button;
             try
             {
