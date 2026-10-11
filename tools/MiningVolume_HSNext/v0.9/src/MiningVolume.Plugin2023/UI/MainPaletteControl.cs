@@ -115,7 +115,7 @@ namespace MiningVolume2023.UI
                 page.Dock = DockStyle.None;
                 page.Location = new Point(0, 0);
                 page.Width = Math.Max(310, _content.ClientSize.Width - 20);
-                page.Height = Math.Max(640, _content.ClientSize.Height - 12);
+                page.Height = Math.Max(800, _content.ClientSize.Height - 12);
             }
             else
             {
