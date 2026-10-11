@@ -193,6 +193,7 @@ namespace MiningVolume2023.Services
             foreach (var handle in session.SelectedHandles) s.SelectedHandles.Add(handle);
             foreach (var t in session.AllowedTypes) s.AllowedTypes.Add((int)t);
             if (session.Source == null) return s;
+            s.EditHistory.AddRange(session.Source.EditHistory);
             foreach (var e in session.Source.Entities)
             {
                 var edit = new EntityEditSnapshot { Handle = e.Handle, Enabled = e.IsEnabled };
@@ -202,6 +203,8 @@ namespace MiningVolume2023.Services
                     if (!v.IsEnabled || hasZ)
                         edit.Vertices.Add(new VertexEditSnapshot { Index = v.Index, Enabled = v.IsEnabled, HasZOverride = hasZ, Z = v.Position.Z });
                 }
+                if (!edit.Enabled || edit.Vertices.Count > 0)
+                    edit.SourceFingerprint=SourceFingerprint.Compute(e);
                 if (!edit.Enabled || edit.Vertices.Count > 0) s.Edits.Add(edit);
             }
             return s;
@@ -256,6 +259,10 @@ namespace MiningVolume2023.Services
 
             RestoreModel(ModelRole.Existing, snap.Existing, warnings);
             RestoreModel(ModelRole.Design, snap.Design, warnings);
+            if(warnings.Count>0) {
+                rebuildDerived=false;
+                warnings.Add("Nguồn cần kiểm tra lại; không tự dựng TIN/mặt cắt/khối lượng từ dữ liệu chưa xác minh.");
+            }
 
             if (snap.SectionLines != null && snap.SectionLines.Count > 0 && snap.Boundary != null && snap.Boundary.Count >= 3)
             {
@@ -313,6 +320,10 @@ namespace MiningVolume2023.Services
                 foreach (var edit in snap.Edits ?? new List<EntityEditSnapshot>())
                 {
                     if (!byHandle.TryGetValue(edit.Handle ?? string.Empty, out var entity)) { warnings.Add($"{session.Name}: không tìm thấy đối tượng handle {edit.Handle}."); continue; }
+                    if(string.IsNullOrEmpty(edit.SourceFingerprint) || edit.SourceFingerprint!=SourceFingerprint.Compute(entity)) {
+                        warnings.Add(session.Name+": nguồn thay đổi hoặc thiếu dấu kiểm chứng; không áp lại chỉnh sửa cũ cho handle "+edit.Handle);
+                        continue;
+                    }
                     entity.SetEnabled(edit.Enabled);
                     foreach (var ve in edit.Vertices ?? new List<VertexEditSnapshot>())
                     {
@@ -321,6 +332,7 @@ namespace MiningVolume2023.Services
                         if (ve.HasZOverride) entity.Vertices[ve.Index].OverrideZ(ve.Z);
                     }
                 }
+                session.Source.EditHistory.AddRange(snap.EditHistory??new List<ModelEditRecord>());
                 session.Source.Touch();
                 session.TinVisible = snap.TinVisible;
             }

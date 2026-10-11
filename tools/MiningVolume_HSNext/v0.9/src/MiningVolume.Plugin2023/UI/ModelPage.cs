@@ -229,6 +229,13 @@ namespace MiningVolume2023.UI
         {
             var rows = SelectedRows().ToList();
             if (rows.Count == 0) return;
+            var source=CurrentSession.Source;long revision=source.Revision;
+            if(!ModelEditConfirmation.Show(this,"Xác nhận loại điểm",
+                "Bạn có chắc chắn muốn loại điểm này khỏi mô hình không?"+
+                "\r\nSố điểm chọn: "+rows.Count+"\r\n"+
+                string.Join("\r\n",rows.Take(8).Select(r=>"Handle "+r.Entity.Handle+" / đỉnh "+r.Vertex.Index+
+                    " / Z "+r.Vertex.Position.Z))+"\r\nChỉ loại khỏi mô hình; CAD gốc giữ nguyên."))return;
+            if(!ReferenceEquals(source,CurrentSession.Source)||source.Revision!=revision)return;
             foreach (var r in rows) CurrentSession.Source.SetVertexEnabled(r.Entity.Id, r.Vertex.Index, false);
             SurfaceWorkflowService.InvalidateTin(CurrentRole, clearCadLayer: true);
         }
@@ -243,12 +250,10 @@ namespace MiningVolume2023.UI
 
         private void RestoreSelected()
         {
-            foreach (var entity in SelectedRows().Select(r => r.Entity).Distinct())
-            {
-                entity.SetEnabled(true);
-                foreach (var v in entity.Vertices) v.Reset();
+            foreach(var row in SelectedRows().ToList()) {
+                CurrentSession.Source.RestoreEntity(row.Entity.Id);
+                CurrentSession.Source.RestoreVertex(row.Entity.Id,row.Vertex.Index);
             }
-            CurrentSession.Source.Touch();
             SurfaceWorkflowService.InvalidateTin(CurrentRole, clearCadLayer: true);
         }
 
@@ -258,7 +263,7 @@ namespace MiningVolume2023.UI
             foreach (var entity in CurrentSession.Source.Entities)
             {
                 entity.SetEnabled(true);
-                foreach (var v in entity.Vertices) v.Reset();
+                foreach (var v in entity.Vertices) CurrentSession.Source.RestoreVertex(entity.Id,v.Index);
             }
             CurrentSession.Source.Touch();
             SurfaceWorkflowService.InvalidateTin(CurrentRole, clearCadLayer: true);
@@ -271,6 +276,9 @@ namespace MiningVolume2023.UI
             using (var form = new NumericInputDialog("Sửa cao độ Z", "Cao độ Z mới:", row.Vertex.Position.Z))
             {
                 if (form.ShowDialog(this) != DialogResult.OK) return;
+                if(!ModelEditConfirmation.Show(this,"Xác nhận sửa Z",
+                    "Handle "+row.Entity.Handle+" / đỉnh "+row.Vertex.Index+"\r\nZ cũ "+row.Vertex.Position.Z+
+                    " → Z mới "+form.Value+"\r\nChỉ sửa mô hình; CAD gốc giữ nguyên."))return;
                 CurrentSession.Source.OverrideVertexZ(row.Entity.Id, row.Vertex.Index, form.Value);
                 SurfaceWorkflowService.InvalidateTin(CurrentRole, clearCadLayer: true);
             }

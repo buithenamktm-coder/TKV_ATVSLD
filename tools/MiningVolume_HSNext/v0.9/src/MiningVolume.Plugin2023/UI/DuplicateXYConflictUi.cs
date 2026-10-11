@@ -81,7 +81,9 @@ namespace MiningVolume2023.UI
                 Padding=new Padding(0,8,0,0)};
             _highDeltaOnly.CheckedChanged+=(s,e)=>BindRows();
             _filter=new TextBox{Width=175}; _filter.TextChanged+=(s,e)=>BindRows();
-            bar.Controls.AddRange(new Control[]{_scan,zoom,_zoomPoint,_excludeVertex,_exclude,
+            var restore=new Button {Text="Khôi phục điểm...",AutoSize=true,Height=34};
+            restore.Click+=async(s,e)=>await RestoreVerticesAsync();
+            bar.Controls.AddRange(new Control[]{_scan,restore,zoom,_zoomPoint,_excludeVertex,_exclude,
                 cancel,_highDeltaOnly,new Label{Text="Lọc nhóm/layer/handle",AutoSize=true},_filter});
             _grid=new DataGridView{Dock=DockStyle.Fill,ReadOnly=true,AllowUserToAddRows=false,AllowUserToDeleteRows=false,
                 AutoGenerateColumns=false,SelectionMode=DataGridViewSelectionMode.FullRowSelect,MultiSelect=false,
@@ -163,7 +165,7 @@ namespace MiningVolume2023.UI
             _grid.SelectionChanged+=(s,e)=>RefreshActions();
             _documentWatch=new System.Windows.Forms.Timer{Interval=300};
             _documentWatch.Tick+=(s,e)=>{if(CadApplication.DocumentManager.MdiActiveDocument!=_document)Close();};
-            Shown+=async(s,e)=>{_documentWatch.Start();if(_report==null)await ScanAsync();else BindRows();};
+            Shown+=async(s,e)=>{_documentWatch.Start();await ScanAsync();};
             FormClosed+=(s,e)=>{
                 _scanCts?.Cancel();_documentWatch.Stop();_documentWatch.Dispose();
                 _groupFont.Dispose();
@@ -342,23 +344,48 @@ namespace MiningVolume2023.UI
             catch(Exception ex) { if(!IsDisposed)_status.Text=ex.Message; }
         }
 
-        private bool ConfirmModelEdit(string title,string message)
+        private async Task RestoreVerticesAsync()
         {
-            using(var dialog=new Form {Text=title,Font=Font,ClientSize=new Size(620,320),
-                StartPosition=FormStartPosition.CenterParent,FormBorderStyle=FormBorderStyle.FixedDialog,
-                MaximizeBox=false,MinimizeBox=false}) {
-                var body=new Label {Text=message,Dock=DockStyle.Fill,Padding=new Padding(15),AutoEllipsis=false};
-                var buttons=new FlowLayoutPanel {Dock=DockStyle.Bottom,Height=55,
-                    FlowDirection=FlowDirection.RightToLeft,Padding=new Padding(10)};
-                var no=new Button {Text="Không",DialogResult=DialogResult.No,Width=110,Height=32};
-                var yes=new Button {Text="Đồng ý",DialogResult=DialogResult.Yes,Width=110,Height=32};
-                buttons.Controls.Add(no);buttons.Controls.Add(yes);
-                dialog.Controls.Add(body);dialog.Controls.Add(buttons);
-                dialog.AcceptButton=no;dialog.CancelButton=no;
-                dialog.Shown+=(s,e)=>no.Focus();
-                return dialog.ShowDialog(this)==DialogResult.Yes;
+            if(!Current() || _scanCts!=null)return;
+            var edits=_source.Entities.SelectMany(e=>e.Vertices.Where(v=>!v.IsEnabled || v.Position.Z!=v.Original.Z)
+                .Select(v=>new {Entity=e,Vertex=v})).ToList();
+            if(edits.Count==0){_status.Text="Không có điểm đã loại/sửa để khôi phục.";return;}
+            using(var dialog=new Form {Text="Khôi phục điểm trong mô hình",Size=new Size(800,500),
+                StartPosition=FormStartPosition.CenterParent,Font=Font}) {
+                var grid=new DataGridView {Dock=DockStyle.Fill,VirtualMode=true,ReadOnly=true,
+                    AllowUserToAddRows=false,AllowUserToDeleteRows=false,RowHeadersVisible=false,
+                    SelectionMode=DataGridViewSelectionMode.FullRowSelect,MultiSelect=true};
+                foreach(var title in new[]{"Handle","Layer","Đỉnh","Z gốc","Z hiện tại","Tham gia"})
+                    grid.Columns.Add(title,title);
+                grid.CellValueNeeded+=(s,e)=>{
+                    if(e.RowIndex<0||e.RowIndex>=edits.Count)return;
+                    var item=edits[e.RowIndex];
+                    e.Value=new object[]{item.Entity.Handle,item.Entity.Layer,item.Vertex.Index,
+                        item.Vertex.Original.Z,item.Vertex.Position.Z,item.Vertex.IsEnabled?"Có":"Không"}[e.ColumnIndex];
+                };
+                grid.RowCount=edits.Count;
+                var bar=new FlowLayoutPanel {Dock=DockStyle.Bottom,Height=50};
+                var selected=new Button {Text="Khôi phục lựa chọn",AutoSize=true,Height=34};
+                var all=new Button {Text="Khôi phục tất cả điểm",AutoSize=true,Height=34};
+                var cancel=new Button {Text="Đóng",DialogResult=DialogResult.Cancel,Height=34};
+                var indices=new List<int>();
+                selected.Click+=(s,e)=>{indices=grid.SelectedRows.Cast<DataGridViewRow>().Select(r=>r.Index).ToList();if(indices.Count>0)dialog.DialogResult=DialogResult.OK;};
+                all.Click+=(s,e)=>{indices=Enumerable.Range(0,edits.Count).ToList();dialog.DialogResult=DialogResult.OK;};
+                bar.Controls.AddRange(new Control[]{selected,all,cancel});
+                dialog.Controls.Add(grid);dialog.Controls.Add(bar);dialog.CancelButton=cancel;
+                if(dialog.ShowDialog(this)!=DialogResult.OK || !Current())return;
+                if(!ConfirmModelEdit("Xác nhận khôi phục", "Khôi phục "+indices.Count+
+                    " điểm về Z gốc và cho tham gia mô hình?\r\nCAD gốc giữ nguyên. Các kết quả tính cũ hết hiệu lực."))return;
+                if(!Current())return;
+                foreach(var index in indices) {
+                    var item=edits[index];_source.RestoreVertex(item.Entity.Id,item.Vertex.Index);
+                }
+                SurfaceWorkflowService.InvalidateTin(_role,clearCadLayer:true);
+                await ScanAsync();
             }
         }
+
+        private bool ConfirmModelEdit(string title,string message) => ModelEditConfirmation.Show(this,title,message);
 
         private async Task EditVertexZAsync(Row row)
         {

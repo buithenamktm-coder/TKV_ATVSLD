@@ -167,6 +167,19 @@ internal static class CoreRegression
                 var r=MeanZPreviewPreparer.Prepare(Model(Entity("a",SourceEntityType.Point,P(0,0)),Entity("b",SourceEntityType.Point,P(0,0,20))));
                 Check(r.HasBlockingConflicts&&r.ToConflictReport(Model()).Groups.Count==1,"Cannot review sparse invalid input");
             },
+            ["model_edits_restore_audit_and_snapshot"] = ()=>{
+                var m=Model(Entity("a",SourceEntityType.Polyline3d,P(0,0,8),P(10,0,4)));
+                var original=SourceFingerprint.Compute(m.Entities[0]);
+                m.SetVertexEnabled("a",0,false);m.OverrideVertexZ("a",1,7);m.RestoreVertex("a",0);
+                Check(m.EditHistory.Count==3&&m.EditHistory[1].OldZ==4&&m.EditHistory[1].NewZ==7,"Missing audit values");
+                Check(m.Entities[0].Vertices[0].IsEnabled&&m.Entities[0].Vertices[1].Position.Z==7,"Restore affected another vertex");
+                Check(SourceFingerprint.Compute(m.Entities[0])==original,"Edits changed original fingerprint");
+                Check(SourceFingerprint.Compute(Entity("a",SourceEntityType.Polyline3d,P(0,0,9),P(10,0,4)))!=original,"Changed geometry accepted");
+                var snapshot=new MiningVolume2023.Services.ProjectSnapshot {SavedUtc=DateTime.UtcNow,
+                    Existing=new MiningVolume2023.Services.ModelSnapshot {EditHistory=m.EditHistory}};
+                var decoded=MiningVolume2023.Services.ProjectSnapshotCodec.Decode(MiningVolume2023.Services.ProjectSnapshotCodec.Encode(snapshot));
+                Check(decoded.Existing.EditHistory.Count==3&&decoded.Existing.EditHistory[1].NewZ==7&&decoded.Existing.EditHistory[1].VertexIndex==1,"Audit snapshot roundtrip lost data");
+            },
             ["square_area_no_holes"] = ()=> {var t=Build(Prepare(Corners()));Check(t.Triangles.Count==2&&Math.Abs(t.Triangles.Sum(x=>x.Area2D)-100)<1e-9,"Square area");},
             ["grid_system_rotated_matches_no_rotation"] = ()=>{
                 var existing=new TinSurface("tn",new[]{new Triangle3(P(0,0,2),P(20,0,2),P(20,20,2)),
@@ -520,6 +533,30 @@ internal static class CoreRegression
             Console.WriteLine(JsonSerializer.Serialize(new{phase="complete",triangles=tin.Triangles.Count,ms=sw.ElapsedMilliseconds,managedBytes=GC.GetTotalMemory(false)}));(tin.Triangles as IDisposable)?.Dispose();
         } catch(Exception ex){Console.WriteLine(JsonSerializer.Serialize(new{phase="error",kind=ex.GetType().Name,message=ex.Message,issues=(ex as DuplicateXYConflictException)?.Issues.GroupBy(x=>x.Code).ToDictionary(x=>x.Key,x=>x.Count()),ms=sw.ElapsedMilliseconds}));Environment.ExitCode=2;}
     }
+    static void ReviewFixture(string path,string boundary,int seconds)
+    {
+        var watch=Stopwatch.StartNew();var model=ReadModel(path);
+        using(var cancel=new CancellationTokenSource(TimeSpan.FromSeconds(seconds))) {
+            Vec2[] region=null;
+            if(boundary!="-")using(var r=new BinaryReader(File.OpenRead(boundary))) {
+                region=new Vec2[r.ReadInt32()];for(int i=0;i<region.Length;i++)region[i]=new Vec2(r.ReadDouble(),r.ReadDouble());
+            }
+            var mean=MeanZPreviewPreparer.Prepare(model,token:cancel.Token,tinRegion:region);
+            Console.WriteLine(JsonSerializer.Serialize(new {phase="mean_review",entities=model.Entities.Count,
+                vertices=model.Entities.Sum(e=>e.Vertices.Count),participating=mean.OriginalVertexCount,
+                sites=mean.Prepared.Sites.Count,groups=mean.Conflicts.Count,above3=mean.ReviewGroups.Count,
+                maxDelta=mean.Conflicts.Count==0?0:mean.Conflicts.Max(g=>g.DeltaZ),blocked=mean.HasBlockingConflicts,
+                ms=watch.ElapsedMilliseconds,managedBytes=GC.GetTotalMemory(false)}));
+            mean=null;GC.Collect();
+            var input=region==null?model:SurfaceRegionClipper.Clip(model,region,cancellationToken:cancel.Token);
+            var strict=new ConflictScanner().Scan(input,new SurfaceBuildOptions(),token:cancel.Token);
+            Console.WriteLine(JsonSerializer.Serialize(new {phase="strict_review",groups=strict.Groups.Count,
+                sources=strict.SourceRecordCount,above3=strict.Groups.Count(g=>g.DeltaZ>3),
+                originalRows=strict.Groups.Sum(g=>g.Sources.Count(x=>!x.Generated)),
+                generatedRows=strict.Groups.Sum(g=>g.Sources.Count(x=>x.Generated)),
+                blocked=strict.HasBlockingConflicts,ms=watch.ElapsedMilliseconds,managedBytes=GC.GetTotalMemory(false)}));
+        }
+    }
     static void ClipOracle()
     {
         var boundaries=new[]{
@@ -537,5 +574,5 @@ internal static class CoreRegression
                 triangles=tin.Triangles.Select(t=>new[]{t.A,t.B,t.C}.Select(p=>new[]{p.X,p.Y,p.Z}))}));
         }
     }
-    static void Main(string[] args){if(args.Length==0)RunTests();else if(args[0]=="--clip-oracle")ClipOracle();else Fixture(args[0],args.Length>1?args[1]:"-",args.Length>2?int.Parse(args[2]):120,args.Length>3?(DuplicateXYConflictPolicy)Enum.Parse(typeof(DuplicateXYConflictPolicy),args[3]):DuplicateXYConflictPolicy.Stop);}
+    static void Main(string[] args){if(args.Length==0)RunTests();else if(args[0]=="--clip-oracle")ClipOracle();else if(args[0]=="--review-fixture")ReviewFixture(args[1],args[2],int.Parse(args[3]));else Fixture(args[0],args.Length>1?args[1]:"-",args.Length>2?int.Parse(args[2]):120,args.Length>3?(DuplicateXYConflictPolicy)Enum.Parse(typeof(DuplicateXYConflictPolicy),args[3]):DuplicateXYConflictPolicy.Stop);}
 }

@@ -178,7 +178,7 @@ jobs:
           }
 
       - name: Build V2.0 QA Candidate Setup (NOT RELEASE)
-        if: github.ref_name == 'miningvolume-v2-qa-candidate' || github.head_ref == 'miningvolume-v2-qa-candidate'
+        if: startsWith(github.ref_name, 'miningvolume-v2-') || startsWith(github.head_ref, 'miningvolume-v2-')
         shell: pwsh
         run: |
           Set-Location $env:MV_ROOT
@@ -263,7 +263,7 @@ jobs:
           Get-Content dist/BUILD_VERIFICATION.txt
 
       - name: Upload V2.0 QA-only installer (not release)
-        if: github.ref_name == 'miningvolume-v2-qa-candidate' || github.head_ref == 'miningvolume-v2-qa-candidate'
+        if: startsWith(github.ref_name, 'miningvolume-v2-') || startsWith(github.head_ref, 'miningvolume-v2-')
         uses: actions/upload-artifact@v4
         with:
           name: IMSAT-MiningVolume-V2.0-QA-CANDIDATE-NOT-RELEASE
