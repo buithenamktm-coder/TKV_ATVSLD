@@ -22,8 +22,8 @@ def test_pair_build_does_not_rescan_just_written_cad_layers():
     assert "TinCadRenderer.CountFaces(" not in draw
     assert "written != expectedCadFaces" in draw
 
-def test_breakline_endpoint_lookup_uses_spatial_site_index():
-    s = read("src/MiningVolume.Surface/ConformingTinBuilder.cs")
+def test_legacy_breakline_endpoint_lookup_uses_spatial_site_index():
+    s = read("tests/core/legacy/LegacyConformingTinBuilder.cs")
     assert "var siteIndex = new SiteIndex" in s
     assert "siteIndex.Find(seg.A)" in s
     assert "siteIndex.Find(seg.B)" in s
@@ -40,16 +40,16 @@ def test_data_page_reports_each_heavy_phase_and_timings():
     assert "totalWatch.Elapsed.TotalSeconds" in s
 
 
-def test_large_tin_delaunay_uses_x_sweep_and_cached_circumcircles():
-    s = read("src/MiningVolume.Surface/ConformingTinBuilder.cs")
+def test_legacy_large_tin_delaunay_uses_x_sweep_and_cached_circumcircles():
+    s = read("tests/core/legacy/LegacyConformingTinBuilder.cs")
     assert "private struct WorkTri" in s
     assert "RightX" in s
     assert ".OrderBy(i => vertices[i].X)" in s
     assert "wt.RightX < point.X - tol" in s
     assert "TryWorkTri" in s
 
-def test_breakline_recovery_reuses_adjacency_and_spatial_edge_index():
-    s = read("src/MiningVolume.Surface/ConformingTinBuilder.cs")
+def test_legacy_breakline_recovery_reuses_adjacency_and_spatial_edge_index():
+    s = read("tests/core/legacy/LegacyConformingTinBuilder.cs")
     build = s[s.index("public TinSurface Build"):s.index("private static List<Tri> BowyerWatson")]
     recover = s[s.index("private static void RecoverConstraint"):s.index("private static int ConstraintVertexDegree")]
     assert "var adjacency = BuildAdjacency(tris)" in build
@@ -58,8 +58,8 @@ def test_breakline_recovery_reuses_adjacency_and_spatial_edge_index():
     assert "edgeIndex.Query(ca, cb)" in recover
     assert "private sealed class EdgeGridIndex" in s
 
-def test_constraint_flip_updates_adjacency_locally_without_scanning_all_locked_edges():
-    s = read("src/MiningVolume.Surface/ConformingTinBuilder.cs")
+def test_legacy_constraint_flip_updates_adjacency_locally_without_scanning_all_locked_edges():
+    s = read("tests/core/legacy/LegacyConformingTinBuilder.cs")
     flip = s[s.index("private static bool TryFlip"):s.index("private static Dictionary<EdgeKey, List<int>> BuildAdjacency")]
     assert "RemoveTriangleOwners" in flip
     assert "AddTriangleOwners" in flip
@@ -219,8 +219,8 @@ def test_resolvable_tin_elevation_conflicts_use_same_upper_lower_dialog():
     assert "Bạn có muốn TIẾP TỤC tạo TIN" in ui
 
 
-def test_breakline_recovery_is_ordered_and_does_not_use_arbitrary_flip_loop():
-    s = read("src/MiningVolume.Surface/ConformingTinBuilder.cs")
+def test_legacy_breakline_recovery_is_ordered_and_does_not_use_arbitrary_flip_loop():
+    s = read("tests/core/legacy/LegacyConformingTinBuilder.cs")
     assert "CrossingEdgesOrdered" in s
     assert "IntersectionParameterAlongFirst" in s
     assert "var pending = new Queue<EdgeKey>()" in s
@@ -230,8 +230,8 @@ def test_breakline_recovery_is_ordered_and_does_not_use_arbitrary_flip_loop():
     assert "Vượt số vòng lặp khi khôi phục breakline" not in s
 
 
-def test_breakline_recovery_falls_back_to_collinear_interior_site_chain():
-    s = read("src/MiningVolume.Surface/ConformingTinBuilder.cs")
+def test_legacy_breakline_recovery_falls_back_to_collinear_interior_site_chain():
+    s = read("tests/core/legacy/LegacyConformingTinBuilder.cs")
     assert "TryRecoverConstraintThroughInteriorSites" in s
     assert "Geometry2D.PointOnSegment" in s
     assert "onLineTol = Math.Max(tol * 100.0, 1e-4)" in s
@@ -241,9 +241,9 @@ def test_breakline_recovery_falls_back_to_collinear_interior_site_chain():
     assert "không có chuỗi cạnh gần thẳng hàng" in s
 
 
-def test_proper_intersection_uses_dimensionally_correct_tolerance_and_recovery_has_index_fallback():
+def test_legacy_proper_intersection_uses_dimensionally_correct_tolerance_and_recovery_has_index_fallback():
     geom = read("src/MiningVolume.Core/Geometry/Geometry2D.cs")
-    tin = read("src/MiningVolume.Surface/ConformingTinBuilder.cs")
+    tin = read("tests/core/legacy/LegacyConformingTinBuilder.cs")
 
     assert "double abEps = Math.Max(1e-24, tol * abLen)" in geom
     assert "double cdEps = Math.Max(1e-24, tol * cdLen)" in geom
@@ -265,9 +265,9 @@ def test_large_tin_deduplicates_bucketed_breaklines_and_reports_live_tile_progre
     assert "message => progress?.Invoke" in tiled
 
     assert "CancellationToken cancellationToken" in builder
-    assert '"Delaunay {orderIndex:n0}/{realCount:n0} điểm..."' in builder
+    assert "Tam giác hóa điểm " in builder
     assert "cancellationToken.ThrowIfCancellationRequested()" in builder
-    assert "khôi phục breakline" in builder
+    assert "Khôi phục breakline " in builder
 
 
 def test_large_tin_processes_independent_tiles_in_parallel_with_bounded_workers():
@@ -299,8 +299,8 @@ def test_tiled_tin_avoids_redundant_large_normalization_work():
     assert "HaloFactors = { 0.12, 0.25, 0.45, 0.65 }" in tiled
 
 
-def test_breakline_recovery_repairs_omitted_sites_and_near_collinear_paths():
-    tin = read("src/MiningVolume.Surface/ConformingTinBuilder.cs")
+def test_legacy_breakline_recovery_repairs_omitted_sites_and_near_collinear_paths():
+    tin = read("tests/core/legacy/LegacyConformingTinBuilder.cs")
     assert "EnsureAllSitesReferenced" in tin
     assert "đã phục hồi {repairedSites:n0} site suy biến" in tin
     assert "TryLockNearCollinearEdgePath" in tin

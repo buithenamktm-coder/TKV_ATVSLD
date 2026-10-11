@@ -68,6 +68,9 @@ $required = @(
     'Contents\Windows\MiningVolume2023.dll',
     'Contents\Windows\MiningVolume.Core.dll',
     'Contents\Windows\MiningVolume.Surface.dll',
+    'Contents\Windows\MiningVolume.Cdt.Native.dll',
+    'Contents\Windows\LICENSE-CDT.txt',
+    'Contents\Windows\NOTICE.txt',
     'Contents\Windows\MiningVolume.Cad2023.dll'
 )
 foreach ($rel in $required) {
@@ -189,7 +192,7 @@ $startupDetail"
 
         $dllDir = Join-Path $target 'Contents\Windows'
         $hashLines = @()
-        foreach ($dll in @('MiningVolume2023.dll','MiningVolume.Core.dll','MiningVolume.Surface.dll','MiningVolume.Cad2023.dll')) {
+        foreach ($dll in @('MiningVolume2023.dll','MiningVolume.Core.dll','MiningVolume.Surface.dll','MiningVolume.Cdt.Native.dll','MiningVolume.Cad2023.dll')) {
             $h = (Get-FileHash (Join-Path $dllDir $dll) -Algorithm SHA256).Hash.ToLowerInvariant()
             $hashLines += "SHA256.$dll=$h"
         }

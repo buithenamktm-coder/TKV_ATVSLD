@@ -380,8 +380,7 @@ namespace MiningVolume.Core.Surface
             // Pairwise split marks can otherwise retain an earlier/lower Z even after
             // the user selected Upper (or vice versa), especially at shared endpoints.
             result.Sites.AddRange(generatedSites);
-            if (options.DuplicateXYConflictPolicy != DuplicateXYConflictPolicy.Stop)
-                ResolveDuplicateSites(result, options, progress, cancellationToken, marks);
+            ResolveDuplicateSites(result, options, progress, cancellationToken, marks);
 
             // 3) Rebuild split segments.
             var rebuilt = new List<Segment3>();

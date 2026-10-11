@@ -5,6 +5,7 @@ $required = @(
   'MiningVolume2023.dll',
   'MiningVolume.Core.dll',
   'MiningVolume.Surface.dll',
+  'MiningVolume.Cdt.Native.dll',
   'MiningVolume.Cad2023.dll'
 )
 foreach ($name in $required) {
@@ -23,3 +24,6 @@ $pkg = Get-Content (Join-Path $root 'PackageContents.xml') -Raw
 if ($pkg -notmatch 'AppVersion="1\.0\.0"') { throw 'PackageContents chưa phải V1.0' }
 if ($pkg -notmatch 'SeriesMin="R24\.2"' -or $pkg -notmatch 'SeriesMax="R24\.2"') { throw 'Bundle không khóa đúng AutoCAD 2023 R24.2' }
 Write-Host '[PASS] Release bundle policy.'
+foreach ($name in @('LICENSE-CDT.txt','NOTICE.txt')) {
+  if (-not (Test-Path (Join-Path $win $name))) { throw "Thiếu thông báo bản quyền: $name" }
+}

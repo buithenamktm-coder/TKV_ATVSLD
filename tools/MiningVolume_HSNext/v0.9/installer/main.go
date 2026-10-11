@@ -99,6 +99,7 @@ func validatePrebuiltBundle(root string) error {
         "miningvolume2023.dll": true,
         "miningvolume.core.dll": true,
         "miningvolume.surface.dll": true,
+        "miningvolume.cdt.native.dll": true,
         "miningvolume.cad2023.dll": true,
     }
 
@@ -107,6 +108,9 @@ func validatePrebuiltBundle(root string) error {
         filepath.Join(windowsDir, "MiningVolume2023.dll"),
         filepath.Join(windowsDir, "MiningVolume.Core.dll"),
         filepath.Join(windowsDir, "MiningVolume.Surface.dll"),
+        filepath.Join(windowsDir, "MiningVolume.Cdt.Native.dll"),
+        filepath.Join(windowsDir, "LICENSE-CDT.txt"),
+        filepath.Join(windowsDir, "NOTICE.txt"),
         filepath.Join(windowsDir, "MiningVolume.Cad2023.dll"),
     }
     for _, p := range required {

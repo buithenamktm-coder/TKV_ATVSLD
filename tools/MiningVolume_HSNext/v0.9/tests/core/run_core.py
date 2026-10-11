@@ -24,6 +24,7 @@ def main():
         lines+=['-r:"'+str(p)+'"' for p in (refs[-1]/'ref/net8.0').glob('*.dll')]
         lines+=['"'+str(p)+'"' for p in sources+[pathlib.Path(__file__).with_name('CoreRegression.cs').resolve()]]
         rsp=tmp/'compile.rsp';rsp.write_text('\n'.join(lines),encoding='utf8')
+        subprocess.run([os.sys.executable,str(project/'src/MiningVolume.Surface/Native/build_native.py'),'--output',str(tmp/'MiningVolume.Cdt.Native.dll')],check=True)
         subprocess.run([str(dotnet),str(sdks[-1]/'Roslyn/bincore/csc.dll'),'@'+str(rsp)],check=True)
         (tmp/'CoreRegression.runtimeconfig.json').write_text(json.dumps({'runtimeOptions':{'tfm':'net8.0','framework':{'name':'Microsoft.NETCore.App','version':runtimes[-1].name}}}))
         return subprocess.run([str(dotnet),str(assembly)]+args.fixture).returncode

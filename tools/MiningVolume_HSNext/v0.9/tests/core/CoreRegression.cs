@@ -80,6 +80,15 @@ internal static class CoreRegression
             ["duplicate_xy_lower"] = ()=>{var p=Prepare(Corners().Append(P(0,0,1)),null,DuplicateXYConflictPolicy.UseLower);Check(!p.HasErrors&&p.Sites.Single(v=>v.X==0&&v.Y==0).Z==0,"Lower policy");},
             ["large_coordinates"] = ()=>{var p=Prepare(Corners().Select(v=>P(v.X+2300000,v.Y+400000,80)));var t=Build(p);Coverage(p,t);Check(Math.Abs(t.Triangles.Sum(x=>x.Area2D)-100)<1e-6,"Coordinate translation changed area");},
             ["deterministic_repeat"] = ()=>{var p=Prepare(Corners().Append(P(4,3)));Check(Signature(Build(p))==Signature(Build(p)),"Nondeterministic");},
+            ["small_positive_triangle_retains_site"] = ()=>{
+                var p=Prepare(new[]{P(0,0),P(1,0),P(0.5,0.00000000001)});
+                var t=Build(p);Coverage(p,t);Check(t.Triangles.Count==1,"Small positive triangle discarded");
+                Check(t.Issues.Any(i=>i.Code=="RETAIN_SMALL_TRIANGLES"),"Small triangle not reported");},
+            ["native_collinear_chain_retained"] = ()=>{
+                var points=Corners().Concat(Enumerable.Range(1,99).Select(i=>P(i/10.0,5))).ToArray();
+                var p=Prepare(points,new[]{new Segment3(P(0,5),P(10,5),"chain")});
+                var t=Build(p);Coverage(p,t);Constraints(p,t);
+                Check(Math.Abs(t.Triangles.Sum(x=>x.Area2D)-100)<1e-8,"Chain left a hole");},
             ["collinear_rejected"] = ()=>{bool rejected=false;try{Build(Prepare(new[]{P(0,0),P(1,1),P(2,2)}));}catch(InvalidOperationException){rejected=true;}Check(rejected,"Collinear accepted");},
             ["builder_cancel"] = ()=>{using(var c=new CancellationTokenSource()){c.Cancel();bool cancelled=false;try{new ConformingTinBuilder().Build("cancel",Prepare(Corners()),Options,null,c.Token);}catch(OperationCanceledException){cancelled=true;}Check(cancelled,"Cancelled builder returned TIN");}},
             ["preparer_cancel_before_start"] = ()=>{using(var c=new CancellationTokenSource()){c.Cancel();bool cancelled=false;try{new SurfaceInputPreparer().PrepareRaw(Corners(),null,Options,null,c.Token);}catch(OperationCanceledException){cancelled=true;}Check(cancelled,"Cancelled preparer returned input");}},

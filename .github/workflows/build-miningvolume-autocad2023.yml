@@ -87,6 +87,9 @@ jobs:
           Copy-Item 'src/MiningVolume.Plugin2023/bin/Release/net48/MiningVolume2023.dll' $out
           Copy-Item 'src/MiningVolume.Core/bin/Release/net48/MiningVolume.Core.dll' $out
           Copy-Item 'src/MiningVolume.Surface/bin/Release/net48/MiningVolume.Surface.dll' $out
+          Copy-Item 'src/MiningVolume.Surface/bin/Release/net48/MiningVolume.Cdt.Native.dll' $out
+          Copy-Item 'src/MiningVolume.Surface/Native/LICENSE-CDT.txt' $out
+          Copy-Item 'src/MiningVolume.Surface/Native/NOTICE.txt' $out
           Copy-Item 'src/MiningVolume.Cad2023/bin/Release/net48/MiningVolume.Cad2023.dll' $out
           New-Item -ItemType Directory -Force "$out/Assets" | Out-Null
           Copy-Item 'src/MiningVolume.Plugin2023/Assets/imsat_logo_64.png' "$out/Assets/imsat_logo_64.png"

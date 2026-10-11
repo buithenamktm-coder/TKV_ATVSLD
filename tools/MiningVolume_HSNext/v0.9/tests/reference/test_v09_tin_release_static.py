@@ -11,18 +11,29 @@ def test_surface_builder_has_no_nettopologysuite_dependency():
     p = read('src/MiningVolume.Surface/MiningVolume.Surface.csproj')
     assert 'NetTopologySuite' not in s
     assert 'NetTopologySuite' not in p
-    for token in ['BowyerWatson', 'RecoverConstraint', 'TryFlip', 'BuildAdjacency', 'InCircumcircle']:
+    for token in ['mv_cdt_build', 'mv_cdt_free', 'CancellationToken', 'Dictionary<XY, int>']:
         assert token in s
 
 
-def test_breakline_recovery_locks_constraints_and_never_flips_locked_edges():
-    s = read('src/MiningVolume.Surface/ConformingTinBuilder.cs')
-    assert 'var locked = new HashSet<EdgeKey>()' in s
-    assert 'var constraint = new EdgeKey(a, b)' in s
-    assert 'locked.Add(constraint)' in s
-    assert 'locked.Contains(e)' in s
-    assert 'ProperIntersection' in s
-    assert 'new diagonal cannot cross any unrelated' in s
+def test_native_constraints_and_sites_are_verified_before_export():
+    s = read('src/MiningVolume.Surface/Native/bridge.cpp')
+    for token in ['cdt.fixedEdges', 'meshEdges.count(edge)', 'pieceToOriginals',
+                  'splitOriginals.count(edge)', 'CDT omitted an input site',
+                  'IntersectingConstraintEdges::NotAllowed', 'observer.isAbortCalculation()']:
+        assert token in s
+    managed = read('src/MiningVolume.Surface/ConformingTinBuilder.cs')
+    assert 'new LegacyConformingTinBuilder' not in managed
+    assert 'RETAIN_SMALL_TRIANGLES' in managed
+    assert 'finally { if (mesh != IntPtr.Zero) mv_cdt_free(mesh); }' in managed
+
+
+def test_native_backend_is_pinned_licensed_and_packaged():
+    assert '3765e08ec4bbef0c6b721204d7c0e45d279084e9' in read('src/MiningVolume.Surface/Native/NOTICE.txt')
+    assert 'Mozilla Public License' in read('src/MiningVolume.Surface/Native/LICENSE-CDT.txt')
+    assert 'BuildNativeCdt' in read('src/MiningVolume.Surface/MiningVolume.Surface.csproj')
+    for path in ['release/verify_release.ps1', 'installer/main.go']:
+        for name in ['MiningVolume.Cdt.Native.dll','LICENSE-CDT.txt','NOTICE.txt']:
+            assert name in read(path)
 
 
 def test_autocad2023_official_nuget_reference_is_pinned_for_ci():

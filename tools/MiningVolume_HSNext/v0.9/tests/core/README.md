@@ -5,7 +5,7 @@ with .NET SDK 8 and executes the regression runner. It does not create another
 add-in project or require AutoCAD. `--dotnet-root PATH` selects a specific SDK.
 The Windows hosted build runs this gate before compiling the net48 add-in.
 
-The 32 cases cover area, input-site coverage, constraint retention, crossings,
+The 34 cases cover area, input-site coverage, constraint retention, crossings,
 overlaps, point-on-edge splitting, duplicate XY policies, large coordinates,
 deterministic repeat, collinear rejection, source immutability, interpolated
 boundary clipping, cancellation, and tiled duplicate elevation choices.
@@ -51,3 +51,18 @@ local support triangulation was separated from final core-region filtering.
 For diagnostic fixtures, append `UseUpper` or `UseLower` after the timeout.
 These are alternative test scenarios, not an approved production elevation choice.
 A successful subset run does not establish whole-drawing completion.
+
+## Native constrained triangulation
+
+Production uses pinned artem-ogre/CDT through `Native/bridge.cpp`, with no legacy
+fallback. The gate builds and exercises that same bridge. Linux requires g++;
+Windows build hosts require Python and Visual Studio C++ x64 Build Tools. The
+Windows DLL uses a static CRT; end users need no compiler. The MPL-2.0 license,
+notice, bridge, and unmodified pinned headers ship in the source archive.
+
+Historical implementation assertions explicitly prefixed `test_legacy_` inspect
+`tests/core/legacy/LegacyConformingTinBuilder.cs` only. They are baseline checks,
+not evidence for the production engine. Executable geometry cases use production.
+The bridge rejects missing sites and constraints, including split constraints.
+Small positive-area triangles are retained with a warning instead of silently
+removing survey vertices. Full tile-seam and AutoCAD runtime gates still apply.
