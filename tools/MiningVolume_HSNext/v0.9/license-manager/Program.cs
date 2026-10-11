@@ -46,6 +46,14 @@ namespace ImsatLicenseManager
                     case "selftest":
                         SelfTest();
                         break;
+                    case "backup":
+                        if (args.Length != 2) return Usage();
+                        BackupIssuer(args[1]);
+                        break;
+                    case "restore":
+                        if (args.Length != 2) return Usage();
+                        RestoreIssuer(args[1]);
+                        break;
                     case "init":
                         if (args.Length != 1) return Usage();
                         Init();
@@ -85,6 +93,8 @@ namespace ImsatLicenseManager
         {
             Console.WriteLine("IMSAT MiningVolume License Manager (offline admin only)");
             Console.WriteLine("  init");
+            Console.WriteLine("  backup <absolute path to encrypted .imsbackup>");
+            Console.WriteLine("  restore <absolute path to encrypted .imsbackup>");
             Console.WriteLine("  selftest");
             Console.WriteLine("  issue <MachineId64hex> <INTERNAL|UNIT> <Customer> <YYYY-MM-DD|PERMANENT>");
             Console.WriteLine("  public");
@@ -122,7 +132,90 @@ namespace ImsatLicenseManager
                 if (verifier.VerifyData(data, CryptoConfig.MapNameToOID("SHA256"), sig))
                     throw new InvalidOperationException("Tampered payload accepted");
             }
+            IssuerBackup.SelfTest();
             Console.WriteLine("LICENSE MANAGER SELFTEST PASS");
+        }
+
+        private static void BackupIssuer(string destination)
+        {
+            destination=Path.GetFullPath(destination);
+            if(File.Exists(destination))
+                throw new IOException("Đã tồn tại tệp backup; không ghi đè.");
+            if(!File.Exists(PrivatePath))
+                throw new InvalidOperationException("Máy hiện tại không có RSA private key để sao lưu.");
+            string pass=IssuerBackup.ReadPasswordFromConsole("Nhập mật khẩu backup (>=16 ký tự): ");
+            string confirmation=IssuerBackup.ReadPasswordFromConsole("Nhập lại mật khẩu backup: ");
+            if(!string.Equals(pass,confirmation,StringComparison.Ordinal))
+                throw new InvalidOperationException("Hai mật khẩu backup không khớp.");
+            byte[] raw;
+            using(var rsa=LoadIssuer())
+                raw=Encoding.UTF8.GetBytes(rsa.ToXmlString(true));
+            try
+            {
+                byte[] cipher=IssuerBackup.Encrypt(raw,pass);
+                string dir=Path.GetDirectoryName(destination);
+                if(!Directory.Exists(dir))
+                    throw new DirectoryNotFoundException("Thư mục chứa backup không tồn tại.");
+                File.WriteAllBytes(destination,cipher);
+                Console.WriteLine("Đã sao lưu key có mật khẩu (AES + HMAC) tới: "+destination);
+                Console.WriteLine("LƯU TRỮ NGOẠI TUYẾN: không lưu mật khẩu cùng file backup, không gửi file này cho khách hàng.");
+            }
+            finally { Array.Clear(raw,0,raw.Length); }
+        }
+
+        private static void RestoreIssuer(string source)
+        {
+            if(File.Exists(PrivatePath))
+                throw new InvalidOperationException("Máy quản trị đã có private issuer key. Không ghi đè.");
+            source=Path.GetFullPath(source);
+            string pass=IssuerBackup.ReadPasswordFromConsole("Nhập mật khẩu khôi phục: ");
+            var encrypted=File.ReadAllBytes(source);
+            var raw=IssuerBackup.Decrypt(encrypted,pass);
+            string recoveredPublic;
+            try
+            {
+                using(var rsa=new RSACryptoServiceProvider())
+                {
+                    rsa.PersistKeyInCsp=false;
+                    rsa.FromXmlString(Encoding.UTF8.GetString(raw));
+                    recoveredPublic=rsa.ToXmlString(false);
+                }
+                if(File.Exists(PublicPath) &&
+                   !string.Equals(File.ReadAllText(PublicPath,Encoding.UTF8).Trim(),
+                                  recoveredPublic,StringComparison.Ordinal))
+                    throw new InvalidOperationException(
+                        "Public key hiện tại khác backup; không thể ghi đè giấy phép đã cấp.");
+                Directory.CreateDirectory(Workdir);
+                var dpapi=ProtectedData.Protect(raw,Entropy,DataProtectionScope.CurrentUser);
+                string temporary=PrivatePath+".restore.new";
+                if(File.Exists(temporary))
+                    throw new IOException("Còn file khôi phục dang dở; cần kiểm tra thủ công.");
+                File.WriteAllBytes(temporary,dpapi);
+                try
+                {
+                    if(!File.Exists(PublicPath))
+                    {
+                        string tempPublic=PublicPath+".restore.new";
+                        File.WriteAllText(tempPublic,recoveredPublic,Encoding.UTF8);
+                        try
+                        {
+                            File.Move(temporary,PrivatePath);
+                            File.Move(tempPublic,PublicPath);
+                        }
+                        catch
+                        {
+                            if(File.Exists(PrivatePath))File.Delete(PrivatePath);
+                            throw;
+                        }
+                        finally {if(File.Exists(tempPublic))File.Delete(tempPublic);}
+                    }
+                    else File.Move(temporary,PrivatePath);
+                }
+                finally {if(File.Exists(temporary))File.Delete(temporary);}
+                Console.WriteLine("Đã khôi phục issuer key DPAPI trên tài khoản Windows hiện tại.");
+                Console.WriteLine("Xác nhận public key/activation trước khi cấp giấy phép mới.");
+            }
+            finally { Array.Clear(raw,0,raw.Length); }
         }
 
         private static void Init()
