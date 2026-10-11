@@ -6,7 +6,7 @@ using System.Windows.Forms;
 
 namespace MiningVolume2023.UI
 {
-    public enum AppPage { Project, Data, Model, Section, Volume, Export }
+    public enum AppPage { Project, Data, Model, Section, Volume, Mineral, Export }
 
     public sealed class MainPaletteControl : UserControl
     {
@@ -41,6 +41,7 @@ namespace MiningVolume2023.UI
                 [AppPage.Model] = new ModelPage(),
                 [AppPage.Section] = new SectionPage(),
                 [AppPage.Volume] = new VolumePage(),
+                [AppPage.Mineral] = new MineralPage(),
                 [AppPage.Export] = new ExportPage()
             };
 
@@ -52,7 +53,8 @@ namespace MiningVolume2023.UI
             AddNav(nav, AppPage.Model, "2", "TIN / Mô hình");
             AddNav(nav, AppPage.Section, "3", "Mặt cắt");
             AddNav(nav, AppPage.Volume, "4", "Khối lượng");
-            AddNav(nav, AppPage.Export, "5", "Xuất Excel");
+            AddNav(nav, AppPage.Mineral, "5", "Vỉa / Quặng");
+            AddNav(nav, AppPage.Export, "6", "Xuất bảng");
 
             ShowPage(AppPage.Project);
         }
