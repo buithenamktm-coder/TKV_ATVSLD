@@ -133,6 +133,8 @@ namespace MiningVolume2023
         internal static void Open(AppPage page)
         {
             EnsureCurrentDrawingProjectLoaded();
+            // Starting the application for the first time starts the 15-day local trial.
+            LicenseService.GetStatus();
             if (Palette == null)
             {
                 Palette = new PaletteSet("IMSAT VOLUME", new Guid("8C96DC13-BC65-4A2C-8B34-2D7644FD1C62"))
@@ -188,6 +190,7 @@ namespace MiningVolume2023
         [CommandMethod("MV_GRID", CommandFlags.Session)] public static void OpenGrid() => Open(AppPage.Grid);
         [CommandMethod("MV_MINERAL", CommandFlags.Session)] public static void OpenMineral() => Open(AppPage.Mineral);
         [CommandMethod("MV_EXPORT", CommandFlags.Session)] public static void OpenExport() => Open(AppPage.Export);
+        [CommandMethod("MV_LICENSE", CommandFlags.Session)] public static void OpenLicense() => Open(AppPage.License);
 
         [CommandMethod("MV_PROJECT_SAVE", CommandFlags.Session)]
         public static void SaveProject()
