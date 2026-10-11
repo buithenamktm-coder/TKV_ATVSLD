@@ -26,6 +26,8 @@ namespace MiningVolume2023.Services
             state.SectionSystem = system;
             state.SectionProfiles.Clear();
             state.VolumeResult = null;
+            state.VolumeCalculatedUtc = null;
+            state.VolumeCalculationSeconds = null;
             DrawPreview(system);
             state.NotifyChanged();
             return system;
@@ -39,6 +41,8 @@ namespace MiningVolume2023.Services
             state.SectionSystem = RebuildAtOffsets(offsets);
             state.SectionProfiles.Clear();
             state.VolumeResult = null;
+            state.VolumeCalculatedUtc = null;
+            state.VolumeCalculationSeconds = null;
             DrawPreview(state.SectionSystem);
             state.NotifyChanged();
             return state.SectionSystem;
@@ -54,6 +58,8 @@ namespace MiningVolume2023.Services
             state.SectionSystem = RebuildAtOffsets(offsets);
             state.SectionProfiles.Clear();
             state.VolumeResult = null;
+            state.VolumeCalculatedUtc = null;
+            state.VolumeCalculationSeconds = null;
             DrawPreview(state.SectionSystem);
             state.NotifyChanged();
             return state.SectionSystem;
@@ -68,6 +74,8 @@ namespace MiningVolume2023.Services
             state.SectionSystem = RebuildAtOffsets(offsets);
             state.SectionProfiles.Clear();
             state.VolumeResult = null;
+            state.VolumeCalculatedUtc = null;
+            state.VolumeCalculationSeconds = null;
             DrawPreview(state.SectionSystem);
             state.NotifyChanged();
             return state.SectionSystem;
@@ -101,6 +109,8 @@ namespace MiningVolume2023.Services
             state.SectionProfiles.Clear();
             state.SectionProfiles.AddRange(profiles);
             state.VolumeResult = null;
+            state.VolumeCalculatedUtc = null;
+            state.VolumeCalculationSeconds = null;
             state.NotifyChanged();
         }
 
