@@ -81,6 +81,7 @@ namespace MiningVolume2023.Services
         [DataMember(Order = 6)] public int SourceMode { get; set; }
         [DataMember(Order = 7)] public List<string> SelectedHandles { get; set; } = new List<string>();
         [DataMember(Order = 8)] public List<ModelEditRecord> EditHistory { get; set; } = new List<ModelEditRecord>();
+        [DataMember(Order = 9)] public string FullSourceFingerprint { get; set; }
     }
 
     [DataContract]
