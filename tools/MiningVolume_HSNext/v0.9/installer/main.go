@@ -203,13 +203,35 @@ func uninstall() {
     msg("Đã gỡ IMSAT VOLUME và đăng ký tự nạp khỏi AutoCAD.\n\nBản vẽ DWG, Project, báo cáo và dữ liệu người dùng được giữ nguyên.", 0x40)
 }
 
+func installedSetupCleanupTargets(currentExe, installedDir string) []string {
+    // Upgrades share the same Autodesk bundle and installation directory.
+    // Remove only known IMSAT-owned setup binaries; never recurse through user data.
+    candidates := []string{
+        currentExe,
+        filepath.Join(installedDir, "MiningVolume_Setup_v1.0.exe"),
+        filepath.Join(installedDir, "MiningVolume_Setup_v2.0_QA.exe"),
+    }
+    unique := []string{}
+    for _, candidate := range candidates {
+        if candidate == "" { continue }
+        duplicate := false
+        for _, existing := range unique {
+            if strings.EqualFold(existing, candidate) { duplicate = true; break }
+        }
+        if !duplicate { unique = append(unique, candidate) }
+    }
+    return unique
+}
+
 func cleanupInstalledSetupLater(exe, dir string) {
-    // The linker selects the installed executable name; no source rewriting.
-    // Wait for the current process to exit; remove only the installer EXE.
+    // Wait for the uninstall process to exit before deleting its own executable.
+    // V1-to-V2 upgrades may leave a verified IMSAT V1 setup in the same folder.
     command := "$id=" + fmt.Sprint(os.Getpid()) + ";" +
-        "try { Wait-Process -Id $id -Timeout 90 -ErrorAction SilentlyContinue } catch {};" +
-        "Remove-Item -LiteralPath " + psQuote(exe) + " -Force -ErrorAction SilentlyContinue;" +
-        "Remove-Item -LiteralPath " + psQuote(dir) + " -ErrorAction SilentlyContinue"
+        "try { Wait-Process -Id $id -Timeout 90 -ErrorAction SilentlyContinue } catch {};"
+    for _, owned := range installedSetupCleanupTargets(exe, dir) {
+        command += "Remove-Item -LiteralPath " + psQuote(owned) + " -Force -ErrorAction SilentlyContinue;"
+    }
+    command += "Remove-Item -LiteralPath " + psQuote(dir) + " -ErrorAction SilentlyContinue"
     cmd := exec.Command("powershell.exe", "-NoProfile", "-NonInteractive",
         "-WindowStyle", "Hidden", "-Command", command)
     _ = cmd.Start()
