@@ -24,6 +24,12 @@ namespace MiningVolume2023.UI
         private readonly DataGridView _grid;
         private readonly Label _status;
         private bool _syncing;
+        private bool _compactParameters;
+        private readonly TableLayoutPanel _rootLayout;
+        private readonly TableLayoutPanel _parameterLayout;
+        private readonly Control[] _parameterLabels = new Control[9];
+        private readonly Control[] _parameterValues = new Control[9];
+        private readonly Control[] _parameterActions = new Control[9];
 
         public SectionPage()
         {
@@ -33,7 +39,7 @@ namespace MiningVolume2023.UI
             // Use one explicit vertical layout. Do not stack Top-docked controls with
             // BringToFront: on a narrow/short AutoCAD palette that can overlap rows and
             // hide the primary section-output button.
-            var root = new TableLayoutPanel
+            var root = _rootLayout = new TableLayoutPanel
             {
                 Dock = DockStyle.Fill,
                 ColumnCount = 1,
@@ -60,7 +66,7 @@ namespace MiningVolume2023.UI
             };
             root.Controls.Add(title, 0, 0);
 
-            var top = new TableLayoutPanel
+            var top = _parameterLayout = new TableLayoutPanel
             {
                 Dock = DockStyle.Fill,
                 ColumnCount = 3,
@@ -106,6 +112,12 @@ namespace MiningVolume2023.UI
             Add(top, 6, "Tỷ lệ ngang 1/", _hScale, new Panel());
             Add(top, 7, "Tỷ lệ đứng 1/", _vScale, new Panel());
             Add(top, 8, "Giãn cách khi xuất CAD", _layoutGap, new Panel());
+            for (int i = 0; i < 9; i++)
+            {
+                _parameterLabels[i] = top.GetControlFromPosition(0, i);
+                _parameterValues[i] = top.GetControlFromPosition(1, i);
+                _parameterActions[i] = top.GetControlFromPosition(2, i);
+            }
             root.Controls.Add(top, 0, 1);
 
             // Primary workflow actions must always remain visible.
@@ -187,7 +199,65 @@ namespace MiningVolume2023.UI
             _layoutGap.ValueChanged += GeneralParameterChanged;
             _hScale.ValueChanged += GeneralParameterChanged;
             _vScale.ValueChanged += GeneralParameterChanged;
+            SizeChanged += (sender, args) => ApplyResponsiveParameterLayout();
+            ApplyResponsiveParameterLayout();
         }
+
+        private void ApplyResponsiveParameterLayout()
+        {
+            bool compact = ClientSize.Width < 560;
+            if (_compactParameters == compact) return;
+            _compactParameters = compact;
+            _parameterLayout.SuspendLayout();
+            try
+            {
+                // Reparent the SAME input controls: do not discard user values.
+                _parameterLayout.Controls.Clear();
+                _parameterLayout.RowStyles.Clear();
+                _parameterLayout.ColumnStyles.Clear();
+                _parameterLayout.ColumnCount = compact ? 2 : 3;
+                _parameterLayout.RowCount = compact ? 11 : 9;
+                if (compact)
+                {
+                    _parameterLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 134F));
+                    _parameterLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+                    for (int k = 0; k < 11; k++)
+                        _parameterLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36F));
+                }
+                else
+                {
+                    _parameterLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150F));
+                    _parameterLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+                    _parameterLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 118F));
+                    for (int k = 0; k < 9; k++)
+                        _parameterLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F / 9F));
+                }
+                for (int i = 0; i < 9; i++)
+                {
+                    int row = compact ? i < 2 ? 2 * i : i + 2 : i;
+                    _parameterLayout.Controls.Add(_parameterLabels[i], 0, row);
+                    _parameterLayout.Controls.Add(_parameterValues[i], 1, row);
+                    if (compact)
+                    {
+                        if (i < 2)
+                        {
+                            var choose = _parameterActions[i];
+                            choose.Dock = DockStyle.Fill;
+                            _parameterLayout.Controls.Add(choose, 0, row + 1);
+                            _parameterLayout.SetColumnSpan(choose, 2);
+                        }
+                    }
+                    else
+                    {
+                        _parameterActions[i].Dock = DockStyle.Fill;
+                        _parameterLayout.Controls.Add(_parameterActions[i], 2, row);
+                    }
+                }
+                _rootLayout.RowStyles[1].Height = compact ? 400F : 290F;
+            }
+            finally { _parameterLayout.ResumeLayout(true); }
+        }
+
         protected override void Dispose(bool disposing)
         {
             if (disposing) ProjectState.Current.Changed -= OnStateChanged;
