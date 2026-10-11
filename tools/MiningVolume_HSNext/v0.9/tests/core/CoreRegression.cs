@@ -7,6 +7,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using MiningVolume.Core.Geometry;
+using MiningVolume.Core.Grid;
 using MiningVolume.Core.Model;
 using MiningVolume.Core.Surface;
 using MiningVolume.Surface;
@@ -65,6 +66,70 @@ internal static class CoreRegression
     {
         var tests=new Dictionary<string,Action> {
             ["square_area_no_holes"] = ()=> {var t=Build(Prepare(Corners()));Check(t.Triangles.Count==2&&Math.Abs(t.Triangles.Sum(x=>x.Area2D)-100)<1e-9,"Square area");},
+            ["grid_exact_constant_cut"] = ()=>{
+                var a=new[]{new Triangle3(P(0,0,2),P(20,0,2),P(20,20,2)),
+                    new Triangle3(P(0,0,2),P(20,20,2),P(0,20,2))};
+                var b=new[]{new Triangle3(P(0,0),P(20,0),P(20,20)),
+                    new Triangle3(P(0,0),P(20,20),P(0,20))};
+                var cell=new[]{new Vec2(0,0),new Vec2(20,0),new Vec2(20,20),new Vec2(0,20)};
+                var v=ExactGridCellCalculator.Calculate(a,b,cell);
+                Check(Math.Abs(v.CutVolume-800)<1e-7&&v.FillVolume<1e-7&&v.IsComplete,"20x20 +2m expected 800m3");
+            },
+            ["grid_exact_mixed_cut_fill"] = ()=>{
+                var a=new[]{new Triangle3(P(0,0,-10),P(20,0,10),P(20,20,10)),
+                    new Triangle3(P(0,0,-10),P(20,20,10),P(0,20,-10))};
+                var b=new[]{new Triangle3(P(0,0),P(20,0),P(20,20)),
+                    new Triangle3(P(0,0),P(20,20),P(0,20))};
+                var cell=new[]{new Vec2(0,0),new Vec2(20,0),new Vec2(20,20),new Vec2(0,20)};
+                var v=ExactGridCellCalculator.Calculate(a,b,cell);
+                Check(Math.Abs(v.CutVolume-1000)<1e-7&&Math.Abs(v.FillVolume-1000)<1e-7,
+                    "Mixed cell must separate excavation and fill, 1000m3 each");
+            },
+            ["grid_exact_partial_boundary"] = ()=>{
+                var a=new[]{new Triangle3(P(0,0,2),P(20,0,2),P(20,20,2)),
+                    new Triangle3(P(0,0,2),P(20,20,2),P(0,20,2))};
+                var b=new[]{new Triangle3(P(0,0),P(20,0),P(20,20)),
+                    new Triangle3(P(0,0),P(20,20),P(0,20))};
+                var cell=new[]{new Vec2(0,0),new Vec2(20,0),new Vec2(20,20),new Vec2(0,20)};
+                var boundary=new[]{new Vec2(0,0),new Vec2(17.5,0),new Vec2(17.5,10),new Vec2(0,10)};
+                var v=ExactGridCellCalculator.Calculate(a,b,cell,boundary);
+                Check(Math.Abs(v.CutVolume-350)<1e-7&&Math.Abs(v.CalculationArea-175)<1e-7&&v.IsComplete,
+                    "Partial 175m2 x 2m must yield 350m3");
+            },
+            ["grid_exact_concave_region"] = ()=>{
+                var a=new[]{new Triangle3(P(0,0,2),P(20,0,2),P(20,20,2)),
+                    new Triangle3(P(0,0,2),P(20,20,2),P(0,20,2))};
+                var b=new[]{new Triangle3(P(0,0),P(20,0),P(20,20)),
+                    new Triangle3(P(0,0),P(20,20),P(0,20))};
+                var cell=new[]{new Vec2(0,0),new Vec2(20,0),new Vec2(20,20),new Vec2(0,20)};
+                var boundary=new[]{new Vec2(0,0),new Vec2(20,0),new Vec2(20,10),
+                    new Vec2(10,10),new Vec2(10,20),new Vec2(0,20)};
+                var v=ExactGridCellCalculator.Calculate(a,b,cell,boundary);
+                Check(Math.Abs(v.CutVolume-600)<1e-7&&Math.Abs(v.CalculationArea-300)<1e-7,
+                    "Concave L region expected 300m2/600m3");
+            },
+            ["grid_exact_boundary_with_hole"] = ()=>{
+                var a=new[]{new Triangle3(P(0,0,2),P(20,0,2),P(20,20,2)),
+                    new Triangle3(P(0,0,2),P(20,20,2),P(0,20,2))};
+                var b=new[]{new Triangle3(P(0,0),P(20,0),P(20,20)),
+                    new Triangle3(P(0,0),P(20,20),P(0,20))};
+                var cell=new[]{new Vec2(0,0),new Vec2(20,0),new Vec2(20,20),new Vec2(0,20)};
+                var hole=(IReadOnlyList<Vec2>)new[]{new Vec2(5,5),new Vec2(10,5),new Vec2(10,10),new Vec2(5,10)};
+                var v=ExactGridCellCalculator.Calculate(a,b,cell,cell,new[]{hole});
+                Check(Math.Abs(v.CalculationArea-375)<1e-7&&Math.Abs(v.CutVolume-750)<1e-7,
+                    "20x20 less 5x5 hole -> 750m3");
+            },
+            ["grid_exact_reports_no_data_not_zero"] = ()=>{
+                var a=new[]{new Triangle3(P(0,0,2),P(10,0,2),P(10,20,2)),
+                    new Triangle3(P(0,0,2),P(10,20,2),P(0,20,2))};
+                var b=new[]{new Triangle3(P(0,0),P(20,0),P(20,20)),
+                    new Triangle3(P(0,0),P(20,20),P(0,20))};
+                var cell=new[]{new Vec2(0,0),new Vec2(20,0),new Vec2(20,20),new Vec2(0,20)};
+                var v=ExactGridCellCalculator.Calculate(a,b,cell);
+                Check(Math.Abs(v.NoDataArea-200)<1e-7&&Math.Abs(v.CutVolume-400)<1e-7&&!v.IsComplete,
+                    "Missing TIN data must not be silently treated as fill=0");
+            },
+
             ["all_sites_referenced"] = ()=>{var p=Prepare(Corners().Concat(new[]{P(2,3),P(6,7),P(5,5)}));Coverage(p,Build(p));},
             ["single_constraint"] = ()=>{var p=Prepare(Corners(),new[]{new Segment3(P(0,0),P(10,10))});Constraints(p,Build(p));},
             ["crossing_same_z"] = ()=>{var p=Prepare(Corners(),new[]{new Segment3(P(0,0),P(10,10)),new Segment3(P(0,10),P(10,0))});Check(!p.HasErrors&&p.Sites.Any(v=>v.X==5&&v.Y==5),"Crossing not noded");Constraints(p,Build(p));},
