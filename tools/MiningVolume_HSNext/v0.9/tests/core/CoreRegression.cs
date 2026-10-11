@@ -204,6 +204,17 @@ internal static class CoreRegression
                 another.Entities.Add(Entity("b",SourceEntityType.Point,P(11,12,13)));
                 Check(modelHash!=SourceFingerprint.ComputeModel(another),
                     "New unedited CAD object did not invalidate the source fingerprint");
+                var reversed=Model(Entity("b",SourceEntityType.Point,P(11,12,13)),
+                    Entity("a",SourceEntityType.Polyline3d,P(0,0,8),P(10,0,4)));
+                Check(SourceFingerprint.ComputeModel(another)==SourceFingerprint.ComputeModel(reversed),
+                    "Source fingerprint depends on entity selection/enumeration order");
+                reversed.Entities[0].Vertices[0].OverrideZ(98);
+                Check(SourceFingerprint.ComputeModel(another)==SourceFingerprint.ComputeModel(reversed),
+                    "Model-side Z override incorrectly changes the source integrity fingerprint");
+                var changedOriginal=Model(Entity("b",SourceEntityType.Point,P(11,12,14)),
+                    Entity("a",SourceEntityType.Polyline3d,P(0,0,8),P(10,0,4)));
+                Check(SourceFingerprint.ComputeModel(another)!=SourceFingerprint.ComputeModel(changedOriginal),
+                    "Changed original CAD Z was not detected by the source integrity fingerprint");
                 bool invalid=false;try{m.RestoreVertices(new[]{new KeyValuePair<string,int>("a",1),new KeyValuePair<string,int>("a",9)});}catch(ArgumentOutOfRangeException){invalid=true;}
                 Check(invalid&&m.Entities[0].Vertices[1].Position.Z==7,"Bulk restore partially applied invalid selection");
                 m.RestoreVertices(new[]{new KeyValuePair<string,int>("a",0)});
