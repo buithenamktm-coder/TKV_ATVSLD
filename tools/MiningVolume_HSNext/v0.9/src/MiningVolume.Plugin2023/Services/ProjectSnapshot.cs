@@ -123,12 +123,15 @@ namespace MiningVolume2023.Services
             using (var json = new MemoryStream())
             {
                 serializer.WriteObject(json, snapshot);
+                if(json.Length>128L*1024*1024)throw new InvalidDataException("Project vượt giới hạn kích thước an toàn; chưa ghi vào DWG.");
                 json.Position = 0;
                 using (var compressed = new MemoryStream())
                 {
                     using (var gzip = new GZipStream(compressed, CompressionLevel.Optimal, true))
                         json.CopyTo(gzip);
-                    return Convert.ToBase64String(compressed.ToArray());
+                    var encoded=Convert.ToBase64String(compressed.ToArray());
+                    if(encoded.Length>64*1024*1024)throw new InvalidDataException("Project nén vượt giới hạn an toàn; chưa ghi vào DWG.");
+                    return encoded;
                 }
             }
         }
