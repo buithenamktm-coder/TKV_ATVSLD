@@ -117,7 +117,7 @@ def test_project_scale_is_persisted_but_report_identity_is_fixed():
     assert 'ExportOptions.FixedDeveloperName' in export
     assert 'ExportOptions.FixedDeveloperContact' in export
     assert 'FixedDeveloperName = "Bùi Thế Nam"' in service
-    assert 'FixedDeveloperContact = "Điện thoại: 0967280686"' in service
+    assert 'FixedDeveloperContact = "ĐT/Zalo: 0967280686"' in service
 
 
 def test_runtime_serialization_references_present():
