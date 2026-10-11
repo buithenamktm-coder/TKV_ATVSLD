@@ -121,7 +121,8 @@ namespace MiningVolume2023.Services
             double horizontalScale,
             double verticalScale,
             double levelStep,
-            Action<int, int> progress = null)
+            Action<int, int> progress = null,
+            double layoutGap = 90.0)
         {
             var state = ProjectState.Current;
             if (state.SectionProfiles.Count == 0) BuildProfiles();
@@ -143,7 +144,8 @@ namespace MiningVolume2023.Services
                         levelStep,
                         start,
                         count,
-                        start == 0);
+                        start == 0,
+                        layoutGap);
                     progress?.Invoke(start + count, total);
                 }
             }

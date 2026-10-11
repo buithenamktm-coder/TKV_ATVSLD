@@ -94,6 +94,8 @@ namespace MiningVolume2023.Services
         public List<SectionProfile> SectionProfiles { get; } = new List<SectionProfile>();
         public VolumeResult VolumeResult { get; set; }
         public double SectionSpacing { get; set; } = 20.0;
+        // Khoảng trống trên bản vẽ xuất, độc lập với cự ly tuyến mặt cắt dùng tính khối lượng.
+        public double SectionLayoutGap { get; set; } = 90.0;
         public double LevelStep { get; set; } = 5.0;
         public double FromLevel { get; set; }
         public double ToLevel { get; set; }
@@ -121,6 +123,7 @@ namespace MiningVolume2023.Services
             SectionProfiles.Clear();
             VolumeResult = null;
             SectionSpacing = 20.0;
+            SectionLayoutGap = 90.0;
             LevelStep = 5.0;
             FromLevel = 0;
             ToLevel = 0;
