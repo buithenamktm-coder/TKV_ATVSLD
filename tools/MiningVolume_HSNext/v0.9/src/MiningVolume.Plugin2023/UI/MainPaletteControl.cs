@@ -6,7 +6,7 @@ using System.Windows.Forms;
 
 namespace MiningVolume2023.UI
 {
-    public enum AppPage { Project, Data, Model, Section, Volume, Grid, Export }
+    public enum AppPage { Project, Data, Model, Section, Volume, Grid, Mineral, Export }
 
     public sealed class MainPaletteControl : UserControl
     {
@@ -42,6 +42,7 @@ namespace MiningVolume2023.UI
                 [AppPage.Section] = new SectionPage(),
                 [AppPage.Volume] = new VolumePage(),
                 [AppPage.Grid] = new GridPage(),
+                [AppPage.Mineral] = new MineralPage(),
                 [AppPage.Export] = new ExportPage()
             };
 
@@ -54,7 +55,8 @@ namespace MiningVolume2023.UI
             AddNav(nav, AppPage.Section, "3", "Mặt cắt");
             AddNav(nav, AppPage.Volume, "4", "Khối lượng");
             AddNav(nav, AppPage.Grid, "5", "Lưới ô vuông");
-            AddNav(nav, AppPage.Export, "6", "Xuất Excel");
+            AddNav(nav, AppPage.Mineral, "6", "Vỉa / Quặng");
+            AddNav(nav, AppPage.Export, "7", "Xuất bảng");
 
             ShowPage(AppPage.Project);
         }
@@ -184,6 +186,7 @@ namespace MiningVolume2023.UI
                 Cursor = Cursors.Hand
             };
             b.FlatAppearance.BorderSize = 0;
+            UiTheme.ApplyRoundedButtonMask(b);
             b.FlatAppearance.MouseOverBackColor = UiTheme.SidebarHover;
             b.FlatAppearance.MouseDownBackColor = UiTheme.Soft;
             b.Click += (s, e) => ShowPage(page);
