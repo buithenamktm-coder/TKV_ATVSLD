@@ -93,6 +93,10 @@ namespace MiningVolume2023.Services
         public SectionSystem SectionSystem { get; set; }
         public List<SectionProfile> SectionProfiles { get; } = new List<SectionProfile>();
         public VolumeResult VolumeResult { get; set; }
+        public List<MineralBody> MineralBodies { get; } = new List<MineralBody>();
+        // Chỉ dữ liệu lộ vỉa đầy đủ của ít nhất một vỉa mới mở phân hệ.
+        // Không đồng nghĩa đã có thể tích 3D chính thức.
+        public bool HasMineralInput => MineralBodies.Any(b => b.HasPairedOutcrops);
         public double SectionSpacing { get; set; } = 20.0;
         public double LevelStep { get; set; } = 5.0;
         public double FromLevel { get; set; }
@@ -120,6 +124,7 @@ namespace MiningVolume2023.Services
             SectionSystem = null;
             SectionProfiles.Clear();
             VolumeResult = null;
+            MineralBodies.Clear();
             SectionSpacing = 20.0;
             LevelStep = 5.0;
             FromLevel = 0;
