@@ -1,6 +1,7 @@
 using System;
 using System.Drawing;
 using System.Linq;
+using MiningVolume.Core.Sections;
 using System.Windows.Forms;
 using MiningVolume2023.Services;
 
@@ -36,7 +37,7 @@ namespace MiningVolume2023.UI
 
             var commands = new FlowLayoutPanel
             {
-                Dock = DockStyle.Top, Height = 77,
+                Dock = DockStyle.Top, Height = 112,
                 WrapContents = true, Padding = new Padding(4, 3, 4, 3)
             };
             commands.Controls.Add(Action("THÊM VỈA", AddBody));
@@ -46,6 +47,8 @@ namespace MiningVolume2023.UI
             commands.Controls.Add(Action("CHỌN LỘ VỈA THIẾT KẾ", (s,e) => Pick(ModelRole.Design)));
             commands.Controls.Add(Action("BỎ CHỌN HIỆN TRẠNG", (s,e) => Clear(ModelRole.Existing)));
             commands.Controls.Add(Action("BỎ CHỌN THIẾT KẾ", (s,e) => Clear(ModelRole.Design)));
+            commands.Controls.Add(Action("GÁN VÙNG TRÊN MẶT CẮT", (s,e) => AssignSectionRegion()));
+            commands.Controls.Add(Action("CẬP NHẬT MẶT CẮT", (s,e) => UpdateSectionRegions()));
             Controls.Add(commands);
             commands.BringToFront();
 
@@ -195,6 +198,81 @@ namespace MiningVolume2023.UI
                 return;
             body.ClearTraces(role);
             ProjectState.Current.NotifyChanged();
+        }
+
+        private string ChooseSection()
+        {
+            var profiles = ProjectState.Current.SectionProfiles
+                .Where(x => x.HasData).OrderBy(x => x.Line.Index).ToList();
+            if (profiles.Count == 0)
+            {
+                MessageBox.Show("Chưa có mặt cắt có đủ hai TIN.", "IMSAT VOLUME");
+                return null;
+            }
+            using (var dialog = new Form
+            {
+                Text = "Chọn mặt cắt để gán vùng khoáng sản",
+                Font = new Font("Arial",9F),
+                Width = 420,Height = 150,
+                FormBorderStyle = FormBorderStyle.FixedDialog,
+                StartPosition = FormStartPosition.CenterParent,
+                MaximizeBox = false,MinimizeBox = false
+            })
+            {
+                var list = new ComboBox
+                {
+                    Left = 15,Top = 12,Width = 378,
+                    DropDownStyle = ComboBoxStyle.DropDownList
+                };
+                list.Items.AddRange(profiles.Select(x=>x.Line.Name).Cast<object>().ToArray());
+                list.SelectedIndex=0;
+                var yes = new Button { Text = "Đồng ý",Left = 214,Top = 49,Width = 80,DialogResult = DialogResult.OK };
+                var no = new Button { Text = "Hủy",Left = 303,Top = 49,Width = 80,DialogResult = DialogResult.Cancel };
+                dialog.Controls.Add(list);dialog.Controls.Add(yes);dialog.Controls.Add(no);
+                dialog.AcceptButton = yes; dialog.CancelButton = no;
+                return dialog.ShowDialog(this)==DialogResult.OK ? list.SelectedItem as string : null;
+            }
+        }
+
+        private void AssignSectionRegion()
+        {
+            var body = Selected();
+            if (body == null) { MissingSelection(); return; }
+            if (!body.HasPairedOutcrops)
+            {
+                MessageBox.Show("Vỉa này chưa chọn đủ đường lộ vỉa hiện trạng và thiết kế.",
+                    "IMSAT VOLUME",MessageBoxButtons.OK,MessageBoxIcon.Warning);
+                return;
+            }
+            string sectionName = ChooseSection();
+            if (sectionName == null) return;
+            try
+            {
+                // Người dùng dựng vùng kín bằng PLINE trong khung mặt cắt trước khi gán.
+                var handle = SelectionService.PickClosedBoundary();
+                if (handle == null) return;
+                var profile = ProjectState.Current.SectionProfiles.First(p => p.Line.Name == sectionName);
+                double area = MineralSectionRegionService.AssignRegion(handle,body,profile);
+                _status.Text = "Đã gán "+body.Name+" vào "+sectionName+
+                    "; F="+area.ToString("0.00")+" m². Bấm CẬP NHẬT MẶT CẮT để đọc lại toàn bộ.";
+            }
+            catch(Exception ex){Alert(ex);}
+        }
+
+        private void UpdateSectionRegions()
+        {
+            try
+            {
+                var result=MineralSectionRegionService.UpdateAll();
+                double area=result.Sum(x=>x.AreaSquareMetres);
+                _status.Text="Đã cập nhật "+result.Count+" vùng khoáng sản; tổng diện tích theo các mặt cắt = "+
+                    area.ToString("0.00")+" m². Chưa phải thể tích m³/tấn.";
+                MessageBox.Show(_status.Text+Environment.NewLine+
+                    "Diện tích theo vỉa đã kiểm tra nằm trong phần đào, không chồng lấn. "+
+                    "Tính thể tích/tấn chỉ được thực hiện khi đủ thông tin hình học giữa các mặt cắt.",
+                    "CẬP NHẬT MẶT CẮT",MessageBoxButtons.OK,MessageBoxIcon.Information);
+            }
+            catch(Exception ex){Alert(ex);}
         }
 
         private void SaveDensity()
