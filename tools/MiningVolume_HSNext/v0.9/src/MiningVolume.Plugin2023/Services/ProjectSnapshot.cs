@@ -48,6 +48,9 @@ namespace MiningVolume2023.Services
         [DataMember(Order = 33)] public double? VolumeCalculationSeconds { get; set; }
         [DataMember(Order = 34)] public DateTime? GridCalculatedUtc { get; set; }
         [DataMember(Order = 35)] public double? GridCalculationSeconds { get; set; }
+        [DataMember(Order = 36)] public string VolumePeriodType { get; set; }
+        [DataMember(Order = 37)] public int VolumePeriodNumber { get; set; }
+        [DataMember(Order = 38)] public int VolumePeriodYear { get; set; }
     }
 
     [DataContract]
