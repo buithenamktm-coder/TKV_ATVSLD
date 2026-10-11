@@ -12,18 +12,18 @@ namespace MiningVolume2023.UI
     /// </summary>
     internal static class UiTheme
     {
-        public static readonly Color Canvas = Color.FromArgb(242, 242, 247);
+        public static readonly Color Canvas = Color.FromArgb(248, 250, 253);
         public static readonly Color Surface = Color.White;
-        public static readonly Color Sidebar = Color.FromArgb(248, 248, 250);
-        public static readonly Color SidebarHover = Color.FromArgb(235, 235, 240);
-        public static readonly Color Accent = Color.FromArgb(0, 122, 255);
-        public static readonly Color AccentDark = Color.FromArgb(0, 102, 214);
+        public static readonly Color Sidebar = Color.FromArgb(239, 245, 251);
+        public static readonly Color SidebarHover = Color.FromArgb(221, 236, 250);
+        public static readonly Color Accent = Color.FromArgb(23, 105, 181);
+        public static readonly Color AccentDark = Color.FromArgb(15, 82, 148);
         public static readonly Color TextStrong = Color.FromArgb(28, 28, 30);
-        public static readonly Color Text = Color.FromArgb(58, 58, 60);
-        public static readonly Color Muted = Color.FromArgb(99, 99, 102);
-        public static readonly Color Border = Color.FromArgb(209, 209, 214);
-        public static readonly Color Soft = Color.FromArgb(229, 229, 234);
-        public static readonly Color Danger = Color.FromArgb(255, 59, 48);
+        public static readonly Color Text = Color.FromArgb(45, 58, 73);
+        public static readonly Color Muted = Color.FromArgb(82, 99, 117);
+        public static readonly Color Border = Color.FromArgb(183, 204, 225);
+        public static readonly Color Soft = Color.FromArgb(229, 239, 248);
+        public static readonly Color Danger = Color.FromArgb(177, 44, 55);
 
         public static void ApplyPage(Control root)
         {
@@ -116,17 +116,21 @@ namespace MiningVolume2023.UI
             }
             else if (text.StartsWith("XÓA"))
             {
-                button.BackColor = Surface;
+                button.BackColor = Color.FromArgb(255, 246, 246);
                 button.ForeColor = Danger;
-                button.FlatAppearance.BorderColor = Color.FromArgb(226, 190, 190);
-                button.FlatAppearance.MouseOverBackColor = Color.FromArgb(252, 241, 241);
+                button.FlatAppearance.BorderColor = Color.FromArgb(234, 181, 181);
+                button.FlatAppearance.MouseOverBackColor = Color.FromArgb(253, 234, 235);
+                button.FlatAppearance.MouseDownBackColor = Color.FromArgb(249, 222, 224);
             }
             else
             {
-                button.BackColor = Surface;
-                button.ForeColor = TextStrong;
-                button.FlatAppearance.MouseOverBackColor = Soft;
-                button.FlatAppearance.MouseDownBackColor = Color.FromArgb(225, 233, 239);
+                // A subtle blue tint and a defined border keep secondary actions
+                // visible on the light palette without making every button dominant.
+                button.BackColor = Color.FromArgb(241, 247, 253);
+                button.ForeColor = Color.FromArgb(31, 62, 94);
+                button.FlatAppearance.BorderColor = Border;
+                button.FlatAppearance.MouseOverBackColor = Color.FromArgb(225, 238, 250);
+                button.FlatAppearance.MouseDownBackColor = Color.FromArgb(212, 231, 248);
             }
         }
 
@@ -171,6 +175,7 @@ namespace MiningVolume2023.UI
                    text.StartsWith("TÍNH ") ||
                    text.StartsWith("XUẤT ") ||
                    text.StartsWith("LƯU PROJECT") ||
+                   text.StartsWith("CẬP NHẬT MẶT CẮT") ||
                    text.StartsWith("XEM TRƯỚC");
         }
 
