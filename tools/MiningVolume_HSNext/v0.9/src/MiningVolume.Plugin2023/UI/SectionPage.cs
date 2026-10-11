@@ -370,7 +370,7 @@ namespace MiningVolume2023.UI
                 if (EditableSectionCadService.HasEditableProfiles(activeDoc.Database) &&
                     MessageBox.Show(
                         "Bản vẽ đang có hệ mặt cắt CAD có thể đã được hiệu chỉnh thủ công. " +
-                        "Thành lập lại sẽ THAY THẾ các đường mặt cắt và xóa các chỉnh sửa trên hệ mặt cắt cũ.\\r\\n\\r\\n" +
+                        "Thành lập lại sẽ THAY THẾ các đường mặt cắt và xóa các chỉnh sửa trên hệ mặt cắt cũ.\r\n\r\n" +
                         "Hãy lưu một bản sao DWG trước khi thực hiện. Anh có chắc chắn muốn vẽ lại không?",
                         "Xác nhận thay thế mặt cắt CAD",
                         MessageBoxButtons.YesNo, MessageBoxIcon.Warning,
