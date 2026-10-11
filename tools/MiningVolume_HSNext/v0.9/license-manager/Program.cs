@@ -43,6 +43,9 @@ namespace ImsatLicenseManager
                 if (args.Length == 0) return Usage();
                 switch (args[0].ToLowerInvariant())
                 {
+                    case "selftest":
+                        SelfTest();
+                        break;
                     case "init":
                         if (args.Length != 1) return Usage();
                         Init();
@@ -82,12 +85,44 @@ namespace ImsatLicenseManager
         {
             Console.WriteLine("IMSAT MiningVolume License Manager (offline admin only)");
             Console.WriteLine("  init");
+            Console.WriteLine("  selftest");
             Console.WriteLine("  issue <MachineId64hex> <INTERNAL|UNIT> <Customer> <YYYY-MM-DD|PERMANENT>");
             Console.WriteLine("  public");
             Console.WriteLine("  provision <full path to plugin LicenseService.cs>");
             Console.WriteLine("  verify <full path to .mvlic>");
             Console.WriteLine("All issuing keys stay in the admin Windows profile, never in the CAD plugin.");
             return 2;
+        }
+
+        private static void SelfTest()
+        {
+            var payload = new SignedLicensePayload
+            {
+                LicenseId = "MV2-SELFTEST", Customer = "IMSAT TEST", Mode = "UNIT",
+                MachineId = new string('A', 64),
+                NotBeforeUtc = DateTime.UtcNow.AddMinutes(-5),
+                ExpiresUtc = DateTime.UtcNow.AddDays(30)
+            };
+            byte[] data;
+            using (var ms = new MemoryStream())
+            {
+                new DataContractJsonSerializer(typeof(SignedLicensePayload)).WriteObject(ms, payload);
+                data = ms.ToArray();
+            }
+            using (var issuer = new RSACryptoServiceProvider(2048))
+            using (var verifier = new RSACryptoServiceProvider())
+            {
+                issuer.PersistKeyInCsp = false;
+                verifier.PersistKeyInCsp = false;
+                verifier.FromXmlString(issuer.ToXmlString(false));
+                byte[] sig = issuer.SignData(data, CryptoConfig.MapNameToOID("SHA256"));
+                if (!verifier.VerifyData(data, CryptoConfig.MapNameToOID("SHA256"), sig))
+                    throw new InvalidOperationException("License RSA-SHA256 round trip FAIL");
+                data[0] ^= 0x01;
+                if (verifier.VerifyData(data, CryptoConfig.MapNameToOID("SHA256"), sig))
+                    throw new InvalidOperationException("Tampered payload accepted");
+            }
+            Console.WriteLine("LICENSE MANAGER SELFTEST PASS");
         }
 
         private static void Init()
