@@ -370,10 +370,10 @@ namespace MiningVolume2023.UI
         /// Experimental mean-Z TIN does not alter either verified TIN or any
         /// official section/volume state. Only writes a TEST_ONLY preview layer.
         /// </summary>
-        private async Task BuildMeanZPreviewAsync()
+        private async Task BuildMeanZPreviewAsync(ModelRole? requestedRole=null)
         {
             if (_busy || !LicenseUiGuard.Check()) return;
-            var role=CurrentRole;
+            var role=requestedRole??CurrentRole;
             var startingDocument=Autodesk.AutoCAD.ApplicationServices.Application
                 .DocumentManager.MdiActiveDocument;
             if(startingDocument==null)
@@ -449,7 +449,15 @@ namespace MiningVolume2023.UI
                         == startingDocument)
                 {
                     Autodesk.AutoCAD.ApplicationServices.Application.ShowModelessDialog(
-                        new MeanZConflictReviewForm(role, ex.Analysis));
+                        new MeanZConflictReviewForm(role, ex.Analysis, () =>
+                        {
+                            if(IsDisposed || !IsHandleCreated ||
+                               Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
+                                   != startingDocument)return;
+                            // Queue after the modeless conflict form finishes closing.
+                            // Build() scans current data and reapplies the >3m hard gate.
+                            BeginInvoke(new Action(async () => await BuildMeanZPreviewAsync(role)));
+                        }));
                 }
                 else if(!IsDisposed)
                 {
