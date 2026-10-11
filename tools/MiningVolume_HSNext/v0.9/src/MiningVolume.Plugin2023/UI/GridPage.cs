@@ -217,7 +217,7 @@ namespace MiningVolume2023.UI
             {
                 if(!GridWorkflowService.IsCurrent)throw new InvalidOperationException(
                     "Lưới đã cũ hoặc chưa tính. Hãy tính lại trước khi vẽ lên CAD.");
-                var doc=Application.DocumentManager.MdiActiveDocument ??
+                var doc=Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument ??
                     throw new InvalidOperationException("Không có bản vẽ AutoCAD.");
                 using(doc.LockDocument())
                     GridCadRenderer.Draw(doc.Database,GridWorkflowService.Report,_labels.Checked);
