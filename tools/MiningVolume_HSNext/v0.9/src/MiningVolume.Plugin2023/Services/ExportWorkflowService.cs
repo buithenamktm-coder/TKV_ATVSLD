@@ -41,8 +41,16 @@ namespace MiningVolume2023.Services
 
         public static void WriteXlsx(string filePath, SpreadsheetReport report)
         {
-            SimpleXlsxWriter.Write(filePath, report);
-            XlsxBrandingInjector.Apply(filePath, report);
+            var target=Path.GetFullPath(filePath);
+            var directory=Path.GetDirectoryName(target);
+            Directory.CreateDirectory(directory);
+            var staging=Path.Combine(directory,"."+Path.GetFileName(target)+"."+Guid.NewGuid().ToString("N")+".tmp");
+            try {
+                SimpleXlsxWriter.Write(staging, report);
+                XlsxBrandingInjector.Apply(staging, report);
+                if(File.Exists(target))File.Replace(staging,target,null);
+                else File.Move(staging,target);
+            } finally {if(File.Exists(staging))File.Delete(staging);}
         }
 
         public static SpreadsheetReport BuildReport(ProjectState state, ExportOptions options)
@@ -59,6 +67,8 @@ namespace MiningVolume2023.Services
             if (options.IncludeSourceXyz) report.Sheets.Add(BuildSourceXyzSheet(state));
             if (options.IncludeSectionData) report.Sheets.Add(BuildSectionDataSheet(state));
             if (options.IncludeSectionAreas) report.Sheets.Add(BuildSectionParameterSheet(state));
+            if ((options.IncludeIntervals || options.IncludeLevels) && state.VolumeResult.Intervals.Any(x=>x.BandVolumes.Count>0))
+                report.Sheets.Add(BuildBandIntervalSheet(state.VolumeResult));
             if (options.IncludeIntervals) report.Sheets.Add(BuildIntervalSheet(state.VolumeResult));
             if (options.IncludeLevels) report.Sheets.Add(BuildLevelSheet(state.VolumeResult));
             if (options.IncludeSummary) report.Sheets.Add(BuildSummarySheet(state, options));
@@ -93,7 +103,7 @@ namespace MiningVolume2023.Services
             AddKV(s, "Mức tính từ", FormatLevel(st.FromLevel));
             AddKV(s, "Mức tính đến", FormatLevel(st.ToLevel));
             AddKV(s, "Bước chia tầng, m", st.LevelStep.ToString("0.###"));
-            AddKV(s, "Quy tắc công thức V1.0", "1 đầu bằng 0: hình chóp; chênh F1-F2 ≤ 40%: TB hai đầu; chênh > 40%: hình chóp cụt");
+            AddKV(s, "Quy tắc công thức theo từng dải cao độ", "1 đầu bằng 0: hình chóp; chênh F1-F2 ≤ 40%: TB hai đầu; chênh > 40%: hình chóp cụt");
             AddKV(s, "Nguyên tắc Excel", "Công thức tham chiếu trực tiếp các ô L, F1, F2 và tự đổi nhánh khi dữ liệu ô thay đổi");
             return s;
         }
@@ -172,20 +182,29 @@ namespace MiningVolume2023.Services
                 new[] { "Đoạn", "MC đầu", "MC cuối", "L, m", "F đào đầu", "F đào giữa", "F đào cuối", "V đào, m³", "F đắp đầu", "F đắp giữa", "F đắp cuối", "V đắp, m³", "Công thức đào", "Công thức đắp", "Ghi chú" },
                 9, 13, 13, 12, 14, 14, 14, 16, 14, 14, 14, 16, 16, 16, 32);
             s.Notes.Add("Các ô V đào/V đắp là công thức Excel thực: 1 đầu bằng 0 dùng hình chóp; chênh diện tích ≤ 40% dùng TB hai đầu; chênh > 40% dùng hình chóp cụt.");
-            s.Notes.Add("Công thức tham chiếu trực tiếp L, F1, F2 nên khi sửa số liệu trong Excel, khối lượng tự tính lại và tự chuyển nhánh công thức.");
+            s.Notes.Add("Sửa L/F1/F2 tại Chi tiết tầng: tổng theo khoảng và theo tầng cùng liên kết, không nội suy lại TIN cho mặt cắt đã sửa tay. F giữa để trống khi không có số đo phù hợp.");
             const int firstDataRow = 4; // tiêu đề + ghi chú + hàng tiêu đề cột
             int excelRow = firstDataRow;
+            int bandRow=4;
             foreach (var x in r.Intervals)
             {
+                int bandLast=bandRow+x.BandVolumes.Count-1;
+                string BandSum(string column)=>"SUM('Chi tiết tầng'!"+column+bandRow+":"+column+bandLast+")";
                 s.Rows.Add(new[]
                 {
                     ReportCell.Int(x.Index), ReportCell.Text(x.StartSection), ReportCell.Text(x.EndSection), ReportCell.N3(x.Distance),
-                    ReportCell.N2(x.CutAreaStart), ReportCell.N2(x.CutAreaMid), ReportCell.N2(x.CutAreaEnd),
-                    ReportCell.Formula2(AdaptiveVolumeFormula(excelRow, "D", "E", "G")),
-                    ReportCell.N2(x.FillAreaStart), ReportCell.N2(x.FillAreaMid), ReportCell.N2(x.FillAreaEnd),
-                    ReportCell.Formula2(AdaptiveVolumeFormula(excelRow, "D", "I", "K")),
-                    ReportCell.Text(FormulaName(x.CutFormula)), ReportCell.Text(FormulaName(x.FillFormula)), ReportCell.Text(x.Note ?? string.Empty)
+                    x.BandVolumes.Count>0?ReportCell.Formula2(BandSum("F")):ReportCell.N2(x.CutAreaStart),
+                    x.HasMidArea?ReportCell.N2(x.CutAreaMid):ReportCell.Text(""),
+                    x.BandVolumes.Count>0?ReportCell.Formula2(BandSum("G")):ReportCell.N2(x.CutAreaEnd),
+                    ReportCell.Formula2(x.BandVolumes.Count>0?BandSum("H"):AdaptiveVolumeFormula(excelRow, "D", "E", "G")),
+                    x.BandVolumes.Count>0?ReportCell.Formula2(BandSum("I")):ReportCell.N2(x.FillAreaStart),
+                    x.HasMidArea?ReportCell.N2(x.FillAreaMid):ReportCell.Text(""),
+                    x.BandVolumes.Count>0?ReportCell.Formula2(BandSum("J")):ReportCell.N2(x.FillAreaEnd),
+                    ReportCell.Formula2(x.BandVolumes.Count>0?BandSum("K"):AdaptiveVolumeFormula(excelRow, "D", "I", "K")),
+                    ReportCell.Text(x.BandVolumes.Count>0?"Tổng các tầng":FormulaName(x.CutFormula)),
+                    ReportCell.Text(x.BandVolumes.Count>0?"Tổng các tầng":FormulaName(x.FillFormula)), ReportCell.Text(x.Note ?? string.Empty)
                 });
+                bandRow+=x.BandVolumes.Count;
                 excelRow++;
             }
 
@@ -202,6 +221,29 @@ namespace MiningVolume2023.Services
             return s;
         }
 
+        private static ReportSheet BuildBandIntervalSheet(VolumeResult r)
+        {
+            var s=NewSheet("Chi tiết tầng","KHỐI LƯỢNG TỪNG KHOẢNG VÀ DẢI CAO ĐỘ",
+                new[]{"Khoảng","Mã tầng","MC đầu","MC cuối","L (m)","F đào đầu","F đào cuối","V đào (m³)","F đắp đầu","F đắp cuối","V đắp (m³)"},
+                10,10,15,15,12,16,16,18,16,16,18);
+            s.Notes.Add("Khối lượng chính thức là tổng đóng góp của từng dải. Sửa tham số tại đây để tính lại các bảng tổng hợp.");
+            int row=4;
+            foreach(var interval in r.Intervals)foreach(var b in interval.BandVolumes) {
+                s.Rows.Add(new[]{ReportCell.Int(interval.Index),ReportCell.Int(b.Index),ReportCell.Text(b.StartSection),
+                    ReportCell.Text(b.EndSection),ReportCell.N3(b.Distance),ReportCell.N3(b.CutAreaStart),ReportCell.N3(b.CutAreaEnd),
+                    ReportCell.Formula3(AdaptiveVolumeFormula(row,"E","F","G")),ReportCell.N3(b.FillAreaStart),ReportCell.N3(b.FillAreaEnd),
+                    ReportCell.Formula3(AdaptiveVolumeFormula(row,"E","I","J"))});row++;
+            }
+            return s;
+        }
+
+        private static ReportCell LevelCell(VolumeResult r,LevelVolumeSummary level,string column,double fallback)
+        {
+            int count=r.Intervals.Sum(x=>x.BandVolumes.Count);
+            return count==0?ReportCell.N2(fallback):ReportCell.Formula2("SUMIF('Chi tiết tầng'!$B$4:$B$"+(3+count)+","+
+                level.Band.Index+",'Chi tiết tầng'!$"+column+"$4:$"+column+"$"+(3+count)+")");
+        }
+
         private static ReportSheet BuildLevelSheet(VolumeResult r)
         {
             var s = NewSheet("Tổng hợp theo tầng", "TỔNG HỢP KHỐI LƯỢNG THEO TẦNG / MỨC",
@@ -215,7 +257,7 @@ namespace MiningVolume2023.Services
                 s.Rows.Add(new[]
                 {
                     ReportCell.Int(i++), ReportCell.Text(x.Band.Name), ReportCell.N3(x.Band.LowerZ), ReportCell.N3(x.Band.UpperZ),
-                    ReportCell.N2(x.CutVolume), ReportCell.N2(x.FillVolume), ReportCell.Formula2("=E" + excelRow + "-F" + excelRow)
+                    LevelCell(r,x,"H",x.CutVolume), LevelCell(r,x,"K",x.FillVolume), ReportCell.Formula2("=E" + excelRow + "-F" + excelRow)
                 });
                 excelRow++;
             }
@@ -322,7 +364,7 @@ namespace MiningVolume2023.Services
             }
         }
 
-        private static string AdaptiveVolumeFormula(
+        internal static string AdaptiveVolumeFormula(
             int row,
             string lengthCol,
             string startCol,

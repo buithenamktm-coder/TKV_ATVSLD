@@ -56,6 +56,7 @@ namespace MiningVolume2023.Services
             Row(s,"Thời gian thực tính lưới, giây", state.GridCalculationSeconds.HasValue
                 ? state.GridCalculationSeconds.Value.ToString("0.000")
                 : "Chưa xác nhận trong phiên hiện tại");
+            Row(s,"Thời điểm xuất Excel",DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss"));
             Row(s,"Người phát triển","Bùi Thế Nam");
             Row(s,"ĐT/Zalo","0967280686");
             Row(s,"Phương pháp",grid.Method);

@@ -20,9 +20,14 @@ def main():
     with tempfile.TemporaryDirectory(prefix='imsat-core-') as temp:
         tmp=pathlib.Path(temp);assembly=tmp/'CoreRegression.dll'
         sources=[p for name in ['MiningVolume.Core','MiningVolume.Surface'] for p in (project/'src'/name).rglob('*.cs') if not any(x in p.parts for x in ('obj','bin'))]
+        sources += [project/'src/MiningVolume.Plugin2023/Services'/name for name in (
+            'ProjectState.cs','MineralBody.cs','ExportWorkflowService.cs','GridVolumeExcelReportBuilder.cs',
+            'MineralVolumeExcelReportBuilder.cs','XlsxBrandingInjector.cs')]
+        (tmp/'Assets').mkdir()
+        shutil.copyfile(project/'src/MiningVolume.Plugin2023/Assets/imsat_logo_64.png',tmp/'Assets/imsat_logo_64.png')
         lines=['-nologo','-target:exe','-out:"'+str(assembly)+'"']
         lines+=['-r:"'+str(p)+'"' for p in (refs[-1]/'ref/net8.0').glob('*.dll')]
-        lines+=['"'+str(p)+'"' for p in sources+[project/'src/MiningVolume.Plugin2023/Services/ProjectSnapshot.cs',pathlib.Path(__file__).with_name('CoreRegression.cs').resolve()]]
+        lines+=['"'+str(p)+'"' for p in sources+[project/'src/MiningVolume.Plugin2023/Services/ProjectSnapshot.cs',pathlib.Path(__file__).with_name('CoreRegression.cs').resolve(),pathlib.Path(__file__).with_name('FinalAuditRegression.cs').resolve()]]
         rsp=tmp/'compile.rsp';rsp.write_text('\n'.join(lines),encoding='utf8')
         subprocess.run([os.sys.executable,str(project/'src/MiningVolume.Surface/Native/build_native.py'),'--output',str(tmp/'MiningVolume.Cdt.Native.dll')],check=True)
         subprocess.run([str(dotnet),str(sdks[-1]/'Roslyn/bincore/csc.dll'),'@'+str(rsp)],check=True)

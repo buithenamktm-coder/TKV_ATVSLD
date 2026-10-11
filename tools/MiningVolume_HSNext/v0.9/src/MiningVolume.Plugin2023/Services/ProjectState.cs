@@ -138,7 +138,11 @@ namespace MiningVolume2023.Services
         public Vec2? SectionDirection { get; set; }
         public SectionSystem SectionSystem { get; set; }
         public List<SectionProfile> SectionProfiles { get; } = new List<SectionProfile>();
-        public VolumeResult VolumeResult { get; set; }
+        private VolumeResult _volumeResult;
+        public VolumeResult VolumeResult {
+            get=>_volumeResult;
+            set { _volumeResult=value;VolumeCalculatedUtc=null;VolumeCalculationSeconds=null; }
+        }
         public List<MineralBody> MineralBodies { get; } = new List<MineralBody>();
         public bool HasMineralInput => MineralBodies.Any(b => b.HasPairedOutcrops);
         public string GridBoundaryHandle { get; set; }

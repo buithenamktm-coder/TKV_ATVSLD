@@ -6,6 +6,7 @@ import (
     "archive/zip"
     "bytes"
     "embed"
+    "encoding/xml"
     "fmt"
     "io"
     "os"
@@ -23,9 +24,11 @@ import (
 //go:embed payload.zip
 var payloadFS embed.FS
 
-const (
+var (
     productName = "IMSAT VOLUME for AutoCAD 2023"
     version = "1.0.0"
+    backupSuffix = ".v100bak"
+    storedSetupName = "MiningVolume_Setup_v1.0.exe"
     uninstallKey = `HKLM\Software\Microsoft\Windows\CurrentVersion\Uninstall\MiningVolume2023`
 )
 
@@ -47,7 +50,7 @@ func install() {
     cad, err := findAutoCAD2023()
     if err != nil { msg(err.Error(), 0x10); return }
 
-    temp := filepath.Join(os.TempDir(), fmt.Sprintf("MiningVolume_v100_%d", os.Getpid()))
+    temp := filepath.Join(os.TempDir(), fmt.Sprintf("MiningVolume_%s_%d", version, os.Getpid()))
     os.RemoveAll(temp)
     if err := os.MkdirAll(temp, 0755); err != nil { msg(err.Error(), 0x10); return }
     defer os.RemoveAll(temp)
@@ -61,7 +64,7 @@ func install() {
     programData := os.Getenv("ProgramData"); if programData == "" { programData = `C:\ProgramData` }
     appPlugins := filepath.Join(programData, "Autodesk", "ApplicationPlugins")
     target := filepath.Join(appPlugins, "MiningVolume2023.bundle")
-    backup := target + ".v100bak"
+    backup := target + backupSuffix
     os.MkdirAll(appPlugins, 0755)
 
     // Recover conservatively from an interrupted previous install before starting
@@ -80,14 +83,21 @@ func install() {
         msg("Không cài được bundle: "+err.Error(), 0x10); return
     }
 
-    // Runtime verification is a release-pipeline responsibility. The end-user
-    // installer must never launch AutoCAD automatically or expose development
-    // self-test behavior. A RUNTIME-PASS artifact has already been verified on
-    // a real AutoCAD 2023 runner before this Setup is published.
-    os.RemoveAll(backup)
-    if err := registerUninstall(target, cad); err != nil {
-        msg("MiningVolume đã được chép vào AutoCAD nhưng chưa ghi được mục gỡ cài đặt: "+err.Error(), 0x30); return
+    // Keep the previous bundle until registration and shortcuts also succeed.
+    // Runtime verification is a release-pipeline responsibility.
+    // QA packaging is not evidence of AutoCAD runtime acceptance.
+    undoRegistration, err := captureRegistration(programData, temp)
+    if err != nil {
+        os.RemoveAll(target); _ = restoreBackup(backup, target)
+        msg("Không sao lưu được đăng ký cài đặt: "+err.Error(), 0x10); return
     }
+    if err := registerUninstall(target, cad); err != nil {
+        os.RemoveAll(target)
+        restoreErr := restoreBackup(backup, target)
+        registryErr := undoRegistration()
+        msg(fmt.Sprintf("Cài đặt chưa hoàn tất: %v. Khôi phục bundle: %v; đăng ký: %v", err, restoreErr, registryErr), 0x10); return
+    }
+    os.RemoveAll(backup)
     writePersistentLog("install", "Status=INSTALLED\r\nAutoCAD="+filepath.Join(cad,"acad.exe"))
     msg("Cài đặt IMSAT VOLUME thành công.\n\nPhần mềm đang được tiếp tục cải tiến và hoàn thiện.\nMọi ý kiến đóng góp vui lòng liên hệ:\n\nBùi Thế Nam\nĐT/Zalo: 0967280686", 0x40)
 }
@@ -130,7 +140,7 @@ func validatePrebuiltBundle(root string) error {
     if err != nil { return fmt.Errorf("Không đọc được PackageContents.xml: %w", err) }
     xmlText := string(xmlBytes)
     for _, token := range []string{
-        `AppVersion="1.0.0"`,
+        `AppVersion="`+version+`"`,
         `SeriesMin="R24.2"`,
         `SeriesMax="R24.2"`,
         `LoadOnAutoCADStartup="True"`,
@@ -153,6 +163,12 @@ func uninstall() {
     // backup and registered launchers. Never scan/remove DWG, other .bundle,
     // user projects, license files, saved reports or user profile folders.
     target := filepath.Join(programData, "Autodesk", "ApplicationPlugins", "MiningVolume2023.bundle")
+    if exists(target) {
+        installedVersion, err := bundleVersion(target)
+        if err != nil || installedVersion != version {
+            msg("Bộ gỡ không khớp phiên bản đang cài. Hãy dùng mục IMSAT trong Windows Installed Apps.", 0x10); return
+        }
+    }
     if err := os.RemoveAll(target); err != nil {
         msg("Không gỡ được bundle IMSAT; cần kiểm tra quyền tệp.\n\n"+err.Error(), 0x10)
         return
@@ -182,13 +198,13 @@ func uninstall() {
     // process removes the installed copy AFTER this uninstaller exits.
     // Original downloaded Setup and user-created files are never deleted.
     installedDir := filepath.Join(programData, "MiningVolume2023")
-    installedExe := filepath.Join(installedDir, "MiningVolume_Setup_v1.0.exe")
+    installedExe := filepath.Join(installedDir, storedSetupName)
     cleanupInstalledSetupLater(installedExe, installedDir)
     msg("Đã gỡ IMSAT VOLUME và đăng ký tự nạp khỏi AutoCAD.\n\nBản vẽ DWG, Project, báo cáo và dữ liệu người dùng được giữ nguyên.", 0x40)
 }
 
 func cleanupInstalledSetupLater(exe, dir string) {
-    // The V2 QA packaging step rewrites this executable name to v2.0_QA.
+    // The linker selects the installed executable name; no source rewriting.
     // Wait for the current process to exit; remove only the installer EXE.
     command := "$id=" + fmt.Sprint(os.Getpid()) + ";" +
         "try { Wait-Process -Id $id -Timeout 90 -ErrorAction SilentlyContinue } catch {};" +
@@ -250,7 +266,7 @@ func registerUninstall(bundlePath, cadDir string) error {
     programData := os.Getenv("ProgramData"); if programData=="" { programData=`C:\ProgramData` }
     dir := filepath.Join(programData, "MiningVolume2023")
     if err := os.MkdirAll(dir,0755); err != nil { return err }
-    exe, _ := os.Executable(); stored := filepath.Join(dir,"MiningVolume_Setup_v1.0.exe")
+    exe, _ := os.Executable(); stored := filepath.Join(dir,storedSetupName)
     if err := copyFile(exe,stored); err != nil { return err }
     vals := [][]string{
         {"/v","DisplayName","/t","REG_SZ","/d",productName,"/f"},
@@ -348,3 +364,28 @@ func isAdmin() bool { return exec.Command("fltmc").Run()==nil }
 func elevate(extra string) { exe,_:=os.Executable(); ps:=fmt.Sprintf("Start-Process -FilePath %s -ArgumentList %s -Verb RunAs",psQuote(exe),psQuote(extra)); _=exec.Command("powershell.exe","-NoProfile","-WindowStyle","Hidden","-Command",ps).Start() }
 func psQuote(s string) string { return "'"+strings.ReplaceAll(s,"'","''")+"'" }
 func msg(text string, icon uintptr) { user32:=syscall.NewLazyDLL("user32.dll"); proc:=user32.NewProc("MessageBoxW"); t,_:=syscall.UTF16PtrFromString(text); c,_:=syscall.UTF16PtrFromString(productName); proc.Call(0,uintptr(unsafe.Pointer(t)),uintptr(unsafe.Pointer(c)),0x0|icon) }
+// Public bundle metadata is parsed, never guessed from a filename.
+func bundleVersion(root string) (string, error) {
+    data, err := os.ReadFile(filepath.Join(root,"PackageContents.xml")); if err != nil { return "",err }
+    var p struct { Version string `xml:"AppVersion,attr"` }
+    if err=xml.Unmarshal(data,&p); err != nil {return "",err}
+    if p.Version=="" {return "",fmt.Errorf("missing AppVersion")}; return p.Version,nil
+}
+
+// Snapshot only owned registration/files. Rollback never scans user documents or licenses.
+func captureRegistration(programData, staging string) (func() error,error) {
+    regFile:=filepath.Join(staging,"previous-registration.reg")
+    existed:=exec.Command("reg","query",uninstallKey).Run()==nil
+    if existed {if err:=exec.Command("reg","export",uninstallKey,regFile,"/y").Run();err!=nil{return nil,err}}
+    menu:=filepath.Join(programData,"Microsoft","Windows","Start Menu","Programs")
+    paths:=[]string{filepath.Join(programData,"MiningVolume2023",storedSetupName),filepath.Join(menu,"IMSAT VOLUME.lnk"),filepath.Join(menu,"Gỡ IMSAT VOLUME.lnk")}
+    saved:=map[string][]byte{}
+    for _,p:=range paths {b,err:=os.ReadFile(p);if err==nil{saved[p]=b}else if !os.IsNotExist(err){return nil,err}}
+    return func() error {
+        var first error
+        record:=func(err error){if err!=nil&&first==nil{first=err}}
+        for _,p:=range paths {if b,ok:=saved[p];ok{record(os.WriteFile(p,b,0644))}else{err:=os.Remove(p);if !os.IsNotExist(err){record(err)}}}
+        if existed {record(exec.Command("reg","import",regFile).Run())} else { _=exec.Command("reg","delete",uninstallKey,"/f").Run() }
+        return first
+    },nil
+}

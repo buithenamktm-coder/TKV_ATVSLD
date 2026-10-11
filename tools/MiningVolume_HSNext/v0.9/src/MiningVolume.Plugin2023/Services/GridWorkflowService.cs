@@ -20,6 +20,8 @@ namespace MiningVolume2023.Services
         {
             _report = null; _options = null; _existing = null; _design = null;
             _revExisting = 0; _revDesign = 0;
+            ProjectState.Current.GridCalculatedUtc=null;
+            ProjectState.Current.GridCalculationSeconds=null;
         }
 
         public static bool IsCurrent

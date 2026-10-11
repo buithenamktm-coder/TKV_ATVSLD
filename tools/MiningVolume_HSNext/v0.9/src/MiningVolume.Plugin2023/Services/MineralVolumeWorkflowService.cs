@@ -14,6 +14,7 @@ namespace MiningVolume2023.Services
         /// </summary>
         public static MineralVolumeSummary Recalculate()
         {
+            var timer=System.Diagnostics.Stopwatch.StartNew();
             var st=ProjectState.Current;
             if (st.VolumeResult == null || st.VolumeResult.Intervals.Count == 0)
                 throw new InvalidOperationException("Hãy tính lại khối lượng đào/đắp theo mặt cắt trước.");
@@ -61,6 +62,9 @@ namespace MiningVolume2023.Services
                 Id=b.Id,Name=b.Name,DensityTonPerCubicMetre=b.DensityTonPerCubicMetre
             }).ToArray();
             var result=MineralVolumeCalculator.Calculate(st.VolumeResult,mineralInputs,entries);
+            timer.Stop();
+            result.CalculatedUtc=DateTime.UtcNow;
+            result.CalculationSeconds=timer.Elapsed.TotalSeconds;
             return result;
         }
     }

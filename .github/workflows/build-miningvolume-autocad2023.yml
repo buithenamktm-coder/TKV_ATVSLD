@@ -140,6 +140,8 @@ jobs:
           $env:GOARCH='amd64'
           $env:CGO_ENABLED='0'
           go vet main.go
+          go test -v main.go main_test.go
+          if ($LASTEXITCODE -ne 0) { throw "Installer regression tests failed." }
 
       - name: Build native Windows installer
         shell: pwsh

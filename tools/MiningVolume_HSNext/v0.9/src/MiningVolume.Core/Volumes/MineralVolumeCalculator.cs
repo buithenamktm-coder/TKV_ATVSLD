@@ -51,6 +51,9 @@ namespace MiningVolume.Core.Volumes
 
     public sealed class MineralVolumeSummary
     {
+        public double AreaDifferenceThreshold { get; internal set; } = .40;
+        public DateTime? CalculatedUtc { get; set; }
+        public double? CalculationSeconds { get; set; }
         public IReadOnlyList<MineralIntervalResult> Intervals { get; internal set; }
         public IReadOnlyList<MineralBodyResult> Bodies { get; internal set; }
         public double TotalCutCubicMetres { get; internal set; }
@@ -203,6 +206,7 @@ namespace MiningVolume.Core.Volumes
             }).ToList();
             return new MineralVolumeSummary
             {
+                AreaDifferenceThreshold=relativeAreaDifferenceThreshold,
                 Intervals=results,
                 Bodies=bodies,
                 TotalCutCubicMetres=excavation.TotalCutVolume

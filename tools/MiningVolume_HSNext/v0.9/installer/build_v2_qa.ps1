@@ -1,5 +1,5 @@
 # V2.0 QA-only packaging. Uses Release DLLs already built by the Windows CI,
-# stages a separate bundle and patches ONLY the temporary Go installer source.
+# stages a separate bundle and supplies version variables through Go linker flags.
 # Does not mutate V1.0 source/bundle or claim the binary is certified.
 param([string]$Root = "")
 
@@ -29,19 +29,8 @@ try {
     $xml = $xml.Replace('GUI-first V1.0', 'V2.0 QA Candidate - NOT RELEASE')
     [System.IO.File]::WriteAllText($package, $xml, (New-Object System.Text.UTF8Encoding $false))
 
-    $go = [System.IO.File]::ReadAllText($main)
-    if (-not $go.Contains('version = "1.0.0"')) { throw "Version của Go installer không phải bản dự kiến." }
-    $go = $go.Replace('version = "1.0.0"', 'version = "2.0.0"')
-    $go = $go.Replace('productName = "IMSAT VOLUME for AutoCAD 2023"',
-                       'productName = "IMSAT VOLUME V2.0 QA Candidate (AutoCAD 2023)"')
-    $go = $go.Replace('Uninstall\MiningVolume2023', 'Uninstall\MiningVolume2023V2QA')
-    $go = $go.Replace('.v100bak', '.v200qabak')
-    $go = $go.Replace('MiningVolume_v100_', 'MiningVolume_v200_QA_')
-    $go = $go.Replace('MiningVolume_Setup_v1.0.exe', 'MiningVolume_Setup_v2.0_QA.exe')
-    $go = $go.Replace('AppVersion="1.0.0"', 'AppVersion="2.0.0"')
-    $go = $go.Replace('v1.0 runtime', 'v2.0 QA runtime')
-    [System.IO.File]::WriteAllText((Join-Path $setupDir "main.go"), $go,
-        (New-Object System.Text.UTF8Encoding $false))
+    # One installer implementation; V1 defaults are preserved. No global source replacements.
+    Copy-Item $main (Join-Path $setupDir "main.go")
 
     Compress-Archive -Path $stage -DestinationPath (Join-Path $setupDir 'payload.zip') -CompressionLevel Optimal
     Push-Location $setupDir
@@ -54,7 +43,8 @@ try {
         go mod init imsat-v2-qa-candidate | Out-Null
         if ($LASTEXITCODE -ne 0) { throw "go mod init V2 thất bại." }
         $exe = Join-Path $dist "IMSAT_MiningVolume_V2_0_QA_CANDIDATE.exe"
-        go build -trimpath -ldflags '-s -w -H=windowsgui' -o $exe .
+        $flags = '-s -w -H=windowsgui -X main.version=2.0.0 -X main.backupSuffix=.v200qabak -X main.storedSetupName=MiningVolume_Setup_v2.0_QA.exe -X "main.productName=IMSAT VOLUME V2.0 QA Candidate (AutoCAD 2023)"'
+        go build -trimpath -ldflags $flags -o $exe .
         if ($LASTEXITCODE -ne 0) { throw "Không build được V2 QA Setup." }
     }
     finally { Pop-Location }

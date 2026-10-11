@@ -96,8 +96,9 @@ namespace MiningVolume.Core.Sections
 
     public sealed class SectionProfile
     {
-        public SectionProfile(SectionLine line, IReadOnlyList<SectionProfileSegment> segments, double cutArea, double fillArea, IReadOnlyList<string> warnings)
+        public SectionProfile(SectionLine line, IReadOnlyList<SectionProfileSegment> segments, double cutArea, double fillArea, IReadOnlyList<string> warnings, bool isUserEdited=false)
         {
+            IsUserEdited=isUserEdited;
             Line = line;
             Segments = segments ?? Array.Empty<SectionProfileSegment>();
             CutArea = cutArea;
@@ -112,6 +113,7 @@ namespace MiningVolume.Core.Sections
             }
             if (double.IsInfinity(MinZ)) { MinZ = 0; MaxZ = 0; }
         }
+        public bool IsUserEdited { get; }
         public SectionLine Line { get; }
         public IReadOnlyList<SectionProfileSegment> Segments { get; }
         public double CutArea { get; }

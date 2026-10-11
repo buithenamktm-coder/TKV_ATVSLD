@@ -95,4 +95,5 @@ def test_setup_uninstaller_preserves_user_projects_and_removes_addin():
     assert "cleanupInstalledSetupLater" in inst
     assert "Gỡ IMSAT VOLUME.lnk" in inst
     assert "DWG, Project" in inst
-    assert "Uninstall\\MiningVolume2023V2QA" in qa
+    assert "main.version=2.0.0" in qa
+    assert ".Replace('Uninstall" not in qa  # Same bundle uses one upgrade/uninstall registration

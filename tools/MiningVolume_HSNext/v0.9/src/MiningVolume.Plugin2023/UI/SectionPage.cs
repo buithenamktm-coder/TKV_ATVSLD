@@ -465,12 +465,18 @@ namespace MiningVolume2023.UI
                     !ReferenceEquals(sectionSystem, state.SectionSystem) ||
                     !ReferenceEquals(existing, state.Existing.Tin) ||
                     !ReferenceEquals(design, state.Design.Tin) ||
+                    from != state.FromLevel || to != state.ToLevel || step != state.LevelStep ||
                     oldProfiles.Length != state.SectionProfiles.Count ||
                     oldProfiles.Where((v, i) => !ReferenceEquals(v, state.SectionProfiles[i])).Any())
                     throw new InvalidOperationException("Dữ liệu CAD/TIN đã đổi trong lúc tính. Hãy cập nhật lại.");
                 // Commit only after all geometry, volume and CAD annotation steps succeed.
                 using (doc.LockDocument())
+                {
+                    var latest=EditableSectionCadService.ReadEditedProfiles(doc.Database,oldProfiles);
+                    if(!EditedSectionProfileBuilder.SameGeometry(edited,latest))
+                        throw new InvalidOperationException("Đường mặt cắt đã đổi trong lúc tính. Hãy cập nhật lại.");
                     EditableSectionCadService.UpdateAreaLabels(doc.Database, edited);
+                }
                 SectionWorkflowService.CommitProfiles(edited);
                 VolumeWorkflowService.Commit(volume, from, to, step);
                 watch.Stop();

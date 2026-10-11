@@ -194,7 +194,7 @@ def test_installer_rejects_foreign_dlls_and_wrong_package_metadata():
     ]:
         assert dll in installer
     assert "Bundle chứa DLL ngoài danh sách cho phép" in installer
-    assert 'AppVersion="1.0.0"' in installer
+    assert '`AppVersion="`+version+`"`' in installer  # Actual package validation runs in Go tests
     assert 'SeriesMin="R24.2"' in installer
     assert 'SeriesMax="R24.2"' in installer
     assert 'LoadOnAutoCADStartup="True"' in installer

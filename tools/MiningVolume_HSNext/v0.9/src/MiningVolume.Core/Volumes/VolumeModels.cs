@@ -87,6 +87,9 @@ namespace MiningVolume.Core.Volumes
         public double FillVolume { get; set; }
         public VolumeFormulaKind FillFormula { get; set; }
         public string Note { get; set; }
+        // One authoritative contribution per elevation band; summaries sum these values.
+        public List<SectionIntervalVolume> BandVolumes { get; } = new List<SectionIntervalVolume>();
+        public bool HasMidArea { get; set; } = true;
     }
 
     public sealed class LevelVolumeSummary

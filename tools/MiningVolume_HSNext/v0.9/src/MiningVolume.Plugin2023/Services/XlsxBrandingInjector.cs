@@ -31,7 +31,7 @@ namespace MiningVolume2023.Services
 
             var targets = report.Sheets
                 .Select((sheet, index) => new { Sheet = sheet, Index = index + 1 })
-                .Where(x => string.Equals(x.Sheet.Name, "Thông tin", StringComparison.OrdinalIgnoreCase) ||
+                .Where(x => x.Sheet.HasSignatures || string.Equals(x.Sheet.Name, "Thông tin", StringComparison.OrdinalIgnoreCase) ||
                             string.Equals(x.Sheet.Name, "Tổng khối", StringComparison.OrdinalIgnoreCase))
                 .ToList();
             if (targets.Count == 0) return;

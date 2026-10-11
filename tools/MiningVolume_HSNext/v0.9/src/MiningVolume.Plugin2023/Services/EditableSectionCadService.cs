@@ -82,35 +82,31 @@ namespace MiningVolume2023.Services
             using (var tr = db.TransactionManager.StartTransaction())
             {
                 var ms = GetModelSpace(db, tr);
-                var labels = new List<DBText>();
-                var titles = new List<DBText>();
-                foreach (ObjectId id in ms)
-                {
-                    var text = tr.GetObject(id, OpenMode.ForRead) as DBText;
-                    if (text == null || text.Layer != "MV_MC_TEXT") continue;
-                    if (text.TextString.StartsWith("F đào =", StringComparison.Ordinal))
-                        labels.Add(text);
-                    using (var data = text.GetXDataForApplication(SectionCadRenderer.FrameRegApp))
-                        if (data != null) titles.Add(text);
-                }
-                foreach (var title in titles)
-                {
-                    using (var data = title.GetXDataForApplication(SectionCadRenderer.FrameRegApp))
-                    {
-                        var values = data?.AsArray();
-                        if (values == null || values.Length < 2) continue;
-                        var section = Convert.ToString(values[1].Value);
-                        if (!areas.TryGetValue(section, out var p)) continue;
-                        var nearest = labels.FirstOrDefault(x =>
-                            Math.Abs(x.Position.X - title.Position.X) < 0.01 &&
-                            Math.Abs(x.Position.Y - (title.Position.Y - 4.5)) < 0.01);
-                        if (nearest == null)
-                            throw new InvalidOperationException("Thiếu nhãn diện tích của " + section +
-                                "; dữ liệu khối lượng chưa được ghi đè.");
-                        nearest.UpgradeOpen();
-                        nearest.TextString = "F đào = " + p.CutArea.ToString("0.00") +
-                            " m²   F đắp = " + p.FillArea.ToString("0.00") + " m²";
+                var labels=new Dictionary<string,List<DBText>>(StringComparer.OrdinalIgnoreCase);
+                foreach(ObjectId id in ms) {
+                    var text=tr.GetObject(id,OpenMode.ForRead) as DBText;
+                    if(text==null)continue;
+                    using(var data=text.GetXDataForApplication(SectionCadRenderer.AreaRegApp)) {
+                        if(data==null)continue;
+                        var values=data.AsArray();
+                        if(values.Length!=4 || Convert.ToString(values[2].Value)!=db.FingerprintGuid.ToString("D") ||
+                            Convert.ToString(values[3].Value)!=text.Handle.ToString())
+                            throw new InvalidOperationException("Nhãn diện tích bị sao chép hoặc thuộc bản vẽ khác: "+text.Handle);
+                        string section=Convert.ToString(values[1].Value);
+                        if(!labels.TryGetValue(section,out var list))labels[section]=list=new List<DBText>();
+                        list.Add(text);
                     }
+                }
+                // Validate every required label before any write. Moving a label is allowed;
+                // matching by its coordinates or visible text is deliberately prohibited.
+                foreach(var pair in areas)
+                    if(!labels.TryGetValue(pair.Key,out var list)||list.Count!=1)
+                        throw new InvalidOperationException("Thiếu/trùng nhãn diện tích có ID của "+pair.Key+
+                            ". Giữ nguyên hình chỉnh sửa; cần khôi phục nhãn hoặc xuất lại sau khi lưu bản sao.");
+                foreach(var pair in areas) {
+                    var label=labels[pair.Key][0];label.UpgradeOpen();
+                    label.TextString="F đào = "+pair.Value.CutArea.ToString("0.00")+
+                        " m²   F đắp = "+pair.Value.FillArea.ToString("0.00")+" m²";
                 }
                 tr.Commit();
             }
@@ -119,11 +115,14 @@ namespace MiningVolume2023.Services
         private static Tagged Decode(Polyline poly, ResultBuffer buf)
         {
             var v = buf.AsArray();
-            if (v.Length != 8 ||
+            if (v.Length != 10 ||
                 v[0].TypeCode != (int)DxfCode.ExtendedDataRegAppName ||
                 v[1].TypeCode != (int)DxfCode.ExtendedDataAsciiString ||
                 v[2].TypeCode != (int)DxfCode.ExtendedDataAsciiString)
-                throw new InvalidOperationException("Metadata đường mặt cắt bị hỏng: " + poly.Handle);
+                throw new InvalidOperationException("Metadata mặt cắt cũ/hỏng; giữ nguyên bản sửa và lưu bản sao trước khi xuất lại: " + poly.Handle);
+            if(Convert.ToString(v[8].Value)!=poly.Database.FingerprintGuid.ToString("D") ||
+                Convert.ToString(v[9].Value)!=poly.Handle.ToString())
+                throw new InvalidOperationException("Đường mặt cắt bị copy hoặc thuộc DWG khác: "+poly.Handle);
             string section = Convert.ToString(v[1].Value);
             string role = Convert.ToString(v[2].Value);
             int run = Convert.ToInt32(v[3].Value);

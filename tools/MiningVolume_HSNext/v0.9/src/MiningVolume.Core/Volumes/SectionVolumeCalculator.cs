@@ -71,7 +71,7 @@ namespace MiningVolume.Core.Volumes
                 SectionBandAreas am = null;
                 double midOffset = (a.Offset + b.Offset) * 0.5;
                 var midLine = builder.BuildLineAtOffset(system.Boundary, system.Direction, midOffset, -(i + 1), "MID-", options.Tolerance);
-                if (midLine != null)
+                if (midLine != null && !pa.IsUserEdited && !pb.IsUserEdited)
                 {
                     pm = sampler.BuildProfile(midLine, existing, design, options.Tolerance);
                     if (pm.HasData) am = areaCalc.Calculate(pm, bands, options.Tolerance);
@@ -100,7 +100,8 @@ namespace MiningVolume.Core.Volumes
                     FillAreaEnd = ab.FillArea,
                     CutFormula = cutFormula,
                     FillFormula = fillFormula,
-                    Note = $"V1.0 tự chọn công thức theo chênh diện tích hai mặt cắt; ngưỡng {options.AreaDifferenceThreshold:P0}."
+                    HasMidArea=am!=null,
+                    Note = $"Tổng các dải cao độ; từng dải tự chọn công thức theo hai diện tích, ngưỡng {options.AreaDifferenceThreshold:P0}."
                 };
 
                 row.CutVolume = VolumeByFormula(
@@ -117,9 +118,15 @@ namespace MiningVolume.Core.Volumes
                         c1, c2, options.AreaDifferenceThreshold, options.Tolerance);
                     var fFormula = SelectFormula(
                         f1, f2, options.AreaDifferenceThreshold, options.Tolerance);
-                    levelCut[k] += VolumeByFormula(c1, c2, distance, cFormula);
-                    levelFill[k] += VolumeByFormula(f1, f2, distance, fFormula);
+                    double cut=VolumeByFormula(c1,c2,distance,cFormula),fill=VolumeByFormula(f1,f2,distance,fFormula);
+                    row.BandVolumes.Add(new SectionIntervalVolume {Index=bands[k].Index,StartSection=a.Name,EndSection=b.Name,
+                        Distance=distance,CutAreaStart=c1,CutAreaEnd=c2,FillAreaStart=f1,FillAreaEnd=f2,
+                        CutFormula=cFormula,FillFormula=fFormula,CutVolume=cut,FillVolume=fill});
+                    levelCut[k] += cut;
+                    levelFill[k] += fill;
                 }
+                row.CutVolume=row.BandVolumes.Sum(x=>x.CutVolume);
+                row.FillVolume=row.BandVolumes.Sum(x=>x.FillVolume);
             }
 
             var levels = new List<LevelVolumeSummary>();
@@ -127,7 +134,7 @@ namespace MiningVolume.Core.Volumes
                 levels.Add(new LevelVolumeSummary { Band = bands[k], CutVolume = levelCut[k], FillVolume = levelFill[k] });
 
             // Tính lại tổng hàng chi tiết bằng đúng tổng các tầng để không phát sinh sai số do hai đường tính khác nhau.
-            // Phân bổ theo từng khoảng được xây dựng từ tổng area trong phạm vi mức, vì vậy tổng hai bảng chỉ lệch do làm tròn hiển thị.
+            // Cộng cùng một tập đóng góp (khoảng, tầng); không phân bổ hay hiệu chỉnh tổng sau tính.
             double detailCut = intervalRows.Sum(x => x.CutVolume), detailFill = intervalRows.Sum(x => x.FillVolume);
             double levelCutTotal = levels.Sum(x => x.CutVolume), levelFillTotal = levels.Sum(x => x.FillVolume);
             if (Math.Abs(detailCut - levelCutTotal) > Math.Max(1e-6, Math.Abs(detailCut) * 1e-9) ||
@@ -139,6 +146,13 @@ namespace MiningVolume.Core.Volumes
 
         public static IReadOnlyList<LevelBand> BuildBands(double fromLevel, double toLevel, double step, double tol = 1e-9)
         {
+            if (double.IsNaN(fromLevel) || double.IsInfinity(fromLevel) ||
+                double.IsNaN(toLevel) || double.IsInfinity(toLevel) ||
+                double.IsNaN(step) || double.IsInfinity(step) ||
+                double.IsNaN(tol) || double.IsInfinity(tol) || tol <= 0)
+                throw new ArgumentException("Mức, bước và dung sai phải là số hữu hạn hợp lệ.");
+            if (Math.Abs(toLevel-fromLevel)/step > 100000)
+                throw new ArgumentException("Số dải cao độ vượt 100.000; hãy tăng bước chia tầng.");
             if (step <= tol) throw new ArgumentOutOfRangeException(nameof(step), "Bước chia tầng phải lớn hơn 0.");
             if (Math.Abs(toLevel - fromLevel) <= tol) throw new ArgumentException("Mức bắt đầu và mức kết thúc phải khác nhau.");
             var r = new List<LevelBand>();
@@ -150,6 +164,7 @@ namespace MiningVolume.Core.Volumes
                 double next = cur + sign * step;
                 if (sign > 0 && next > toLevel) next = toLevel;
                 if (sign < 0 && next < toLevel) next = toLevel;
+                if(next==cur)throw new ArgumentException("Bước chia tầng quá nhỏ so với độ lớn cao độ.");
                 r.Add(new LevelBand(index++, cur, next));
                 cur = next;
             }

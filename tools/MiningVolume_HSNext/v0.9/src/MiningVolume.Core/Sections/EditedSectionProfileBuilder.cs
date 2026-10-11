@@ -88,7 +88,22 @@ namespace MiningVolume.Core.Sections
             if (result.Count == 0)
                 throw new InvalidOperationException("Mặt cắt chỉnh sửa không còn vùng hợp lệ để tính diện tích.");
             return new SectionProfile(original.Line, result, cut, fill,
-                new[] { "Đã cập nhật từ đường mặt cắt do người dùng hiệu chỉnh trên CAD." });
+                new[] { "Đã cập nhật từ đường mặt cắt do người dùng hiệu chỉnh trên CAD." },true);
+        }
+
+        public static bool SameGeometry(IReadOnlyList<SectionProfile> a,IReadOnlyList<SectionProfile> b)
+        {
+            if(a==null || b==null || a.Count!=b.Count)return false;
+            for(int i=0;i<a.Count;i++) {
+                if(a[i]==null || b[i]==null) {if(a[i]!=b[i])return false;continue;}
+                if(a[i].Line.Name!=b[i].Line.Name || a[i].Segments.Count!=b[i].Segments.Count)return false;
+                for(int j=0;j<a[i].Segments.Count;j++) {
+                    var x=a[i].Segments[j];var y=b[i].Segments[j];
+                    if(x.S0!=y.S0 || x.S1!=y.S1 || x.ExistingZ0!=y.ExistingZ0 || x.ExistingZ1!=y.ExistingZ1 ||
+                        x.DesignZ0!=y.DesignZ0 || x.DesignZ1!=y.DesignZ1)return false;
+                }
+            }
+            return true;
         }
 
         private static void Validate(EditedSectionPath path, (double start, double end) range, double tol)

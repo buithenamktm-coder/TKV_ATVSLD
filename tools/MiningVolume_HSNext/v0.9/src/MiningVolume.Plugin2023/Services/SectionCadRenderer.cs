@@ -17,6 +17,7 @@ namespace MiningVolume2023.Services
         private const string TextLayer = "MV_MC_TEXT";
         internal const string FrameRegApp = "IMSAT_MV2_MC_FRAME";
         internal const string EditRegApp = "IMSAT_MV2_MC_EDIT";
+        internal const string AreaRegApp = "IMSAT_MV2_MC_AREA";
         private const string ArialStyle = "MV_ARIAL";
 
         public static void ReplacePreview(Database db, SectionSystem system)
@@ -98,6 +99,7 @@ namespace MiningVolume2023.Services
 
             using (var tr = db.TransactionManager.StartTransaction())
             {
+                EnsureFrameRegApp(db, tr);
                 ObjectId exLayer = EnsureLayer(db, tr, ExistingLayer, 1); // đỏ
                 ObjectId deLayer = EnsureLayer(db, tr, DesignLayer, 5);   // xanh dương
                 ObjectId axLayer = EnsureLayer(db, tr, AxisLayer, 7);
@@ -144,8 +146,13 @@ namespace MiningVolume2023.Services
                         new TypedValue((int)DxfCode.ExtendedDataReal, y0),
                         new TypedValue((int)DxfCode.ExtendedDataReal, baseZ),
                         new TypedValue((int)DxfCode.ExtendedDataReal, vExag));
-                    AddText(ms, tr, styleId, txLayer, new Point3d(x0, y0 + height + 3.5, 0),
+                    var areaLabel=AddText(ms, tr, styleId, txLayer, new Point3d(x0, y0 + height + 3.5, 0),
                         $"F đào = {p.CutArea:0.00} m²   F đắp = {p.FillArea:0.00} m²", 3.0, 0);
+                    areaLabel.XData=new ResultBuffer(
+                        new TypedValue((int)DxfCode.ExtendedDataRegAppName,AreaRegApp),
+                        new TypedValue((int)DxfCode.ExtendedDataAsciiString,p.Line.Name),
+                        new TypedValue((int)DxfCode.ExtendedDataAsciiString,db.FingerprintGuid.ToString("D")),
+                        new TypedValue((int)DxfCode.ExtendedDataAsciiString,areaLabel.Handle.ToString()));
 
                     double xTick = NiceStep(width / 5.0);
                     for (double x = 0; x <= width + 1e-9; x += xTick)
@@ -300,7 +307,9 @@ namespace MiningVolume2023.Services
                 new TypedValue((int)DxfCode.ExtendedDataReal, x0),
                 new TypedValue((int)DxfCode.ExtendedDataReal, y0),
                 new TypedValue((int)DxfCode.ExtendedDataReal, baseZ),
-                new TypedValue((int)DxfCode.ExtendedDataReal, vExag));
+                new TypedValue((int)DxfCode.ExtendedDataReal, vExag),
+                new TypedValue((int)DxfCode.ExtendedDataAsciiString,poly.Database.FingerprintGuid.ToString("D")),
+                new TypedValue((int)DxfCode.ExtendedDataAsciiString,poly.Handle.ToString()));
         }
 
         private static Polyline FlushProfilePolyline(
@@ -328,7 +337,7 @@ namespace MiningVolume2023.Services
         private static void EnsureFrameRegApp(Database db, Transaction tr)
         {
             var reg = (RegAppTable)tr.GetObject(db.RegAppTableId, OpenMode.ForRead);
-            foreach (var name in new[] { FrameRegApp, EditRegApp })
+            foreach (var name in new[] { FrameRegApp, EditRegApp, AreaRegApp })
             {
                 if (reg.Has(name)) continue;
                 if (!reg.IsWriteEnabled) reg.UpgradeOpen();

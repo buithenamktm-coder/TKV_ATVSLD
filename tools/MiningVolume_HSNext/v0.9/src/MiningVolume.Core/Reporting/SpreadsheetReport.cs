@@ -88,6 +88,17 @@ namespace MiningVolume.Core.Reporting
 
         public static void Write(string filePath, SpreadsheetReport report)
         {
+            if(string.IsNullOrWhiteSpace(filePath))throw new ArgumentException("Đường dẫn không hợp lệ.",nameof(filePath));
+            var target=Path.GetFullPath(filePath);var directory=Path.GetDirectoryName(target);
+            Directory.CreateDirectory(directory);
+            var staging=Path.Combine(directory,"."+Path.GetFileName(target)+"."+Guid.NewGuid().ToString("N")+".tmp");
+            try {
+                WriteCore(staging,report);
+                if(File.Exists(target))File.Replace(staging,target,null);else File.Move(staging,target);
+            } finally {if(File.Exists(staging))File.Delete(staging);}
+        }
+        private static void WriteCore(string filePath, SpreadsheetReport report)
+        {
             if (string.IsNullOrWhiteSpace(filePath)) throw new ArgumentException("Đường dẫn file Excel không hợp lệ.", nameof(filePath));
             if (report == null) throw new ArgumentNullException(nameof(report));
             if (report.Sheets.Count == 0) throw new InvalidOperationException("Báo cáo chưa có sheet để xuất.");
