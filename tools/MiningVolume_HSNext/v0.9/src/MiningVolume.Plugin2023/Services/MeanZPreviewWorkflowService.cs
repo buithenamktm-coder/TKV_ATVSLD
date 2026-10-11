@@ -60,17 +60,18 @@ namespace MiningVolume2023.Services
             var boundary=ProjectState.Current.HasTinRegion
                 ? ProjectState.Current.TinRegionPolygon.ToArray()
                 : null;
-            var experimentSource=source;
-            if (boundary != null && boundary.Length>=3)
-            {
-                progress?.Invoke("Giới hạn dữ liệu thử nghiệm trong vùng tạo TIN đã chọn...");
-                experimentSource=SurfaceRegionClipper.Clip(
-                    source,boundary,1e-6,cancellationToken);
-            }
-            progress?.Invoke("Gộp các đỉnh trùng XY theo Z trung bình (không thay dữ liệu gốc)...");
-            var prepared = MeanZPreviewPreparer.Prepare(experimentSource, 1e-6, 1e-4, cancellationToken);
+            progress?.Invoke("Kiểm tra các nhóm trùng XY, yêu cầu sửa nếu ΔZ > 3,000 m...");
+            var prepared = MeanZPreviewPreparer.Prepare(source, 1e-6, 1e-4,
+                cancellationToken, boundary);
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!ReferenceEquals(source,session.Source) || source.Revision != revision)
+                throw new InvalidOperationException("Dữ liệu nguồn thay đổi khi kiểm tra Z; hãy quét lại.");
+            // Hard gate before ANY triangulation: do not silently average a 79m
+            // conflict or create an apparently usable surface from it.
+            if (prepared.HasBlockingConflicts)
+                throw new MeanZReviewRequiredException(prepared);
 
-            progress?.Invoke("Tam giác hóa toàn bộ tọa độ XY đã gộp, không ràng buộc breakline...");
+            progress?.Invoke("Tam giác hóa các đỉnh đã kiểm tra, không ràng buộc breakline...");
             var opts = new SurfaceBuildOptions
             {
                 XyTolerance = 1e-6, ZConflictTolerance = 1e-4,
@@ -153,6 +154,7 @@ namespace MiningVolume2023.Services
                 writer.WriteLine("So dinh sau gop;"+data.Prepared.Sites.Count.ToString(CultureInfo.InvariantCulture));
                 writer.WriteLine("So nhom XY trung;"+data.DuplicateGroupCount.ToString(CultureInfo.InvariantCulture));
                 writer.WriteLine("So nhom XY khac Z;"+data.Conflicts.Count.ToString(CultureInfo.InvariantCulture));
+                writer.WriteLine("So nhom can kiem tra > 3m;"+data.ReviewGroups.Count.ToString(CultureInfo.InvariantCulture));
                 writer.WriteLine("So breakline KHONG rang buoc;"+data.IgnoredBreaklineSegments.ToString(CultureInfo.InvariantCulture));
                 writer.WriteLine("So tam giac CDT;"+preview.TotalTriangles.ToString(CultureInfo.InvariantCulture));
                 writer.WriteLine("So mat CAD minh hoa;"+preview.DrawnTriangles.Count.ToString(CultureInfo.InvariantCulture));
