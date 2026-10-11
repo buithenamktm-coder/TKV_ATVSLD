@@ -17,6 +17,19 @@ namespace MiningVolume.Core.Surface
     /// </summary>
     public static class MeanZPreviewPreparer
     {
+        /// <summary>Only applies to opt-in experimental TIN; never relax official TIN.</summary>
+        public const double ReviewThresholdMetres = 3.0;
+
+        /// <summary>The original editable vertex identity in ProjectState.Source.</summary>
+        public sealed class Member
+        {
+            public string EntityId { get; internal set; }
+            public int VertexIndex { get; internal set; }
+            public string Handle { get; internal set; }
+            public string Layer { get; internal set; }
+            public SourceEntityType Type { get; internal set; }
+            public double Z { get; internal set; }
+        }
         private readonly struct Cell : IEquatable<Cell>
         {
             public readonly long X, Y;
@@ -31,13 +44,16 @@ namespace MiningVolume.Core.Surface
             internal int N;
             internal double AverageZ, MinZ, MaxZ;
             internal string FirstHandle, LastHandle;
-            internal void Add(double z,string handle)
+            internal List<Member> Members = new List<Member>();
+            internal void Add(double z,string handle,SourceEntity entity,int vertexIndex)
             {
                 N++;
                 AverageZ += (z-AverageZ)/N;
                 if (z<MinZ) MinZ=z;
                 if (z>MaxZ) MaxZ=z;
                 LastHandle=handle;
+                Members.Add(new Member { EntityId=entity.Id,VertexIndex=vertexIndex,
+                    Handle=handle,Layer=entity.Layer,Type=entity.Type,Z=z });
             }
         }
 
@@ -51,12 +67,16 @@ namespace MiningVolume.Core.Surface
             public double MeanZ { get; internal set; }
             public string FirstHandle { get; internal set; }
             public string LastHandle { get; internal set; }
+            public IReadOnlyList<Member> Members { get; internal set; }
             public double DeltaZ => MaxZ-MinZ;
+            public bool NeedsReview => DeltaZ > ReviewThresholdMetres;
         }
         public sealed class Result
         {
             public PreparedSurfaceInput Prepared { get; internal set; }
             public IReadOnlyList<ConflictMean> Conflicts { get; internal set; }
+            public IReadOnlyList<ConflictMean> ReviewGroups => Conflicts.Where(c=>c.NeedsReview).ToList();
+            public bool HasBlockingConflicts => Conflicts.Any(c=>c.NeedsReview);
             public int OriginalVertexCount { get; internal set; }
             public int DuplicateGroupCount { get; internal set; }
             public int MergedVertexCount { get; internal set; }
@@ -66,7 +86,8 @@ namespace MiningVolume.Core.Surface
         }
 
         public static Result Prepare(SurfaceModel source, double xyTolerance=1e-6,
-            double zConflictTolerance=1e-4, CancellationToken token=default(CancellationToken))
+            double zConflictTolerance=1e-4, CancellationToken token=default(CancellationToken),
+            IReadOnlyList<Vec2> tinRegion=null)
         {
             if (source==null) throw new ArgumentNullException(nameof(source));
             if (!(xyTolerance>0) || double.IsInfinity(xyTolerance) || double.IsNaN(xyTolerance))
@@ -74,6 +95,12 @@ namespace MiningVolume.Core.Surface
             if (zConflictTolerance<0 || double.IsNaN(zConflictTolerance) || double.IsInfinity(zConflictTolerance))
                 throw new ArgumentOutOfRangeException(nameof(zConflictTolerance));
 
+            // Use ORIGINAL model vertices so each review-table button maps to
+            // a real editable entity/vertex, not a clipped synthetic segment.
+            // Limit points to the same 10% support rectangle used for regional TIN.
+            IReadOnlyList<Vec2> support=tinRegion!=null && tinRegion.Count>=3
+                ? SurfaceRegionClipper.BuildSupportRectangle(tinRegion,0.10,xyTolerance)
+                : null;
             var groups=new List<Group>();
             var cells=new Dictionary<Cell,List<int>>();
             int total=0,ignoredSegments=0;
@@ -100,6 +127,8 @@ namespace MiningVolume.Core.Surface
                 {
                     token.ThrowIfCancellationRequested();
                     Vec3 point=vertex.Position;
+                    if(support!=null && !SurfaceRegionClipper.ContainsInclusive(point.XY,support,xyTolerance))
+                        continue;
                     if(!Finite(point.X)||!Finite(point.Y)||!Finite(point.Z))
                         throw new InvalidOperationException("Đỉnh CAD chứa NaN/Infinity: "+entity.Handle);
                     total++;
@@ -118,7 +147,7 @@ namespace MiningVolume.Core.Surface
                         }
                     if(found>=0)
                     {
-                        groups[found].Add(point.Z,entity.Handle);
+                        groups[found].Add(point.Z,entity.Handle,entity,vertex.Index);
                         continue;
                     }
                     var next=new Group
@@ -127,6 +156,8 @@ namespace MiningVolume.Core.Surface
                         AverageZ=point.Z,MinZ=point.Z,MaxZ=point.Z,
                         FirstHandle=entity.Handle,LastHandle=entity.Handle
                     };
+                    next.Members.Add(new Member {EntityId=entity.Id,VertexIndex=vertex.Index,
+                        Handle=entity.Handle,Layer=entity.Layer,Type=entity.Type,Z=point.Z});
                     int index=groups.Count;groups.Add(next);
                     if(!cells.TryGetValue(key,out var bucket))cells[key]=bucket=new List<int>();
                     bucket.Add(index);
@@ -147,7 +178,8 @@ namespace MiningVolume.Core.Surface
                 conflicts.Add(new ConflictMean {
                     X=g.XY.X,Y=g.XY.Y,VertexCount=g.N,
                     MinZ=g.MinZ,MaxZ=g.MaxZ,MeanZ=g.AverageZ,
-                    FirstHandle=g.FirstHandle,LastHandle=g.LastHandle
+                    FirstHandle=g.FirstHandle,LastHandle=g.LastHandle,
+                    Members=g.Members.AsReadOnly()
                 });
             }
             // Intentionally leave Breaklines empty. This is essential: passing
@@ -164,5 +196,17 @@ namespace MiningVolume.Core.Surface
         }
 
         private static bool Finite(double x)=>!double.IsNaN(x)&&!double.IsInfinity(x);
+    }
+
+    public sealed class MeanZReviewRequiredException : InvalidOperationException
+    {
+        public MeanZPreviewPreparer.Result Analysis { get; }
+        public MeanZReviewRequiredException(MeanZPreviewPreparer.Result analysis)
+            : base("Có "+analysis.ReviewGroups.Count.ToString("n0")+
+                " nhóm trùng XY có chênh lệch Z > 3,000 m. Hãy kiểm tra và loại/sửa đỉnh "+
+                "ngay trên bảng rồi mới dựng TIN thử nghiệm.")
+        {
+            Analysis=analysis;
+        }
     }
 }
