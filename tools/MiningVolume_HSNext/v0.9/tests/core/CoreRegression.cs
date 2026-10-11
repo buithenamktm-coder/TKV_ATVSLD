@@ -50,6 +50,20 @@ internal static class CoreRegression
             Check(a.Vertices[0].Position.Z==10&&b.Vertices[0].Position.Z==0,"Policy modified source");
         } finally { (r.Surface.Triangles as IDisposable)?.Dispose(); }
     }
+    static void OverlapPolicy(DuplicateXYConflictPolicy policy, bool partial, bool reverse)
+    {
+        var segs=new[]{new Segment3(P(0,0),P(10,0),"low"),
+            new Segment3(P(partial?2:0,0,4),P(partial?8:10,0,4),"high"),
+            new Segment3(P(5,-5,7),P(5,5,7),"cross")};
+        if(reverse) Array.Reverse(segs);
+        var p=Prepare(new[]{P(-1,-6),P(11,-6),P(11,6),P(-1,6)},segs,policy);
+        Check(!p.HasErrors,string.Join(";",p.Issues.Where(x=>x.Severity==ValidationSeverity.Error).Select(x=>x.Code)));
+        foreach(var edge in p.Breaklines)foreach(var v in new[]{edge.A,edge.B})
+            Check(p.Sites.Any(q=>Same(q,v)),"Breakline endpoint differs from canonical site");
+        double expected=policy==DuplicateXYConflictPolicy.UseUpper?7:0;
+        Check(p.Sites.Single(v=>Math.Abs(v.X-5)<1e-8&&Math.Abs(v.Y)<1e-8).Z==expected,"Shared node did not apply all Z choices");
+        var tin=Build(p);Coverage(p,tin);Constraints(p,tin);
+    }
     static void RunTests()
     {
         var tests=new Dictionary<string,Action> {
@@ -75,6 +89,23 @@ internal static class CoreRegression
             ["tiled_duplicate_different_types_stop"] = ()=>{
                 var m=Model(Entity("a",SourceEntityType.Point,P(0,0,10)),Entity("b",SourceEntityType.Line,P(0,0,0),P(10,0)),Entity("c",SourceEntityType.Point,P(10,10)),Entity("d",SourceEntityType.Point,P(0,10)));
                 bool rejected=false;try{var r=new TiledConformingTinBuilder().Build("conflict",m,Options);(r.Surface.Triangles as IDisposable)?.Dispose();}catch(DuplicateXYConflictException){rejected=true;}Check(rejected,"Tiled builder silently chooses Z by entity type");},
+            ["overlap_upper_full_forward"] = ()=>OverlapPolicy(DuplicateXYConflictPolicy.UseUpper,false,false),
+            ["overlap_upper_full_reverse"] = ()=>OverlapPolicy(DuplicateXYConflictPolicy.UseUpper,false,true),
+            ["overlap_upper_partial_forward"] = ()=>OverlapPolicy(DuplicateXYConflictPolicy.UseUpper,true,false),
+            ["overlap_upper_partial_reverse"] = ()=>OverlapPolicy(DuplicateXYConflictPolicy.UseUpper,true,true),
+            ["overlap_lower_full_forward"] = ()=>OverlapPolicy(DuplicateXYConflictPolicy.UseLower,false,false),
+            ["overlap_lower_full_reverse"] = ()=>OverlapPolicy(DuplicateXYConflictPolicy.UseLower,false,true),
+            ["overlap_lower_partial_forward"] = ()=>OverlapPolicy(DuplicateXYConflictPolicy.UseLower,true,false),
+            ["overlap_lower_partial_reverse"] = ()=>OverlapPolicy(DuplicateXYConflictPolicy.UseLower,true,true),
+            ["tiled_concave_region_empty_outer_tiles"] = ()=>{
+                var m=new SurfaceModel("L-region");
+                var pts=new List<Vec3>();for(int x=0;x<=128;x++)for(int y=0;y<=128;y++)pts.Add(P(x,y));
+                m.Entities.Add(Entity("grid",SourceEntityType.Point,pts.ToArray()));
+                var boundary=new[]{new Vec2(0,0),new Vec2(128,0),new Vec2(128,8),new Vec2(8,8),new Vec2(8,128),new Vec2(0,128)};
+                var r=new TiledConformingTinBuilder().Build("L-region",m,new SurfaceBuildOptions{ClipBoundary=boundary});
+                try {Check(r.Surface.Triangles.Count>0,"Empty region TIN");Check(r.Surface.Triangles.All(t=>Geometry2D.TriangleIntersectsPolygon(t,boundary,1e-6)),"Outside triangle retained");}
+                finally {(r.Surface.Triangles as IDisposable)?.Dispose();}
+            },
             ["tiled_explicit_upper"] = ()=>TiledPolicy(DuplicateXYConflictPolicy.UseUpper,10),
             ["tiled_explicit_lower"] = ()=>TiledPolicy(DuplicateXYConflictPolicy.UseLower,0),
             ["tiled_minor_z_conflict_stop"] = ()=>{
@@ -94,9 +125,9 @@ internal static class CoreRegression
         }
         return m;
     }
-    static void Fixture(string path, string boundary, int seconds)
+    static void Fixture(string path, string boundary, int seconds, DuplicateXYConflictPolicy policy)
     {
-        var sw=Stopwatch.StartNew();var m=ReadModel(path);var o=new SurfaceBuildOptions();
+        var sw=Stopwatch.StartNew();var m=ReadModel(path);var o=new SurfaceBuildOptions {DuplicateXYConflictPolicy=policy};
         Console.WriteLine(JsonSerializer.Serialize(new{phase="loaded",entities=m.Entities.Count,vertices=m.Entities.Sum(x=>x.Vertices.Count),ms=sw.ElapsedMilliseconds}));
         using(var c=new CancellationTokenSource(TimeSpan.FromSeconds(seconds)))try {
             if(boundary!="-") {using(var r=new BinaryReader(File.OpenRead(boundary))){int n=r.ReadInt32();var b=new Vec2[n];for(int i=0;i<n;i++)b[i]=new Vec2(r.ReadDouble(),r.ReadDouble());o.ClipBoundary=b;}m=SurfaceRegionClipper.Clip(m,o.ClipBoundary,o.XyTolerance,c.Token);}
@@ -108,5 +139,5 @@ internal static class CoreRegression
             Console.WriteLine(JsonSerializer.Serialize(new{phase="complete",triangles=tin.Triangles.Count,ms=sw.ElapsedMilliseconds,managedBytes=GC.GetTotalMemory(false)}));(tin.Triangles as IDisposable)?.Dispose();
         } catch(Exception ex){Console.WriteLine(JsonSerializer.Serialize(new{phase="error",kind=ex.GetType().Name,message=ex.Message,issues=(ex as DuplicateXYConflictException)?.Issues.GroupBy(x=>x.Code).ToDictionary(x=>x.Key,x=>x.Count()),ms=sw.ElapsedMilliseconds}));Environment.ExitCode=2;}
     }
-    static void Main(string[] args){if(args.Length==0)RunTests();else Fixture(args[0],args.Length>1?args[1]:"-",args.Length>2?int.Parse(args[2]):120);}
+    static void Main(string[] args){if(args.Length==0)RunTests();else Fixture(args[0],args.Length>1?args[1]:"-",args.Length>2?int.Parse(args[2]):120,args.Length>3?(DuplicateXYConflictPolicy)Enum.Parse(typeof(DuplicateXYConflictPolicy),args[3]):DuplicateXYConflictPolicy.Stop);}
 }

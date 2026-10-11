@@ -202,6 +202,8 @@ def test_resolvable_tin_elevation_conflicts_use_same_upper_lower_dialog():
         "POINT_ON_BREAKLINE_Z_CONFLICT",
         "BREAKLINE_CROSSING_Z_CONFLICT",
         "BREAKLINE_OVERLAP_Z_CONFLICT",
+        "BREAKLINE_DUPLICATE_Z_CONFLICT",
+        "BREAKLINE_NODE_Z_CONFLICT",
     ]:
         assert code in prep
         assert code in tiled

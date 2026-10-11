@@ -1,6 +1,6 @@
 """Compile and execute the real Core/Surface sources with the .NET 8 SDK.
 No extra application/project, package restore or AutoCAD installation is needed.
-Optional positional arguments: fixture.bin boundary.bin seconds.
+Optional positional arguments: fixture.bin boundary.bin seconds [UseUpper|UseLower|Stop].
 """
 import argparse, json, os, pathlib, re, shutil, subprocess, tempfile
 

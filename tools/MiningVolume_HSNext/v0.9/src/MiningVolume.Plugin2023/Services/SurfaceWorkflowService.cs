@@ -322,7 +322,9 @@ namespace MiningVolume2023.Services
                         (string.Equals(x.Code, "DUPLICATE_XY_CONFLICT_Z", StringComparison.OrdinalIgnoreCase) ||
                          string.Equals(x.Code, "POINT_ON_BREAKLINE_Z_CONFLICT", StringComparison.OrdinalIgnoreCase) ||
                          string.Equals(x.Code, "BREAKLINE_CROSSING_Z_CONFLICT", StringComparison.OrdinalIgnoreCase) ||
-                         string.Equals(x.Code, "BREAKLINE_OVERLAP_Z_CONFLICT", StringComparison.OrdinalIgnoreCase)))
+                         string.Equals(x.Code, "BREAKLINE_OVERLAP_Z_CONFLICT", StringComparison.OrdinalIgnoreCase) ||
+                         string.Equals(x.Code, "BREAKLINE_DUPLICATE_Z_CONFLICT", StringComparison.OrdinalIgnoreCase) ||
+                         string.Equals(x.Code, "BREAKLINE_NODE_Z_CONFLICT", StringComparison.OrdinalIgnoreCase)))
                     .ToList();
                 if (duplicateIssues.Count > 0)
                     throw new DuplicateXYConflictException(session.Name, duplicateIssues);

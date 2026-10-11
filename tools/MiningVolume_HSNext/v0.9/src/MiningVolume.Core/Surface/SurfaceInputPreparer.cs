@@ -164,7 +164,7 @@ namespace MiningVolume.Core.Surface
         {
             public SplitMark(double t, Vec3 p) { T = t; Point = p; }
             public double T { get; }
-            public Vec3 Point { get; }
+            public Vec3 Point { get; set; }
         }
 
         private static void NormalizeBreaklineTopology(PreparedSurfaceInput result, SurfaceBuildOptions options, Action<string> progress, CancellationToken cancellationToken)
@@ -376,6 +376,13 @@ namespace MiningVolume.Core.Surface
                     "AUTO_NORMALIZE_BREAKLINE_OVERLAPS",
                     $"Đã tự chuẩn hóa {overlapPairs:n0} cặp breakline chồng lấn có cao độ phù hợp."));
 
+            // Resolve the complete set of nodes before rebuilding/deduplicating edges.
+            // Pairwise split marks can otherwise retain an earlier/lower Z even after
+            // the user selected Upper (or vice versa), especially at shared endpoints.
+            result.Sites.AddRange(generatedSites);
+            if (options.DuplicateXYConflictPolicy != DuplicateXYConflictPolicy.Stop)
+                ResolveDuplicateSites(result, options, progress, cancellationToken, marks);
+
             // 3) Rebuild split segments.
             var rebuilt = new List<Segment3>();
             for (int i = 0; i < source.Count; i++)
@@ -478,7 +485,7 @@ namespace MiningVolume.Core.Surface
             result.Breaklines.Clear();
             result.Breaklines.AddRange(dedup);
 
-            result.Sites.AddRange(generatedSites);
+
             foreach (var s in dedup)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -524,10 +531,18 @@ namespace MiningVolume.Core.Surface
             }
         }
 
-        private static void ResolveDuplicateSites(PreparedSurfaceInput result, SurfaceBuildOptions options, Action<string> progress, CancellationToken cancellationToken)
+        private static void ResolveDuplicateSites(PreparedSurfaceInput result, SurfaceBuildOptions options, Action<string> progress, CancellationToken cancellationToken,
+            List<List<SplitMark>> nodes = null)
         {
             cancellationToken.ThrowIfCancellationRequested();
             progress?.Invoke("Đang kiểm tra điểm trùng XY và cao độ...");
+            if (nodes != null)
+                foreach (var segmentNodes in nodes)
+                    foreach (var node in segmentNodes)
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+                        result.Sites.Add(node.Point);
+                    }
             var unique = new List<Vec3>();
             var grid = new Dictionary<string, List<int>>();
 
@@ -605,8 +620,32 @@ namespace MiningVolume.Core.Surface
                 }
             }
 
+            if (nodes != null)
+                foreach (var segmentNodes in nodes)
+                    foreach (var node in segmentNodes)
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+                        node.Point = FindCanonicalNode(node.Point, unique, grid, options.XyTolerance);
+                    }
             result.Sites.Clear();
             result.Sites.AddRange(unique);
+        }
+
+        private static Vec3 FindCanonicalNode(Vec3 p, IReadOnlyList<Vec3> sites,
+            Dictionary<string, List<int>> grid, double tolerance)
+        {
+            long ix = (long)Math.Floor(p.X / tolerance);
+            long iy = (long)Math.Floor(p.Y / tolerance);
+            // Use the same neighbourhood and match order as ResolveDuplicateSites.
+            for (long dx = -1; dx <= 1; dx++)
+            for (long dy = -1; dy <= 1; dy++)
+            {
+                List<int> ids;
+                if (!grid.TryGetValue((ix + dx) + ":" + (iy + dy), out ids)) continue;
+                foreach (int id in ids)
+                    if (sites[id].XY.DistanceTo(p.XY) <= tolerance) return sites[id];
+            }
+            throw new InvalidOperationException("Không ánh xạ được nút breakline đã chuẩn hóa.");
         }
 
         private static void AddMark(List<SplitMark> marks, double t, Vec3 p, double xyTol)

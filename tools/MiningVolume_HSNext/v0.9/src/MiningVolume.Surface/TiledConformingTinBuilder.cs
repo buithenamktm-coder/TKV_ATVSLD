@@ -351,7 +351,9 @@ namespace MiningVolume.Surface
                                         (string.Equals(x.Code, "DUPLICATE_XY_CONFLICT_Z", StringComparison.OrdinalIgnoreCase) ||
                                          string.Equals(x.Code, "POINT_ON_BREAKLINE_Z_CONFLICT", StringComparison.OrdinalIgnoreCase) ||
                                          string.Equals(x.Code, "BREAKLINE_CROSSING_Z_CONFLICT", StringComparison.OrdinalIgnoreCase) ||
-                                         string.Equals(x.Code, "BREAKLINE_OVERLAP_Z_CONFLICT", StringComparison.OrdinalIgnoreCase)))
+                                         string.Equals(x.Code, "BREAKLINE_OVERLAP_Z_CONFLICT", StringComparison.OrdinalIgnoreCase) ||
+                                         string.Equals(x.Code, "BREAKLINE_DUPLICATE_Z_CONFLICT", StringComparison.OrdinalIgnoreCase) ||
+                                         string.Equals(x.Code, "BREAKLINE_NODE_Z_CONFLICT", StringComparison.OrdinalIgnoreCase)))
                                     .ToList();
 
                                 if (resolvable.Count > 0)
@@ -372,11 +374,22 @@ namespace MiningVolume.Surface
                                 $"TIN dữ liệu lớn: ô {tileOrdinal + 1:n0}/{total:n0} • " +
                                 $"{prepared.Sites.Count:n0} site • {prepared.Breaklines.Count:n0} breakline • đang tam giác hóa...");
 
+                            // A tile's support triangles may all be outside a concave
+                            // calculation region. This is a valid empty tile, not a failed TIN.
+                            // Clip after core ownership below; only an empty complete surface fails.
+                            var localOptions = new SurfaceBuildOptions
+                            {
+                                XyTolerance = options.XyTolerance,
+                                ZConflictTolerance = options.ZConflictTolerance,
+                                MinimumTriangleArea = options.MinimumTriangleArea,
+                                DuplicateXYConflictPolicy = options.DuplicateXYConflictPolicy,
+                                ClipBoundary = null
+                            };
                             var tw = Stopwatch.StartNew();
                             var local = localBuilder.Build(
                                 name + $" [{ix + 1},{iy + 1}]",
                                 prepared,
-                                options,
+                                localOptions,
                                 message => progress?.Invoke(
                                     Volatile.Read(ref completed),
                                     total,
