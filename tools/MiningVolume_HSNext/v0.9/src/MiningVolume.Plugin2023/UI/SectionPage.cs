@@ -105,7 +105,7 @@ namespace MiningVolume2023.UI
             Add(top, 5, "Đến mức", _toLevel, new Panel());
             Add(top, 6, "Tỷ lệ ngang 1/", _hScale, new Panel());
             Add(top, 7, "Tỷ lệ đứng 1/", _vScale, new Panel());
-            Add(top, 8, "Giãn mặt cắt khi xuất CAD", _layoutGap, new Panel());
+            Add(top, 8, "Giãn cách khi xuất CAD", _layoutGap, new Panel());
             root.Controls.Add(top, 0, 1);
 
             // Primary workflow actions must always remain visible.
