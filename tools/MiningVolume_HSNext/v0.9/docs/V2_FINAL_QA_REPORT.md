@@ -82,3 +82,40 @@ PlanCode yêu cầu nghiệm thu P0 trước khi tập trung sâu vào khối l�
 Setup chỉ phục vụ người kiểm thử: artifact **IMSAT-MiningVolume-V2.0-QA-CANDIDATE-NOT-RELEASE** trong workflow đúng HEAD. `V2_SHA256SUMS.txt` dành riêng cho V2 .exe; không dùng SHA256 của installer V1 hoặc ZIP thay thế. `V2_BUILD_VERIFICATION.txt` ghi source commit/run/hash. Cảnh báo C4068 của thư viện CDT về GCC pragma trên MSVC đã thấy trong build; không có compile error, không coi đây là crash host.
 
 Chạy `V2_AUTOCAD_ACCEPTANCE.md` trên Windows AutoCAD 2023, cung cấp log/ảnh/DWG bản kiểm thử và quyết định xử lý cao độ nguồn. Cần PUBLIC RSA key do máy quản trị tạo và chứng cứ backup/restore độc lập; không gửi private key vào repo/chat. Không tạo tag hoặc Release V2.0 khi còn gate bắt buộc chưa đạt.
+
+---
+
+## Phụ lục A — cập nhật nghiệm thu mã nguồn 12/10/2026 (THAY THẾ số liệu CI cũ)
+
+**Chú ý:** Các dòng thống kê 218 reference/63 C# và nhánh PR #26 ở phần đầu báo cáo là **LỊCH SỬ 11/10**, không phải kết quả trên mã nguồn mới nhất. Mốc kiểm tra code hiện hành là nhánh `miningvolume-v2-chatgpt-p0-continuation` (PR #27), source SHA `983e3e27aeffac67c89a5a5328eff44f87f7411f`.
+
+### Các sửa đổi thực hiện và đã commit
+
+- `eb512e01` (Work): xử lý RF-01…RF-05 và RF-08, RF-13, RF-14: XData và nhãn mặt cắt, khối lượng sửa tay theo tầng, kiểm toán 3 workbook, atomic write/rollback Excel, installer và test định lượng. Commit ban đầu có **4 lỗi compile CS1503** do `FingerprintGuid.ToString("D")` không khớp API.
+- `ebfc611a` và `b6df5cbc`: sửa 4 chỗ gọi `FingerprintGuid.ToString("D")` trong `EditableSectionCadService.cs`, `SectionCadRenderer.cs` sang `FingerprintGuid.ToString()`, giữ logic so sánh hai đầu nhất quán. Sau đó Windows CI hai luồng **PASS**.
+- `c71a84b4`: khi uninstall V2 sau nâng cấp V1→V2, kiểm tra và xóa có giới hạn các tên Setup IMSAT đã biết trong thư mục cài, không quét xóa DWG/license/báo cáo.
+- `983e3e27`: bổ sung regression test Windows xác minh chỉ các binary Setup IMSAT đã biết bị chọn để dọn, không ra ngoài thư mục cài.
+
+### Test, build và gói V2.0 QA đã đạt
+
+| Hạng mục | Actual | Trạng thái |
+|---|---|---|
+| Python reference | 228 passed | PASS |
+| C# Core + native CDT, report builders và XML/XLSX/logo | 73 passed, 0 failed | PASS |
+| Go installer tests trên Windows | 4 passed | PASS |
+| Build .NET add-in AutoCAD 2023 API | Zero compile errors | PASS |
+| License issuer backup/self-test (CLI) | PASS | PASS trong CI, CHƯA xác thực máy quản trị độc lập |
+| Windows source QA | Run [38184927012](https://github.com/buithenamktm-coder/TKV_ATVSLD/actions/runs/38184927012) | PASS trên đúng code SHA |
+| Windows pull-request QA | Run [38184930156](https://github.com/buithenamktm-coder/TKV_ATVSLD/actions/runs/38184930156) | PASS trên đúng code SHA |
+| Setup QA V2 | Artifact `IMSAT-MiningVolume-V2.0-QA-CANDIDATE-NOT-RELEASE`, ID 11719058004 | BUILD PASS, AutoCAD runtime NOT TESTED |
+| SHA256 V2 EXE | `5cec0e087215d4361c0aac9bd0a34fc69a1bb0dd71335ffd0a34b5d1e50ebb3e` | PASS, lấy từ chính CI |
+| T01–T22 thao tác AutoCAD thực | Chưa có host AutoCAD 2023 trong phạm vi kiểm thử này | NOT TESTED |
+| Excel Desktop mở, recalculation, print | Chỉ có kiểm tra cấu trúc/engine XLSX | NOT TESTED |
+| TIN chính thức trên dữ liệu SQ thực tế | Còn xung đột ΔZ >3,000 m chưa được quyết định | BLOCKED |
+| RSA PUBLIC trust anchor và kích hoạt license thật | `RsaPublicKeyXml=""` | BLOCKED |
+
+**Giới hạn:** 228/73/4 PASS không chứng minh trải nghiệm AutoCAD hay cài đặt Windows thực tế. Dữ liệu thử nghiệm có đáp án biết trước không thay cho dữ liệu SQ đang có xung đột khảo sát. Phần cần host chưa được phép nhận hoàn thành.
+
+### Kết luận kỹ thuật và bước nghiệm thu tiếp theo
+
+Cả hai workflow ở source SHA `983e3e27` đã đủ bằng chứng để đóng chốt *build tự động* và tạo QA Setup. Tuy nhiên, các chốt *nghiệm thu AutoCAD, DXF SQ thật, public RSA và cài/gỡ trực tiếp* vẫn chưa thể PASS. Xem bảng trạng thái mới tại `V2_RELEASE_GATES.md`; Work tiếp tục thực hiện PlanCode `PLANCODE_WORK_MININGVOLUME_V2_FINAL_AUDIT_RELEASE_20261012.md`. Không cấp nhãn FINAL/RELEASE nếu thiếu chứng cứ bắt buộc.
