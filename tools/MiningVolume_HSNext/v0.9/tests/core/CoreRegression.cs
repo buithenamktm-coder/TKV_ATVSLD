@@ -438,6 +438,30 @@ internal static class CoreRegression
                 m.RemoveEntityFromModel("c");Check(!scanner.Scan(m,Options).HasBlockingConflicts,"Exclusion did not clear conflict");
                 m.RestoreEntity("c");Check(scanner.Scan(m,Options).HasBlockingConflicts,"Restore bypassed scan");
             },
+            ["strict_xy_sparse_index_keeps_distinct_roots_in_same_cell"] = ()=>{
+                // Two diagonally separated XYs may occupy the same hash cell yet
+                // differ by more than the Euclidean XY tolerance. A third point
+                // close to the second root must not be assigned to the first.
+                // Also exercises real mine-survey coordinate magnitudes.
+                foreach(double origin in new[]{5000.0,2500000.0}){
+                    var a=Entity("root-a",SourceEntityType.Point,P(origin+0.00000010,6000.00000010,1));
+                    var b=Entity("root-b",SourceEntityType.Point,P(origin+0.00000090,6000.00000090,6));
+                    var c=Entity("near-b",SourceEntityType.Point,P(origin+0.00000092,6000.00000087,8));
+                    var d=Entity("near-a",SourceEntityType.Point,P(origin+0.00000012,6000.00000011,1));
+                    var model=Model(a,b,c,d);
+                    var scan=new ConflictScanner().Scan(model,new SurfaceBuildOptions{
+                        XyTolerance=1e-6,ZConflictTolerance=1e-4});
+                    Check(scan.Groups.Count==1,"Scanner merged diagonal distinct XY roots");
+                    var group=scan.Groups[0];
+                    Check(group.Sources.Count==2 && group.Sources.Any(x=>x.EntityId=="root-b") &&
+                        group.Sources.Any(x=>x.EntityId=="near-b") &&
+                        !group.Sources.Any(x=>x.EntityId=="root-a" || x.EntityId=="near-a"),
+                        "Scanner assigned a source to a different XY root");
+                    Check(Math.Abs(group.DeltaZ-2)<1e-9 && scan.SameXYZDuplicates==1,
+                        "Incorrect strict XY/Z conflict groups after index compaction");
+                    Check(model.Revision==0,"Conflict scan modified original model");
+                }
+            },
             ["manual_report_crossing_provenance"] = ()=>{
                 var m=Model(Entity("a",SourceEntityType.Line,P(0,0,1),P(10,10,1)),Entity("b",SourceEntityType.Line,P(0,10,5),P(10,0,5)));
                 var g=new ConflictScanner().Scan(m,Options).Groups.Single();
