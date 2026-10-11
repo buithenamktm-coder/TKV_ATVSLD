@@ -9,6 +9,7 @@ using System.Threading;
 using MiningVolume.Core.Geometry;
 using MiningVolume.Core.Grid;
 using MiningVolume.Core.Sections;
+using MiningVolume.Core.Volumes;
 using MiningVolume.Core.Model;
 using MiningVolume.Core.Surface;
 using MiningVolume.Surface;
