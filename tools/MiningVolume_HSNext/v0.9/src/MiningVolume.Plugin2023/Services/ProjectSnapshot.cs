@@ -35,6 +35,10 @@ namespace MiningVolume2023.Services
         [DataMember(Order = 21)] public bool HadVolumeResult { get; set; }
         [DataMember(Order = 22)] public string TinRegionHandle { get; set; }
         [DataMember(Order = 23)] public List<Point2Snapshot> TinRegion { get; set; } = new List<Point2Snapshot>();
+        [DataMember(Order = 26)] public string GridBoundaryHandle { get; set; }
+        [DataMember(Order = 27)] public double GridSizeX { get; set; }
+        [DataMember(Order = 28)] public double GridSizeY { get; set; }
+        [DataMember(Order = 29)] public double GridRotationDegrees { get; set; }
     }
 
     [DataContract]
