@@ -44,6 +44,39 @@ namespace MiningVolume2023.Services
             return result.Value.GetObjectIds();
         }
 
+        public static IReadOnlyList<string> PickMineralOutcropHandles(string mineralName, ModelRole role)
+        {
+            var doc = Application.DocumentManager.MdiActiveDocument;
+            if (doc == null) return null;
+            string title = role == ModelRole.Existing ? "hiện trạng" : "thiết kế";
+            var options = new PromptSelectionOptions
+            {
+                MessageForAdding = "\\nChọn các đoạn đường lộ vỉa " + mineralName + " trên bình đồ " + title + ": ",
+                MessageForRemoval = "\\nBỏ đoạn lộ vỉa khỏi lựa chọn: ",
+                AllowDuplicates = false
+            };
+            var filter = new SelectionFilter(new[]
+            {
+                new TypedValue((int)DxfCode.Operator, "<OR"),
+                new TypedValue((int)DxfCode.Start, "LINE"),
+                new TypedValue((int)DxfCode.Start, "LWPOLYLINE"),
+                new TypedValue((int)DxfCode.Start, "POLYLINE"),
+                new TypedValue((int)DxfCode.Operator, "OR>")
+            });
+            var picked = doc.Editor.GetSelection(options, filter);
+            if (picked.Status != PromptStatus.OK || picked.Value == null) return null;
+            var handles = new List<string>();
+            using (var tr = doc.Database.TransactionManager.StartOpenCloseTransaction())
+                foreach (var id in picked.Value.GetObjectIds())
+                {
+                    var entity = tr.GetObject(id, OpenMode.ForRead) as Entity;
+                    if (entity is Line || entity is Polyline ||
+                        entity is Polyline2d || entity is Polyline3d)
+                        handles.Add(entity.Handle.ToString());
+                }
+            return handles;
+        }
+
         public static string PickClosedBoundary()
         {
             var doc = Application.DocumentManager.MdiActiveDocument;
