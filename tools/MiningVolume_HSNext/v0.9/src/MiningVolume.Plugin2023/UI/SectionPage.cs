@@ -15,6 +15,7 @@ namespace MiningVolume2023.UI
         private readonly Label _boundary;
         private readonly Label _direction;
         private readonly NumericUpDown _spacing;
+        private readonly NumericUpDown _layoutGap;
         private readonly NumericUpDown _levelStep;
         private readonly NumericUpDown _fromLevel;
         private readonly NumericUpDown _toLevel;
@@ -43,7 +44,7 @@ namespace MiningVolume2023.UI
             };
             root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 32F));   // title
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 258F));  // parameters
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 290F));  // parameters
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 42F));   // primary actions
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 38F));   // edit tools
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 28F));   // status
@@ -63,7 +64,7 @@ namespace MiningVolume2023.UI
             {
                 Dock = DockStyle.Fill,
                 ColumnCount = 3,
-                RowCount = 8,
+                RowCount = 9,
                 Padding = new Padding(4, 2, 4, 2),
                 Margin = Padding.Empty,
                 BackColor = Color.White
@@ -71,8 +72,8 @@ namespace MiningVolume2023.UI
             top.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150F));
             top.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
             top.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 118F));
-            for (int i = 0; i < 8; i++)
-                top.RowStyles.Add(new RowStyle(SizeType.Percent, 12.5F));
+            for (int i = 0; i < 9; i++)
+                top.RowStyles.Add(new RowStyle(SizeType.Percent, 100F / 9F));
 
             _boundary = new Label
             {
@@ -89,6 +90,7 @@ namespace MiningVolume2023.UI
                 TextAlign = ContentAlignment.MiddleLeft
             };
             _spacing = Num(20, 0.1M, 10000);
+            _layoutGap = Num(90, 30, 10000);
             _levelStep = Num(5, 0.1M, 1000);
             _fromLevel = Num(0, -10000, 10000);
             _toLevel = Num(0, -10000, 10000);
@@ -103,6 +105,7 @@ namespace MiningVolume2023.UI
             Add(top, 5, "Đến mức", _toLevel, new Panel());
             Add(top, 6, "Tỷ lệ ngang 1/", _hScale, new Panel());
             Add(top, 7, "Tỷ lệ đứng 1/", _vScale, new Panel());
+            Add(top, 8, "Giãn mặt cắt khi xuất CAD", _layoutGap, new Panel());
             root.Controls.Add(top, 0, 1);
 
             // Primary workflow actions must always remain visible.
@@ -175,6 +178,7 @@ namespace MiningVolume2023.UI
             _fromLevel.ValueChanged += VolumeParameterChanged;
             _toLevel.ValueChanged += VolumeParameterChanged;
             _spacing.ValueChanged += GeneralParameterChanged;
+            _layoutGap.ValueChanged += GeneralParameterChanged;
             _hScale.ValueChanged += GeneralParameterChanged;
             _vScale.ValueChanged += GeneralParameterChanged;
         }
@@ -330,7 +334,8 @@ namespace MiningVolume2023.UI
                         _status.Text = $"Đang vẽ mặt cắt {done:n0}/{total:n0} xuống AutoCAD...";
                         _status.Refresh();
                         Application.DoEvents();
-                    });
+                    },
+                    (double)_layoutGap.Value);
                 drawWatch.Stop();
 
                 _status.Text =
@@ -367,6 +372,7 @@ namespace MiningVolume2023.UI
             if (_syncing) return;
             var st = ProjectState.Current;
             st.SectionSpacing = (double)_spacing.Value;
+            st.SectionLayoutGap = (double)_layoutGap.Value;
             st.HorizontalScale = (double)_hScale.Value;
             st.VerticalScale = (double)_vScale.Value;
         }
@@ -375,6 +381,7 @@ namespace MiningVolume2023.UI
         {
             var st = ProjectState.Current;
             st.SectionSpacing = (double)_spacing.Value;
+            st.SectionLayoutGap = (double)_layoutGap.Value;
             st.LevelStep = (double)_levelStep.Value;
             st.FromLevel = (double)_fromLevel.Value;
             st.ToLevel = (double)_toLevel.Value;
@@ -389,6 +396,7 @@ namespace MiningVolume2023.UI
             _boundary.Text = string.IsNullOrWhiteSpace(st.BoundaryHandle) ? "Chưa chọn" : "Handle: " + st.BoundaryHandle;
             if (st.SectionDirection.HasValue) _direction.Text = DirectionText(st.SectionDirection.Value);
             _spacing.Value = Clamp(_spacing, st.SectionSpacing);
+            _layoutGap.Value = Clamp(_layoutGap, st.SectionLayoutGap);
             _levelStep.Value = Clamp(_levelStep, st.LevelStep);
             _fromLevel.Value = Clamp(_fromLevel, st.FromLevel);
             _toLevel.Value = Clamp(_toLevel, st.ToLevel);
