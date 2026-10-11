@@ -29,8 +29,8 @@
 | MV2-14 | View 3D TIN HT/TK trực tiếp CAD, Esc khôi phục palette | Có | 3DORBIT / Esc trên AutoCAD thực |
 | MV2-15 | Nút bo góc & tương phản | Có | 1366×768, FullHD, scaling 100/125/150% |
 | MV2-16 | Trial 15 ngày từ lần đầu dùng, không khóa dữ liệu DWG | Có | Kiểm tra chạy offline/hết hạn/rollback/corrupt ledger |
-| MV2-17 | RSA-SHA256 key theo mã máy và License Manager offline | Có (ADMIN CLI) | **Chưa provision PUBLIC verifier; chưa có backup key và admin UI chính thức** |
-| MV2-18 | Bộ cài Setup/Uninstall chuyên nghiệp riêng V2.0 | CHƯA ĐẠT | Hiện CI sử dụng packaging V1.0 PRE_RELEASE, phải làm Setup V2.0 mới |
+| MV2-17 | RSA-SHA256 theo mã máy, License Manager CLI, backup/restore khóa ký được mã hóa | Có code + tự kiểm thử | **Chưa provision PUBLIC verifier; chưa kiểm thử khôi phục trên máy Windows quản trị thứ hai và admin UI** |
+| MV2-18 | Setup V2.0 QA Candidate có icon IMSAT; kế thừa cài/gỡ | Đã build QA | Chưa kiểm thử cài/gỡ/upgrade thực trên AutoCAD; chưa ký số và chưa nghiệm thu phát hành |
 | MV2-19 | Runtime nghiệm thu trên AutoCAD 2023 thật | CHƯA ĐẠT | Host QA log, screenshot, DWG test, thiết bị Windows |
 | MV2-20 | Khả năng chạy AutoCAD 2012+ | CHƯA ĐẠT | Hiện add-in target NET API AutoCAD 2023/R24.2; cần build/adapter riêng nếu mở rộng |
 
@@ -49,8 +49,8 @@
 10. Không tạo tag V2.0 phát hành, không đưa Installer tới người dùng cuối khi còn bất kỳ hard gate nào chưa có chứng cứ.
 
 ## Những việc cụ thể còn phải viết/sửa
-- **Setup V2.0:** phiên bản/PackageContents.xml, bộ cài chọn đường dẫn hợp lệ theo cơ chế Autodesk ApplicationPlugins, upgrade V1.0, repair, uninstall, icon IMSAT, chống phá dữ liệu/License.
-- **Bản quyền:** quy trình backup/restore private signing key an toàn, admin UI, audit thu hồi/cấp lại, phát hành và gắn PUBLIC key đúng release. Never bundle private key.
+- **Setup V2.0:** đã có gói **QA Candidate** (AppVersion 2.0.0 và icon IMSAT) tách V1.0, chỉ phục vụ kiểm thử; vẫn phải làm tùy chọn thư mục hợp lệ, upgrade V1.0, repair, uninstall, ký số và kiểm chứng cài đặt host.
+- **Bản quyền:** đã có backup/restore issuer key mã hóa AES+HMAC trên dòng lệnh và tự kiểm thử; vẫn phải nghiệm thu restore trên máy quản trị độc lập, xây dựng admin UI, audit thu hồi/cấp lại, provision PUBLIC key đúng release. Never bundle private key.
 - **Runtime 3D:** xử lý command lifecycle Esc/cancel/failed, DWG đóng/chuyển tab, giữ/khôi phục palette/visible layers, không treo AutoCAD.
 - **Hiệu năng:** grid/TIN nhiều tam giác; test mô hình có 100k/1M tam giác, memory/file-backed, vẽ nhiều ô và nhiều mặt cắt không chồng; không nâng giới hạn bằng cách bỏ qua phần dữ liệu thiếu.
 - **Định dạng:** giao diện không tràn chữ, nút bo góc đồng đều, Excel Arial12/bảng đóng khung/IMSAT logo/developer name và điện thoại cố định.
