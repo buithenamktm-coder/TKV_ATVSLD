@@ -462,6 +462,45 @@ internal static class CoreRegression
                     Check(model.Revision==0,"Conflict scan modified original model");
                 }
             },
+            ["edited_cad_section_updates_areas_and_never_changes_source"] = ()=>{
+                var line = new SectionLine(1,"MC-01",0,new Vec2(1,0),new Vec2(0,1),
+                    new[]{new SectionSpan(0,10)});
+                var seg = new SectionProfileSegment(0,10,new Vec2(0,0),new Vec2(10,0),
+                    10,10,5,5);
+                var source = new SectionProfile(line,new[]{seg},50,0,Array.Empty<string>());
+                var ht = new[]{new EditedSectionPath(0,new[]{
+                    new EditedSectionVertex(0,10), new EditedSectionVertex(5,12),
+                    new EditedSectionVertex(10,10)})};
+                var tk = new[]{new EditedSectionPath(0,new[]{
+                    new EditedSectionVertex(0,5), new EditedSectionVertex(10,5)})};
+                var updated=EditedSectionProfileBuilder.Rebuild(source,ht,tk);
+                Check(Math.Abs(updated.CutArea-60)<1e-8 && updated.FillArea==0,
+                    "Edited CAD vertices must drive newly calculated section area");
+                Check(updated.Segments.Count==2 && source.Segments.Count==1 &&
+                    source.CutArea==50 && source.Segments[0].ExistingZ0==10,
+                    "CAD editing unexpectedly mutated source profile");
+                var mixed=EditedSectionProfileBuilder.Rebuild(source,
+                    new[]{new EditedSectionPath(0,new[]{
+                        new EditedSectionVertex(0,10),new EditedSectionVertex(10,0)})},tk);
+                Check(Math.Abs(mixed.CutArea-12.5)<1e-8 &&
+                    Math.Abs(mixed.FillArea-12.5)<1e-8,
+                    "Edited section sign crossing must split cut/fill exactly");
+                bool rejected=false;
+                try {
+                    EditedSectionProfileBuilder.Rebuild(source,
+                        new[]{new EditedSectionPath(0,new[]{
+                            new EditedSectionVertex(0,10),new EditedSectionVertex(8,12),
+                            new EditedSectionVertex(7,13),new EditedSectionVertex(10,10)})},tk);
+                } catch(InvalidOperationException) { rejected=true; }
+                Check(rejected,"Reversed CAD profile must not be used for new volume");
+                rejected=false;
+                try {
+                    EditedSectionProfileBuilder.Rebuild(source,
+                        new[]{new EditedSectionPath(0,new[]{
+                            new EditedSectionVertex(1,10),new EditedSectionVertex(10,10)})},tk);
+                } catch(InvalidOperationException) { rejected=true; }
+                Check(rejected,"Edited path must preserve source coverage endpoints");
+            },
             ["manual_report_crossing_provenance"] = ()=>{
                 var m=Model(Entity("a",SourceEntityType.Line,P(0,0,1),P(10,10,1)),Entity("b",SourceEntityType.Line,P(0,10,5),P(10,0,5)));
                 var g=new ConflictScanner().Scan(m,Options).Groups.Single();
