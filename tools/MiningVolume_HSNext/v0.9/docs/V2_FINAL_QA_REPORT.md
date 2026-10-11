@@ -119,3 +119,34 @@ Chạy `V2_AUTOCAD_ACCEPTANCE.md` trên Windows AutoCAD 2023, cung cấp log/ả
 ### Kết luận kỹ thuật và bước nghiệm thu tiếp theo
 
 Cả hai workflow ở source SHA `983e3e27` đã đủ bằng chứng để đóng chốt *build tự động* và tạo QA Setup. Tuy nhiên, các chốt *nghiệm thu AutoCAD, DXF SQ thật, public RSA và cài/gỡ trực tiếp* vẫn chưa thể PASS. Xem bảng trạng thái mới tại `V2_RELEASE_GATES.md`; Work tiếp tục thực hiện PlanCode `PLANCODE_WORK_MININGVOLUME_V2_FINAL_AUDIT_RELEASE_20261012.md`. Không cấp nhãn FINAL/RELEASE nếu thiếu chứng cứ bắt buộc.
+
+---
+
+## Phụ lục B — triển khai chống mất mặt cắt và kiểm toàn bộ nguồn (12/10/2026)
+
+**Đây là bản cập nhật mới nhất thay thế bảng test tự động cũ trong Phụ lục A.** Source SHA đã PASS: `e97a4a6e07ee4d38f8ecbc51857c728b054e6f6a`. Hai luồng Windows cùng SHA: [push 38185748918](https://github.com/buithenamktm-coder/TKV_ATVSLD/actions/runs/38185748918) và [PR 38185752716](https://github.com/buithenamktm-coder/TKV_ATVSLD/actions/runs/38185752716) **SUCCESS**.
+
+### Triển khai trực tiếp sau đợt audit 983e3e27
+
+- ProjectSnapshot có `HadEditableSectionCad`: khi lưu DWG ghi lại CAD output đã xuất hoặc đã được chỉnh tay và nhận kết quả; nếu thiếu toàn bộ CAD paths lúc reopen, không tự chép kết quả gốc từ TIN thay cho hình đã hiệu chỉnh. Project cũ định dạng 2 vẫn giải mã được.
+- `ModelSnapshot.FullSourceFingerprint` và `SourceFingerprint.ComputeModel`: lấy SHA-256 nguồn ban đầu của tất cả entities/vertices, có layer/handle/loại/closed và Z gốc, sắp theo handle, không tính loại điểm hay Z override chỉ trong IMSAT. Nạp lại DWG đối chiếu hash trước khi áp chỉnh sửa lưu, thay đổi bất kỳ source entity nào đều chặn kết quả dẫn xuất và hiện cảnh báo. Dùng một luồng hash thay vì tạo từng triệu SHA256 riêng.
+- `SectionPage.BuildProfiles`: khi có MC CAD, yêu cầu xác nhận Yes/No mặc định No trước khi xuất đè, không tự xóa CAD đã chỉnh nếu người dùng từ chối. Hủy điểm chèn trước draw không commit mặt cắt mới thay trạng thái cũ.
+- `SectionWorkflowService.DrawProfiles` nhận candidate profiles riêng; chỉ commit khi vẽ xong. Nếu active DWG hoặc TIN/hệ MC đổi khi Task.Run đang tính và khi chọn điểm chèn, dừng kết quả stale.
+- Cập nhật `V2_AUTOCAD_ACCEPTANCE.md` để gom thêm 5 ca kiểm thử host: xác nhận vẽ đè, hủy chọn điểm, xóa toàn bộ CAD đã lưu, đổi bản vẽ giữa tính, Excel và uninstall. Đây là hướng dẫn nghiệm thu, không phải bằng chứng runtime.
+- Test mới `tests/reference/test_v2_section_persistence_safety.py` và bổ sung `tests/core/CoreRegression.cs`: roundtrip marker/digest và kiểm fingerprint nhạy với CAD gốc nhưng không nhạy với override nội bộ, bất biến theo thứ tự đối tượng.
+
+### Kết quả CI độc lập trên đúng source SHA
+
+| Loại | Bằng chứng | Trạng thái |
+|---|---|---|
+| Python reference | **230/230 passed** | PASS |
+| C# Core + native CDT | **73/73 passed** | PASS |
+| Go installer trên Windows | **4/4 passed** | PASS |
+| .NET AutoCAD 2023 Plugin Release build | Windows Actions | PASS |
+| License issuer self-test, native installer + QA packaging | Windows Actions | PASS cho CI |
+| V2 QA artifact | `IMSAT-MiningVolume-V2.0-QA-CANDIDATE-NOT-RELEASE`, ID **11720040080** | Có, NOT RELEASE |
+| V2 QA Setup EXE SHA-256 | `ee3e5a6aed388f6b9d9ddc0c6f873e63b97ad276857a05997442fca555e99cde` | Đã đối chiếu log CI |
+| AutoCAD tương tác T01–T22 + SAVE/SAVEAS, Excel Desktop | Không có host chứng thực trong phiên sửa | NOT TESTED |
+| DXF SQ nguồn có ΔZ >3 m, RSA verifier public key | Chưa xử lý dữ liệu chuyên môn/cấp khóa công khai | BLOCKED |
+
+**Bản QA có thể tải từ artifact của run 38185748918 để thử trên môi trường kiểm soát.** Không dùng artifact tên V1.0, không phát hành chính thức khi host, SQ và licensing chưa qua gate. Chi tiết gate mới nhất: `V2_RELEASE_GATES.md`.
