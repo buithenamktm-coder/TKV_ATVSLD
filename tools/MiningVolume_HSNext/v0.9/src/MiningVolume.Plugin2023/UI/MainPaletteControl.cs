@@ -11,7 +11,12 @@ namespace MiningVolume2023.UI
     public sealed class MainPaletteControl : UserControl
     {
         private readonly Panel _content;
+        private readonly Panel _sidebar;
+        private readonly Panel _compactHeader;
+        private readonly ComboBox _compactNavigation;
         private readonly Dictionary<AppPage, Control> _pages;
+        private bool _compact;
+        private AppPage _currentPage;
         private readonly Dictionary<AppPage, Button> _buttons = new Dictionary<AppPage, Button>();
 
         public MainPaletteControl()
@@ -21,17 +26,40 @@ namespace MiningVolume2023.UI
             Font = new Font("Arial", 9F);
 
             var header = BuildHeader();
-            var sidebar = BuildSidebar(out var nav);
+            _sidebar = BuildSidebar(out var nav);
+            _compactNavigation = new ComboBox
+            {
+                Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList,
+                Font = new Font("Arial", 9F, FontStyle.Bold),
+                BackColor = UiTheme.Surface, ForeColor = UiTheme.TextStrong
+            };
+            _compactNavigation.Items.AddRange(new object[] {
+                "Dự án", "Dữ liệu", "TIN / Mô hình", "Mặt cắt",
+                "Khối lượng", "Lưới ô vuông", "Vỉa / Quặng", "Xuất bảng", "Bản quyền"
+            });
+            _compactNavigation.SelectedIndexChanged += (sender, args) =>
+            {
+                if (_compactNavigation.SelectedIndex >= 0)
+                    ShowPage((AppPage)_compactNavigation.SelectedIndex);
+            };
+            _compactHeader = new Panel
+            {
+                Dock = DockStyle.Top, Height = 46, Visible = false,
+                BackColor = UiTheme.Sidebar, Padding = new Padding(8, 6, 8, 6)
+            };
+            _compactHeader.Controls.Add(_compactNavigation);
 
             _content = new Panel
             {
                 Dock = DockStyle.Fill,
                 Padding = new Padding(10),
-                BackColor = UiTheme.Canvas
+                BackColor = UiTheme.Canvas,
+                AutoScroll = true
             };
 
             Controls.Add(_content);
-            Controls.Add(sidebar);
+            Controls.Add(_compactHeader);
+            Controls.Add(_sidebar);
             Controls.Add(header);
 
             _pages = new Dictionary<AppPage, Control>
@@ -61,6 +89,39 @@ namespace MiningVolume2023.UI
             AddNav(nav, AppPage.License, "8", "Bản quyền");
 
             ShowPage(AppPage.Project);
+            SizeChanged += (sender, args) => ApplyResponsiveLayout();
+            ApplyResponsiveLayout();
+        }
+
+        private void ApplyResponsiveLayout()
+        {
+            // AutoCAD docked-left palettes commonly have only 350-480 px.
+            // Replace the permanent side menu with a compact TOP selector,
+            // giving narrow windows their full width for vertically scrolling
+            // workflow pages. No page is recreated; form values are preserved.
+            bool compact = ClientSize.Width < 650;
+            if (_compact != compact)
+            {
+                _compact = compact;
+                _sidebar.Visible = !compact;
+                _compactHeader.Visible = compact;
+                _compactNavigation.SelectedIndex = (int)_currentPage;
+            }
+            var page = _content.Controls.Count == 0 ? null : _content.Controls[0];
+            if (page == null) return;
+            _content.SuspendLayout();
+            if (_compact)
+            {
+                page.Dock = DockStyle.None;
+                page.Location = new Point(0, 0);
+                page.Width = Math.Max(310, _content.ClientSize.Width - 20);
+                page.Height = Math.Max(640, _content.ClientSize.Height - 12);
+            }
+            else
+            {
+                page.Dock = DockStyle.Fill;
+            }
+            _content.ResumeLayout();
         }
 
         private static Panel BuildHeader()
@@ -200,11 +261,15 @@ namespace MiningVolume2023.UI
         {
             if (!_pages.TryGetValue(page, out var control)) return;
 
+            _currentPage = page;
             _content.SuspendLayout();
             _content.Controls.Clear();
             control.Dock = DockStyle.Fill;
             _content.Controls.Add(control);
             _content.ResumeLayout();
+            if (_compactNavigation.SelectedIndex != (int)page)
+                _compactNavigation.SelectedIndex = (int)page;
+            ApplyResponsiveLayout();
 
             foreach (var kv in _buttons)
             {
