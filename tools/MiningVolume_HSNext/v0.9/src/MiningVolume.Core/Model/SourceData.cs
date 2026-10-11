@@ -32,7 +32,10 @@ namespace MiningVolume.Core.Model
         public bool IsEnabled { get; private set; }
 
         public void SetEnabled(bool enabled) => IsEnabled = enabled;
-        public void OverrideZ(double z) => Position = new Vec3(Position.X, Position.Y, z);
+        public void OverrideZ(double z) {
+            if(double.IsNaN(z)||double.IsInfinity(z))throw new ArgumentOutOfRangeException(nameof(z));
+            Position = new Vec3(Position.X, Position.Y, z);
+        }
         public void Reset()
         {
             Position = Original;
@@ -58,6 +61,8 @@ namespace MiningVolume.Core.Model
         public string OriginId { get; set; }
         public int? OriginSegmentIndex { get; set; }
         public bool IsGenerated { get; set; }
+        public SourceEntityType? OriginType { get; set; }
+        public IReadOnlyList<int> OriginVertexIndices { get; set; }
         public string Handle { get; }
         public string Layer { get; }
         public SourceEntityType Type { get; }
@@ -94,6 +99,20 @@ namespace MiningVolume.Core.Model
         }
     }
 
+    public sealed class ModelEditRecord
+    {
+        public DateTime Utc { get; set; }
+        public string User { get; set; }
+        public string Action { get; set; }
+        public string EntityId { get; set; }
+        public string Handle { get; set; }
+        public int VertexIndex { get; set; }
+        public double OldZ { get; set; }
+        public double NewZ { get; set; }
+        public bool OldEnabled { get; set; }
+        public bool NewEnabled { get; set; }
+    }
+
     public sealed class SurfaceModel
     {
         public SurfaceModel(string name) { Name = name ?? "Mô hình"; }
@@ -101,6 +120,7 @@ namespace MiningVolume.Core.Model
 
         public string Name { get; set; }
         public List<SourceEntity> Entities { get; } = new List<SourceEntity>();
+        public List<ModelEditRecord> EditHistory { get; } = new List<ModelEditRecord>();
         public DateTime LastModifiedUtc { get; private set; } = DateTime.UtcNow;
         public long Revision => Interlocked.Read(ref _revision);
 
@@ -122,14 +142,42 @@ namespace MiningVolume.Core.Model
         public void SetVertexEnabled(string id, int vertexIndex, bool enabled)
         {
             var e = Entities.First(x => x.Id == id);
-            e.Vertices[vertexIndex].SetEnabled(enabled);
+            var v=e.Vertices[vertexIndex];
+            Record(e,v,enabled?"Enable vertex":"Exclude vertex",v.Position.Z,enabled);
+            v.SetEnabled(enabled);
             Touch();
         }
         public void OverrideVertexZ(string id, int vertexIndex, double z)
         {
             var e = Entities.First(x => x.Id == id);
-            e.Vertices[vertexIndex].OverrideZ(z);
+            if(double.IsNaN(z)||double.IsInfinity(z))throw new ArgumentOutOfRangeException(nameof(z));
+            var v=e.Vertices[vertexIndex];
+            Record(e,v,"Override Z",z,v.IsEnabled);
+            v.OverrideZ(z);
             Touch();
+        }
+        public void RestoreVertex(string id,int vertexIndex)
+        {
+            var e=Entities.First(x=>x.Id==id);var v=e.Vertices[vertexIndex];
+            Record(e,v,"Restore vertex",v.Original.Z,true);v.Reset();Touch();
+        }
+        public void RestoreVertices(IEnumerable<KeyValuePair<string,int>> selection)
+        {
+            var byId=Entities.ToDictionary(e=>e.Id,StringComparer.Ordinal);
+            var vertices=selection.Distinct().Select(item=>new {Entity=byId[item.Key],Index=item.Value}).ToList();
+            // Validate the complete selection before the first mutation.
+            foreach(var item in vertices)if(item.Index<0||item.Index>=item.Entity.Vertices.Count)
+                throw new ArgumentOutOfRangeException(nameof(selection));
+            foreach(var item in vertices) {
+                var v=item.Entity.Vertices[item.Index];Record(item.Entity,v,"Restore vertex",v.Original.Z,true);v.Reset();
+            }
+            if(vertices.Count>0)Touch();
+        }
+        private void Record(SourceEntity e,ModelVertex v,string action,double z,bool enabled)
+        {
+            EditHistory.Add(new ModelEditRecord {Utc=DateTime.UtcNow,User=Environment.UserName,
+                Action=action,EntityId=e.Id,Handle=e.Handle,VertexIndex=v.Index,
+                OldZ=v.Position.Z,NewZ=z,OldEnabled=v.IsEnabled,NewEnabled=enabled});
         }
     }
 }

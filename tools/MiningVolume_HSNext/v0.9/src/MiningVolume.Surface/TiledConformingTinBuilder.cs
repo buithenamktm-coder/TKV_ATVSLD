@@ -49,6 +49,21 @@ namespace MiningVolume.Surface
             var prepared=new SurfaceInputPreparer().Prepare(model,options,
                 message=>progress?.Invoke(0,3,message),cancellationToken);
             long prepareMs=watch.ElapsedMilliseconds;
+            return BuildPrepared(name, prepared, options, inputVertices, inputBreaklines,
+                prepareMs, progress, cancellationToken);
+        }
+
+        /// <summary>Construct a file-backed constrained Delaunay mesh from sites already
+        /// normalized by a caller. Works for the separately labeled Z-mean test only:
+        /// it never modifies the official source model or constraints.</summary>
+        public Result BuildPrepared(string name, PreparedSurfaceInput prepared, SurfaceBuildOptions options,
+            int inputVertices, int inputBreaklines, long prepareMs,
+            Action<int,int,string> progress=null, CancellationToken cancellationToken=default(CancellationToken))
+        {
+            if (prepared==null)throw new ArgumentNullException(nameof(prepared));
+            options=options??new SurfaceBuildOptions();
+            cancellationToken.ThrowIfCancellationRequested();
+            var watch=Stopwatch.StartNew();
             if(prepared.HasErrors)
             {
                 if(prepared.ConflictReport?.HasBlockingConflicts==true)throw prepared.ConflictReport.ToException();

@@ -91,10 +91,15 @@ namespace MiningVolume.Core.Surface
             report.InputVertices=points.Count;report.InputSegments=edges.Count;
             var groupCells=new Dictionary<Cell,List<ConflictGroup>>();
             Cell At(Vec2 p)=>new Cell((long)Math.Floor(p.X/xy),(long)Math.Floor(p.Y/xy));
-            ConflictSource Vertex(PointRef p)=>new ConflictSource{EntityId=p.Entity.OriginId,Handle=p.Entity.Handle,Layer=p.Entity.Layer,
-                Type=p.Entity.Type,VertexIndex=p.Vertex,Z=p.P.Z,Generated=p.Entity.IsGenerated,Origin=p.Entity.IsGenerated?"Đỉnh cắt phạm vi; xem đối tượng gốc":"Đỉnh mô hình nguồn"};
+            ConflictSource Vertex(PointRef p) {
+                int original=p.Entity.OriginVertexIndices!=null?p.Entity.OriginVertexIndices[p.Vertex]:
+                    p.Entity.IsGenerated?-1:p.Vertex;
+                return new ConflictSource {EntityId=p.Entity.OriginId,Handle=p.Entity.Handle,Layer=p.Entity.Layer,
+                    Type=p.Entity.OriginType??p.Entity.Type,VertexIndex=original,Z=p.P.Z,Generated=original<0,
+                    Origin=original<0?"Đỉnh cắt phạm vi; xem đối tượng gốc":"Đỉnh mô hình nguồn"};
+            }
             ConflictSource Edge(EdgeRef e,Vec2 p,string origin)=>new ConflictSource{EntityId=e.Entity.OriginId,Handle=e.Entity.Handle,
-                Layer=e.Entity.Layer,Type=e.Entity.Type,SegmentIndex=e.Entity.OriginSegmentIndex??e.Segment,
+                Layer=e.Entity.Layer,Type=e.Entity.OriginType??e.Entity.Type,SegmentIndex=e.Entity.OriginSegmentIndex??e.Segment,
                 SegmentParameter=SurfaceInputPreparer.ParameterOnSegment(p,e.Edge),Z=Geometry2D.InterpolateZOnSegment(p,e.Edge),Generated=true,Origin=origin};
             void Add(Vec2 p,params ConflictSource[] sources){
                 var cell=At(p);ConflictGroup group=null;

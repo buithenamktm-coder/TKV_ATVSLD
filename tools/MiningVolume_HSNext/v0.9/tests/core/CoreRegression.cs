@@ -67,6 +67,123 @@ internal static class CoreRegression
     static void RunTests()
     {
         var tests=new Dictionary<string,Action> {
+            ["mean_z_preview_all_entities_and_original_unchanged"] = ()=>{
+                var contour=Entity("contour",SourceEntityType.Contour,P(0,0,0),P(10,0,0));
+                var poly=Entity("p3",SourceEntityType.Polyline3d,P(0,0,94.862),P(10,10,30));
+                var l=Entity("line",SourceEntityType.Line,P(0,0,20),P(0,10,20));
+                var model=Model(contour,poly,l);
+                var result=MeanZPreviewPreparer.Prepare(model);
+                Check(result.OriginalVertexCount==6,"Preview should include EVERY enabled input vertex");
+                Check(result.Prepared.Sites.Count==4,"Three coincident corner points merge into ONE XY");
+                Check(result.DuplicateGroupCount==1&&result.MergedVertexCount==2,
+                    "Preview dedup groups not counted");
+                Check(result.Conflicts.Count==1,"One conflicting duplicate XY group");
+                Check(Math.Abs(result.Conflicts[0].MeanZ-(94.862+20)/3)<1e-9,
+                    "Z average must use every observation (not just min/max)");
+                Check(Math.Abs(result.Conflicts[0].DeltaZ-94.862)<1e-9,
+                    "Largest real mine ΔZ must be preserved in report");
+                Check(result.IgnoredBreaklineSegments==3&&result.Prepared.Breaklines.Count==0,
+                    "Conflicting breaklines MUST NOT be sent into experimental CDT");
+                Check(contour.Vertices[0].Position.Z==0&&poly.Vertices[0].Position.Z==94.862&&
+                    l.Vertices[0].Position.Z==20,"Experimental average edited source CAD vertices");
+                var tin=Build(result.Prepared);
+                Check(tin.Triangles.Count>0,"Experimental averaged points should triangulate");
+                Check(!result.ForOfficialVolumes,"Experimental TIN cannot be official");
+            },
+            ["mean_z_preview_disabled_inputs_and_identical_z"] = ()=>{
+                var a=Entity("a",SourceEntityType.Point,P(0,0,10));
+                var b=Entity("b",SourceEntityType.Point,P(0,0,10));
+                var disabled=Entity("disabled",SourceEntityType.Point,P(0,0,900));
+                disabled.SetEnabled(false);
+                var model=Model(a,b,disabled,Entity("c",SourceEntityType.Point,P(10,0,10)),
+                    Entity("d",SourceEntityType.Point,P(0,10,10)));
+                var result=MeanZPreviewPreparer.Prepare(model);
+                Check(result.OriginalVertexCount==4&&result.Prepared.Sites.Count==3,
+                    "Disabled entities must not be used");
+                Check(result.DuplicateGroupCount==1&&result.Conflicts.Count==0,
+                    "Identical XYZ duplicates are not Z conflicts");
+                Check(result.Prepared.Sites.Any(p=>p.X==0&&p.Y==0&&p.Z==10),
+                    "Identical points should retain source elevation");
+                Check(result.Prepared.Breaklines.Count==0,"Experimental preview does not add breaklines");
+                var tin=Build(result.Prepared);
+                Check(tin.Triangles.Count==1,"Triangle of three usable XY sites");
+            },
+            ["mean_z_preview_strict_mode_still_rejects_conflicts"] = ()=>{
+                var data=Model(Entity("a",SourceEntityType.Point,P(0,0,0)),
+                    Entity("b",SourceEntityType.Point,P(0,0,94.862)),
+                    Entity("c",SourceEntityType.Point,P(10,0,0)),
+                    Entity("d",SourceEntityType.Point,P(0,10,0)));
+                var strict=new SurfaceInputPreparer().Prepare(data,new SurfaceBuildOptions());
+                Check(strict.HasErrors&&strict.ConflictReport.HasBlockingConflicts,
+                    "Official strict mode must still reject conflicting Z");
+                var experimental=MeanZPreviewPreparer.Prepare(data);
+                Check(!experimental.Prepared.HasErrors&&experimental.Conflicts.Count==1,
+                    "Opt-in experimental mode must be independent from strict");
+                Check(Math.Abs(experimental.Prepared.Sites.First(p=>p.X==0&&p.Y==0).Z-47.431)<1e-9,
+                    "Z middle between 0 and 94.862");
+            },
+            ["mean_z_preview_threshold_and_review_provenance"] = ()=>{
+                foreach(double delta in new[]{0.001,3.0,3.001,94.862}) {
+                    var m=Model(Entity("a",SourceEntityType.Point,P(2500000,400000)),
+                        Entity("b",SourceEntityType.Polyline3d,P(2500000,400000,delta),P(2500010,400000)),
+                        Entity("c",SourceEntityType.Point,P(2500000,400010)));
+                    var r=MeanZPreviewPreparer.Prepare(m);
+                    Check(r.HasBlockingConflicts==(delta>3),"Strict >3 threshold violated");
+                    Check(Math.Abs(r.Conflicts.Single().MeanZ-delta/2)<1e-10,"Wrong mean");
+                    var report=r.ToConflictReport(m);
+                    Check(report.Groups.Single().Sources.Count==2&&report.Groups[0].Sources.All(x=>!x.Generated&&x.VertexIndex==0),"Lost original provenance");
+                    Check(new SurfaceInputPreparer().Prepare(m,new SurfaceBuildOptions()).HasErrors,"Preview relaxed official tolerance");
+                }
+            },
+            ["mean_z_preview_region_mesh_area"] = ()=>{
+                var m=Model(Entity("a",SourceEntityType.Point,P(0,0,2)),Entity("b",SourceEntityType.Point,P(10,0,2)),
+                    Entity("c",SourceEntityType.Point,P(10,10,2)),Entity("d",SourceEntityType.Point,P(0,10,2)));
+                var ring=new[]{new Vec2(0,0),new Vec2(10,0),new Vec2(10,4),new Vec2(4,4),new Vec2(4,10),new Vec2(0,10)};
+                var r=MeanZPreviewPreparer.Prepare(m,tinRegion:ring);
+                var mesh=new TiledConformingTinBuilder().BuildPrepared("preview",r.Prepared,
+                    new SurfaceBuildOptions{ClipBoundary=ring},r.OriginalVertexCount,0,0);
+                try {
+                    Check(Math.Abs(mesh.Surface.Triangles.Sum(t=>t.Area2D)-64)<1e-8,"Preview escaped concave boundary");
+                    Check(mesh.Surface.Triangles.All(t=>new[]{t.A,t.B,t.C}.All(v=>SurfaceRegionClipper.ContainsInclusive(v.XY,ring)&&Math.Abs(v.Z-2)<1e-10)),"Bad clipped vertices/Z");
+                } finally {(mesh.Surface.Triangles as IDisposable)?.Dispose();}
+            },
+            ["regional_conflict_original_index_and_synthetic_guard"] = ()=>{
+                var poly=Entity("poly",SourceEntityType.Polyline3d,P(-10,0),P(0,0),P(10,0));
+                var m=Model(poly,Entity("point",SourceEntityType.Point,P(0,0,5)),Entity("clip",SourceEntityType.Point,P(-1,0,8)));
+                var ring=new[]{new Vec2(0,-2),new Vec2(8,-2),new Vec2(8,2),new Vec2(0,2)};
+                var clipped=SurfaceRegionClipper.Clip(m,ring);
+                var report=new ConflictScanner().Scan(clipped,new SurfaceBuildOptions());
+                var atZero=report.Groups.Single(g=>Math.Abs(g.Position.X)<1e-9);
+                Check(atZero.Sources.Any(x=>x.EntityId=="poly"&&!x.Generated&&x.VertexIndex==1&&x.Type==SourceEntityType.Polyline3d),"Clipping renumbered original vertex");
+                Check(clipped.Entities.Where(e=>e.Handle=="poly").Any(e=>e.OriginVertexIndices.Any(i=>i<0)),"Synthetic clipping point was mapped to real vertex");
+                m.SetVertexEnabled("poly",1,false);
+                Check(poly.Vertices[0].IsEnabled&&poly.Vertices[2].IsEnabled&&poly.IsEnabled,"Disabled whole polyline");
+                m.SetVertexEnabled("poly",1,true);
+                Check(poly.ActiveVertices().Count()==3,"Restore failed");
+                bool rejected=false;try{m.OverrideVertexZ("poly",1,double.NaN);}catch(ArgumentOutOfRangeException){rejected=true;}
+                Check(rejected&&poly.Vertices[1].Position.Z==0,"Invalid edit mutated source");
+            },
+            ["mean_z_review_with_less_than_three_sites"] = ()=>{
+                var r=MeanZPreviewPreparer.Prepare(Model(Entity("a",SourceEntityType.Point,P(0,0)),Entity("b",SourceEntityType.Point,P(0,0,20))));
+                Check(r.HasBlockingConflicts&&r.ToConflictReport(Model()).Groups.Count==1,"Cannot review sparse invalid input");
+            },
+            ["model_edits_restore_audit_and_snapshot"] = ()=>{
+                var m=Model(Entity("a",SourceEntityType.Polyline3d,P(0,0,8),P(10,0,4)));
+                var original=SourceFingerprint.Compute(m.Entities[0]);
+                m.SetVertexEnabled("a",0,false);m.OverrideVertexZ("a",1,7);m.RestoreVertex("a",0);
+                Check(m.EditHistory.Count==3&&m.EditHistory[1].OldZ==4&&m.EditHistory[1].NewZ==7,"Missing audit values");
+                Check(m.Entities[0].Vertices[0].IsEnabled&&m.Entities[0].Vertices[1].Position.Z==7,"Restore affected another vertex");
+                Check(SourceFingerprint.Compute(m.Entities[0])==original,"Edits changed original fingerprint");
+                Check(SourceFingerprint.Compute(Entity("a",SourceEntityType.Polyline3d,P(0,0,9),P(10,0,4)))!=original,"Changed geometry accepted");
+                bool invalid=false;try{m.RestoreVertices(new[]{new KeyValuePair<string,int>("a",1),new KeyValuePair<string,int>("a",9)});}catch(ArgumentOutOfRangeException){invalid=true;}
+                Check(invalid&&m.Entities[0].Vertices[1].Position.Z==7,"Bulk restore partially applied invalid selection");
+                m.RestoreVertices(new[]{new KeyValuePair<string,int>("a",0)});
+                Check(m.Entities[0].Vertices[1].Position.Z==7,"Bulk restore reset unrelated edit");
+                var snapshot=new MiningVolume2023.Services.ProjectSnapshot {SavedUtc=DateTime.UtcNow,
+                    Existing=new MiningVolume2023.Services.ModelSnapshot {EditHistory=m.EditHistory}};
+                var decoded=MiningVolume2023.Services.ProjectSnapshotCodec.Decode(MiningVolume2023.Services.ProjectSnapshotCodec.Encode(snapshot));
+                Check(decoded.Existing.EditHistory.Count==4&&decoded.Existing.EditHistory[1].NewZ==7&&decoded.Existing.EditHistory[1].VertexIndex==1,"Audit snapshot roundtrip lost data");
+            },
             ["square_area_no_holes"] = ()=> {var t=Build(Prepare(Corners()));Check(t.Triangles.Count==2&&Math.Abs(t.Triangles.Sum(x=>x.Area2D)-100)<1e-9,"Square area");},
             ["grid_system_rotated_matches_no_rotation"] = ()=>{
                 var existing=new TinSurface("tn",new[]{new Triangle3(P(0,0,2),P(20,0,2),P(20,20,2)),
@@ -420,6 +537,30 @@ internal static class CoreRegression
             Console.WriteLine(JsonSerializer.Serialize(new{phase="complete",triangles=tin.Triangles.Count,ms=sw.ElapsedMilliseconds,managedBytes=GC.GetTotalMemory(false)}));(tin.Triangles as IDisposable)?.Dispose();
         } catch(Exception ex){Console.WriteLine(JsonSerializer.Serialize(new{phase="error",kind=ex.GetType().Name,message=ex.Message,issues=(ex as DuplicateXYConflictException)?.Issues.GroupBy(x=>x.Code).ToDictionary(x=>x.Key,x=>x.Count()),ms=sw.ElapsedMilliseconds}));Environment.ExitCode=2;}
     }
+    static void ReviewFixture(string path,string boundary,int seconds)
+    {
+        var watch=Stopwatch.StartNew();var model=ReadModel(path);
+        using(var cancel=new CancellationTokenSource(TimeSpan.FromSeconds(seconds))) {
+            Vec2[] region=null;
+            if(boundary!="-")using(var r=new BinaryReader(File.OpenRead(boundary))) {
+                region=new Vec2[r.ReadInt32()];for(int i=0;i<region.Length;i++)region[i]=new Vec2(r.ReadDouble(),r.ReadDouble());
+            }
+            var mean=MeanZPreviewPreparer.Prepare(model,token:cancel.Token,tinRegion:region);
+            Console.WriteLine(JsonSerializer.Serialize(new {phase="mean_review",entities=model.Entities.Count,
+                vertices=model.Entities.Sum(e=>e.Vertices.Count),participating=mean.OriginalVertexCount,
+                sites=mean.Prepared.Sites.Count,groups=mean.Conflicts.Count,above3=mean.ReviewGroups.Count,
+                maxDelta=mean.Conflicts.Count==0?0:mean.Conflicts.Max(g=>g.DeltaZ),blocked=mean.HasBlockingConflicts,
+                ms=watch.ElapsedMilliseconds,managedBytes=GC.GetTotalMemory(false)}));
+            mean=null;GC.Collect();
+            var input=region==null?model:SurfaceRegionClipper.Clip(model,region,cancellationToken:cancel.Token);
+            var strict=new ConflictScanner().Scan(input,new SurfaceBuildOptions(),token:cancel.Token);
+            Console.WriteLine(JsonSerializer.Serialize(new {phase="strict_review",groups=strict.Groups.Count,
+                sources=strict.SourceRecordCount,above3=strict.Groups.Count(g=>g.DeltaZ>3),
+                originalRows=strict.Groups.Sum(g=>g.Sources.Count(x=>!x.Generated)),
+                generatedRows=strict.Groups.Sum(g=>g.Sources.Count(x=>x.Generated)),
+                blocked=strict.HasBlockingConflicts,ms=watch.ElapsedMilliseconds,managedBytes=GC.GetTotalMemory(false)}));
+        }
+    }
     static void ClipOracle()
     {
         var boundaries=new[]{
@@ -437,5 +578,5 @@ internal static class CoreRegression
                 triangles=tin.Triangles.Select(t=>new[]{t.A,t.B,t.C}.Select(p=>new[]{p.X,p.Y,p.Z}))}));
         }
     }
-    static void Main(string[] args){if(args.Length==0)RunTests();else if(args[0]=="--clip-oracle")ClipOracle();else Fixture(args[0],args.Length>1?args[1]:"-",args.Length>2?int.Parse(args[2]):120,args.Length>3?(DuplicateXYConflictPolicy)Enum.Parse(typeof(DuplicateXYConflictPolicy),args[3]):DuplicateXYConflictPolicy.Stop);}
+    static void Main(string[] args){if(args.Length==0)RunTests();else if(args[0]=="--clip-oracle")ClipOracle();else if(args[0]=="--review-fixture")ReviewFixture(args[1],args[2],int.Parse(args[3]));else Fixture(args[0],args.Length>1?args[1]:"-",args.Length>2?int.Parse(args[2]):120,args.Length>3?(DuplicateXYConflictPolicy)Enum.Parse(typeof(DuplicateXYConflictPolicy),args[3]):DuplicateXYConflictPolicy.Stop);}
 }

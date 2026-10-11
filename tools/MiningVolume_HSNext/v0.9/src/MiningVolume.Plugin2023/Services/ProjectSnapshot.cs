@@ -66,6 +66,7 @@ namespace MiningVolume2023.Services
         [DataMember(Order = 5)] public bool HadTin { get; set; }
         [DataMember(Order = 6)] public int SourceMode { get; set; }
         [DataMember(Order = 7)] public List<string> SelectedHandles { get; set; } = new List<string>();
+        [DataMember(Order = 8)] public List<ModelEditRecord> EditHistory { get; set; } = new List<ModelEditRecord>();
     }
 
     [DataContract]
@@ -74,6 +75,7 @@ namespace MiningVolume2023.Services
         [DataMember(Order = 1)] public string Handle { get; set; }
         [DataMember(Order = 2)] public bool Enabled { get; set; } = true;
         [DataMember(Order = 3)] public List<VertexEditSnapshot> Vertices { get; set; } = new List<VertexEditSnapshot>();
+        [DataMember(Order = 4)] public string SourceFingerprint { get; set; }
     }
 
     [DataContract]
@@ -121,12 +123,15 @@ namespace MiningVolume2023.Services
             using (var json = new MemoryStream())
             {
                 serializer.WriteObject(json, snapshot);
+                if(json.Length>128L*1024*1024)throw new InvalidDataException("Project vượt giới hạn kích thước an toàn; chưa ghi vào DWG.");
                 json.Position = 0;
                 using (var compressed = new MemoryStream())
                 {
                     using (var gzip = new GZipStream(compressed, CompressionLevel.Optimal, true))
                         json.CopyTo(gzip);
-                    return Convert.ToBase64String(compressed.ToArray());
+                    var encoded=Convert.ToBase64String(compressed.ToArray());
+                    if(encoded.Length>64*1024*1024)throw new InvalidDataException("Project nén vượt giới hạn an toàn; chưa ghi vào DWG.");
+                    return encoded;
                 }
             }
         }
@@ -134,12 +139,17 @@ namespace MiningVolume2023.Services
         public static ProjectSnapshot Decode(string encoded)
         {
             if (string.IsNullOrWhiteSpace(encoded)) return null;
+            if(encoded.Length>64*1024*1024)throw new InvalidDataException("Project vượt giới hạn kích thước an toàn.");
             var bytes = Convert.FromBase64String(encoded);
             using (var compressed = new MemoryStream(bytes))
             using (var gzip = new GZipStream(compressed, CompressionMode.Decompress))
             using (var json = new MemoryStream())
             {
-                gzip.CopyTo(json);
+                var buffer=new byte[81920];int count;
+                while((count=gzip.Read(buffer,0,buffer.Length))>0) {
+                    if(json.Length+count>128L*1024*1024)throw new InvalidDataException("Project giải nén vượt giới hạn an toàn.");
+                    json.Write(buffer,0,count);
+                }
                 json.Position = 0;
                 var serializer = new DataContractJsonSerializer(typeof(ProjectSnapshot));
                 return (ProjectSnapshot)serializer.ReadObject(json);

@@ -178,7 +178,7 @@ jobs:
           }
 
       - name: Build V2.0 QA Candidate Setup (NOT RELEASE)
-        if: github.ref_name == 'miningvolume-v2-qa-candidate' || github.head_ref == 'miningvolume-v2-qa-candidate'
+        if: startsWith(github.ref_name, 'miningvolume-v2-') || startsWith(github.head_ref, 'miningvolume-v2-')
         shell: pwsh
         run: |
           Set-Location $env:MV_ROOT
@@ -190,6 +190,18 @@ jobs:
           if (-not (Test-Path "dist/V2_QA_CANDIDATE_NOT_RELEASE.txt")) {
             throw "Missing non-release warning for V2 QA Setup."
           }
+          $v2Hash = (Get-FileHash 'dist/IMSAT_MiningVolume_V2_0_QA_CANDIDATE.exe' -Algorithm SHA256).Hash.ToLowerInvariant()
+          "SHA256  $v2Hash  IMSAT_MiningVolume_V2_0_QA_CANDIDATE.exe" | Set-Content -Encoding ascii dist/V2_SHA256SUMS.txt
+          @(
+            'IMSAT MiningVolume V2.0 QA CANDIDATE — NOT RELEASE'
+            "Source commit: $env:SOURCE_SHA"
+            "Checked out commit: $env:CHECKED_OUT_SHA"
+            "Workflow run: $env:GITHUB_RUN_ID"
+            "V2 Setup SHA256: $v2Hash"
+            'AutoCAD 2023 interactive runtime: NOT TESTED'
+            'Production license trust anchor and acceptance: NOT APPROVED'
+          ) | Set-Content -Encoding utf8 dist/V2_BUILD_VERIFICATION.txt
+          Get-Content dist/V2_BUILD_VERIFICATION.txt
 
       - name: Create checksums and source archive
         shell: pwsh
@@ -263,7 +275,7 @@ jobs:
           Get-Content dist/BUILD_VERIFICATION.txt
 
       - name: Upload V2.0 QA-only installer (not release)
-        if: github.ref_name == 'miningvolume-v2-qa-candidate' || github.head_ref == 'miningvolume-v2-qa-candidate'
+        if: startsWith(github.ref_name, 'miningvolume-v2-') || startsWith(github.head_ref, 'miningvolume-v2-')
         uses: actions/upload-artifact@v4
         with:
           name: IMSAT-MiningVolume-V2.0-QA-CANDIDATE-NOT-RELEASE
@@ -272,6 +284,11 @@ jobs:
           path: |
             tools/MiningVolume_HSNext/v0.9/dist/IMSAT_MiningVolume_V2_0_QA_CANDIDATE.exe
             tools/MiningVolume_HSNext/v0.9/dist/V2_QA_CANDIDATE_NOT_RELEASE.txt
+            tools/MiningVolume_HSNext/v0.9/dist/V2_SHA256SUMS.txt
+            tools/MiningVolume_HSNext/v0.9/dist/V2_BUILD_VERIFICATION.txt
+            tools/MiningVolume_HSNext/v0.9/docs/V2_FINAL_QA_REPORT.md
+            tools/MiningVolume_HSNext/v0.9/docs/V2_RELEASE_GATES.md
+            tools/MiningVolume_HSNext/v0.9/docs/V2_AUTOCAD_ACCEPTANCE.md
 
       - name: Upload pre-release candidate
         uses: actions/upload-artifact@v4

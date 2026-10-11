@@ -1,0 +1,84 @@
+# IMSAT MiningVolume V2.0 — báo cáo QA ngày 11/10/2026
+
+**Trạng thái: QA CANDIDATE, CHƯA HOÀN THÀNH NGHIỆM THU. Không phát hành chính thức.**
+
+Nhánh `miningvolume-v2-hs-all-sources-tin`, PR #26. Kế thừa dự án hiện có; không sửa nhánh `miningvolume-v1.0`.
+Áp dụng toàn bộ PlanCode `PLANCODE_WORK_MININGVOLUME_V2_FINAL_20261011.md`.
+
+## Mốc triển khai và lỗi đã khắc phục
+
+| Mốc | Commit | Sửa lỗi / bằng chứng |
+|---|---|---|
+| P0.1 | `1b4d6f8d7c0c623b43cf267845eb3f08343e1b39` | Bổ sung handler loại/sửa Z; hợp nhất hai cửa sổ; xác nhận tiếng Việt mặc định Không; chặn nguồn cũ/điểm sinh; giữ provenance khi clipping; cắt TIN thử đúng polygon. 216 reference + 62 C# PASS. Windows run 38158413718 PASS. |
+| P0.2 | `4a83b44a440f3fe81a2da8f9f7dc33f6e5bfdc27` | Nhật ký old/new/time/user, khôi phục điểm, fingerprint hình học khi mở DWG, giới hạn giải nén, triển khai Setup V2 QA trên nhánh PR26. 216 reference + 63 C# PASS; Windows run 38158783762 PASS, có V2 QA installer. |
+| P0.3 | Commit chứa báo cáo này | Khôi phục nhiều điểm qua chỉ mục, kiểm tra toàn bộ lựa chọn trước sửa; giữ nguyên tọa độ đầu mút; CSV từng nguồn; 218 reference + 63 C# PASS; SHA256 và thông tin nguồn riêng cho Setup V2. CI cuối phải đọc theo chính HEAD và V2_BUILD_VERIFICATION.txt trong artifact. |
+
+Các lỗi UI đã sửa ở mức mã/build: thiếu `ExcludeVertexAsync(Row)`/`EditVertexZAsync(Row)`; Zoom hàng nhóm gây null; bản quét cũ còn cho sửa sau hủy; lọc layer làm mất thành viên khác trong nhóm; nút thao tác nằm ngoài phần nhìn thấy; cửa sổ trung bình Z có luồng xử lý riêng thiếu thống nhất. Cửa sổ dùng chung bảng VirtualMode, mặc định >3 m, mỗi điểm có Zoom/Loại/Sửa; điểm nội suy không có provenance thật không được sửa/xóa. Chỉ sửa mô hình và vô hiệu dữ liệu dẫn xuất. Thao tác model không mở CAD nguồn để ghi.
+
+Fingerprint chặn áp lại chỉ số đỉnh khi hình học DWG đã đổi. Bản lưu cũ thiếu fingerprint được cảnh báo và không áp sửa đỉnh tự động; không tự dựng lại kết quả khi có cảnh báo nguồn. Cần nghiệm thu lưu/mở DWG trong host, không coi test codec là bằng chứng đầy đủ.
+
+## Kiểm thử đã thực hiện
+
+| Kiểm tra | Actual | Kết luận / giới hạn |
+|---|---|---|
+| pytest reference | 218 passed | PASS; có kiểm tra cấu trúc, không phải toàn bộ test runtime |
+| C# CoreRegression + CDT C++ thật | 63 tests, 0 failed | PASS; nguồn Core/Surface thật, không mock hình học |
+| GEOS độc lập so mesh C# | 4/4 | PASS; biên lõm, dải hẹp, polygon xiên, cắt hull; sai số diện tích/Z lớn nhất ~7.11e-15 |
+| Ngưỡng preview | 0.001/3.000 không vượt; 3.001/94.862 vượt | PASS; TIN chính thức vẫn từ chối xung đột theo dung sai 1e-4 m |
+| Mô hình / persistence | loại đúng 1 đỉnh; restore không sửa đỉnh khác; reject NaN; roundtrip nhật ký; fingerprint đổi theo hình học gốc | PASS tại lõi/codec, DWG thực NOT TESTED |
+| Windows build và LicenseManager self-test | run 38158783762 PASS | Chỉ chứng minh build/CLI self-test; chưa chứng minh máy quản trị độc lập |
+| AutoCAD 2023 tương tác, DPI, Esc, nhiều DWG | Không có Windows/AutoCAD host trong Work này | NOT TESTED |
+
+Lệnh tái lập (tại thư mục sản phẩm):
+
+```text
+python -m pytest tests/reference -q
+python tests/core/run_core.py --dotnet-root <dotnet-sdk-8-root>
+python tests/core/run_core.py --dotnet-root <root> -- --clip-oracle > oracle.jsonl
+python tests/core/verify_clip_oracle.py oracle.jsonl
+python tests/core/run_core.py --dotnet-root <root> -- --review-fixture <private-model.bin> <boundary.bin-or-dash> 600
+```
+
+Log tổng hợp nằm tại `docs/qa/20261011/`. Binary fixture, tọa độ và handle mỏ được giữ riêng, không commit.
+
+## Hai DXF và dữ liệu HSMo
+
+Số đo dữ liệu thật ghi nhận trên lõi ở mốc P0.2; các log giữ nguyên, không đổi số đo thành kết quả host. Adapter đọc DXF theo WCS; LW arc bước tối đa 0.5 m. Đây là quét dữ liệu qua adapter, **không phải thao tác AutoCAD**.
+
+| Nguồn / mô hình | Đỉnh đầu vào | Nhóm preview >3 m | Nhóm strict | Thời gian tổng quét mean + strict |
+|---|---:|---:|---:|---:|
+| Vỉa 4 HT, LO_TINHKL | 1,220,951 | 20 | 4,137 | 35.826 s |
+| Vỉa 4 TK, LO_TINHKL | 858,952 | 15 | 11,737 | 30.131 s |
+| SQ cũ HT, không biên | 952,593 | 93 | 1,297 | 24.179 s |
+| SQ cũ TK, không biên | 945,685 | 96 | 1,259 | 24.348 s |
+| Test HS HT, LO_TINHKL | 952,593 | 93 | 1,294 | 30.350 s |
+| Test HS TK, LO_TINHKL | 945,685 | 96 | 1,256 | 30.502 s |
+
+**Cả sáu trường hợp đều BLOCKED đúng vì còn xung đột nguồn; chưa dựng thành công hai TIN chính thức trên các file này.** Không tự chọn Z cao/thấp/trung bình thay quyết định khảo sát. Strict còn xét giao/chồng breakline; số nhóm không thể đồng nhất với preview chỉ xét đỉnh trùng XY. Không tuyên bố khớp con số 1.293 của ảnh cũ.
+
+SQ có ΔZ tối đa 94.862 m. Mức managed memory tại cuối quét ~0.61–1.38 GB, không phải peak RAM/working set; chưa nghiệm thu RAM/UI trong AutoCAD. Các bài kiểm tra chạy có timeout 600 s, đều hoàn thành. Chưa chứng minh vẽ hàng triệu mặt CAD không treo.
+
+Đã lấy lại `Test HS.dxf`, `Tinh kl SQ 2026.09.091.dxf`, `Tinh kl SQ 2026.09.09.dwg`. Hai DXF có các lớp !HT/!TK, mỗi lớp gồm 6 CIRCLE và 5 SPLINE ngoài danh sách loại nguồn hỗ trợ; adapter báo rõ unsupported, không tính chúng như điểm/polyline đã hỗ trợ. Test HS có HS_MATCAT và LO_TINHKL. DWG chưa mở trong AutoCAD; chưa giải mã HDAI_TIN_MODEL_OBJ, chưa đối chứng đường mặt cắt HSMo. Không nhận định thuật toán HSMo là trung bình Z.
+
+## P1 → P2 → P3: trạng thái từng chức năng
+
+PlanCode yêu cầu nghiệm thu P0 trước khi tập trung sâu vào khối lượng. Vì TIN mỏ còn cần người có thẩm quyền chọn/sửa Z và thiếu host, các mục sau **không được đánh dấu hoàn tất**.
+
+| Chức năng | Chứng cứ hiện có | Chưa đạt / chưa kiểm thử |
+|---|---|---|
+| Menu/Ribbon/Palette/bo nút/logo | Kế thừa, build PASS | 1366×768/FullHD, DPI 100/125/150%, mọi nút host |
+| Hai TIN + View 3D | Core test/build | TIN mỏ đã sửa nguồn; Esc/orbit/chuyển DWG/layer |
+| Mặt cắt + khoảng giãn | Kế thừa build/reference | MC 20m HSMo, đo CAD, giãn không đổi cự ly |
+| Lưới ô vuông | Native C# cut/fill, xoay, biên lõm, lỗ, no-data PASS | Grid lớn CAD; nghiệm thu tổng và ô thực |
+| Khối lượng / TT34 | Kế thừa mã và checks | Rà soát toàn bộ lựa chọn công thức/đơn vị/điều kiện TT34 sau P0; chưa nghiệm thu nghiệp vụ |
+| Nhiều vỉa/thân quặng | Core nhiều vỉa, thiếu dữ liệu, miền đào, chồng lấn PASS | Grip/XData, đổi tên, lưu lại, hình học và địa chất thực |
+| CAD TABLE / Excel | Build và reference | Excel desktop tính lại, layout Arial12/logo; bảng CAD thực |
+| Trial 15 ngày / RSA | Windows issuer CLI self-test PASS | Public trust anchor còn rỗng; trial thời gian thật và máy quản trị độc lập NOT TESTED; admin UI chưa nghiệm thu |
+| Setup V2 | QA .exe build PASS, manifest NOT RELEASE | Cài/nâng cấp/rollback/gỡ trên AutoCAD thực; chữ ký số chưa có |
+| AutoCAD 2012+ | Không có chứng cứ | KHÔNG hỗ trợ phát hành theo tuyên bố hiện tại; mục tiêu 2023 x64 |
+
+## Bàn giao và bước bắt buộc
+
+Setup chỉ phục vụ người kiểm thử: artifact **IMSAT-MiningVolume-V2.0-QA-CANDIDATE-NOT-RELEASE** trong workflow đúng HEAD. `V2_SHA256SUMS.txt` dành riêng cho V2 .exe; không dùng SHA256 của installer V1 hoặc ZIP thay thế. `V2_BUILD_VERIFICATION.txt` ghi source commit/run/hash. Cảnh báo C4068 của thư viện CDT về GCC pragma trên MSVC đã thấy trong build; không có compile error, không coi đây là crash host.
+
+Chạy `V2_AUTOCAD_ACCEPTANCE.md` trên Windows AutoCAD 2023, cung cấp log/ảnh/DWG bản kiểm thử và quyết định xử lý cao độ nguồn. Cần PUBLIC RSA key do máy quản trị tạo và chứng cứ backup/restore độc lập; không gửi private key vào repo/chat. Không tạo tag hoặc Release V2.0 khi còn gate bắt buộc chưa đạt.
