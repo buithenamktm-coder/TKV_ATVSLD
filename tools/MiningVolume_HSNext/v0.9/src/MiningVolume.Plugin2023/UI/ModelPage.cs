@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using MiningVolume.Core.Model;
@@ -26,6 +27,9 @@ namespace MiningVolume2023.UI
         private readonly Button _buildBoth;
         private readonly Button _toggleTin;
         private readonly Button _view3D;
+        private readonly Button _meanZBuild;
+        private readonly Button _meanZCancel;
+        private CancellationTokenSource _meanZCts;
         private readonly List<RowRef> _rows = new List<RowRef>();
         private bool _busy;
 
@@ -58,7 +62,7 @@ namespace MiningVolume2023.UI
             var second = new FlowLayoutPanel
             {
                 Dock = DockStyle.Top,
-                Height = 72,
+                Height = 122,
                 WrapContents = true,
                 Padding = new Padding(0, 2, 0, 2),
                 AutoScroll = false
@@ -75,6 +79,13 @@ namespace MiningVolume2023.UI
             second.Controls.Add(_buildBoth);
             second.Controls.Add(_toggleTin);
             second.Controls.Add(_view3D);
+            _meanZBuild = Button("TIN Z TRUNG BÌNH – THỬ", async (s,e) => await BuildMeanZPreviewAsync());
+            _meanZBuild.Width = 224;
+            _meanZCancel = Button("HỦY TIN THỬ", (s,e) => _meanZCts?.Cancel());
+            _meanZCancel.Width = 118;
+            _meanZCancel.Enabled = false;
+            second.Controls.Add(_meanZBuild);
+            second.Controls.Add(_meanZCancel);
             _progress = new ProgressBar { Width = 150, Height = 24, Style = ProgressBarStyle.Marquee, Visible = false, MarqueeAnimationSpeed = 25 };
             second.Controls.Add(_progress);
             Controls.Add(second);
@@ -114,7 +125,11 @@ namespace MiningVolume2023.UI
 
         protected override void Dispose(bool disposing)
         {
-            if (disposing) ProjectState.Current.Changed -= StateChanged;
+            if (disposing)
+            {
+                _meanZCts?.Cancel();
+                ProjectState.Current.Changed -= StateChanged;
+            }
             base.Dispose(disposing);
         }
 
@@ -164,6 +179,8 @@ namespace MiningVolume2023.UI
             _toggleTin.Enabled = s.Tin != null && !_busy;
             _view3D.Enabled = s.IsTinCurrent && !_busy;
             _build.Enabled = !_busy && s.Source != null && s.Source.Entities.Count > 0;
+            _meanZBuild.Enabled = !_busy && s.Source != null && s.Source.Entities.Count > 0;
+            _meanZCancel.Enabled = _busy && _meanZCts != null;
             _buildBoth.Enabled = !_busy &&
                 ProjectState.Current.Existing.Source != null && ProjectState.Current.Existing.Source.Entities.Count > 0 &&
                 ProjectState.Current.Design.Source != null && ProjectState.Current.Design.Source.Entities.Count > 0;
@@ -337,6 +354,84 @@ namespace MiningVolume2023.UI
             finally { SetBusy(false, null); }
         }
 
+        /// <summary>
+        /// Experimental mean-Z TIN does not alter either verified TIN or any
+        /// official section/volume state. Only writes a TEST_ONLY preview layer.
+        /// </summary>
+        private async Task BuildMeanZPreviewAsync()
+        {
+            if (_busy || !LicenseUiGuard.Check()) return;
+            var role=CurrentRole;
+            if (MessageBox.Show(this,
+                "TIN THỬ NGHIỆM – TRUNG BÌNH Z\\r\\n\\r\\n"+
+                "Gộp tất cả đỉnh trùng XY từ đối tượng đang dùng bằng Z trung bình. "+
+                "Đường breakline KHÔNG được giữ như cạnh bắt buộc. "+
+                "Chỉ vẽ trên layer riêng TEST_ONLY, không thay TIN hiện trạng/thiết kế chính thức.\\r\\n\\r\\n"+
+                "KẾT QUẢ KHÔNG DÙNG TÍNH KHỐI LƯỢNG. Tiếp tục?",
+                "IMSAT VOLUME – TIN thử nghiệm",
+                MessageBoxButtons.YesNo,MessageBoxIcon.Warning,
+                MessageBoxDefaultButton.Button2)!=DialogResult.Yes) return;
+
+            _meanZCts=new CancellationTokenSource();
+            SetBusy(true,"Đang chuẩn hóa trùng XY và dựng TIN thử nghiệm...");
+            MeanZPreviewWorkflowService.PreviewResult result=null;
+            try
+            {
+                var token=_meanZCts.Token;
+                Action<string> progress = m => {
+                    if(IsDisposed || !IsHandleCreated)return;
+                    try { BeginInvoke(new Action(()=>{
+                        if(!IsDisposed) _info.Text="TIN Z trung bình THỬ: "+m;
+                    })); } catch(InvalidOperationException){}
+                };
+                result=await Task.Run(() =>
+                    MeanZPreviewWorkflowService.Build(role, progress, token), token);
+                token.ThrowIfCancellationRequested();
+                int count=MeanZPreviewWorkflowService.Draw(result);
+                string info=
+                    "Đã tạo TIN THỬ NGHIỆM trên layer: "+result.Layer+
+                    "\\r\\nĐỉnh nguồn: "+result.Analysis.OriginalVertexCount.ToString("n0")+
+                    "; đỉnh sau gộp: "+result.Analysis.Prepared.Sites.Count.ToString("n0")+
+                    "\\r\\nNhóm XY trùng: "+result.Analysis.DuplicateGroupCount.ToString("n0")+
+                    "; nhóm khác Z: "+result.Analysis.Conflicts.Count.ToString("n0")+
+                    "\\r\\nBreakline KHÔNG ràng buộc: "+result.Analysis.IgnoredBreaklineSegments.ToString("n0")+
+                    "\\r\\nSố tam giác toàn bộ: "+result.TotalTriangles.ToString("n0")+
+                    "; số mặt CAD minh họa: "+count.ToString("n0")+
+                    (result.DrawIsSampled?" (đã lấy mẫu hiển thị để không treo CAD)":"")+
+                    "\\r\\n\\r\\nKHÔNG DÙNG LƯỚI NÀY ĐỂ TÍNH KHỐI LƯỢNG."+
+                    "\\r\\nCó xuất báo cáo chi tiết các vị trí Z đã gộp sang CSV không?";
+                if(MessageBox.Show(this,info,"TIN Z TB – chỉ so sánh HSMo",
+                    MessageBoxButtons.YesNo,MessageBoxIcon.Information)==DialogResult.Yes)
+                {
+                    using(var dlg=new SaveFileDialog
+                    {
+                        Filter="CSV phân tích trùng XY (*.csv)|*.csv",
+                        DefaultExt="csv",AddExtension=true,OverwritePrompt=true,
+                        FileName="IMSAT_TIN_Z_TB_"+(role==ModelRole.Existing?"HT":"TK")+
+                            "_THU_"+DateTime.Now.ToString("yyyyMMdd_HHmm")+".csv"
+                    })
+                        if(dlg.ShowDialog(this)==DialogResult.OK)
+                            MeanZPreviewWorkflowService.ExportCsv(result,dlg.FileName);
+                }
+            }
+            catch(OperationCanceledException)
+            {
+                MessageBox.Show(this,"Đã hủy dựng TIN Z trung bình. Không thay TIN chính thức.",
+                    "IMSAT VOLUME",MessageBoxButtons.OK,MessageBoxIcon.Information);
+            }
+            catch(Exception ex)
+            {
+                MessageBox.Show(this,ex.Message,"Không dựng được TIN Z trung bình THỬ",
+                    MessageBoxButtons.OK,MessageBoxIcon.Error);
+            }
+            finally
+            {
+                result?.Dispose();
+                _meanZCts?.Dispose();_meanZCts=null;
+                if (!IsDisposed) SetBusy(false,null);
+            }
+        }
+
         private void ShowValidation(string modelName, IReadOnlyList<ValidationIssue> issues)
         {
             int errors = issues.Count(x => x.Severity == ValidationSeverity.Error);
@@ -380,6 +475,8 @@ namespace MiningVolume2023.UI
                 ProjectState.Current.Existing.Source != null && ProjectState.Current.Existing.Source.Entities.Count > 0 &&
                 ProjectState.Current.Design.Source != null && ProjectState.Current.Design.Source.Entities.Count > 0;
             _toggleTin.Enabled = !busy && CurrentSession.Tin != null;
+            _meanZBuild.Enabled = !busy && CurrentSession.Source != null && CurrentSession.Source.Entities.Count > 0;
+            _meanZCancel.Enabled = busy && _meanZCts != null;
             _view3D.Enabled = !busy && CurrentSession.IsTinCurrent;
             _model.Enabled = !busy;
             _grid.Enabled = !busy;
