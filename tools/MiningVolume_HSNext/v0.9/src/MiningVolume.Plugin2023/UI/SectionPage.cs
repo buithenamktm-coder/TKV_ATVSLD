@@ -361,6 +361,24 @@ namespace MiningVolume2023.UI
             var button = s as Button;
             try
             {
+                // Building again replaces the CAD output layers. Protect
+                // manually grip-edited geometry even if the user has not pressed
+                // "CẬP NHẬT MẶT CẮT" yet. Default is to KEEP the original.
+                var activeDoc = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument;
+                if (activeDoc == null)
+                    throw new InvalidOperationException("Không có bản vẽ AutoCAD đang hoạt động.");
+                if (EditableSectionCadService.HasEditableProfiles(activeDoc.Database) &&
+                    MessageBox.Show(
+                        "Bản vẽ đang có hệ mặt cắt CAD có thể đã được hiệu chỉnh thủ công. " +
+                        "Thành lập lại sẽ THAY THẾ các đường mặt cắt và xóa các chỉnh sửa trên hệ mặt cắt cũ.\\r\\n\\r\\n" +
+                        "Hãy lưu một bản sao DWG trước khi thực hiện. Anh có chắc chắn muốn vẽ lại không?",
+                        "Xác nhận thay thế mặt cắt CAD",
+                        MessageBoxButtons.YesNo, MessageBoxIcon.Warning,
+                        MessageBoxDefaultButton.Button2) != DialogResult.Yes)
+                {
+                    _status.Text = "Đã giữ nguyên hệ mặt cắt CAD và khối lượng hiện có.";
+                    return;
+                }
                 if (button != null) button.Enabled = false;
                 UseWaitCursor = true;
                 EnsureSystem();
@@ -389,7 +407,6 @@ namespace MiningVolume2023.UI
                             progress.Report($"Đang tính mặt cắt {done:n0}/{total:n0}: {name}...")));
 
                 watch.Stop();
-                SectionWorkflowService.CommitProfiles(profiles);
                 int valid = profiles.Count(x => x.HasData);
                 _status.Text =
                     $"Tính xong {profiles.Count:n0} mặt cắt ({valid:n0} đủ hai TIN) trong {watch.Elapsed.TotalSeconds:0.0}s. " +
@@ -413,8 +430,13 @@ namespace MiningVolume2023.UI
                         _status.Refresh();
                         Application.DoEvents();
                     },
-                    (double)_layoutGap.Value);
+                    (double)_layoutGap.Value,
+                    profiles);
                 drawWatch.Stop();
+                // Only commit the newly sampled profiles after CAD drawing has
+                // succeeded. Canceling the insertion point leaves prior
+                // manually accepted profiles and volumes untouched.
+                SectionWorkflowService.CommitProfiles(profiles);
 
                 _status.Text =
                     $"Đã thành lập {profiles.Count:n0} mặt cắt; {valid:n0} mặt cắt có đủ dữ liệu hai TIN. " +
