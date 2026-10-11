@@ -288,6 +288,7 @@ namespace MiningVolume2023.UI
             ProjectState.Current.BoundaryHandle = h;
             ProjectState.Current.SectionSystem = null;
             ProjectState.Current.SectionProfiles.Clear();
+            ProjectState.Current.VolumeResult = null;
             _boundary.Text = "Handle: " + h;
             ProjectState.Current.NotifyChanged();
         }
@@ -299,6 +300,7 @@ namespace MiningVolume2023.UI
             ProjectState.Current.SectionDirection = r.Vector;
             ProjectState.Current.SectionSystem = null;
             ProjectState.Current.SectionProfiles.Clear();
+            ProjectState.Current.VolumeResult = null;
             _direction.Text = DirectionText(r.Vector);
             ProjectState.Current.NotifyChanged();
         }
