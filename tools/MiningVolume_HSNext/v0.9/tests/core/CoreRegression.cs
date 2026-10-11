@@ -67,6 +67,61 @@ internal static class CoreRegression
     static void RunTests()
     {
         var tests=new Dictionary<string,Action> {
+            ["mean_z_preview_all_entities_and_original_unchanged"] = ()=>{
+                var contour=Entity("contour",SourceEntityType.Contour,P(0,0,0),P(10,0,0));
+                var poly=Entity("p3",SourceEntityType.Polyline3d,P(0,0,94.862),P(10,10,30));
+                var l=Entity("line",SourceEntityType.Line,P(0,0,20),P(0,10,20));
+                var model=Model(contour,poly,l);
+                var result=MeanZPreviewPreparer.Prepare(model);
+                Check(result.OriginalVertexCount==6,"Preview should include EVERY enabled input vertex");
+                Check(result.Prepared.Sites.Count==4,"Three coincident corner points merge into ONE XY");
+                Check(result.DuplicateGroupCount==1&&result.MergedVertexCount==2,
+                    "Preview dedup groups not counted");
+                Check(result.Conflicts.Count==1,"One conflicting duplicate XY group");
+                Check(Math.Abs(result.Conflicts[0].MeanZ-(94.862+20)/3)<1e-9,
+                    "Z average must use every observation (not just min/max)");
+                Check(Math.Abs(result.Conflicts[0].DeltaZ-94.862)<1e-9,
+                    "Largest real mine ΔZ must be preserved in report");
+                Check(result.IgnoredBreaklineSegments==3&&result.Prepared.Breaklines.Count==0,
+                    "Conflicting breaklines MUST NOT be sent into experimental CDT");
+                Check(contour.Vertices[0].Position.Z==0&&poly.Vertices[0].Position.Z==94.862&&
+                    l.Vertices[0].Position.Z==20,"Experimental average edited source CAD vertices");
+                var tin=Build(result.Prepared);
+                Check(tin.Triangles.Count>0,"Experimental averaged points should triangulate");
+                Check(!result.ForOfficialVolumes,"Experimental TIN cannot be official");
+            },
+            ["mean_z_preview_disabled_inputs_and_identical_z"] = ()=>{
+                var a=Entity("a",SourceEntityType.Point,P(0,0,10));
+                var b=Entity("b",SourceEntityType.Point,P(0,0,10));
+                var disabled=Entity("disabled",SourceEntityType.Point,P(0,0,900));
+                disabled.SetEnabled(false);
+                var model=Model(a,b,disabled,Entity("c",SourceEntityType.Point,P(10,0,10)),
+                    Entity("d",SourceEntityType.Point,P(0,10,10)));
+                var result=MeanZPreviewPreparer.Prepare(model);
+                Check(result.OriginalVertexCount==4&&result.Prepared.Sites.Count==3,
+                    "Disabled entities must not be used");
+                Check(result.DuplicateGroupCount==1&&result.Conflicts.Count==0,
+                    "Identical XYZ duplicates are not Z conflicts");
+                Check(result.Prepared.Sites.Any(p=>p.X==0&&p.Y==0&&p.Z==10),
+                    "Identical points should retain source elevation");
+                Check(result.Prepared.Breaklines.Count==0,"Experimental preview does not add breaklines");
+                var tin=Build(result.Prepared);
+                Check(tin.Triangles.Count==1,"Triangle of three usable XY sites");
+            },
+            ["mean_z_preview_strict_mode_still_rejects_conflicts"] = ()=>{
+                var data=Model(Entity("a",SourceEntityType.Point,P(0,0,0)),
+                    Entity("b",SourceEntityType.Point,P(0,0,94.862)),
+                    Entity("c",SourceEntityType.Point,P(10,0,0)),
+                    Entity("d",SourceEntityType.Point,P(0,10,0)));
+                var strict=new SurfaceInputPreparer().Prepare(data,new SurfaceBuildOptions());
+                Check(strict.HasErrors&&strict.ConflictReport.HasBlockingConflicts,
+                    "Official strict mode must still reject conflicting Z");
+                var experimental=MeanZPreviewPreparer.Prepare(data);
+                Check(!experimental.Prepared.HasErrors&&experimental.Conflicts.Count==1,
+                    "Opt-in experimental mode must be independent from strict");
+                Check(Math.Abs(experimental.Prepared.Sites.First(p=>p.X==0&&p.Y==0).Z-47.431)<1e-9,
+                    "Z middle between 0 and 94.862");
+            },
             ["square_area_no_holes"] = ()=> {var t=Build(Prepare(Corners()));Check(t.Triangles.Count==2&&Math.Abs(t.Triangles.Sum(x=>x.Area2D)-100)<1e-9,"Square area");},
             ["grid_system_rotated_matches_no_rotation"] = ()=>{
                 var existing=new TinSurface("tn",new[]{new Triangle3(P(0,0,2),P(20,0,2),P(20,20,2)),
