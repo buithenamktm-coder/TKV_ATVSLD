@@ -35,6 +35,7 @@ namespace MiningVolume2023.Services
         [DataMember(Order = 21)] public bool HadVolumeResult { get; set; }
         [DataMember(Order = 22)] public string TinRegionHandle { get; set; }
         [DataMember(Order = 23)] public List<Point2Snapshot> TinRegion { get; set; } = new List<Point2Snapshot>();
+        [DataMember(Order = 24)] public double SectionLayoutGap { get; set; } = 90.0;
     }
 
     [DataContract]
