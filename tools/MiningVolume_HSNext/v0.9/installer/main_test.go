@@ -46,3 +46,23 @@ func TestRestoreInterruptedBundle(t *testing.T) {
     if err:=restoreBackup(backup,target);err!=nil{t.Fatal(err)}
     b,err:=os.ReadFile(filepath.Join(target,"old.dll"));if err!=nil||string(b)!="accepted"{t.Fatal("backup lost")}
 }
+
+func TestInstalledSetupCleanupTargetsOnlyOwnedVersions(t *testing.T) {
+    root := t.TempDir()
+    current := filepath.Join(root, "MiningVolume_Setup_v2.0_QA.exe")
+    targets := installedSetupCleanupTargets(current, root)
+    if len(targets) != 2 { t.Fatalf("expected only two distinct owned IMSAT setup files; got %v", targets) }
+    expected := map[string]bool{
+        current: true,
+        filepath.Join(root, "MiningVolume_Setup_v1.0.exe"): true,
+    }
+    for _, target := range targets {
+        if !expected[target] { t.Fatalf("unexpected cleanup target, possible user file: %s", target) }
+    }
+    future := filepath.Join(root, "MiningVolume_Setup_v2.0_Release.exe")
+    next := installedSetupCleanupTargets(future, root)
+    if len(next) != 3 { t.Fatalf("release setup and two known upgrades must be handled; got %v", next) }
+    for _, target := range next {
+        if filepath.Dir(target) != root { t.Fatalf("cleanup escaped installed directory: %s", target) }
+    }
+}
