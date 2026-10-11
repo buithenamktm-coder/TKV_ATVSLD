@@ -68,7 +68,7 @@ namespace MiningVolume2023.Services
 
         private static ReportSheet BuildInfoSheet(ProjectState st, ExportOptions opt, DateTime now)
         {
-            var s = NewSheet("Thông tin", "THÔNG TIN BÁO CÁO IMSAT VOLUME", new[] { "Nội dung", "Giá trị" }, 32, 60);
+            var s = NewSheet("Thông tin", "THÔNG TIN BÁO CÁO IMSAT VOLUME", new[] { "Nội dung", "Giá trị" }, 45, 45);
             s.Landscape = false;
             s.Notes.Add("Báo cáo được xuất tự động từ IMSAT VOLUME.");
             AddKV(s, "Đơn vị khai thác", EmptyAsNotSet(st.MiningUnitName));
@@ -236,7 +236,7 @@ namespace MiningVolume2023.Services
             double levelCut = r.Levels.Sum(x => x.CutVolume);
             double levelFill = r.Levels.Sum(x => x.FillVolume);
             var s = NewSheet("Tổng khối", "BẢNG TỔNG HỢP KHỐI LƯỢNG",
-                new[] { "Chỉ tiêu", "Đơn vị", "Giá trị" }, 40, 14, 22);
+                new[] { "Chỉ tiêu", "Đơn vị", "Giá trị" }, 45, 15, 45);
             s.Landscape = false;
             s.Notes.Add("Người phát triển: " + ExportOptions.FixedDeveloperName);
             s.Notes.Add(ExportOptions.FixedDeveloperContact);
