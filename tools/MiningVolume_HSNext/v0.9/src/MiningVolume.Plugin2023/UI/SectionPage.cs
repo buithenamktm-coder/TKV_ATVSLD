@@ -46,7 +46,7 @@ namespace MiningVolume2023.UI
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 32F));   // title
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 290F));  // parameters
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 42F));   // primary actions
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 38F));   // edit tools
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 74F));   // edit tools + CAD profile update
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 28F));   // status
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));   // grid
             Controls.Add(root);
@@ -136,7 +136,8 @@ namespace MiningVolume2023.UI
             {
                 Dock = DockStyle.Fill,
                 FlowDirection = FlowDirection.LeftToRight,
-                WrapContents = false,
+                WrapContents = true,
+                AutoScroll = true,
                 Padding = new Padding(4, 2, 4, 2),
                 Margin = Padding.Empty
             };
@@ -144,6 +145,11 @@ namespace MiningVolume2023.UI
             tools.Controls.Add(Button("Dịch tuyến", MoveLine));
             tools.Controls.Add(Button("Xóa tuyến", DeleteLine));
             tools.Controls.Add(Button("Xóa preview", (s, e) => SectionWorkflowService.ClearPreview()));
+            var updateEdited = Button("CẬP NHẬT MẶT CẮT", UpdateEditedProfiles);
+            updateEdited.Name = "btnUpdateEditedSections";
+            updateEdited.Font = new Font("Arial", 9F, FontStyle.Bold);
+            updateEdited.MinimumSize = new Size(175, 34);
+            tools.Controls.Add(updateEdited);
             root.Controls.Add(tools, 0, 3);
 
             _status = new Label
@@ -356,6 +362,66 @@ namespace MiningVolume2023.UI
             }
         }
 
+
+        private async void UpdateEditedProfiles(object sender, EventArgs e)
+        {
+            if (!LicenseUiGuard.Check()) return;
+            var button = sender as Button;
+            var state = ProjectState.Current;
+            var doc = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument;
+            try
+            {
+                if (doc == null) throw new InvalidOperationException("Không có bản vẽ AutoCAD.");
+                if (state.SectionProfiles.Count == 0)
+                    throw new InvalidOperationException("Hãy xuất/vẽ hệ mặt cắt trước khi hiệu chỉnh.");
+                if (Math.Abs(state.FromLevel - state.ToLevel) < 1e-9)
+                    throw new InvalidOperationException("Hãy thiết lập 'Tính từ mức' và 'Đến mức' trước khi cập nhật khối lượng.");
+                if (button != null) button.Enabled = false;
+                UseWaitCursor = true;
+                SectionWorkflowService.EnsureProfileInputsReady();
+                var oldProfiles = state.SectionProfiles.ToArray();
+                // Read CAD in its drawing thread before doing pure geometry in Task.Run.
+                var edited = EditableSectionCadService.ReadEditedProfiles(doc.Database, oldProfiles);
+                var sectionSystem = state.SectionSystem;
+                var existing = state.Existing.Tin;
+                var design = state.Design.Tin;
+                double from = state.FromLevel, to = state.ToLevel, step = state.LevelStep;
+                var watch = Stopwatch.StartNew();
+                _status.Text = "Đang tính lại diện tích đào/đắp và khối lượng từ mặt cắt đã sửa trên CAD...";
+                var volume = await Task.Run(() => VolumeWorkflowService.CalculateCore(
+                    sectionSystem, edited, existing, design, from, to, step));
+                if (!ReferenceEquals(doc, Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument) ||
+                    !ReferenceEquals(sectionSystem, state.SectionSystem) ||
+                    !ReferenceEquals(existing, state.Existing.Tin) ||
+                    !ReferenceEquals(design, state.Design.Tin) ||
+                    oldProfiles.Length != state.SectionProfiles.Count ||
+                    oldProfiles.Where((v, i) => !ReferenceEquals(v, state.SectionProfiles[i])).Any())
+                    throw new InvalidOperationException("Dữ liệu CAD/TIN đã đổi trong lúc tính. Hãy cập nhật lại.");
+                // Commit only after all geometry, volume and CAD annotation steps succeed.
+                using (doc.LockDocument())
+                    EditableSectionCadService.UpdateAreaLabels(doc.Database, edited);
+                SectionWorkflowService.CommitProfiles(edited);
+                VolumeWorkflowService.Commit(volume, from, to, step);
+                watch.Stop();
+                state.VolumeCalculatedUtc = DateTime.UtcNow;
+                state.VolumeCalculationSeconds = watch.Elapsed.TotalSeconds;
+                doc.Editor.Regen();
+                _status.Text = "Đã cập nhật " + edited.Count.ToString("n0") +
+                    " mặt cắt và tính lại khối lượng: đào " + volume.TotalCutVolume.ToString("n2") +
+                    " m³; đắp " + volume.TotalFillVolume.ToString("n2") + " m³.";
+                RefreshGrid();
+            }
+            catch (Exception ex)
+            {
+                _status.Text = "Chưa cập nhật mặt cắt: " + ex.Message;
+                MessageBox.Show(ex.Message, "Cập nhật mặt cắt CAD", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally
+            {
+                UseWaitCursor = false;
+                if (button != null) button.Enabled = true;
+            }
+        }
 
         private void VolumeParameterChanged(object sender, EventArgs e)
         {
