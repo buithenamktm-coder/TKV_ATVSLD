@@ -81,6 +81,21 @@ namespace MiningVolume.Core.Surface
             public int DuplicateGroupCount { get; internal set; }
             public int MergedVertexCount { get; internal set; }
             public int IgnoredBreaklineSegments { get; internal set; }
+            public ConflictReport ToConflictReport(SurfaceModel source)
+            {
+                var report=new ConflictReport {ModelName=source.Name,SourceRevision=source.Revision,
+                    XyTolerance=1e-6,ZTolerance=1e-4,InputVertices=OriginalVertexCount};
+                int index=0;
+                foreach(var item in Conflicts.OrderByDescending(c=>c.DeltaZ)) {
+                    var group=new ConflictGroup {Id="XY-"+(++index).ToString("000"),Position=new Vec2(item.X,item.Y)};
+                    foreach(var member in item.Members) group.Sources.Add(new ConflictSource {
+                        EntityId=member.EntityId,Handle=member.Handle,Layer=member.Layer,Type=member.Type,
+                        VertexIndex=member.VertexIndex,Z=member.Z,Generated=false,Origin="Đỉnh mô hình nguồn"});
+                    report.Groups.Add(group);
+                }
+                return report;
+            }
+
             public bool ForOfficialVolumes => false;
             public string Method => "TIN tham khảo: trung bình cộng Z của tất cả đỉnh trùng XY, tam giác hóa KHÔNG ràng buộc breakline";
         }
@@ -127,10 +142,10 @@ namespace MiningVolume.Core.Surface
                 {
                     token.ThrowIfCancellationRequested();
                     Vec3 point=vertex.Position;
-                    if(support!=null && !SurfaceRegionClipper.ContainsInclusive(point.XY,support,xyTolerance))
-                        continue;
                     if(!Finite(point.X)||!Finite(point.Y)||!Finite(point.Z))
                         throw new InvalidOperationException("Đỉnh CAD chứa NaN/Infinity: "+entity.Handle);
+                    if(support!=null && !SurfaceRegionClipper.ContainsInclusive(point.XY,support,xyTolerance))
+                        continue;
                     total++;
                     var key=At(point.X,point.Y);
                     int found=-1;
@@ -163,8 +178,6 @@ namespace MiningVolume.Core.Surface
                     bucket.Add(index);
                 }
             }
-            if(groups.Count<3)
-                throw new InvalidOperationException("TIN thử nghiệm cần tối thiểu 3 tọa độ XY khác nhau.");
             var prepared=new PreparedSurfaceInput();
             var conflicts=new List<ConflictMean>();
             int duplicates=0;

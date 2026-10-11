@@ -26,7 +26,7 @@ namespace MiningVolume2023.UI
             => CadApplication.ShowModelessDialog(new ConflictReviewForm(role, report));
     }
 
-    internal sealed class ConflictReviewForm : Form
+    internal class ConflictReviewForm : Form
     {
         private sealed class Row {
             public ConflictGroup Group;
@@ -34,6 +34,7 @@ namespace MiningVolume2023.UI
             public bool IsGroupHeader => Source==null;
         }
         private readonly ModelRole _role;
+        private readonly bool _meanPreview;
         private readonly Autodesk.AutoCAD.ApplicationServices.Document _document;
         private readonly DataGridView _grid;
         private readonly Label _status;
@@ -51,12 +52,14 @@ namespace MiningVolume2023.UI
         private MiningVolume.Core.Model.SurfaceModel _source;
         private long _revision;
 
-        public ConflictReviewForm(ModelRole role, ConflictReport report)
+        public ConflictReviewForm(ModelRole role, ConflictReport report, bool meanPreview=false)
         {
-            _role=role; _report=report;
+            _role=role; _report=report; _meanPreview=meanPreview;
             _document=CadApplication.DocumentManager.MdiActiveDocument;
             _source=ProjectState.Current.Get(role).Source; _revision=_source.Revision;
-            Text="IMSAT VOLUME — Điểm trùng tọa độ — "+ProjectState.Current.Get(role).Name;
+            Text="IMSAT VOLUME — Điểm trùng tọa độ — "+ProjectState.Current.Get(role).Name+
+                (meanPreview?" — TIN thử (không tính khối lượng)":" — TIN chính thức");
+            foreach(var entity in _source.Entities) _entityById[entity.Id]=entity;
             Font=new Font("Arial",9F); Size=new Size(1220,660); MinimumSize=new Size(800,460);
             _groupFont=new Font("Arial",9F,FontStyle.Bold);
             StartPosition=FormStartPosition.CenterScreen;
@@ -65,7 +68,7 @@ namespace MiningVolume2023.UI
             _scan=new Button{Text="Quét lại",AutoSize=true,Height=34};
             _scan.Click+=async(s,e)=>await ScanAsync();
             var zoom=new Button{Text="Zoom đối tượng",AutoSize=true,Height=34};
-            zoom.Click+=(s,e)=>Run(()=>{var row=Selected();if(row!=null)CadViewService.ZoomToHandle(row.Source.Handle);});
+            zoom.Click+=(s,e)=>Run(()=>{var row=Selected();if(row?.Source!=null)CadViewService.ZoomToHandle(row.Source.Handle);});
             _zoomPoint=new Button{Text="Zoom đúng XY",AutoSize=true,Height=34};
             _zoomPoint.Click+=(s,e)=>Run(()=>{var row=Selected();if(row!=null)CadViewService.ZoomToXY(row.Group.Position.X,row.Group.Position.Y);});
             _excludeVertex=new Button{Text="LOẠI ĐIỂM KHỎI MÔ HÌNH",AutoSize=true,Height=34};
@@ -91,6 +94,20 @@ namespace MiningVolume2023.UI
             AddRowAction("row_zoom","Zoom",68);
             AddRowAction("row_remove","Loại điểm",94);
             AddRowAction("row_edit_z","Sửa Z",70);
+            // Keep all three actions visible on a 1366px display while details scroll.
+            _grid.Columns["row_zoom"].DisplayIndex=0;
+            _grid.Columns["row_remove"].DisplayIndex=1;
+            _grid.Columns["row_edit_z"].DisplayIndex=2;
+            foreach(var id in new[]{"row_zoom","row_remove","row_edit_z"}) _grid.Columns[id].Frozen=true;
+            _grid.CellPainting+=(s,e)=>{
+                if(e.RowIndex<0||e.RowIndex>=_rows.Count||e.ColumnIndex<0)return;
+                var id=_grid.Columns[e.ColumnIndex].Name;
+                if(!id.StartsWith("row_",StringComparison.Ordinal))return;
+                var row=_rows[e.RowIndex];
+                if(row.IsGroupHeader || (id!="row_zoom" && ResolveOriginalVertex(row)==null)) {
+                    e.PaintBackground(e.ClipBounds,true);e.Handled=true;
+                }
+            };
             _grid.CellValueNeeded+=(s,e)=>{
                 if(e.RowIndex<0||e.RowIndex>=_rows.Count||e.ColumnIndex<0)return;
                 var row=_rows[e.RowIndex];var g=row.Group;
@@ -136,7 +153,7 @@ namespace MiningVolume2023.UI
             _grid.CellContentClick+=async (s,e)=>{
                 if(e.RowIndex<0||e.RowIndex>=_rows.Count||e.ColumnIndex<0)return;
                 var row=_rows[e.RowIndex];
-                if(row.IsGroupHeader)return;
+                if(row.IsGroupHeader || _scanCts!=null || !Current())return;
                 var action=_grid.Columns[e.ColumnIndex].Name;
                 if(action=="row_zoom") ZoomRow(row);
                 else if(action=="row_remove") await ExcludeVertexAsync(row);
@@ -189,7 +206,7 @@ namespace MiningVolume2023.UI
         /// </summary>
         private MiningVolume.Core.Model.ModelVertex ResolveOriginalVertex(Row row)
         {
-            if(row==null || _source==null || !Current())return null;
+            if(row==null || _source==null || !Current() || _scanCts!=null || _report==null)return null;
             if(row.IsGroupHeader)return null;
             if(!_entityById.TryGetValue(row.Source.EntityId,out var candidate) || !candidate.IsEnabled)
                 return null;
@@ -207,10 +224,8 @@ namespace MiningVolume2023.UI
                 var indexed=candidate.Vertices.FirstOrDefault(v=>v.Index==row.Source.VertexIndex);
                 return indexed!=null && Matches(indexed)?indexed:null;
             }
-            // Region-clipping may produce a generated copy of an actual
-            // original endpoint; only accept a provable coordinate/Z match.
-            var matches=candidate.Vertices.Where(Matches).Take(2).ToList();
-            return matches.Count==1?matches[0]:null;
+            // A coordinate coincidence is not proof of original-vertex provenance.
+            return null;
         }
 
         private void RefreshActions()
@@ -240,7 +255,7 @@ namespace MiningVolume2023.UI
                         .IndexOf(filter,StringComparison.OrdinalIgnoreCase)>=0).ToList();
                     if(matching.Count==0)continue;
                     _rows.Add(new Row{Group=g});
-                    foreach(var source in matching.OrderBy(x=>x.Z))
+                    foreach(var source in g.Sources.OrderBy(x=>x.Z))
                     {
                         _rows.Add(new Row{Group=g,Source=source});
                         sourceRows++;
@@ -259,7 +274,8 @@ namespace MiningVolume2023.UI
         }
         private async Task ScanAsync()
         {
-            if(_scanCts!=null)return;
+            if(_scanCts!=null || IsDisposed)return;
+            if(CadApplication.DocumentManager.MdiActiveDocument!=_document)return;
             _source=ProjectState.Current.Get(_role).Source;_revision=_source.Revision;
             _entityById.Clear();
             foreach(var e in _source.Entities)
@@ -268,10 +284,12 @@ namespace MiningVolume2023.UI
             _scanCts=new CancellationTokenSource();var token=_scanCts.Token;
             _scan.Enabled=false;_exclude.Enabled=false;_excludeVertex.Enabled=false;
             _zoomPoint.Enabled=false;
+            _report=null;_rows.Clear();_grid.RowCount=0;_grid.Enabled=false;
             _status.Text="Đang quét nguồn tham gia mô hình...";
             try{
                 var source=_source;
                 var result=await Task.Run(()=>{
+                    if(_meanPreview)return MeanZPreviewPreparer.Prepare(source,1e-6,1e-4,token,polygon).ToConflictReport(source);
                     var input=polygon.Length>=3?SurfaceRegionClipper.Clip(source,polygon,1e-7,token):source;
                     return new ConflictScanner().Scan(input,new SurfaceBuildOptions(),null,token);
                 },token);
@@ -280,11 +298,11 @@ namespace MiningVolume2023.UI
                 _report=result;BindRows();
             }catch(OperationCanceledException){if(!IsDisposed)_status.Text="Đã hủy quét. Không thay đổi dữ liệu nguồn.";}
             catch(Exception ex){if(!IsDisposed)_status.Text=ex.Message;}
-            finally{_scanCts.Dispose();_scanCts=null;if(!IsDisposed){_scan.Enabled=true;RefreshActions();}}
+            finally{_scanCts.Dispose();_scanCts=null;if(!IsDisposed){_scan.Enabled=true;_grid.Enabled=true;_grid.Invalidate();RefreshActions();}}
         }
-        private async Task ExcludeVertexAsync()
+        private Task ExcludeVertexAsync()=>ExcludeVertexAsync(Selected());
+        private async Task ExcludeVertexAsync(Row row)
         {
-            var row=Selected();
             if(row==null)return;
             if(!Current())
             {
@@ -300,18 +318,15 @@ namespace MiningVolume2023.UI
             }
             var entity=_source.Entities.First(e=>e.Id==row.Source.EntityId);
             int index=vertex.Index;
-            if(MessageBox.Show(this,
-                "Loại CHỈ MỘT ĐỈNH khỏi dữ liệu dựng TIN?"+
+            if(!ConfirmModelEdit("Xác nhận loại điểm",
+                "Bạn có chắc chắn muốn loại điểm này khỏi mô hình không?"+
                 "\r\nLayer: "+entity.Layer+" • Handle: "+entity.Handle+" • Đỉnh: "+index+
                 "\r\nXY: "+row.Group.Position.X.ToString("0.###")+"; "+
                 row.Group.Position.Y.ToString("0.###")+
                 " • Z: "+vertex.Position.Z.ToString("0.###")+" m"+
                 "\r\nΔZ nhóm: "+row.Group.DeltaZ.ToString("0.###")+" m."+
                 "\r\n\r\nKhông xóa/sửa bản vẽ DWG gốc. TIN, mặt cắt và "+
-                "kết quả tính đang lưu sẽ mất hiệu lực. Tiếp tục?",
-                "Xác nhận LOẠI ĐIỂM khỏi mô hình",
-                MessageBoxButtons.YesNo,MessageBoxIcon.Warning,
-                MessageBoxDefaultButton.Button2)!=DialogResult.Yes)return;
+                "kết quả tính đang lưu sẽ mất hiệu lực."))return;
             try
             {
                 if(!Current())throw new InvalidOperationException("Nguồn đã thay đổi.");
@@ -327,9 +342,52 @@ namespace MiningVolume2023.UI
             catch(Exception ex) { if(!IsDisposed)_status.Text=ex.Message; }
         }
 
+        private bool ConfirmModelEdit(string title,string message)
+        {
+            using(var dialog=new Form {Text=title,Font=Font,ClientSize=new Size(620,320),
+                StartPosition=FormStartPosition.CenterParent,FormBorderStyle=FormBorderStyle.FixedDialog,
+                MaximizeBox=false,MinimizeBox=false}) {
+                var body=new Label {Text=message,Dock=DockStyle.Fill,Padding=new Padding(15),AutoEllipsis=false};
+                var buttons=new FlowLayoutPanel {Dock=DockStyle.Bottom,Height=55,
+                    FlowDirection=FlowDirection.RightToLeft,Padding=new Padding(10)};
+                var no=new Button {Text="Không",DialogResult=DialogResult.No,Width=110,Height=32};
+                var yes=new Button {Text="Đồng ý",DialogResult=DialogResult.Yes,Width=110,Height=32};
+                buttons.Controls.Add(no);buttons.Controls.Add(yes);
+                dialog.Controls.Add(body);dialog.Controls.Add(buttons);
+                dialog.AcceptButton=no;dialog.CancelButton=no;
+                dialog.Shown+=(s,e)=>no.Focus();
+                return dialog.ShowDialog(this)==DialogResult.Yes;
+            }
+        }
+
+        private async Task EditVertexZAsync(Row row)
+        {
+            var vertex=ResolveOriginalVertex(row);
+            if(vertex==null)return;
+            var oldZ=vertex.Position.Z;
+            using(var input=new NumericInputDialog("Sửa Z trong mô hình — "+row.Source.Handle+
+                " / đỉnh "+vertex.Index,"Z mới (m):",oldZ)) {
+                if(input.ShowDialog(this)!=DialogResult.OK)return;
+                var z=input.Value;
+                if(double.IsNaN(z)||double.IsInfinity(z)) {_status.Text="Z phải là số hữu hạn.";return;}
+                if(z==oldZ)return;
+                if(!ConfirmModelEdit("Xác nhận sửa Z trong mô hình",
+                    "XY: "+row.Group.Position.X+"; "+row.Group.Position.Y+
+                    "\r\nLayer: "+row.Source.Layer+" • Handle: "+row.Source.Handle+" • Đỉnh: "+vertex.Index+
+                    "\r\nZ cũ: "+oldZ+" m → Z mới: "+z+" m; ΔZ nhóm: "+row.Group.DeltaZ+
+                    "\r\nChỉ thay đổi mô hình. CAD gốc giữ nguyên. TIN, mặt cắt và khối lượng cũ hết hiệu lực."))return;
+                try {
+                    if(ResolveOriginalVertex(row)!=vertex)throw new InvalidOperationException("Nguồn thay đổi; hãy quét lại.");
+                    _source.OverrideVertexZ(row.Source.EntityId,vertex.Index,z);
+                    SurfaceWorkflowService.InvalidateTin(_role,clearCadLayer:true);
+                    await ScanAsync();
+                } catch(Exception ex) {if(!IsDisposed)_status.Text=ex.Message;}
+            }
+        }
+
         private async Task ExcludeAsync()
         {
-            var row=Selected();if(row==null)return;
+            var row=Selected();if(row==null || row.IsGroupHeader || _scanCts!=null)return;
             if(!Current()){_status.Text="Nguồn đã thay đổi; hãy quét lại.";return;}
             var entity=_source.Entities.FirstOrDefault(x=>x.Id==row.Source.EntityId);
             if(entity==null){_status.Text="Không tìm thấy đối tượng gốc. Hãy nạp lại dữ liệu và quét.";return;}

@@ -40,8 +40,7 @@ namespace MiningVolume.Core.Surface
                 if (!entity.IsBreakline)
                 {
                     var inside = entity.ActiveVertices()
-                        .Select(v => v.Position)
-                        .Where(p => ContainsInclusive(p.XY, support, tolerance))
+                        .Where(v => ContainsInclusive(v.Position.XY, support, tolerance))
                         .ToList();
 
                     if (inside.Count > 0)
@@ -51,8 +50,9 @@ namespace MiningVolume.Core.Surface
                             entity.Handle,
                             entity.Layer,
                             entity.Type,
-                            inside,
-                            false){OriginId=entity.OriginId,IsGenerated=true});
+                            inside.Select(v=>v.Position),
+                            false){OriginId=entity.OriginId,IsGenerated=true,OriginType=entity.OriginType??entity.Type,
+                                OriginVertexIndices=inside.Select(v=>OriginalIndex(entity,v.Index)).ToArray()});
                     }
                     continue;
                 }
@@ -72,13 +72,25 @@ namespace MiningVolume.Core.Surface
                             entity.Layer,
                             SourceEntityType.Line,
                             new[] { clipped.A, clipped.B },
-                            false){OriginId=entity.OriginId,OriginSegmentIndex=sourceSegment,IsGenerated=true});
+                            false){OriginId=entity.OriginId,OriginSegmentIndex=sourceSegment,IsGenerated=true,
+                                OriginType=entity.OriginType??entity.Type,
+                                OriginVertexIndices=new[]{EndpointIndex(clipped.A,a,b,entity),EndpointIndex(clipped.B,a,b,entity)}});
                     }
                 }
             }
 
             result.Touch();
             return result;
+        }
+
+        private static int OriginalIndex(SourceEntity entity,int index)
+            => entity.OriginVertexIndices!=null?entity.OriginVertexIndices[index]:entity.IsGenerated?-1:index;
+        private static int EndpointIndex(Vec3 p,ModelVertex a,ModelVertex b,SourceEntity entity)
+        {
+            // Exact endpoints only: near-endpoint clipping is still synthetic.
+            if(p.X==a.Position.X && p.Y==a.Position.Y && p.Z==a.Position.Z)return OriginalIndex(entity,a.Index);
+            if(p.X==b.Position.X && p.Y==b.Position.Y && p.Z==b.Position.Z)return OriginalIndex(entity,b.Index);
+            return -1;
         }
 
         public static IReadOnlyList<Vec2> BuildSupportRectangle(

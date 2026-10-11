@@ -71,11 +71,14 @@ namespace MiningVolume2023.Services
             if (prepared.HasBlockingConflicts)
                 throw new MeanZReviewRequiredException(prepared);
 
+            if(prepared.Prepared.Sites.Count<3)
+                throw new InvalidOperationException("TIN thử nghiệm cần tối thiểu 3 tọa độ XY khác nhau.");
             progress?.Invoke("Tam giác hóa các đỉnh đã kiểm tra, không ràng buộc breakline...");
             var opts = new SurfaceBuildOptions
             {
                 XyTolerance = 1e-6, ZConflictTolerance = 1e-4,
-                MinimumTriangleArea = 1e-10
+                MinimumTriangleArea = 1e-10,
+                ClipBoundary = boundary
             };
             var mesh = new TiledConformingTinBuilder().BuildPrepared(
                 session.Name + " - Z TRUNG BINH THU NGHIEM",

@@ -122,6 +122,51 @@ internal static class CoreRegression
                 Check(Math.Abs(experimental.Prepared.Sites.First(p=>p.X==0&&p.Y==0).Z-47.431)<1e-9,
                     "Z middle between 0 and 94.862");
             },
+            ["mean_z_preview_threshold_and_review_provenance"] = ()=>{
+                foreach(double delta in new[]{0.001,3.0,3.001,94.862}) {
+                    var m=Model(Entity("a",SourceEntityType.Point,P(2500000,400000)),
+                        Entity("b",SourceEntityType.Polyline3d,P(2500000,400000,delta),P(2500010,400000)),
+                        Entity("c",SourceEntityType.Point,P(2500000,400010)));
+                    var r=MeanZPreviewPreparer.Prepare(m);
+                    Check(r.HasBlockingConflicts==(delta>3),"Strict >3 threshold violated");
+                    Check(Math.Abs(r.Conflicts.Single().MeanZ-delta/2)<1e-10,"Wrong mean");
+                    var report=r.ToConflictReport(m);
+                    Check(report.Groups.Single().Sources.Count==2&&report.Groups[0].Sources.All(x=>!x.Generated&&x.VertexIndex==0),"Lost original provenance");
+                    Check(new SurfaceInputPreparer().Prepare(m,new SurfaceBuildOptions()).HasErrors,"Preview relaxed official tolerance");
+                }
+            },
+            ["mean_z_preview_region_mesh_area"] = ()=>{
+                var m=Model(Entity("a",SourceEntityType.Point,P(0,0,2)),Entity("b",SourceEntityType.Point,P(10,0,2)),
+                    Entity("c",SourceEntityType.Point,P(10,10,2)),Entity("d",SourceEntityType.Point,P(0,10,2)));
+                var ring=new[]{new Vec2(0,0),new Vec2(10,0),new Vec2(10,4),new Vec2(4,4),new Vec2(4,10),new Vec2(0,10)};
+                var r=MeanZPreviewPreparer.Prepare(m,tinRegion:ring);
+                var mesh=new TiledConformingTinBuilder().BuildPrepared("preview",r.Prepared,
+                    new SurfaceBuildOptions{ClipBoundary=ring},r.OriginalVertexCount,0,0);
+                try {
+                    Check(Math.Abs(mesh.Surface.Triangles.Sum(t=>t.Area2D)-64)<1e-8,"Preview escaped concave boundary");
+                    Check(mesh.Surface.Triangles.All(t=>new[]{t.A,t.B,t.C}.All(v=>SurfaceRegionClipper.ContainsInclusive(v.XY,ring)&&Math.Abs(v.Z-2)<1e-10)),"Bad clipped vertices/Z");
+                } finally {(mesh.Surface.Triangles as IDisposable)?.Dispose();}
+            },
+            ["regional_conflict_original_index_and_synthetic_guard"] = ()=>{
+                var poly=Entity("poly",SourceEntityType.Polyline3d,P(-10,0),P(0,0),P(10,0));
+                var m=Model(poly,Entity("point",SourceEntityType.Point,P(0,0,5)),Entity("clip",SourceEntityType.Point,P(-1,0,8)));
+                var ring=new[]{new Vec2(0,-2),new Vec2(8,-2),new Vec2(8,2),new Vec2(0,2)};
+                var clipped=SurfaceRegionClipper.Clip(m,ring);
+                var report=new ConflictScanner().Scan(clipped,new SurfaceBuildOptions());
+                var atZero=report.Groups.Single(g=>Math.Abs(g.Position.X)<1e-9);
+                Check(atZero.Sources.Any(x=>x.EntityId=="poly"&&!x.Generated&&x.VertexIndex==1&&x.Type==SourceEntityType.Polyline3d),"Clipping renumbered original vertex");
+                Check(clipped.Entities.Where(e=>e.Handle=="poly").Any(e=>e.OriginVertexIndices.Any(i=>i<0)),"Synthetic clipping point was mapped to real vertex");
+                m.SetVertexEnabled("poly",1,false);
+                Check(poly.Vertices[0].IsEnabled&&poly.Vertices[2].IsEnabled&&poly.IsEnabled,"Disabled whole polyline");
+                m.SetVertexEnabled("poly",1,true);
+                Check(poly.ActiveVertices().Count()==3,"Restore failed");
+                bool rejected=false;try{m.OverrideVertexZ("poly",1,double.NaN);}catch(ArgumentOutOfRangeException){rejected=true;}
+                Check(rejected&&poly.Vertices[1].Position.Z==0,"Invalid edit mutated source");
+            },
+            ["mean_z_review_with_less_than_three_sites"] = ()=>{
+                var r=MeanZPreviewPreparer.Prepare(Model(Entity("a",SourceEntityType.Point,P(0,0)),Entity("b",SourceEntityType.Point,P(0,0,20))));
+                Check(r.HasBlockingConflicts&&r.ToConflictReport(Model()).Groups.Count==1,"Cannot review sparse invalid input");
+            },
             ["square_area_no_holes"] = ()=> {var t=Build(Prepare(Corners()));Check(t.Triangles.Count==2&&Math.Abs(t.Triangles.Sum(x=>x.Area2D)-100)<1e-9,"Square area");},
             ["grid_system_rotated_matches_no_rotation"] = ()=>{
                 var existing=new TinSurface("tn",new[]{new Triangle3(P(0,0,2),P(20,0,2),P(20,20,2)),

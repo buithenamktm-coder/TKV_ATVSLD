@@ -16,7 +16,9 @@ def test_tin_z_mean_test_is_explicitly_opt_in_and_cannot_become_official_tin():
     assert 'session.Tin =' not in svc
     assert 'VolumeResult =' not in svc
     assert 'SectionProfiles.Clear()' not in svc
-    assert 'SurfaceRegionClipper.Clip(' in svc
+    assert 'ClipBoundary = boundary' in svc
+    assert 'cancellationToken, boundary)' in svc
+    assert 'mean_z_preview_region_mesh_area' in code('tests/core/CoreRegression.cs')
     assert 'SourceRevision=revision' in svc
 
 def test_z_mean_preparer_keeps_raw_z_and_discards_invalid_constraints():

@@ -32,7 +32,10 @@ namespace MiningVolume.Core.Model
         public bool IsEnabled { get; private set; }
 
         public void SetEnabled(bool enabled) => IsEnabled = enabled;
-        public void OverrideZ(double z) => Position = new Vec3(Position.X, Position.Y, z);
+        public void OverrideZ(double z) {
+            if(double.IsNaN(z)||double.IsInfinity(z))throw new ArgumentOutOfRangeException(nameof(z));
+            Position = new Vec3(Position.X, Position.Y, z);
+        }
         public void Reset()
         {
             Position = Original;
@@ -58,6 +61,8 @@ namespace MiningVolume.Core.Model
         public string OriginId { get; set; }
         public int? OriginSegmentIndex { get; set; }
         public bool IsGenerated { get; set; }
+        public SourceEntityType? OriginType { get; set; }
+        public IReadOnlyList<int> OriginVertexIndices { get; set; }
         public string Handle { get; }
         public string Layer { get; }
         public SourceEntityType Type { get; }
