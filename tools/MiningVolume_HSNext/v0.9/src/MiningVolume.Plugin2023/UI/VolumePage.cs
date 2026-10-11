@@ -71,13 +71,32 @@ namespace MiningVolume2023.UI
                 // and their CAD layers are synchronized with the verified core surfaces.
                 SurfaceWorkflowService.EnsureBothTinsReady(synchronizeCadLayers: true);
 
+                var doc = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument;
+                if (doc == null)
+                    throw new InvalidOperationException("Không có bản vẽ AutoCAD đang hoạt động.");
                 double from = st.FromLevel, to = st.ToLevel, step = st.LevelStep;
                 var system = st.SectionSystem;
                 var profiles = st.SectionProfiles.ToArray();
                 var existing = st.Existing.Tin;
                 var design = st.Design.Tin;
+                long revisionExisting = st.Existing.Source.Revision;
+                long revisionDesign = st.Design.Source.Revision;
                 var watch = Stopwatch.StartNew();
                 var result = await Task.Run(() => VolumeWorkflowService.CalculateCore(system, profiles, existing, design, from, to, step));
+                // Never commit an asynchronous volume result to a different DWG,
+                // TIN revision, section geometry or level parameter set.
+                if (!ReferenceEquals(doc, Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument) ||
+                    !ReferenceEquals(system, st.SectionSystem) ||
+                    !ReferenceEquals(existing, st.Existing.Tin) ||
+                    !ReferenceEquals(design, st.Design.Tin) ||
+                    !st.Existing.IsTinCurrent || !st.Design.IsTinCurrent ||
+                    revisionExisting != st.Existing.Source.Revision ||
+                    revisionDesign != st.Design.Source.Revision ||
+                    from != st.FromLevel || to != st.ToLevel || step != st.LevelStep ||
+                    profiles.Length != st.SectionProfiles.Count ||
+                    profiles.Where((p, i) => !ReferenceEquals(p, st.SectionProfiles[i])).Any())
+                    throw new InvalidOperationException(
+                        "DWG, dữ liệu TIN hoặc mặt cắt đã thay đổi khi tính. Đã giữ nguyên kết quả cũ; hãy tính lại.");
                 VolumeWorkflowService.Commit(result, from, to, step);
                 watch.Stop();
                 st.VolumeCalculatedUtc = DateTime.UtcNow;
