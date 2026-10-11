@@ -342,13 +342,12 @@ namespace MiningVolume.Core.Grid
         private static double SignedArea(IReadOnlyList<Vec2> polygon)
         {
             if (polygon.Count < 3) return 0;
+            // Anchor each determinant at the same vertex to avoid catastrophic
+            // cancellation at mine survey coordinates of several million metres.
             double twice = 0;
-            for (int i = 0; i < polygon.Count; i++)
-            {
-                var a = polygon[i];
-                var b = polygon[(i + 1) % polygon.Count];
-                twice += a.X * b.Y - b.X * a.Y;
-            }
+            var origin = polygon[0];
+            for (int i = 1; i + 1 < polygon.Count; i++)
+                twice += Vec2.Cross(origin, polygon[i], polygon[i + 1]);
             return twice * 0.5;
         }
     }
