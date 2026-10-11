@@ -10,6 +10,8 @@ namespace MiningVolume.Core.Surface
     public enum DuplicateXYConflictPolicy
     {
         Stop = 0,
+        // Numeric values retained ONLY to read legacy projects/API requests.
+        // SurfaceBuildOptions always migrates these to Stop; no automatic Z choice.
         UseUpper = 1,
         UseLower = 2
     }
@@ -17,7 +19,7 @@ namespace MiningVolume.Core.Surface
     public sealed class DuplicateXYConflictException : Exception
     {
         public DuplicateXYConflictException(string modelName, IReadOnlyList<ValidationIssue> issues)
-            : base($"Dữ liệu mô hình {modelName} có xung đột cao độ Z có thể xử lý bằng lựa chọn đỉnh trên/đỉnh dưới.")
+            : base($"Dữ liệu mô hình {modelName} có xung đột cao độ Z. Mở Điểm trùng tọa độ để kiểm tra và xử lý nguồn.")
         {
             ModelName = modelName ?? "Mô hình";
             Issues = issues ?? Array.Empty<ValidationIssue>();
@@ -25,6 +27,7 @@ namespace MiningVolume.Core.Surface
 
         public string ModelName { get; }
         public IReadOnlyList<ValidationIssue> Issues { get; }
+        public ConflictReport Report { get; set; }
     }
 
     public sealed class ValidationIssue
@@ -41,6 +44,7 @@ namespace MiningVolume.Core.Surface
 
     public sealed class PreparedSurfaceInput
     {
+        public ConflictReport ConflictReport { get; set; }
         public List<Vec3> Sites { get; } = new List<Vec3>();
         public List<Segment3> Breaklines { get; } = new List<Segment3>();
         public List<ValidationIssue> Issues { get; } = new List<ValidationIssue>();
@@ -103,7 +107,12 @@ namespace MiningVolume.Core.Surface
         public double XyTolerance { get; set; } = 1e-6;
         public double ZConflictTolerance { get; set; } = 1e-4;
         public double MinimumTriangleArea { get; set; } = 1e-10;
-        public DuplicateXYConflictPolicy DuplicateXYConflictPolicy { get; set; } = DuplicateXYConflictPolicy.Stop;
+        public bool LegacyElevationPolicyIgnored { get; private set; }
+        public DuplicateXYConflictPolicy DuplicateXYConflictPolicy
+        {
+            get => DuplicateXYConflictPolicy.Stop;
+            set { if (value != DuplicateXYConflictPolicy.Stop) LegacyElevationPolicyIgnored = true; }
+        }
         public IReadOnlyList<Vec2> ClipBoundary { get; set; }
     }
 

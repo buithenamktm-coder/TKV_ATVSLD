@@ -42,6 +42,14 @@ namespace MiningVolume.Surface
 
         public TinSurface Build(string name, PreparedSurfaceInput input, SurfaceBuildOptions options,
             Action<string> progress, CancellationToken cancellationToken)
+            => BuildCore(name, input, options, progress, cancellationToken, false);
+
+        internal TinSurface BuildFileBacked(string name, PreparedSurfaceInput input, SurfaceBuildOptions options,
+            Action<string> progress, CancellationToken cancellationToken)
+            => BuildCore(name, input, options, progress, cancellationToken, true);
+
+        private TinSurface BuildCore(string name, PreparedSurfaceInput input, SurfaceBuildOptions options,
+            Action<string> progress, CancellationToken cancellationToken, bool fileBacked)
         {
             if (input == null) throw new ArgumentNullException(nameof(input));
             options = options ?? new SurfaceBuildOptions();
@@ -104,7 +112,18 @@ namespace MiningVolume.Surface
                 var indices = new int[checked(count * 3)];
                 if (mv_cdt_copy(mesh, indices, indices.Length) != 0)
                     throw new InvalidOperationException("Không đọc được kết quả lưới ràng buộc.");
+                if (fileBacked)
+                {
+                    int retainedSmall;
+                    var store = AdaptiveTinStore.Create(input.Sites, indices, options, progress,
+                        cancellationToken, out retainedSmall);
+                    var storedIssues = input.Issues.ToList();
+                    if (retainedSmall > 0) storedIssues.Add(new ValidationIssue(ValidationSeverity.Warning,
+                        "RETAIN_SMALL_TRIANGLES", $"Giữ {retainedSmall:n0} tam giác diện tích nhỏ dương để bảo toàn điểm và breakline."));
+                    return new TinSurface(name, store, storedIssues);
+                }
                 var output = new List<Triangle3>(count);
+                var clipper = options.ClipBoundary == null ? null : new TinPolygonClipper(options.ClipBoundary, cancellationToken);
                 int small = 0;
                 for (int i = 0; i < count; i++)
                 {
@@ -115,9 +134,8 @@ namespace MiningVolume.Surface
                     // A small positive-area triangle can be the only owner of a survey vertex.
                     // Keep it, report it, and never silently remove its point or constraint.
                     if (t.Area2D <= options.MinimumTriangleArea) small++;
-                    if (options.ClipBoundary != null && options.ClipBoundary.Count >= 3 &&
-                        !Geometry2D.TriangleIntersectsPolygon(t, options.ClipBoundary, options.XyTolerance)) continue;
-                    output.Add(t);
+                    if (clipper == null) output.Add(t);
+                    else output.AddRange(clipper.Clip(t, cancellationToken));
                 }
                 if (output.Count == 0) throw new InvalidOperationException("TIN không tạo được tam giác hợp lệ trong phạm vi tính.");
                 var issues = input.Issues.ToList();

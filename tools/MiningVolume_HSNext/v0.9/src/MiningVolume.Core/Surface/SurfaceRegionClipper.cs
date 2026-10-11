@@ -52,13 +52,17 @@ namespace MiningVolume.Core.Surface
                             entity.Layer,
                             entity.Type,
                             inside,
-                            false));
+                            false){OriginId=entity.OriginId,IsGenerated=true});
                     }
                     continue;
                 }
 
-                foreach (var segment in entity.ActiveBreaklineSegments())
+                for (int sourceSegment = 0; sourceSegment < entity.Vertices.Count - (entity.Closed ? 0 : 1); sourceSegment++)
                 {
+                    var a = entity.Vertices[sourceSegment];
+                    var b = entity.Vertices[(sourceSegment + 1) % entity.Vertices.Count];
+                    if (!a.IsEnabled || !b.IsEnabled) continue;
+                    var segment = new Segment3(a.Position, b.Position, entity.Id);
                     cancellationToken.ThrowIfCancellationRequested();
                     foreach (var clipped in ClipSegment(segment, support, tolerance))
                     {
@@ -68,7 +72,7 @@ namespace MiningVolume.Core.Surface
                             entity.Layer,
                             SourceEntityType.Line,
                             new[] { clipped.A, clipped.B },
-                            false));
+                            false){OriginId=entity.OriginId,OriginSegmentIndex=sourceSegment,IsGenerated=true});
                     }
                 }
             }

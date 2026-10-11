@@ -94,6 +94,10 @@ namespace MiningVolume2023.UI
             source.SetColumnSpan(_via4Preset, 4);
             sourceBox.Controls.Add(source);
             body.Controls.Add(sourceBox);
+            var review = Btn("Điểm trùng tọa độ — kiểm tra nguồn TIN", (s, e) =>
+                DuplicateXYConflictUi.Show(ProjectState.Current.ActiveRole));
+            review.Width = 520;
+            body.Controls.Add(review);
 
             var typeBox = new GroupBox
             {
@@ -448,38 +452,14 @@ namespace MiningVolume2023.UI
             ModelRole role,
             CancellationToken token)
         {
-            var policy = DuplicateXYConflictPolicy.Stop;
-            var session = ProjectState.Current.Get(role);
-
-            while (true)
-            {
+            token.ThrowIfCancellationRequested();
+            try {
+                return await Task.Run(() => SurfaceWorkflowService.BuildCoreDetailed(
+                    role, message => SetBuildStatus(message), token), token);
+            } catch (DuplicateXYConflictException ex) {
                 token.ThrowIfCancellationRequested();
-                try
-                {
-                    return await Task.Run(() =>
-                        SurfaceWorkflowService.BuildCoreDetailed(
-                            role,
-                            message => SetBuildStatus(message),
-                            token,
-                            policy), token);
-                }
-                catch (DuplicateXYConflictException ex)
-                {
-                    token.ThrowIfCancellationRequested();
-
-                    var chosen = DuplicateXYConflictUi.Ask(this, ex);
-                    if (!chosen.HasValue)
-                        throw new OperationCanceledException(
-                            "Người dùng dừng tạo TIN do dữ liệu trùng XY khác Z.",
-                            token);
-
-                    policy = chosen.Value;
-                    SetBuildStatus(
-                        $"Đang dựng lại TIN {session.Name}: " +
-                        (policy == DuplicateXYConflictPolicy.UseUpper
-                            ? "dùng đỉnh trên (Z lớn hơn) tại vị trí trùng XY..."
-                            : "dùng đỉnh dưới (Z nhỏ hơn) tại vị trí trùng XY..."));
-                }
+                DuplicateXYConflictUi.Show(role, ex.Report);
+                throw new OperationCanceledException("Cần xử lý nguồn xung đột và quét lại trước khi tạo TIN.", token);
             }
         }
 

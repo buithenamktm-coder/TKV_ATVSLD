@@ -45,6 +45,7 @@ namespace MiningVolume.Core.Model
         public SourceEntity(string id, string handle, string layer, SourceEntityType type, IEnumerable<Vec3> vertices, bool closed = false)
         {
             Id = id ?? throw new ArgumentNullException(nameof(id));
+            OriginId = Id;
             Handle = handle ?? string.Empty;
             Layer = layer ?? string.Empty;
             Type = type;
@@ -54,6 +55,9 @@ namespace MiningVolume.Core.Model
         }
 
         public string Id { get; }
+        public string OriginId { get; set; }
+        public int? OriginSegmentIndex { get; set; }
+        public bool IsGenerated { get; set; }
         public string Handle { get; }
         public string Layer { get; }
         public SourceEntityType Type { get; }

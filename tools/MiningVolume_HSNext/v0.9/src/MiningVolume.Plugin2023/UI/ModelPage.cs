@@ -267,31 +267,9 @@ namespace MiningVolume2023.UI
             try
             {
                 SetBusy(true, $"Đang kiểm tra dữ liệu và dựng TIN {ProjectState.Current.Get(role).Name}...");
-                var policy = DuplicateXYConflictPolicy.Stop;
-                SurfaceBuildResult build = null;
-                while (build == null)
-                {
-                    try
-                    {
-                        var selectedPolicy = policy;
-                        build = await Task.Run(() =>
-                            SurfaceWorkflowService.BuildCoreDetailed(
-                                role,
-                                null,
-                                default(System.Threading.CancellationToken),
-                                selectedPolicy));
-                    }
-                    catch (DuplicateXYConflictException ex)
-                    {
-                        var chosen = DuplicateXYConflictUi.Ask(this, ex);
-                        if (!chosen.HasValue) return;
-                        policy = chosen.Value;
-                        SetBusy(true,
-                            policy == DuplicateXYConflictPolicy.UseUpper
-                                ? $"Đang dựng lại TIN {ProjectState.Current.Get(role).Name} với đỉnh trên..."
-                                : $"Đang dựng lại TIN {ProjectState.Current.Get(role).Name} với đỉnh dưới...");
-                    }
-                }
+                SurfaceBuildResult build;
+                try { build = await Task.Run(() => SurfaceWorkflowService.BuildCoreDetailed(role)); }
+                catch (DuplicateXYConflictException ex) { DuplicateXYConflictUi.Show(role, ex.Report); return; }
                 SurfaceWorkflowService.DrawTin(role, build);
                 MessageBox.Show(
                     $"TIN {ProjectState.Current.Get(role).Name} đã tạo thành công.\r\n\r\n" +
@@ -330,40 +308,9 @@ namespace MiningVolume2023.UI
             try
             {
                 SetBusy(true, "Đang dựng đồng thời cặp TIN hiện trạng / thiết kế...");
-                var existingPolicy = DuplicateXYConflictPolicy.Stop;
-                var designPolicy = DuplicateXYConflictPolicy.Stop;
-                SurfaceBuildResult[] builds = null;
-
-                while (builds == null)
-                {
-                    try
-                    {
-                        var ep = existingPolicy;
-                        var dp = designPolicy;
-                        builds = await Task.Run(() =>
-                            SurfaceWorkflowService.BuildPairCoreDetailed(
-                                null,
-                                default(System.Threading.CancellationToken),
-                                ep,
-                                dp));
-                    }
-                    catch (DuplicateXYConflictException ex)
-                    {
-                        var chosen = DuplicateXYConflictUi.Ask(this, ex);
-                        if (!chosen.HasValue) return;
-
-                        if (string.Equals(ex.ModelName, st.Design.Name, StringComparison.OrdinalIgnoreCase))
-                            designPolicy = chosen.Value;
-                        else
-                            existingPolicy = chosen.Value;
-
-                        SetBusy(true,
-                            $"Đang dựng lại {ex.ModelName} với " +
-                            (chosen.Value == DuplicateXYConflictPolicy.UseUpper
-                                ? "đỉnh trên (Z lớn hơn)..."
-                                : "đỉnh dưới (Z nhỏ hơn)..."));
-                    }
-                }
+                SurfaceBuildResult[] builds;
+                try { builds = await Task.Run(() => SurfaceWorkflowService.BuildPairCoreDetailed()); }
+                catch (DuplicateXYConflictException ex) { DuplicateXYConflictUi.Ask(this, ex); return; }
 
                 SurfaceWorkflowService.DrawTinPair(builds);
                 MessageBox.Show(

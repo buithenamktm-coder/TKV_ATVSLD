@@ -114,19 +114,17 @@ def test_section_cad_output_is_batched_to_avoid_one_giant_transaction():
     assert "drawWatch.Elapsed.TotalSeconds" in page
 
 
-def test_large_mine_tin_routes_to_tiled_engine_instead_of_one_global_delaunay():
+def test_large_mine_uses_one_verified_mesh_then_adaptive_storage():
     workflow = read("src/MiningVolume.Plugin2023/Services/SurfaceWorkflowService.cs")
     tiled = read("src/MiningVolume.Surface/TiledConformingTinBuilder.cs")
     preparer = read("src/MiningVolume.Core/Surface/SurfaceInputPreparer.cs")
     assert "LargeDatasetVertexThreshold = 200000" in workflow
     assert "new TiledConformingTinBuilder().Build" in workflow
-    assert "DefaultTargetCoreVertices = 4000" in tiled
-    assert "MillionScaleTargetCoreVertices = 2200" in tiled
-    assert "MultiMillionTargetCoreVertices = 1600" in tiled
-    assert "HaloFactors" in tiled
-    assert "CircumcircleInside" in tiled
-    assert "TryClip" in tiled
-    assert "PrepareRawForTiledTin" in preparer
+    assert tiled.count("new SurfaceInputPreparer().Prepare") == 1
+    assert tiled.count("BuildFileBacked") == 1
+    assert "HaloFactors" not in tiled
+    assert "ParallelTileRetryException" not in tiled
+    assert "MaxTrianglesPerLeaf = 8192" in read("src/MiningVolume.Surface/AdaptiveTinStore.cs")
     assert "10 triệu đỉnh" in workflow
 
 
@@ -137,9 +135,10 @@ def test_large_tin_is_file_backed_and_cad_render_is_bounded_preview():
     state = read("src/MiningVolume.Plugin2023/Services/ProjectState.cs")
     assert "ITiledTriangleSource" in store
     assert "FileOptions.SequentialScan" in store
-    assert "cacheTiles: 6" in tiled
+    assert "cacheTiles:6" in read("src/MiningVolume.Surface/AdaptiveTinStore.cs")
     assert "PreviewTriangles" in tiled
-    assert "previewTriangles.Count < 200000" in tiled
+    assert "Math.Min(200000,tiles.Count)" in tiled
+    assert "tiles.Count/200000.0" in tiled
     assert "TinCadIsPreview" in state
     assert "cadPreview" in workflow
     assert "BuildCadPreview" in workflow
@@ -154,69 +153,28 @@ def test_large_tin_ui_has_progress_and_user_cancel():
     assert "SetBuildStatus" in data
 
 
-def test_large_tin_duplicate_xy_requires_explicit_z_policy():
-    # The old source-priority assertions encoded the silent-Z-selection defect.
-    # Executable regressions for mixed source types and 1 cm conflicts live in tests/core.
-    tiled = read("src/MiningVolume.Surface/TiledConformingTinBuilder.cs")
-    assert "AUTO_RESOLVE_DUPLICATE_XY_MINOR" not in tiled
-    assert "AUTO_RESOLVE_DUPLICATE_XY_BY_PRIORITY" not in tiled
-    assert "SourcePriority" not in tiled
-    assert "DuplicateXYConflictPolicy.UseUpper" in tiled
-    assert "DuplicateXYConflictPolicy.UseLower" in tiled
-    assert "DUPLICATE_XY_CONFLICT_Z" in tiled
-    assert "SnapSegmentEndpoints" in tiled
-
-
-def test_duplicate_xy_conflicts_can_continue_with_upper_or_lower_vertex():
+def test_manual_review_cannot_choose_upper_or_lower():
+    prep = read("src/MiningVolume.Core/Surface/SurfaceInputPreparer.cs")
     core = read("src/MiningVolume.Core/Surface/SurfaceContracts.cs")
-    prep = read("src/MiningVolume.Core/Surface/SurfaceInputPreparer.cs")
-    tiled = read("src/MiningVolume.Surface/TiledConformingTinBuilder.cs")
-    workflow = read("src/MiningVolume.Plugin2023/Services/SurfaceWorkflowService.cs")
     ui = read("src/MiningVolume.Plugin2023/UI/DuplicateXYConflictUi.cs")
-    data = read("src/MiningVolume.Plugin2023/UI/DataPage.cs")
-    model = read("src/MiningVolume.Plugin2023/UI/ModelPage.cs")
-
-    assert "DuplicateXYConflictPolicy" in core
-    assert "UseUpper" in core and "UseLower" in core
-    assert "DuplicateXYConflictException" in core
-    assert "USER_RESOLVE_DUPLICATE_XY_UPPER" in prep
-    assert "USER_RESOLVE_DUPLICATE_XY_LOWER" in prep
-    assert "USER_RESOLVE_DUPLICATE_XY_UPPER" in tiled
-    assert "USER_RESOLVE_DUPLICATE_XY_LOWER" in tiled
-    assert "duplicateXYPolicy" in workflow
-    assert "Bạn có muốn TIẾP TỤC tạo TIN" in ui
-    assert "DÙNG ĐỈNH TRÊN (Z LỚN HƠN)" in ui
-    assert "DÙNG ĐỈNH DƯỚI (Z NHỎ HƠN)" in ui
-    assert "BuildRoleWithConflictChoiceAsync" in data
-    assert "DuplicateXYConflictUi.Ask" in data
-    assert "DuplicateXYConflictUi.Ask" in model
+    assert "LegacyElevationPolicyIgnored" in core
+    assert "get => DuplicateXYConflictPolicy.Stop" in core
+    assert "ConflictScanner" in prep
+    assert "UseUpper" not in prep and "UseLower" not in prep
+    assert "UseUpper" not in ui and "UseLower" not in ui
+    assert "ConflictReviewForm" in ui
+    assert "ScanAsync" in ui and "ExcludeAsync" in ui
+    assert "VirtualMode=true" in ui
 
 
-def test_resolvable_tin_elevation_conflicts_use_same_upper_lower_dialog():
-    prep = read("src/MiningVolume.Core/Surface/SurfaceInputPreparer.cs")
-    tiled = read("src/MiningVolume.Surface/TiledConformingTinBuilder.cs")
+def test_manual_conflict_report_tracks_sources_and_derived_intersections():
+    report = read("src/MiningVolume.Core/Surface/ConflictReport.cs")
+    for field in ["EntityId", "Handle", "Layer", "VertexIndex", "SegmentIndex", "SegmentParameter", "SourceRevision"]:
+        assert field in report
+    for operation in ["PointOnSegment", "ProperIntersection", "CollinearOverlap", "ThrowIfCancellationRequested"]:
+        assert operation in report
     workflow = read("src/MiningVolume.Plugin2023/Services/SurfaceWorkflowService.cs")
-    ui = read("src/MiningVolume.Plugin2023/UI/DuplicateXYConflictUi.cs")
-
-    for code in [
-        "POINT_ON_BREAKLINE_Z_CONFLICT",
-        "BREAKLINE_CROSSING_Z_CONFLICT",
-        "BREAKLINE_OVERLAP_Z_CONFLICT",
-        "BREAKLINE_DUPLICATE_Z_CONFLICT",
-        "BREAKLINE_NODE_Z_CONFLICT",
-    ]:
-        assert code in prep
-        assert code in tiled
-        assert code in workflow
-
-    assert "USER_RESOLVE_POINT_ON_BREAKLINE_UPPER" in prep
-    assert "USER_RESOLVE_POINT_ON_BREAKLINE_LOWER" in prep
-    assert "USER_RESOLVE_BREAKLINE_CROSSING_UPPER" in prep
-    assert "USER_RESOLVE_BREAKLINE_CROSSING_LOWER" in prep
-    assert "USER_RESOLVE_BREAKLINE_OVERLAP_UPPER" in prep
-    assert "USER_RESOLVE_BREAKLINE_OVERLAP_LOWER" in prep
-    assert "xung đột cao độ Z" in ui
-    assert "Bạn có muốn TIẾP TỤC tạo TIN" in ui
+    assert "ConflictReport.ToException()" in workflow
 
 
 def test_legacy_breakline_recovery_is_ordered_and_does_not_use_arbitrary_flip_loop():
@@ -252,8 +210,8 @@ def test_legacy_proper_intersection_uses_dimensionally_correct_tolerance_and_rec
     assert "spatial edge index is an accelerator, not a source" in tin
 
 
-def test_large_tin_deduplicates_bucketed_breaklines_and_reports_live_tile_progress():
-    tiled = read("src/MiningVolume.Surface/TiledConformingTinBuilder.cs")
+def test_legacy_large_tin_deduplicates_bucketed_breaklines_and_reports_live_tile_progress():
+    tiled = read("tests/core/legacy/LegacyHaloTinBuilder.cs")
     builder = read("src/MiningVolume.Surface/ConformingTinBuilder.cs")
 
     assert "private readonly struct SegmentRef" in tiled
@@ -270,8 +228,8 @@ def test_large_tin_deduplicates_bucketed_breaklines_and_reports_live_tile_progre
     assert "Khôi phục breakline " in builder
 
 
-def test_large_tin_processes_independent_tiles_in_parallel_with_bounded_workers():
-    tiled = read("src/MiningVolume.Surface/TiledConformingTinBuilder.cs")
+def test_legacy_large_tin_processes_independent_tiles_in_parallel_with_bounded_workers():
+    tiled = read("tests/core/legacy/LegacyHaloTinBuilder.cs")
     assert "Parallel.For(0, total, parallelOptions" in tiled
     assert "MaxDegreeOfParallelism = workerCount" in tiled
     assert "Math.Min(4, Math.Max(1, Environment.ProcessorCount - 1))" in tiled
@@ -282,16 +240,16 @@ def test_large_tin_processes_independent_tiles_in_parallel_with_bounded_workers(
     assert "TIN dữ liệu lớn: {doneNow:n0}/{total:n0} ô xong" in tiled
 
 
-def test_large_tin_parallel_failure_retries_stable_single_worker():
-    tiled = read("src/MiningVolume.Surface/TiledConformingTinBuilder.cs")
+def test_legacy_large_tin_parallel_failure_retries_stable_single_worker():
+    tiled = read("tests/core/legacy/LegacyHaloTinBuilder.cs")
     assert "ParallelTileRetryException" in tiled
     assert "forcedWorkerCount: 1" in tiled
     assert "đang tự chuyển sang chế độ ổn định 1 luồng" in tiled
 
 
-def test_tiled_tin_avoids_redundant_large_normalization_work():
+def test_legacy_tiled_tin_avoids_redundant_large_normalization_work():
     prep = read("src/MiningVolume.Core/Surface/SurfaceInputPreparer.cs")
-    tiled = read("src/MiningVolume.Surface/TiledConformingTinBuilder.cs")
+    tiled = read("tests/core/legacy/LegacyHaloTinBuilder.cs")
     assert "PrepareRawForTiledTin" in tiled
     assert "Dictionary<long, List<int>> _cells" in prep
     assert "int[] _visited" in prep

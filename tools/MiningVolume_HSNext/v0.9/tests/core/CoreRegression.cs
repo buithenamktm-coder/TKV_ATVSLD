@@ -44,11 +44,13 @@ internal static class CoreRegression
         var a=Entity("a",SourceEntityType.Point,P(0,0,10));
         var b=Entity("b",SourceEntityType.Line,P(0,0),P(10,0));
         var m=Model(a,b,Entity("c",SourceEntityType.Point,P(10,10)),Entity("d",SourceEntityType.Point,P(0,10)));
-        var r=new TiledConformingTinBuilder().Build("policy",m,new SurfaceBuildOptions{DuplicateXYConflictPolicy=policy});
-        try { var points=r.Surface.Triangles.SelectMany(t=>new[]{t.A,t.B,t.C}).Where(v=>v.X==0&&v.Y==0).ToArray();
-            Check(points.Length>0&&points.All(v=>v.Z==expected),"Tiled explicit Z policy ignored");
-            Check(a.Vertices[0].Position.Z==10&&b.Vertices[0].Position.Z==0,"Policy modified source");
-        } finally { (r.Surface.Triangles as IDisposable)?.Dispose(); }
+        var options=new SurfaceBuildOptions{DuplicateXYConflictPolicy=policy};
+        Check(options.LegacyElevationPolicyIgnored&&options.DuplicateXYConflictPolicy==DuplicateXYConflictPolicy.Stop,"Legacy policy not migrated");
+        bool rejected=false;
+        try { var r=new TiledConformingTinBuilder().Build("policy",m,options); (r.Surface.Triangles as IDisposable)?.Dispose(); }
+        catch(DuplicateXYConflictException ex) { rejected=ex.Report!=null&&ex.Report.HasBlockingConflicts; }
+        Check(rejected,"Legacy policy bypassed manual review");
+        Check(a.Vertices[0].Position.Z==10&&b.Vertices[0].Position.Z==0,"Policy modified source");
     }
     static void OverlapPolicy(DuplicateXYConflictPolicy policy, bool partial, bool reverse)
     {
@@ -57,12 +59,7 @@ internal static class CoreRegression
             new Segment3(P(5,-5,7),P(5,5,7),"cross")};
         if(reverse) Array.Reverse(segs);
         var p=Prepare(new[]{P(-1,-6),P(11,-6),P(11,6),P(-1,6)},segs,policy);
-        Check(!p.HasErrors,string.Join(";",p.Issues.Where(x=>x.Severity==ValidationSeverity.Error).Select(x=>x.Code)));
-        foreach(var edge in p.Breaklines)foreach(var v in new[]{edge.A,edge.B})
-            Check(p.Sites.Any(q=>Same(q,v)),"Breakline endpoint differs from canonical site");
-        double expected=policy==DuplicateXYConflictPolicy.UseUpper?7:0;
-        Check(p.Sites.Single(v=>Math.Abs(v.X-5)<1e-8&&Math.Abs(v.Y)<1e-8).Z==expected,"Shared node did not apply all Z choices");
-        var tin=Build(p);Coverage(p,tin);Constraints(p,tin);
+        Check(p.HasErrors,"Legacy overlap policy bypassed manual review");
     }
     static void RunTests()
     {
@@ -76,8 +73,37 @@ internal static class CoreRegression
             ["site_on_constraint"] = ()=>{var p=Prepare(Corners().Append(P(5,0)),new[]{new Segment3(P(0,0),P(10,0))});Check(p.Breaklines.Count==2,"Site not split");Coverage(p,Build(p));},
             ["duplicate_xy_same_z"] = ()=>{var p=Prepare(Corners().Append(P(0,0)));Check(p.Sites.Count==4&&!p.HasErrors,"Duplicate handling");},
             ["duplicate_xy_stop"] = ()=>Check(Prepare(Corners().Append(P(0,0,1))).HasErrors,"Conflicting Z accepted"),
-            ["duplicate_xy_upper"] = ()=>{var p=Prepare(Corners().Append(P(0,0,1)),null,DuplicateXYConflictPolicy.UseUpper);Check(!p.HasErrors&&p.Sites.Single(v=>v.X==0&&v.Y==0).Z==1,"Upper policy");},
-            ["duplicate_xy_lower"] = ()=>{var p=Prepare(Corners().Append(P(0,0,1)),null,DuplicateXYConflictPolicy.UseLower);Check(!p.HasErrors&&p.Sites.Single(v=>v.X==0&&v.Y==0).Z==0,"Lower policy");},
+            ["legacy_upper_requires_review"] = ()=>Check(Prepare(Corners().Append(P(0,0,1)),null,DuplicateXYConflictPolicy.UseUpper).HasErrors,"Legacy upper bypass"),
+            ["legacy_lower_requires_review"] = ()=>Check(Prepare(Corners().Append(P(0,0,1)),null,DuplicateXYConflictPolicy.UseLower).HasErrors,"Legacy lower bypass"),
+            ["manual_report_all_sources_and_rescan"] = ()=>{
+                var a=Entity("a",SourceEntityType.Point,P(2,3,1));var b=Entity("b",SourceEntityType.Point,P(2,3,1));
+                var c=Entity("c",SourceEntityType.Point,P(2,3,8));var m=Model(a,b,c);var scanner=new ConflictScanner();
+                var report=scanner.Scan(m,Options);Check(report.Groups.Count==1&&report.Groups[0].Sources.Count==3,"Missing contributing source");
+                Check(report.Groups[0].DeltaZ==7&&m.Revision==0,"Wrong delta or mutated source");
+                m.RemoveEntityFromModel("c");Check(!scanner.Scan(m,Options).HasBlockingConflicts,"Exclusion did not clear conflict");
+                m.RestoreEntity("c");Check(scanner.Scan(m,Options).HasBlockingConflicts,"Restore bypassed scan");
+            },
+            ["manual_report_crossing_provenance"] = ()=>{
+                var m=Model(Entity("a",SourceEntityType.Line,P(0,0,1),P(10,10,1)),Entity("b",SourceEntityType.Line,P(0,10,5),P(10,0,5)));
+                var g=new ConflictScanner().Scan(m,Options).Groups.Single();
+                Check(g.Position.X==5&&g.Position.Y==5&&g.Sources.Count==2,"Crossing report");
+                Check(g.Sources.All(s=>s.Generated&&s.SegmentIndex==0&&s.Handle==s.EntityId),"Missing source mapping");
+            },
+            ["exact_concave_clip_area_plane_and_storage"] = ()=>{
+                var points=new List<Vec3>();for(int x=0;x<=10;x++)for(int y=0;y<=10;y++)points.Add(P(x,y,2*x-3*y+7));
+                var boundary=new[]{new Vec2(0.3,0.2),new Vec2(9.7,0.2),new Vec2(9.7,1.6),new Vec2(2.4,1.6),new Vec2(2.4,9.8),new Vec2(0.3,9.8)};
+                var options=new SurfaceBuildOptions{ClipBoundary=boundary};
+                var tin=Build(Prepare(points),options);double expected=9.4*1.4+2.1*8.2;
+                Check(Math.Abs(tin.Triangles.Sum(t=>t.Area2D)-expected)<1e-9,"Concave clipping area");
+                Check(tin.Triangles.SelectMany(t=>new[]{t.A,t.B,t.C}).All(p=>Math.Abs(p.Z-(2*p.X-3*p.Y+7))<1e-10),"Clipping changed plane Z");
+                var r=new TiledConformingTinBuilder().Build("clip",Model(Entity("points",SourceEntityType.Point,points.ToArray())),options);
+                try{Check(Signature(tin)==Signature(r.Surface),"In-memory and stored clip differ");}
+                finally{(r.Surface.Triangles as IDisposable)?.Dispose();}
+            },
+            ["clip_self_intersection_rejected"] = ()=>{
+                bool rejected=false;try{new TinPolygonClipper(new[]{new Vec2(0,0),new Vec2(10,10),new Vec2(0,10),new Vec2(10,0)});}
+                catch(ArgumentException){rejected=true;}Check(rejected,"Invalid polygon accepted");
+            },
             ["large_coordinates"] = ()=>{var p=Prepare(Corners().Select(v=>P(v.X+2300000,v.Y+400000,80)));var t=Build(p);Coverage(p,t);Check(Math.Abs(t.Triangles.Sum(x=>x.Area2D)-100)<1e-6,"Coordinate translation changed area");},
             ["deterministic_repeat"] = ()=>{var p=Prepare(Corners().Append(P(4,3)));Check(Signature(Build(p))==Signature(Build(p)),"Nondeterministic");},
             ["small_positive_triangle_retains_site"] = ()=>{
@@ -89,6 +115,35 @@ internal static class CoreRegression
                 var p=Prepare(points,new[]{new Segment3(P(0,5),P(10,5),"chain")});
                 var t=Build(p);Coverage(p,t);Constraints(p,t);
                 Check(Math.Abs(t.Triangles.Sum(x=>x.Area2D)-100)<1e-8,"Chain left a hole");},
+            ["file_backed_seams_area_and_query_bounds"] = ()=>{
+                var random=new Random(722);
+                var points=new List<Vec3>{P(0,0),P(100,0),P(100,100),P(0,100)};
+                for(int i=0;i<20000;i++)points.Add(P(random.NextDouble()*100,random.NextDouble()*100));
+                var m=Model(Entity("random",SourceEntityType.Point,points.ToArray()));
+                var r=new TiledConformingTinBuilder().Build("seam",m,Options);
+                try {
+                    var store=(ITiledTriangleSource)r.Surface.Triangles;
+                    var edges=new Dictionary<string,(int count,Vec3 a,Vec3 b)>();double area=0;
+                    string Key(Vec3 v)=>$"{Math.Round(v.X,6):R},{Math.Round(v.Y,6):R}";
+                    foreach(var tile in store.Tiles){
+                        Check(tile.TriangleCount<=8192,"Storage leaf exceeds density cap");
+                        foreach(var t in store.ReadTile(tile.Index)){
+                            area+=t.Area2D;var p=new[]{t.A,t.B,t.C};
+                            Check(p.All(v=>tile.Contains(v.XY)),"Tile bounds omit triangle vertices");
+                            for(int i=0;i<3;i++){
+                                var a=p[i];var b=p[(i+1)%3];var aa=Key(a);var bb=Key(b);
+                                var key=String.CompareOrdinal(aa,bb)<0?aa+"/"+bb:bb+"/"+aa;
+                                if(edges.TryGetValue(key,out var value))edges[key]=(value.count+1,a,b);else edges[key]=(1,a,b);
+                            }
+                        }
+                    }
+                    bool Hull(Vec3 a,Vec3 b)=>(a.X==0&&b.X==0)||(a.X==100&&b.X==100)||(a.Y==0&&b.Y==0)||(a.Y==100&&b.Y==100);
+                    Check(edges.Values.All(e=>e.count==2||(e.count==1&&Hull(e.a,e.b))),"Unpaired interior or nonmanifold edge");
+                    Check(Math.Abs(area-10000)<1e-6,"Storage seam changed area");
+                    Check(r.PreviewTriangles.Count<=200000,"Unbounded preview");
+                    var prepared=Prepare(points);Coverage(prepared,r.Surface);
+                } finally {(r.Surface.Triangles as IDisposable)?.Dispose();}
+            },
             ["collinear_rejected"] = ()=>{bool rejected=false;try{Build(Prepare(new[]{P(0,0),P(1,1),P(2,2)}));}catch(InvalidOperationException){rejected=true;}Check(rejected,"Collinear accepted");},
             ["builder_cancel"] = ()=>{using(var c=new CancellationTokenSource()){c.Cancel();bool cancelled=false;try{new ConformingTinBuilder().Build("cancel",Prepare(Corners()),Options,null,c.Token);}catch(OperationCanceledException){cancelled=true;}Check(cancelled,"Cancelled builder returned TIN");}},
             ["preparer_cancel_before_start"] = ()=>{using(var c=new CancellationTokenSource()){c.Cancel();bool cancelled=false;try{new SurfaceInputPreparer().PrepareRaw(Corners(),null,Options,null,c.Token);}catch(OperationCanceledException){cancelled=true;}Check(cancelled,"Cancelled preparer returned input");}},
@@ -148,5 +203,22 @@ internal static class CoreRegression
             Console.WriteLine(JsonSerializer.Serialize(new{phase="complete",triangles=tin.Triangles.Count,ms=sw.ElapsedMilliseconds,managedBytes=GC.GetTotalMemory(false)}));(tin.Triangles as IDisposable)?.Dispose();
         } catch(Exception ex){Console.WriteLine(JsonSerializer.Serialize(new{phase="error",kind=ex.GetType().Name,message=ex.Message,issues=(ex as DuplicateXYConflictException)?.Issues.GroupBy(x=>x.Code).ToDictionary(x=>x.Key,x=>x.Count()),ms=sw.ElapsedMilliseconds}));Environment.ExitCode=2;}
     }
-    static void Main(string[] args){if(args.Length==0)RunTests();else Fixture(args[0],args.Length>1?args[1]:"-",args.Length>2?int.Parse(args[2]):120,args.Length>3?(DuplicateXYConflictPolicy)Enum.Parse(typeof(DuplicateXYConflictPolicy),args[3]):DuplicateXYConflictPolicy.Stop);}
+    static void ClipOracle()
+    {
+        var boundaries=new[]{
+            new[]{new Vec2(.3,.2),new Vec2(9.7,.2),new Vec2(9.7,1.6),new Vec2(2.4,1.6),new Vec2(2.4,9.8),new Vec2(.3,9.8)},
+            new[]{new Vec2(.1,5.01),new Vec2(9.9,5.06),new Vec2(9.9,5.08),new Vec2(.1,5.03)},
+            new[]{new Vec2(.5,4),new Vec2(6,.3),new Vec2(9.8,6),new Vec2(4,9.9)},
+            new[]{new Vec2(-2,3),new Vec2(12,3),new Vec2(12,8),new Vec2(-2,8)}
+        };
+        for(int k=0;k<boundaries.Length;k++){
+            var rng=new Random(822+k);var points=new List<Vec3>();
+            foreach(var p in Corners())points.Add(P(p.X,p.Y,2*p.X-3*p.Y+7));
+            for(int j=0;j<2000;j++){double x=rng.NextDouble()*10,y=rng.NextDouble()*10;points.Add(P(x,y,2*x-3*y+7));}
+            var tin=Build(Prepare(points),new SurfaceBuildOptions{ClipBoundary=boundaries[k]});
+            Console.WriteLine(JsonSerializer.Serialize(new{oracleCase=k,boundary=boundaries[k].Select(p=>new[]{p.X,p.Y}),
+                triangles=tin.Triangles.Select(t=>new[]{t.A,t.B,t.C}.Select(p=>new[]{p.X,p.Y,p.Z}))}));
+        }
+    }
+    static void Main(string[] args){if(args.Length==0)RunTests();else if(args[0]=="--clip-oracle")ClipOracle();else Fixture(args[0],args.Length>1?args[1]:"-",args.Length>2?int.Parse(args[2]):120,args.Length>3?(DuplicateXYConflictPolicy)Enum.Parse(typeof(DuplicateXYConflictPolicy),args[3]):DuplicateXYConflictPolicy.Stop);}
 }

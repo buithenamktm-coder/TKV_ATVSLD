@@ -30,7 +30,8 @@ def test_v1_tin_region_is_core_geometry_not_only_ui_filter():
     assert "Interpolate(segment" in clipper
     assert "BuildSupportRectangle" in clipper
     assert "0.10" in clipper
-    assert "Geometry2D.TriangleIntersectsPolygon" in tiled
+    assert "BuildFileBacked" in tiled
+    assert "clipper.Clip(t,token)" in read("src/MiningVolume.Surface/AdaptiveTinStore.cs")
     assert "options.ClipBoundary" in conforming
 
 
@@ -50,4 +51,4 @@ def test_v1_region_tin_keeps_boundary_crossing_triangles():
     assert "TriangleIntersectsPolygon" in geom
     assert "PointInTriangle" in geom
     assert "SegmentsTouchOrCross" in geom
-    assert "TriangleIntersectsPolygon" in conforming
+    assert "clipper.Clip(t, cancellationToken)" in conforming

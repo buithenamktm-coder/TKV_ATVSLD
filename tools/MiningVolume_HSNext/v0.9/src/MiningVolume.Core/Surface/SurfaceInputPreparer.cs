@@ -31,6 +31,15 @@ namespace MiningVolume.Core.Surface
 
             var result = new PreparedSurfaceInput();
             cancellationToken.ThrowIfCancellationRequested();
+            result.ConflictReport = new ConflictScanner().Scan(model, options, progress, cancellationToken);
+            if (result.ConflictReport.HasBlockingConflicts)
+            {
+                result.Issues.AddRange(result.ConflictReport.ToException().Issues);
+                return result;
+            }
+            if (options.LegacyElevationPolicyIgnored)
+                result.Issues.Add(new ValidationIssue(ValidationSeverity.Warning,"LEGACY_Z_POLICY_REQUIRES_REVIEW",
+                    "Chính sách cao độ cũ đã chuyển về kiểm tra thủ công; không tự chọn Z và không sửa dữ liệu nguồn."));
             progress?.Invoke("Đang đọc điểm và breakline nguồn...");
             var active = model.Entities.Where(e => e.IsEnabled);
 
@@ -185,6 +194,14 @@ namespace MiningVolume.Core.Surface
                 });
             }
 
+            // Snap endpoints BEFORE intersection discovery. Snapping only after
+            // splitting can create a new overlap that was absent in the source
+            // coordinates, leaving an unnoded constraint in the final PSLG.
+            ResolveDuplicateSites(result, options, progress, cancellationToken, marks);
+            if (result.HasErrors) return;
+            for (int i = 0; i < source.Count; i++)
+                source[i] = new Segment3(marks[i][0].Point, marks[i][1].Point, source[i].SourceId);
+
             // 1) Split a breakline at every already-existing site lying on its interior.
             var pointIndex = new PointGridIndex(result.Sites, options.XyTolerance, cancellationToken);
             for (int i = 0; i < source.Count; i++)
@@ -207,29 +224,7 @@ namespace MiningVolume.Core.Surface
                     double expected = Geometry2D.InterpolateZOnSegment(site.XY, seg);
                     if (Math.Abs(expected - site.Z) > options.ZConflictTolerance)
                     {
-                        if (options.DuplicateXYConflictPolicy == DuplicateXYConflictPolicy.UseUpper ||
-                            options.DuplicateXYConflictPolicy == DuplicateXYConflictPolicy.UseLower)
-                        {
-                            bool useUpper = options.DuplicateXYConflictPolicy == DuplicateXYConflictPolicy.UseUpper;
-                            double chosenZ = useUpper ? Math.Max(site.Z, expected) : Math.Min(site.Z, expected);
-                            var chosen = new Vec3(site.X, site.Y, chosenZ);
 
-                            // Chỉ thay trong dữ liệu chuẩn hóa của lần dựng TIN hiện tại.
-                            // Không sửa POINT hay breakline nguồn trong bản vẽ CAD.
-                            result.Sites[siteIndex] = chosen;
-                            AddMark(marks[i], t, chosen, options.XyTolerance);
-                            result.Issues.Add(new ValidationIssue(
-                                ValidationSeverity.Warning,
-                                useUpper
-                                    ? "USER_RESOLVE_POINT_ON_BREAKLINE_UPPER"
-                                    : "USER_RESOLVE_POINT_ON_BREAKLINE_LOWER",
-                                $"Điểm tại ({site.X:0.###}, {site.Y:0.###}) có Z={site.Z:0.###}, " +
-                                $"breakline {seg.SourceId} nội suy Z={expected:0.###}; theo lựa chọn người dùng, " +
-                                $"dùng đỉnh {(useUpper ? "trên" : "dưới")} Z={chosenZ:0.###}. " +
-                                "Dữ liệu CAD gốc không bị sửa.",
-                                seg.SourceId));
-                            continue;
-                        }
 
                         result.Issues.Add(new ValidationIssue(
                             ValidationSeverity.Error,
@@ -240,7 +235,7 @@ namespace MiningVolume.Core.Surface
                         continue;
                     }
 
-                    AddMark(marks[i], t, new Vec3(site.X, site.Y, (site.Z + expected) * 0.5),
+                    AddMark(marks[i], t, new Vec3(site.X, site.Y, site.Z),
                         options.XyTolerance);
                 }
             }
@@ -273,26 +268,7 @@ namespace MiningVolume.Core.Surface
                         double zb = Geometry2D.InterpolateZOnSegment(xy, b);
                         if (Math.Abs(za - zb) > options.ZConflictTolerance)
                         {
-                            if (options.DuplicateXYConflictPolicy == DuplicateXYConflictPolicy.UseUpper ||
-                                options.DuplicateXYConflictPolicy == DuplicateXYConflictPolicy.UseLower)
-                            {
-                                bool useUpper = options.DuplicateXYConflictPolicy == DuplicateXYConflictPolicy.UseUpper;
-                                double chosenZ = useUpper ? Math.Max(za, zb) : Math.Min(za, zb);
-                                var chosen = new Vec3(xy.X, xy.Y, chosenZ);
-                                AddMark(marks[i], ParameterOnSegment(xy, a), chosen, options.XyTolerance);
-                                AddMark(marks[j], ParameterOnSegment(xy, b), chosen, options.XyTolerance);
-                                generatedSites.Add(chosen);
-                                result.Issues.Add(new ValidationIssue(
-                                    ValidationSeverity.Warning,
-                                    useUpper
-                                        ? "USER_RESOLVE_BREAKLINE_CROSSING_UPPER"
-                                        : "USER_RESOLVE_BREAKLINE_CROSSING_LOWER",
-                                    $"Hai breakline {a.SourceId} / {b.SourceId} cắt tại ({xy.X:0.###}, {xy.Y:0.###}) " +
-                                    $"có Z1={za:0.###}, Z2={zb:0.###}; theo lựa chọn người dùng, dùng đỉnh " +
-                                    $"{(useUpper ? "trên" : "dưới")} Z={chosenZ:0.###}. Dữ liệu CAD gốc không bị sửa."));
-                                autoCrossings++;
-                                continue;
-                            }
+
 
                             result.Issues.Add(new ValidationIssue(
                                 ValidationSeverity.Error,
@@ -303,7 +279,7 @@ namespace MiningVolume.Core.Surface
                             continue;
                         }
 
-                        var p = new Vec3(xy.X, xy.Y, (za + zb) * 0.5);
+                        var p = new Vec3(xy.X, xy.Y, za);
                         AddMark(marks[i], ParameterOnSegment(xy, a), p, options.XyTolerance);
                         AddMark(marks[j], ParameterOnSegment(xy, b), p, options.XyTolerance);
                         generatedSites.Add(p);
@@ -327,26 +303,7 @@ namespace MiningVolume.Core.Surface
                         double zb = Geometry2D.InterpolateZOnSegment(q.XY, b);
                         if (Math.Abs(za - zb) > options.ZConflictTolerance)
                         {
-                            if (options.DuplicateXYConflictPolicy == DuplicateXYConflictPolicy.UseUpper ||
-                                options.DuplicateXYConflictPolicy == DuplicateXYConflictPolicy.UseLower)
-                            {
-                                bool useUpper = options.DuplicateXYConflictPolicy == DuplicateXYConflictPolicy.UseUpper;
-                                double chosenZ = useUpper ? Math.Max(za, zb) : Math.Min(za, zb);
-                                var chosen = new Vec3(q.X, q.Y, chosenZ);
-                                AddMark(marks[i], ParameterOnSegment(q.XY, a), chosen, options.XyTolerance);
-                                AddMark(marks[j], ParameterOnSegment(q.XY, b), chosen, options.XyTolerance);
-                                generatedSites.Add(chosen);
-                                result.Issues.Add(new ValidationIssue(
-                                    ValidationSeverity.Warning,
-                                    useUpper
-                                        ? "USER_RESOLVE_BREAKLINE_OVERLAP_UPPER"
-                                        : "USER_RESOLVE_BREAKLINE_OVERLAP_LOWER",
-                                    $"Hai breakline chồng lấn {a.SourceId} / {b.SourceId} tại " +
-                                    $"({q.X:0.###}, {q.Y:0.###}) có Z1={za:0.###}, Z2={zb:0.###}; " +
-                                    $"theo lựa chọn người dùng, dùng đỉnh {(useUpper ? "trên" : "dưới")} " +
-                                    $"Z={chosenZ:0.###}. Dữ liệu CAD gốc không bị sửa."));
-                                continue;
-                            }
+
 
                             result.Issues.Add(new ValidationIssue(
                                 ValidationSeverity.Error,
@@ -356,7 +313,7 @@ namespace MiningVolume.Core.Surface
                             continue;
                         }
 
-                        var p = new Vec3(q.X, q.Y, (za + zb) * 0.5);
+                        var p = new Vec3(q.X, q.Y, za);
                         AddMark(marks[i], ParameterOnSegment(q.XY, a), p, options.XyTolerance);
                         AddMark(marks[j], ParameterOnSegment(q.XY, b), p, options.XyTolerance);
                         generatedSites.Add(p);
@@ -587,34 +544,13 @@ namespace MiningVolume.Core.Surface
                     var old = unique[match];
                     if (Math.Abs(old.Z - p.Z) > options.ZConflictTolerance)
                     {
-                        if (options.DuplicateXYConflictPolicy == DuplicateXYConflictPolicy.UseUpper)
-                        {
-                            double chosen = Math.Max(old.Z, p.Z);
-                            unique[match] = new Vec3(old.X, old.Y, chosen);
-                            result.Issues.Add(new ValidationIssue(
-                                ValidationSeverity.Warning,
-                                "USER_RESOLVE_DUPLICATE_XY_UPPER",
-                                $"Hai điểm trùng XY ({p.X:0.###}, {p.Y:0.###}) có Z={old.Z:0.###} và Z={p.Z:0.###}; " +
-                                $"theo lựa chọn người dùng, dùng đỉnh trên Z={chosen:0.###}."));
-                        }
-                        else if (options.DuplicateXYConflictPolicy == DuplicateXYConflictPolicy.UseLower)
-                        {
-                            double chosen = Math.Min(old.Z, p.Z);
-                            unique[match] = new Vec3(old.X, old.Y, chosen);
-                            result.Issues.Add(new ValidationIssue(
-                                ValidationSeverity.Warning,
-                                "USER_RESOLVE_DUPLICATE_XY_LOWER",
-                                $"Hai điểm trùng XY ({p.X:0.###}, {p.Y:0.###}) có Z={old.Z:0.###} và Z={p.Z:0.###}; " +
-                                $"theo lựa chọn người dùng, dùng đỉnh dưới Z={chosen:0.###}."));
-                        }
-                        else
-                        {
+
                             result.Issues.Add(new ValidationIssue(
                                 ValidationSeverity.Error,
                                 "DUPLICATE_XY_CONFLICT_Z",
                                 $"Hai điểm trùng XY nhưng khác Z: ({p.X:0.###}, {p.Y:0.###}) " +
                                 $"có Z={old.Z:0.###} và Z={p.Z:0.###}."));
-                        }
+
                     }
                 }
             }
@@ -656,7 +592,7 @@ namespace MiningVolume.Core.Surface
             marks.Add(new SplitMark(t, p));
         }
 
-        private static double ParameterOnSegment(Vec2 p, Segment3 s)
+        internal static double ParameterOnSegment(Vec2 p, Segment3 s)
         {
             double dx = s.B.X - s.A.X;
             double dy = s.B.Y - s.A.Y;
@@ -670,7 +606,7 @@ namespace MiningVolume.Core.Surface
             return Math.Min(1e-6, xyTol / Math.Max(s.Length2D, xyTol));
         }
 
-        private static bool TryLineIntersection(Vec2 a, Vec2 b, Vec2 c, Vec2 d, out Vec2 p)
+        internal static bool TryLineIntersection(Vec2 a, Vec2 b, Vec2 c, Vec2 d, out Vec2 p)
         {
             double rX = b.X - a.X, rY = b.Y - a.Y;
             double sX = d.X - c.X, sY = d.Y - c.Y;
@@ -687,7 +623,7 @@ namespace MiningVolume.Core.Surface
             return true;
         }
 
-        private static bool CollinearOverlap(Segment3 a, Segment3 b, double tol)
+        internal static bool CollinearOverlap(Segment3 a, Segment3 b, double tol)
         {
             double la = a.Length2D;
             if (la <= tol || b.Length2D <= tol) return false;
@@ -741,7 +677,7 @@ namespace MiningVolume.Core.Surface
             return ix + ":" + iy;
         }
 
-        private sealed class PointGridIndex
+        internal sealed class PointGridIndex
         {
             private readonly Dictionary<long, List<int>> _cells = new Dictionary<long, List<int>>();
             private readonly CancellationToken _cancellationToken;
@@ -796,7 +732,7 @@ namespace MiningVolume.Core.Surface
             private static long Key(int x, int y) => ((long)x << 32) ^ (uint)y;
         }
 
-        private sealed class SegmentGridIndex
+        internal sealed class SegmentGridIndex
         {
             private readonly Dictionary<long, List<int>> _cells = new Dictionary<long, List<int>>();
             private readonly List<List<long>> _segmentCells = new List<List<long>>();

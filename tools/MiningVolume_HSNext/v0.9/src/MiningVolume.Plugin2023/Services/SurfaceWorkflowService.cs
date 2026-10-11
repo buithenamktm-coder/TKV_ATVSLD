@@ -288,9 +288,12 @@ namespace MiningVolume2023.Services
                     throw new InvalidOperationException($"TIN {session.Name} không tạo được tam giác hợp lệ.");
 
                 if (!ReferenceEquals(session.Source, source) || source.Revision != sourceRevision)
+                {
+                    (tiled.Surface.Triangles as IDisposable)?.Dispose();
                     throw new InvalidOperationException(
                         $"Dữ liệu {session.Name} đã thay đổi trong lúc đang dựng TIN. " +
                         "Kết quả tạm bị hủy; hãy tạo/cập nhật TIN lại.");
+                }
 
                 return new SurfaceBuildResult
                 {
@@ -317,6 +320,7 @@ namespace MiningVolume2023.Services
             prepareWatch.Stop();
             if (prepared.HasErrors)
             {
+                if(prepared.ConflictReport?.HasBlockingConflicts==true)throw prepared.ConflictReport.ToException();
                 var duplicateIssues = prepared.Issues
                     .Where(x => x.Severity == ValidationSeverity.Error &&
                         (string.Equals(x.Code, "DUPLICATE_XY_CONFLICT_Z", StringComparison.OrdinalIgnoreCase) ||
@@ -374,17 +378,16 @@ namespace MiningVolume2023.Services
         {
             // Build both pure-core surfaces before touching the DWG. If either fails,
             // neither CAD TIN is replaced.
-            return new[]
-            {
-                BuildCoreDetailed(ModelRole.Existing,
-                    message => progress?.Invoke("Hiện trạng: " + message),
-                    cancellationToken,
-                    existingPolicy),
-                BuildCoreDetailed(ModelRole.Design,
-                    message => progress?.Invoke("Thiết kế: " + message),
-                    cancellationToken,
-                    designPolicy)
-            };
+            var existing = BuildCoreDetailed(ModelRole.Existing,
+                message => progress?.Invoke("Hiện trạng: " + message), cancellationToken, existingPolicy);
+            try {
+                var design = BuildCoreDetailed(ModelRole.Design,
+                    message => progress?.Invoke("Thiết kế: " + message), cancellationToken, designPolicy);
+                return new[] { existing, design };
+            } catch {
+                (existing.Tin.Triangles as IDisposable)?.Dispose();
+                throw;
+            }
         }
 
         public static void DrawTinPair(SurfaceBuildResult[] builds, Action<string> progress = null)
