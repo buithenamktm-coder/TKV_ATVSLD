@@ -132,6 +132,7 @@ namespace MiningVolume2023.Services
                 DirectionX = state.SectionDirection?.X ?? 0,
                 DirectionY = state.SectionDirection?.Y ?? 0,
                 SectionSpacing = state.SectionSpacing,
+                SectionLayoutGap = state.SectionLayoutGap,
                 LevelStep = state.LevelStep,
                 FromLevel = state.FromLevel,
                 ToLevel = state.ToLevel,
@@ -194,6 +195,8 @@ namespace MiningVolume2023.Services
             var state = ProjectState.Current;
             state.Reset();
             state.SectionSpacing = PositiveOr(snap.SectionSpacing, 20);
+            // Tệp DWG cũ chưa có SectionLayoutGap: 0 được khôi phục về 90.
+            state.SectionLayoutGap = Math.Max(30.0, PositiveOr(snap.SectionLayoutGap, 90));
             state.LevelStep = PositiveOr(snap.LevelStep, 5);
             state.FromLevel = snap.FromLevel;
             state.ToLevel = snap.ToLevel;
