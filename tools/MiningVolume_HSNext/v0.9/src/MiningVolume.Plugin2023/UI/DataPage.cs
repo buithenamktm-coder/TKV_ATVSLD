@@ -290,8 +290,8 @@ namespace MiningVolume2023.UI
                     _sourceTable.Controls.Add(_designLayer,1,2);
                     _sourceTable.Controls.Add(_sourceLoad[1],0,3);
                     _sourceTable.Controls.Add(_sourceChoose[1],1,3);
-                    _sourceTable.Controls.Add(_via4Preset,0,4);
                     _sourceTable.SetColumnSpan(_via4Preset,2);
+                    _sourceTable.Controls.Add(_via4Preset,0,4);
                 }
                 else
                 {
@@ -310,8 +310,8 @@ namespace MiningVolume2023.UI
                         _sourceTable.Controls.Add(_sourceLoad[row],2,row);
                         _sourceTable.Controls.Add(_sourceChoose[row],3,row);
                     }
-                    _sourceTable.Controls.Add(_via4Preset,0,2);
                     _sourceTable.SetColumnSpan(_via4Preset,4);
+                    _sourceTable.Controls.Add(_via4Preset,0,2);
                 }
             }
             finally { _sourceTable.ResumeLayout(true); }
