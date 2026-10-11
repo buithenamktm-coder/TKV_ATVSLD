@@ -22,8 +22,11 @@ namespace MiningVolume.Core.Model
             {
                 writer.Write("IMSAT-SOURCE-MODEL-1");
                 writer.Write(model.Entities.Count);
+                // Hash one streaming binary representation; a model with one
+                // million single-vertex points must NOT allocate a million
+                // individual SHA256 instances and digest strings.
                 foreach (var entity in model.Entities.OrderBy(x => x.Handle, StringComparer.OrdinalIgnoreCase))
-                    writer.Write(Compute(entity));
+                    WriteOriginal(writer, entity);
                 writer.Flush();
                 stream.FlushFinalBlock();
                 return BitConverter.ToString(hash.Hash).Replace("-", "").ToLowerInvariant();
@@ -38,12 +41,25 @@ namespace MiningVolume.Core.Model
             using(var hash=SHA256.Create())
             using(var stream=new CryptoStream(Stream.Null,hash,CryptoStreamMode.Write))
             using(var writer=new BinaryWriter(stream,Encoding.UTF8,true)) {
-                writer.Write("IMSAT-SOURCE-1");writer.Write(entity.Handle.ToUpperInvariant());
-                writer.Write(entity.Layer);writer.Write((int)entity.Type);writer.Write(entity.Closed);
-                writer.Write(entity.Vertices.Count);
-                foreach(var v in entity.Vertices){writer.Write(v.Original.X);writer.Write(v.Original.Y);writer.Write(v.Original.Z);}
+                writer.Write("IMSAT-SOURCE-1");
+                WriteOriginal(writer, entity);
                 writer.Flush();stream.FlushFinalBlock();
                 return BitConverter.ToString(hash.Hash).Replace("-","").ToLowerInvariant();
+            }
+        }
+
+        private static void WriteOriginal(BinaryWriter writer, SourceEntity entity)
+        {
+            writer.Write(entity.Handle.ToUpperInvariant());
+            writer.Write(entity.Layer);
+            writer.Write((int)entity.Type);
+            writer.Write(entity.Closed);
+            writer.Write(entity.Vertices.Count);
+            foreach (var v in entity.Vertices)
+            {
+                writer.Write(v.Original.X);
+                writer.Write(v.Original.Y);
+                writer.Write(v.Original.Z);
             }
         }
     }
