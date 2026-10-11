@@ -333,8 +333,16 @@ namespace MiningVolume2023.Services
                 {
                     try
                     {
-                        var v = VolumeWorkflowService.CalculateCore(state.SectionSystem, state.SectionProfiles, state.Existing.Tin, state.Design.Tin, state.FromLevel, state.ToLevel, state.LevelStep);
+                        // Restored DWGs rebuild real geometry/volume: record the
+                        // actual recomputation, never mislabel the old export date.
+                        var timer = System.Diagnostics.Stopwatch.StartNew();
+                        var v = VolumeWorkflowService.CalculateCore(state.SectionSystem,
+                            state.SectionProfiles, state.Existing.Tin, state.Design.Tin,
+                            state.FromLevel, state.ToLevel, state.LevelStep);
+                        timer.Stop();
                         state.VolumeResult = v;
+                        state.VolumeCalculatedUtc = DateTime.UtcNow;
+                        state.VolumeCalculationSeconds = timer.Elapsed.TotalSeconds;
                     }
                     catch (Exception ex) { warnings.Add("Không khôi phục được kết quả khối lượng: " + ex.Message); }
                 }
