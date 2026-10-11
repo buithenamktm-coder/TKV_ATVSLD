@@ -25,7 +25,9 @@ def test_renderer_uses_same_gap_for_prior_batched_and_current_profiles():
     assert 'currentY -= height + 45.0;' not in renderer
     assert 'double layoutGap = 90.0' in renderer
     assert 'start == 0,\n                        layoutGap);' in workflow
-    assert '(double)_layoutGap.Value);' in ui
+    # The newly drawn profiles are passed explicitly so an insertion cancel
+    # does not replace the previously approved section/volume state.
+    assert '(double)_layoutGap.Value,\n                    profiles);' in ui
     assert 'double.IsNaN(layoutGap)' in renderer
     assert 'double.IsInfinity(layoutGap)' in renderer
 
