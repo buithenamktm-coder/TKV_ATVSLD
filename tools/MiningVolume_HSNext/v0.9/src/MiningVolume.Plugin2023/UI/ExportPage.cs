@@ -19,6 +19,8 @@ namespace MiningVolume2023.UI
         private readonly CheckBox _warnings;
         private readonly TextBox _developer;
         private readonly TextBox _contact;
+        private readonly CheckBox _toCad;
+        private readonly CheckBox _toExcel;
         private readonly Button _export;
         private readonly Label _status;
 
@@ -73,11 +75,19 @@ namespace MiningVolume2023.UI
                 Padding = new Padding(4, 6, 4, 4)
             });
 
+            var targets = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 35, WrapContents = false, Padding = new Padding(7, 4, 4, 0) };
+            _toCad = new CheckBox { Text = "Xuất bảng lên CAD", AutoSize = true, Checked = false, Margin = new Padding(4, 4, 20, 4) };
+            _toExcel = new CheckBox { Text = "Xuất file Excel", AutoSize = true, Checked = true, Margin = new Padding(4, 4, 20, 4) };
+            targets.Controls.Add(_toCad);
+            targets.Controls.Add(_toExcel);
+            Controls.Add(targets);
+            targets.BringToFront();
+
             var bottom = new TableLayoutPanel { Dock = DockStyle.Top, Height = 72, ColumnCount = 2, Padding = new Padding(4) };
             bottom.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             bottom.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 180));
             _status = new Label { Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, ForeColor = Color.DimGray, Text = "Cần thành lập mặt cắt và tính khối lượng trước khi xuất." };
-            _export = new Button { Text = "XUẤT EXCEL", Dock = DockStyle.Top, Height = 38, Font = new Font("Arial", 10F, FontStyle.Bold) };
+            _export = new Button { Text = "XUẤT KHỐI LƯỢNG", Dock = DockStyle.Top, Height = 38, Font = new Font("Arial", 10F, FontStyle.Bold) };
             _export.Click += ExportClicked;
             bottom.Controls.Add(_status, 0, 0);
             bottom.Controls.Add(_export, 1, 0);
@@ -97,57 +107,106 @@ namespace MiningVolume2023.UI
         private async void ExportClicked(object sender, EventArgs e)
         {
             var st = ProjectState.Current;
+            bool exportCad = _toCad.Checked;
+            bool exportExcel = _toExcel.Checked;
+            if (!exportCad && !exportExcel)
+            {
+                MessageBox.Show("Chọn ít nhất một hình thức xuất: CAD hoặc Excel.", "IMSAT VOLUME",
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
             if (st.VolumeResult == null || st.SectionProfiles.Count == 0)
             {
-                MessageBox.Show("Chưa có đủ mặt cắt và kết quả khối lượng để xuất.", "Xuất Excel", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show("Chưa có đủ mặt cắt và kết quả khối lượng để xuất.", "IMSAT VOLUME",
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
 
-            using (var dlg = new SaveFileDialog
+            // Prompt CAD only if the user explicitly requests CAD output.
+            Autodesk.AutoCAD.Geometry.Point3d? cadInsertion = null;
+            var doc = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument;
+            if (exportCad)
             {
-                Title = "Xuất báo cáo IMSAT VOLUME",
-                Filter = "Excel Workbook (*.xlsx)|*.xlsx",
-                DefaultExt = "xlsx",
-                AddExtension = true,
-                OverwritePrompt = true,
-                FileName = "IMSAT_VOLUME_KhoiLuong_" + DateTime.Now.ToString("yyyyMMdd_HHmm") + ".xlsx"
-            })
+                if (doc == null) { MessageBox.Show("Không có bản vẽ AutoCAD đang hoạt động."); return; }
+                cadInsertion = SelectionService.PickInsertionPoint("Chọn điểm chèn bảng khối lượng lên CAD: ");
+                if (!cadInsertion.HasValue) return;
+            }
+
+            string excelPath = null;
+            if (exportExcel)
             {
-                if (dlg.ShowDialog(this) != DialogResult.OK) return;
-
-                var opt = new ExportOptions
+                using (var dlg = new SaveFileDialog
                 {
-                    IncludeSourceXyz = _xyz.Checked,
-                    IncludeSectionData = _sectionData.Checked,
-                    IncludeSectionAreas = _sectionArea.Checked,
-                    IncludeIntervals = _detail.Checked,
-                    IncludeLevels = _levels.Checked,
-                    IncludeSummary = _summary.Checked,
-                    IncludeWarnings = _warnings.Checked,
-                    DeveloperName = ExportOptions.FixedDeveloperName,
-                    DeveloperContact = ExportOptions.FixedDeveloperContact
-                };
-
-                try
+                    Title = "Xuất báo cáo IMSAT VOLUME",
+                    Filter = "Excel Workbook (*.xlsx)|*.xlsx",
+                    DefaultExt = "xlsx",
+                    AddExtension = true,
+                    OverwritePrompt = true,
+                    FileName = "IMSAT_VOLUME_KhoiLuong_" + DateTime.Now.ToString("yyyyMMdd_HHmm") + ".xlsx"
+                })
                 {
-                    _export.Enabled = false;
-                    UseWaitCursor = true;
+                    if (dlg.ShowDialog(this) != DialogResult.OK) return;
+                    excelPath = dlg.FileName;
+                }
+            }
+
+            var opt = new ExportOptions
+            {
+                IncludeSourceXyz = _xyz.Checked,
+                IncludeSectionData = _sectionData.Checked,
+                IncludeSectionAreas = _sectionArea.Checked,
+                IncludeIntervals = _detail.Checked,
+                IncludeLevels = _levels.Checked,
+                IncludeSummary = _summary.Checked,
+                IncludeWarnings = _warnings.Checked,
+                DeveloperName = ExportOptions.FixedDeveloperName,
+                DeveloperContact = ExportOptions.FixedDeveloperContact
+            };
+            var currentResult = st.VolumeResult;
+            bool excelWritten = false;
+            try
+            {
+                _export.Enabled = false;
+                UseWaitCursor = true;
+                if (exportCad)
+                    SurfaceWorkflowService.EnsureBothTinsReady(synchronizeCadLayers: true);
+
+                if (exportExcel)
+                {
                     _status.Text = "Đang lập workbook và ghi file Excel...";
                     var report = await Task.Run(() => ExportWorkflowService.BuildReport(st, opt));
-                    await Task.Run(() => ExportWorkflowService.WriteXlsx(dlg.FileName, report));
-                    _status.Text = "Đã xuất: " + dlg.FileName;
-                    MessageBox.Show("Đã xuất báo cáo Excel thành công.\n\n" + dlg.FileName, "IMSAT VOLUME", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    await Task.Run(() => ExportWorkflowService.WriteXlsx(excelPath, report));
+                    excelWritten = true;
                 }
-                catch (Exception ex)
+
+                if (exportCad)
                 {
-                    _status.Text = "Xuất Excel chưa thành công.";
-                    MessageBox.Show(ex.Message, "Xuất Excel", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    if (!ReferenceEquals(doc, Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument))
+                        throw new InvalidOperationException("Bản vẽ AutoCAD đã thay đổi trong lúc xuất; không chèn bảng vào bản vẽ khác.");
+                    if (!ReferenceEquals(currentResult, st.VolumeResult))
+                        throw new InvalidOperationException("Khối lượng đã thay đổi trong lúc xuất; hãy xuất lại để tránh dùng bảng cũ.");
+                    _status.Text = "Đang chèn bảng khối lượng TABLE vào AutoCAD...";
+                    using (doc.LockDocument())
+                        CadVolumeTableService.Insert(doc.Database, currentResult, cadInsertion.Value);
                 }
-                finally
-                {
-                    UseWaitCursor = false;
-                    RefreshState();
-                }
+
+                _status.Text = exportExcel && exportCad ? "Đã xuất bảng CAD và file Excel." :
+                    exportCad ? "Đã xuất bảng khối lượng lên AutoCAD." : "Đã xuất: " + excelPath;
+                MessageBox.Show(_status.Text, "IMSAT VOLUME", MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                _status.Text = excelWritten
+                    ? "Excel đã xuất, nhưng thao tác CAD chưa hoàn tất."
+                    : "Xuất khối lượng chưa thành công.";
+                MessageBox.Show(_status.Text + Environment.NewLine + ex.Message,
+                    "Xuất khối lượng", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally
+            {
+                UseWaitCursor = false;
+                RefreshState();
             }
         }
 
