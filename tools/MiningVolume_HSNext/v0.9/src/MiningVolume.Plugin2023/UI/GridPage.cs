@@ -235,7 +235,11 @@ namespace MiningVolume2023.UI
             {
                 if(string.IsNullOrWhiteSpace(st.GridBoundaryHandle))
                     throw new InvalidOperationException("Hãy chọn đường bao ô lưới trên bình đồ CAD.");
-                var boundary=BoundaryGeometryService.ReadBoundary(st.GridBoundaryHandle).ToArray();
+                var activeDoc = Application.DocumentManager.MdiActiveDocument;
+                if (activeDoc == null)
+                    throw new InvalidOperationException("Không có bản vẽ AutoCAD đang hoạt động.");
+                string boundaryHandle = st.GridBoundaryHandle;
+                var boundary=BoundaryGeometryService.ReadBoundary(boundaryHandle).ToArray();
                 SurfaceWorkflowService.EnsureBothTinsReady(synchronizeCadLayers:false);
                 var options=new GridVolumeOptions
                 {
@@ -257,7 +261,23 @@ namespace MiningVolume2023.UI
                     options,(done,total)=>((IProgress<string>)progress).Report(
                         "Đang tính ô "+done.ToString("n0")+"/"+total.ToString("n0")),
                     cts.Token));
-                GridWorkflowService.Commit(result,options,existing,design,rx,ry);
+                cts.Token.ThrowIfCancellationRequested();
+                if (!ReferenceEquals(activeDoc, Application.DocumentManager.MdiActiveDocument) ||
+                    !string.Equals(st.GridBoundaryHandle, boundaryHandle, StringComparison.OrdinalIgnoreCase) ||
+                    !ReferenceEquals(st.Existing.Tin, existing) ||
+                    !ReferenceEquals(st.Design.Tin, design) ||
+                    options.SizeX != st.GridSizeX || options.SizeY != st.GridSizeY ||
+                    options.RotationDegrees != st.GridRotationDegrees)
+                    throw new InvalidOperationException(
+                        "DWG, TIN, đường bao hoặc kích thước ô đã thay đổi trong lúc tính. Không dùng khối lượng cũ.");
+                var latestBoundary=BoundaryGeometryService.ReadBoundary(boundaryHandle);
+                if (latestBoundary.Count != boundary.Length ||
+                    boundary.Where((point,index) => index < latestBoundary.Count &&
+                        (Math.Abs(point.X-latestBoundary[index].X)>1e-7 ||
+                         Math.Abs(point.Y-latestBoundary[index].Y)>1e-7)).Any())
+                    throw new InvalidOperationException(
+                        "Đường bao CAD đã được sửa trong khi tính lưới. Hãy tính lại theo đường bao mới.");
+                GridWorkflowService.Commit(result,options,existing,design,rx,ry,boundaryHandle);
                 watch.Stop();
                 st.GridCalculatedUtc = DateTime.UtcNow;
                 st.GridCalculationSeconds = watch.Elapsed.TotalSeconds;
