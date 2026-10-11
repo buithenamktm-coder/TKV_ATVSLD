@@ -89,7 +89,7 @@ namespace MiningVolume2023.Services
                     using(var data=text.GetXDataForApplication(SectionCadRenderer.AreaRegApp)) {
                         if(data==null)continue;
                         var values=data.AsArray();
-                        if(values.Length!=4 || Convert.ToString(values[2].Value)!=db.FingerprintGuid.ToString("D") ||
+                        if(values.Length!=4 || Convert.ToString(values[2].Value)!=db.FingerprintGuid.ToString() ||
                             Convert.ToString(values[3].Value)!=text.Handle.ToString())
                             throw new InvalidOperationException("Nhãn diện tích bị sao chép hoặc thuộc bản vẽ khác: "+text.Handle);
                         string section=Convert.ToString(values[1].Value);
@@ -120,7 +120,7 @@ namespace MiningVolume2023.Services
                 v[1].TypeCode != (int)DxfCode.ExtendedDataAsciiString ||
                 v[2].TypeCode != (int)DxfCode.ExtendedDataAsciiString)
                 throw new InvalidOperationException("Metadata mặt cắt cũ/hỏng; giữ nguyên bản sửa và lưu bản sao trước khi xuất lại: " + poly.Handle);
-            if(Convert.ToString(v[8].Value)!=poly.Database.FingerprintGuid.ToString("D") ||
+            if(Convert.ToString(v[8].Value)!=poly.Database.FingerprintGuid.ToString() ||
                 Convert.ToString(v[9].Value)!=poly.Handle.ToString())
                 throw new InvalidOperationException("Đường mặt cắt bị copy hoặc thuộc DWG khác: "+poly.Handle);
             string section = Convert.ToString(v[1].Value);
