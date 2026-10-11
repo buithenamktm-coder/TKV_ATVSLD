@@ -77,6 +77,17 @@ jobs:
           Set-Location $env:MV_ROOT
           dotnet build MiningVolume.HSNext.sln -c Release --no-restore -p:UseAutoCADNuGet=true
 
+      - name: Build and self-test offline license issuer (admin tool)
+        shell: pwsh
+        run: |
+          Set-Location $env:MV_ROOT
+          dotnet restore license-manager/IMSAT.LicenseManager.csproj
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet build license-manager/IMSAT.LicenseManager.csproj -c Release --no-restore
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & "license-manager/bin/Release/net48/IMSAT.LicenseManager.exe" selftest
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Assemble prebuilt bundle
         shell: pwsh
         run: |
