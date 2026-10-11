@@ -139,6 +139,7 @@ namespace MiningVolume2023.UI
                     for (int k=0; k<5; k++)
                         _settingsGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 36F));
                     _settingsGrid.Controls.Add(_scopeCaption,0,0);
+                    _settingsGrid.SetColumnSpan(_boundary,1);
                     _settingsGrid.Controls.Add(_boundary,1,0);
                     _pickBoundary.Dock=DockStyle.Fill;
                     _settingsGrid.Controls.Add(_pickBoundary,0,1);
