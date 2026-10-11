@@ -422,6 +422,9 @@ namespace MiningVolume2023.UI
         private async Task BuildPairTinAsync()
         {
             var st = ProjectState.Current;
+            var activeDoc = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument;
+            if (activeDoc == null)
+                throw new InvalidOperationException("Không có bản vẽ AutoCAD đang hoạt động.");
             if (st.Existing.Source == null || st.Existing.Source.Entities.Count == 0 ||
                 st.Design.Source == null || st.Design.Source.Entities.Count == 0)
             {
@@ -456,6 +459,10 @@ namespace MiningVolume2023.UI
                 var design = await BuildRoleWithConflictChoiceAsync(ModelRole.Design, token);
 
                 token.ThrowIfCancellationRequested();
+                if (!ReferenceEquals(activeDoc,
+                    Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument))
+                    throw new InvalidOperationException(
+                        "Đã đổi DWG trong lúc dựng cặp TIN. Không ghi kết quả từ bản vẽ cũ sang bản vẽ mới.");
                 var builds = new[] { existing, design };
                 var cadWatch = Stopwatch.StartNew();
                 SurfaceWorkflowService.DrawTinPair(builds, message => SetBuildStatus(message));
