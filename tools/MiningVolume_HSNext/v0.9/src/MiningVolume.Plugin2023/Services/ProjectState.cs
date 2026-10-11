@@ -12,6 +12,32 @@ namespace MiningVolume2023.Services
     public enum ModelRole { Existing, Design }
     public enum SourceSelectionMode { Layer = 0, ManualSelection = 1 }
 
+    /// <summary>Starter list for TKV coal and mineral surface operations.
+    /// Editable in UI; a project may contain another organizational unit.</summary>
+    public static class MiningUnitCatalog
+    {
+        public const string Coal = "Than lộ thiên";
+        public const string Mineral = "Quặng/khoáng sản lộ thiên";
+        public static readonly IReadOnlyList<string> CoalUnits = new[]
+        {
+            "Công ty Cổ phần Than Cao Sơn - TKV",
+            "Công ty Cổ phần Than Đèo Nai - Cọc Sáu - TKV",
+            "Công ty Cổ phần Than Hà Tu - Vinacomin",
+            "Công ty Cổ phần Than Tây Nam Đá Mài - Vinacomin",
+            "Công ty Than Na Dương - VVMI",
+            "Công ty Than Khánh Hòa - VVMI",
+            "Công ty Than Núi Hồng - VVMI",
+            "Công ty Cổ phần Than - Điện Nông Sơn - TKV"
+        };
+        public static readonly IReadOnlyList<string> MineralUnits = new[]
+        {
+            "Chi nhánh Mỏ tuyển đồng Sin Quyền, Lào Cai - Vimico",
+            "Công ty Cổ phần Đồng Tả Phời - Vinacomin"
+        };
+        public static IReadOnlyList<string> ForCategory(string group) =>
+            string.Equals(group, Mineral, StringComparison.Ordinal) ? MineralUnits : CoalUnits;
+    }
+
     public sealed class ModelSession
     {
         public ModelSession(ModelRole role, string name, string tinLayer)
@@ -108,7 +134,13 @@ namespace MiningVolume2023.Services
         public double HorizontalScale { get; set; } = 1000.0;
         public double VerticalScale { get; set; } = 500.0;
         public string DeveloperName { get; set; } = "Bùi Thế Nam";
-        public string DeveloperContact { get; set; } = "Điện thoại: 0967280686";
+        public string DeveloperContact { get; set; } = "ĐT/Zalo: 0967280686";
+        public string MiningUnitGroup { get; set; } = MiningUnitCatalog.Coal;
+        public string MiningUnitName { get; set; } = string.Empty;
+        public DateTime? VolumeCalculatedUtc { get; set; }
+        public double? VolumeCalculationSeconds { get; set; }
+        public DateTime? GridCalculatedUtc { get; set; }
+        public double? GridCalculationSeconds { get; set; }
         public DateTime? LastProjectSavedUtc { get; set; }
         public event EventHandler Changed;
 
@@ -128,6 +160,12 @@ namespace MiningVolume2023.Services
             SectionSystem = null;
             SectionProfiles.Clear();
             VolumeResult = null;
+            VolumeCalculatedUtc = null;
+            VolumeCalculationSeconds = null;
+            GridCalculatedUtc = null;
+            GridCalculationSeconds = null;
+            MiningUnitGroup = MiningUnitCatalog.Coal;
+            MiningUnitName = string.Empty;
             MineralBodies.Clear();
             GridBoundaryHandle = null;
             GridSizeX = 20.0;
@@ -141,7 +179,7 @@ namespace MiningVolume2023.Services
             HorizontalScale = 1000.0;
             VerticalScale = 500.0;
             DeveloperName = "Bùi Thế Nam";
-            DeveloperContact = "Điện thoại: 0967280686";
+            DeveloperContact = "ĐT/Zalo: 0967280686";
             LastProjectSavedUtc = null;
         }
 
