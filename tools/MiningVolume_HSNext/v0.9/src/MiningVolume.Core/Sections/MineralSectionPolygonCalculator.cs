@@ -122,7 +122,7 @@ namespace MiningVolume.Core.Sections
                 removed=false;
                 for(int i=0;i<p.Count;i++)
                 {
-                    var a=p[(i+p.Count-1)%p.Count],b=p[i],c=p[(i+1)%p.Count];
+                    Vec2 a=p[(i+p.Count-1)%p.Count],b=p[i],c=p[(i+1)%p.Count];
                     if(b.DistanceTo(a)<=Eps || Math.Abs(Vec2.Cross(a,b,c)) <=
                        Eps*Math.Max(1.0,a.DistanceTo(c)))
                     {
@@ -140,8 +140,8 @@ namespace MiningVolume.Core.Sections
                 for(int j=i+1;j<p.Count;j++)
                 {
                     if(j==i+1 || (i==0&&j==p.Count-1))continue;
-                    var a=p[i],b=p[(i+1)%p.Count];
-                    var c=p[j],d=p[(j+1)%p.Count];
+                    Vec2 a=p[i],b=p[(i+1)%p.Count];
+                    Vec2 c=p[j],d=p[(j+1)%p.Count];
                     if(Geometry2D.ProperIntersection(a,b,c,d,Eps) ||
                        Geometry2D.PointOnSegment(a,c,d,Eps) ||
                        Geometry2D.PointOnSegment(b,c,d,Eps) ||
