@@ -104,6 +104,16 @@ namespace MiningVolume2023.Services
                         drawSections.Bounds.Right <= drawSections.Parent.ClientSize.Width &&
                         drawSections.Bounds.Bottom <= drawSections.Parent.ClientSize.Height,
                         "Nút XUẤT / VẼ MẶT CẮT hiển thị trong palette tối thiểu");
+
+                    // Owner's left-docked workflow: verify that the compact
+                    // vertical layout still exposes the update action.
+                    ui.Size = new System.Drawing.Size(360, 700);
+                    ui.ShowPage(AppPage.Section);
+                    ui.PerformLayout();
+                    var updateEdited = FindByName(ui, "btnUpdateEditedSections");
+                    Check(r, updateEdited != null && updateEdited.Visible &&
+                        updateEdited.Width > 120 && updateEdited.Height > 20,
+                        "Nút CẬP NHẬT MẶT CẮT tồn tại khi ghim palette bên trái");
                 }
                 Check(r, string.IsNullOrWhiteSpace(EntryPoint.StartupUiError),
                     "Giao diện startup không phát sinh exception");
