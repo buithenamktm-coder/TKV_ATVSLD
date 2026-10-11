@@ -25,6 +25,8 @@ namespace MiningVolume.Core.Grid
         public int J { get; internal set; }
         public string CellCode => "O-" + I + "-" + J;
         public IReadOnlyList<Vec2> Corners { get; internal set; }
+        public IReadOnlyList<double?> ExistingNodeHeights { get; internal set; }
+        public IReadOnlyList<double?> DesignNodeHeights { get; internal set; }
         public GridCellVolume Volume { get; internal set; }
     }
 
@@ -112,13 +114,32 @@ namespace MiningVolume.Core.Grid
                             cells.Add(new GridVolumeCell
                             {
                                 I = checked((int)i), J = checked((int)j),
-                                Corners = cell, Volume = volume
+                                Corners = cell,
+                                ExistingNodeHeights = cell.Select(p => SampleZ(tn, p)).ToArray(),
+                                DesignNodeHeights = cell.Select(p => SampleZ(tk, p)).ToArray(),
+                                Volume = volume
                             });
                         processed++;
                         if (processed == total || processed % 100 == 0) progress?.Invoke(processed, total);
                     }
                 return new GridVolumeReport { Cells = cells };
             }
+        }
+
+        private static double? SampleZ(IReadOnlyList<Triangle3> candidates, Vec2 p)
+        {
+            foreach (var t in candidates)
+            {
+                double determinant = Vec2.Cross(t.A.XY, t.B.XY, t.C.XY);
+                if (Math.Abs(determinant) < 1e-14) continue;
+                double a = Vec2.Cross(p, t.B.XY, t.C.XY) / determinant;
+                double b = Vec2.Cross(t.A.XY, p, t.C.XY) / determinant;
+                double c = 1.0 - a - b;
+                if (a >= -1e-8 && b >= -1e-8 && c >= -1e-8 &&
+                    a <= 1+1e-8 && b <= 1+1e-8 && c <= 1+1e-8)
+                    return a*t.A.Z + b*t.B.Z + c*t.C.Z;
+            }
+            return null;
         }
 
         private static Vec2 World(double u, double v, Vec2 origin, double c, double s)
