@@ -158,6 +158,7 @@ namespace MiningVolume2023.Services
                 };
                 item.ExistingOutcropHandles.AddRange(body.ExistingOutcropHandles);
                 item.DesignOutcropHandles.AddRange(body.DesignOutcropHandles);
+                item.ConfirmedAbsentSections.AddRange(body.ConfirmedAbsentSections);
                 s.MineralBodies.Add(item);
             }
             foreach (var p in state.TinRegionPolygon)
@@ -240,6 +241,9 @@ namespace MiningVolume2023.Services
                     };
                     restored.AddTraces(ModelRole.Existing, body.ExistingOutcropHandles);
                     restored.AddTraces(ModelRole.Design, body.DesignOutcropHandles);
+                    if (body.ConfirmedAbsentSections != null)
+                        foreach (var absent in body.ConfirmedAbsentSections)
+                            restored.SetAbsentAtSection(absent,true);
                     state.MineralBodies.Add(restored);
                 }
             }

@@ -18,6 +18,15 @@ namespace MiningVolume2023.Services
         public bool IsDeleted { get; set; }
         public List<string> ExistingOutcropHandles { get; } = new List<string>();
         public List<string> DesignOutcropHandles { get; } = new List<string>();
+        // Phải xác nhận rõ bằng tay khi vỉa không có trên một mặt cắt.
+        public List<string> ConfirmedAbsentSections { get; } = new List<string>();
+        public void SetAbsentAtSection(string sectionName, bool absent)
+        {
+            string name=(sectionName??string.Empty).Trim();
+            if(name.Length==0)throw new ArgumentException("Tên mặt cắt không hợp lệ.");
+            ConfirmedAbsentSections.RemoveAll(x=>string.Equals(x,name,StringComparison.OrdinalIgnoreCase));
+            if(absent)ConfirmedAbsentSections.Add(name);
+        }
 
         public bool HasPairedOutcrops =>
             !IsDeleted && ExistingOutcropHandles.Count > 0 && DesignOutcropHandles.Count > 0;

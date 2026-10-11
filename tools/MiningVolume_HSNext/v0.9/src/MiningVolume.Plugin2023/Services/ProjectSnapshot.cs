@@ -53,6 +53,7 @@ namespace MiningVolume2023.Services
         [DataMember(Order = 5)] public bool IsDeleted { get; set; }
         [DataMember(Order = 6)] public List<string> ExistingOutcropHandles { get; set; } = new List<string>();
         [DataMember(Order = 7)] public List<string> DesignOutcropHandles { get; set; } = new List<string>();
+        [DataMember(Order = 8)] public List<string> ConfirmedAbsentSections { get; set; } = new List<string>();
     }
 
     [DataContract]
