@@ -267,7 +267,7 @@ namespace MiningVolume2023.UI
 
         private async Task BuildTinAsync()
         {
-            if (_busy) return;
+            if (_busy || !LicenseUiGuard.Check()) return;
             var role = CurrentRole;
             try
             {
@@ -297,7 +297,7 @@ namespace MiningVolume2023.UI
 
         private async Task BuildBothTinAsync()
         {
-            if (_busy) return;
+            if (_busy || !LicenseUiGuard.Check()) return;
             var st = ProjectState.Current;
             if (st.Existing.Source == null || st.Existing.Source.Entities.Count == 0 ||
                 st.Design.Source == null || st.Design.Source.Entities.Count == 0)

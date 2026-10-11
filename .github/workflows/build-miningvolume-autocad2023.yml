@@ -77,6 +77,17 @@ jobs:
           Set-Location $env:MV_ROOT
           dotnet build MiningVolume.HSNext.sln -c Release --no-restore -p:UseAutoCADNuGet=true
 
+      - name: Build and self-test offline license issuer (admin tool)
+        shell: pwsh
+        run: |
+          Set-Location $env:MV_ROOT
+          dotnet restore license-manager/IMSAT.LicenseManager.csproj
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet build license-manager/IMSAT.LicenseManager.csproj -c Release --no-restore
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & "license-manager/bin/Release/net48/IMSAT.LicenseManager.exe" selftest
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Assemble prebuilt bundle
         shell: pwsh
         run: |
@@ -166,6 +177,20 @@ jobs:
             }
           }
 
+      - name: Build V2.0 QA Candidate Setup (NOT RELEASE)
+        if: github.ref_name == 'miningvolume-v2-qa-candidate' || github.head_ref == 'miningvolume-v2-qa-candidate'
+        shell: pwsh
+        run: |
+          Set-Location $env:MV_ROOT
+          & ./installer/build_v2_qa.ps1
+          if ($LASTEXITCODE -ne 0) { throw "V2 QA Candidate packaging failed." }
+          if (-not (Test-Path "dist/IMSAT_MiningVolume_V2_0_QA_CANDIDATE.exe")) {
+            throw "Missing V2 QA Setup after build."
+          }
+          if (-not (Test-Path "dist/V2_QA_CANDIDATE_NOT_RELEASE.txt")) {
+            throw "Missing non-release warning for V2 QA Setup."
+          }
+
       - name: Create checksums and source archive
         shell: pwsh
         run: |
@@ -236,6 +261,17 @@ jobs:
             $zip.Dispose()
           }
           Get-Content dist/BUILD_VERIFICATION.txt
+
+      - name: Upload V2.0 QA-only installer (not release)
+        if: github.ref_name == 'miningvolume-v2-qa-candidate' || github.head_ref == 'miningvolume-v2-qa-candidate'
+        uses: actions/upload-artifact@v4
+        with:
+          name: IMSAT-MiningVolume-V2.0-QA-CANDIDATE-NOT-RELEASE
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            tools/MiningVolume_HSNext/v0.9/dist/IMSAT_MiningVolume_V2_0_QA_CANDIDATE.exe
+            tools/MiningVolume_HSNext/v0.9/dist/V2_QA_CANDIDATE_NOT_RELEASE.txt
 
       - name: Upload pre-release candidate
         uses: actions/upload-artifact@v4

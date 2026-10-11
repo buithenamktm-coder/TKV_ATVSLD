@@ -54,6 +54,7 @@ namespace MiningVolume2023.UI
             commands.Controls.Add(Action("XÁC NHẬN VỈA VẮNG TẠI MC", (s,e) => ToggleAbsentSection()));
             commands.Controls.Add(Action("TÍNH M³ / TẤN THEO VỈA", (s,e) => CalculateMineralVolumes()));
             commands.Controls.Add(Action("XUẤT EXCEL KHOÁNG SẢN", (s,e) => ExportMineralExcel()));
+            commands.Controls.Add(Action("XUẤT BẢNG LÊN CAD", (s,e) => ExportMineralCad()));
             Controls.Add(commands);
             commands.BringToFront();
 
@@ -241,6 +242,7 @@ namespace MiningVolume2023.UI
 
         private void AssignSectionRegion()
         {
+            if (!LicenseUiGuard.Check()) return;
             var body = Selected();
             if (body == null) { MissingSelection(); return; }
             if (!body.HasPairedOutcrops)
@@ -266,6 +268,7 @@ namespace MiningVolume2023.UI
 
         private void UpdateSectionRegions()
         {
+            if (!LicenseUiGuard.Check()) return;
             try
             {
                 var result=MineralSectionRegionService.UpdateAll();
@@ -282,6 +285,7 @@ namespace MiningVolume2023.UI
 
         private void ToggleAbsentSection()
         {
+            if (!LicenseUiGuard.Check()) return;
             var body=Selected();
             if(body==null){MissingSelection();return;}
             if(!body.HasPairedOutcrops)
@@ -320,6 +324,7 @@ namespace MiningVolume2023.UI
 
         private void CalculateMineralVolumes()
         {
+            if (!LicenseUiGuard.Check()) return;
             try
             {
                 SaveDensity();
@@ -343,6 +348,7 @@ namespace MiningVolume2023.UI
 
         private void ExportMineralExcel()
         {
+            if (!LicenseUiGuard.Check()) return;
             try
             {
                 SaveDensity();
@@ -365,6 +371,26 @@ namespace MiningVolume2023.UI
                         "Công thức Excel liên kết thể trọng, diện tích, chiều dài, thể tích và tấn.",
                         "IMSAT VOLUME",MessageBoxButtons.OK,MessageBoxIcon.Information);
                 }
+            }
+            catch(Exception ex){Alert(ex);}
+        }
+
+        private void ExportMineralCad()
+        {
+            if (!LicenseUiGuard.Check()) return;
+            try
+            {
+                SaveDensity();
+                // Always recalculate from actual CAD geometry before table export.
+                var report=MineralVolumeWorkflowService.Recalculate();
+                var doc=Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument ??
+                    throw new InvalidOperationException("Không có bản vẽ AutoCAD đang hoạt động.");
+                var insertion=SelectionService.PickInsertionPoint("Chọn điểm chèn bảng khoáng sản trên CAD: ");
+                if(!insertion.HasValue)return;
+                using(doc.LockDocument())
+                    MineralCadTableService.Insert(doc.Database,report,insertion.Value);
+                doc.Editor.Regen();
+                _status.Text="Đã chèn bảng khoáng sản dạng TABLE có thể sửa ô trên AutoCAD.";
             }
             catch(Exception ex){Alert(ex);}
         }

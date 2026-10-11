@@ -166,7 +166,7 @@ namespace MiningVolume2023.UI
 
         private async Task CalculateAsync()
         {
-            if(_cts!=null)return;
+            if(_cts!=null || !LicenseUiGuard.Check())return;
             var st=ProjectState.Current;
             try
             {
@@ -213,6 +213,7 @@ namespace MiningVolume2023.UI
 
         private void DrawCad()
         {
+            if (!LicenseUiGuard.Check()) return;
             try
             {
                 if(!GridWorkflowService.IsCurrent)throw new InvalidOperationException(
@@ -229,6 +230,7 @@ namespace MiningVolume2023.UI
 
         private async Task ExportExcelAsync()
         {
+            if (!LicenseUiGuard.Check()) return;
             try
             {
                 if(!GridWorkflowService.IsCurrent)throw new InvalidOperationException(
