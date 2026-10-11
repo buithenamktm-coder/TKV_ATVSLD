@@ -12,7 +12,7 @@ namespace MiningVolume2023.Services
     public sealed class ExportOptions
     {
         public const string FixedDeveloperName = "Bùi Thế Nam";
-        public const string FixedDeveloperContact = "Điện thoại: 0967280686";
+        public const string FixedDeveloperContact = "ĐT/Zalo: 0967280686";
 
         public bool IncludeSourceXyz { get; set; } = true;
         public bool IncludeSectionData { get; set; } = true;
@@ -71,9 +71,14 @@ namespace MiningVolume2023.Services
             var s = NewSheet("Thông tin", "THÔNG TIN BÁO CÁO IMSAT VOLUME", new[] { "Nội dung", "Giá trị" }, 32, 60);
             s.Landscape = false;
             s.Notes.Add("Báo cáo được xuất tự động từ IMSAT VOLUME.");
-            AddKV(s, "Thời gian xuất", now.ToString("dd/MM/yyyy HH:mm:ss"));
+            AddKV(s, "Đơn vị khai thác", EmptyAsNotSet(st.MiningUnitName));
+            AddKV(s, "Nhóm khai thác", st.MiningUnitGroup);
+            AddKV(s, "Kỳ tính khối lượng", st.VolumePeriodLabel);
+            AddKV(s, "Thời điểm tính khối lượng", FormatCalculationTime(st.VolumeCalculatedUtc));
+            AddKV(s, "Thời gian thực tính khối lượng, giây", FormatDuration(st.VolumeCalculationSeconds));
+            AddKV(s, "Thời gian xuất Excel", now.ToString("dd/MM/yyyy HH:mm:ss"));
             AddKV(s, "Người phát triển phần mềm", ExportOptions.FixedDeveloperName);
-            AddKV(s, "Điện thoại", "0967280686");
+            AddKV(s, "ĐT/Zalo", "0967280686");
             AddKV(s, "Layer hiện trạng", EmptyAsNotSet(st.Existing.Layer));
             AddKV(s, "Layer thiết kế", EmptyAsNotSet(st.Design.Layer));
             AddKV(s, "Số đối tượng hiện trạng", st.Existing.EntityCount.ToString("n0"));
@@ -248,6 +253,29 @@ namespace MiningVolume2023.Services
             s.Rows.Add(new[] { ReportCell.Text("Sai lệch kiểm soát đắp (chi tiết - theo tầng)"), ReportCell.Text("m³"), ReportCell.Formula3("=C6-C9") });
             s.Rows.Add(new[] { ReportCell.Text("Số khoảng mặt cắt"), ReportCell.Text("khoảng"), opt.IncludeIntervals ? ReportCell.FormulaInt("=COUNTA('Khối lượng chi tiết'!A4:A" + (3 + r.Intervals.Count) + ")") : ReportCell.Int(r.Intervals.Count) });
             s.Rows.Add(new[] { ReportCell.Text("Số tầng / mức"), ReportCell.Text("tầng"), opt.IncludeLevels ? ReportCell.FormulaInt("=COUNTA('Tổng hợp theo tầng'!A3:A" + (2 + r.Levels.Count) + ")") : ReportCell.Int(r.Levels.Count) });
+
+            // Keep C5:C9 and all existing linked volume formulas unchanged.
+            // Append the project metadata and sign-off block after the fixed
+            // calculation rows. Do not put extra Notes above the table.
+            s.Rows.Add(new[] { ReportCell.Text(""), ReportCell.Text(""), ReportCell.Text("") });
+            s.Rows.Add(new[] { ReportCell.Text("Đơn vị khai thác", true), ReportCell.Text(""),
+                ReportCell.Text(EmptyAsNotSet(st.MiningUnitName)) });
+            s.Rows.Add(new[] { ReportCell.Text("Nhóm khai thác", true), ReportCell.Text(""),
+                ReportCell.Text(st.MiningUnitGroup) });
+            s.Rows.Add(new[] { ReportCell.Text("Kỳ tính khối lượng", true), ReportCell.Text(""),
+                ReportCell.Text(st.VolumePeriodLabel) });
+            s.Rows.Add(new[] { ReportCell.Text("Thời điểm tính", true), ReportCell.Text(""),
+                ReportCell.Text(FormatCalculationTime(st.VolumeCalculatedUtc)) });
+            s.Rows.Add(new[] { ReportCell.Text("Thời gian thực tính (giây)", true), ReportCell.Text(""),
+                ReportCell.Text(FormatDuration(st.VolumeCalculationSeconds)) });
+            s.Rows.Add(new[] { ReportCell.Text(""), ReportCell.Text(""), ReportCell.Text("") });
+            s.Rows.Add(new[] { ReportCell.Text("NGƯỜI TÍNH TOÁN", true),
+                ReportCell.Text(""), ReportCell.Text("NGƯỜI KIỂM TRA", true) });
+            s.Rows.Add(new[] { ReportCell.Text("(Ký, ghi rõ họ tên)"),
+                ReportCell.Text(""), ReportCell.Text("(Ký, ghi rõ họ tên)") });
+            s.Rows.Add(new[] { ReportCell.Text(""), ReportCell.Text(""), ReportCell.Text("") });
+            s.Rows.Add(new[] { ReportCell.Text(""), ReportCell.Text(""), ReportCell.Text("") });
+            s.Rows.Add(new[] { ReportCell.Text(""), ReportCell.Text(""), ReportCell.Text("") });
             return s;
         }
 
@@ -274,6 +302,12 @@ namespace MiningVolume2023.Services
         }
         private static void AddKV(ReportSheet s, string key, string value) => s.Rows.Add(new[] { ReportCell.Text(key, true), ReportCell.Text(value) });
         private static string EmptyAsNotSet(string s) => string.IsNullOrWhiteSpace(s) ? "Chưa thiết lập" : s.Trim();
+        private static string FormatCalculationTime(DateTime? utc) =>
+            utc.HasValue ? utc.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss")
+                         : "Chưa xác nhận trong phiên hiện tại";
+        private static string FormatDuration(double? seconds) =>
+            seconds.HasValue && !double.IsNaN(seconds.Value) && !double.IsInfinity(seconds.Value)
+                ? seconds.Value.ToString("0.000") : "Chưa xác nhận trong phiên hiện tại";
         private static string FormulaName(VolumeFormulaKind x)
         {
             switch (x)
