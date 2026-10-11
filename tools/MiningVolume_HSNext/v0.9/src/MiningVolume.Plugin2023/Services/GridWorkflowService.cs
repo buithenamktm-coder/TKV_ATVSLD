@@ -15,11 +15,12 @@ namespace MiningVolume2023.Services
         private static TinSurface _existing;
         private static TinSurface _design;
         private static long _revExisting, _revDesign;
+        private static string _boundaryHandle;
 
         public static void Invalidate()
         {
             _report = null; _options = null; _existing = null; _design = null;
-            _revExisting = 0; _revDesign = 0;
+            _revExisting = 0; _revDesign = 0; _boundaryHandle = null;
             ProjectState.Current.GridCalculatedUtc=null;
             ProjectState.Current.GridCalculationSeconds=null;
         }
@@ -34,7 +35,11 @@ namespace MiningVolume2023.Services
                        ReferenceEquals(_existing, state.Existing.Tin) &&
                        ReferenceEquals(_design, state.Design.Tin) &&
                        state.Existing.Source.Revision == _revExisting &&
-                       state.Design.Source.Revision == _revDesign;
+                       state.Design.Source.Revision == _revDesign &&
+                       string.Equals(_boundaryHandle, state.GridBoundaryHandle, StringComparison.OrdinalIgnoreCase) &&
+                       _options.SizeX == state.GridSizeX &&
+                       _options.SizeY == state.GridSizeY &&
+                       _options.RotationDegrees == state.GridRotationDegrees;
             }
         }
 
@@ -42,14 +47,19 @@ namespace MiningVolume2023.Services
         public static GridVolumeOptions Options => IsCurrent ? _options : null;
 
         public static void Commit(GridVolumeReport result, GridVolumeOptions options,
-            TinSurface existing, TinSurface design, long existingRevision, long designRevision)
+            TinSurface existing, TinSurface design, long existingRevision, long designRevision,
+            string boundaryHandle = null)
         {
             if (result == null) throw new ArgumentNullException(nameof(result));
             var state = ProjectState.Current;
             if (!ReferenceEquals(state.Existing.Tin, existing) ||
                 !ReferenceEquals(state.Design.Tin, design) ||
                 state.Existing.Source.Revision != existingRevision ||
-                state.Design.Source.Revision != designRevision)
+                state.Design.Source.Revision != designRevision ||
+                !string.Equals(boundaryHandle, state.GridBoundaryHandle, StringComparison.OrdinalIgnoreCase) ||
+                options == null ||
+                options.SizeX != state.GridSizeX || options.SizeY != state.GridSizeY ||
+                options.RotationDegrees != state.GridRotationDegrees)
                 throw new InvalidOperationException("Dữ liệu/TIN đã thay đổi trong khi đang tính lưới. Hãy tính lại.");
             _report = result;
             _options = options;
@@ -57,6 +67,7 @@ namespace MiningVolume2023.Services
             _design = design;
             _revExisting = existingRevision;
             _revDesign = designRevision;
+            _boundaryHandle = boundaryHandle;
             state.NotifyChanged();
         }
     }
