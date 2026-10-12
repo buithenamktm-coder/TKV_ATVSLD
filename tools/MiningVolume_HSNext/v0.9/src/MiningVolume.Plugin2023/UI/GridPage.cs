@@ -307,8 +307,14 @@ namespace MiningVolume2023.UI
                     "Lưới đã cũ hoặc chưa tính. Hãy tính lại trước khi vẽ lên CAD.");
                 var doc=Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument ??
                     throw new InvalidOperationException("Không có bản vẽ AutoCAD.");
+                GridWorkflowService.EnsureBoundaryCurrent(
+                    BoundaryGeometryService.ReadBoundary(ProjectState.Current.GridBoundaryHandle));
                 using(doc.LockDocument())
+                {
+                    if(!ReferenceEquals(doc,Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument))
+                        throw new InvalidOperationException("Đã chuyển DWG trước khi vẽ lưới.");
                     GridCadRenderer.Draw(doc.Database,GridWorkflowService.Report,_labels.Checked);
+                }
                 doc.Editor.Regen();
                 _status.Text="Đã vẽ hệ lưới trên layer riêng; các lưới lần xuất trước được giữ nguyên.";
             }
@@ -330,6 +336,11 @@ namespace MiningVolume2023.UI
                 })
                 {
                     if(dlg.ShowDialog(this)!=DialogResult.OK)return;
+                    // The Save As dialog can remain open while a CAD boundary is
+                    // grip-edited. Re-read the actual polygon immediately before
+                    // taking a workbook snapshot.
+                    GridWorkflowService.EnsureBoundaryCurrent(
+                        BoundaryGeometryService.ReadBoundary(ProjectState.Current.GridBoundaryHandle));
                     var report=GridVolumeExcelReportBuilder.Build(GridWorkflowService.Report,GridWorkflowService.Options);
                     _excel.Enabled=false;UseWaitCursor=true;_status.Text="Đang xuất 6 sheet Excel...";
                     await Task.Run(()=>ExportWorkflowService.WriteXlsx(dlg.FileName,report));
