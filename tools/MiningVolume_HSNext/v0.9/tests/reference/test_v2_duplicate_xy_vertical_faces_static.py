@@ -52,3 +52,29 @@ def test_unreviewed_3d_vertical_faces_cannot_be_used_for_final_volume():
     assert "AnnotateVerticalConflicts(" in sampler
     assert "ĐIỂM TRÙNG XY:" in sampler
     assert "CẦN KIỂM TRA MC" in page
+
+def test_standard_tin_creation_never_launches_manual_point_deletion():
+    ui = read("MiningVolume.Plugin2023/UI/DataPage.cs")
+    build = ui.split("private async Task<SurfaceBuildResult> BuildRoleWithConflictChoiceAsync(",1)[1].split(
+        "private void SetBuildStatus(",1)[0]
+    assert "BuildCoreDetailed(" in build
+    assert "DuplicateXYConflictUi.Show(" not in build
+    assert "OperationCanceledException(" not in build
+    assert "Cần xử lý nguồn xung đột và quét lại" not in build
+    # The legacy editor remains available only on demand; not a release gate.
+    assert 'Btn("Thống kê điểm trùng (kiểm tra tùy chọn)"' in ui
+    warning = ui.split("catch (DuplicateXYConflictException ex)",1)[1].split(
+        "catch (SurfaceValidationException ex)",1)[0]
+    assert "Không yêu cầu loại từng điểm trùng thủ công" in warning
+    assert "Không thể dựng topology TIN" in warning
+
+
+def test_post_tin_warning_is_counted_not_manual_confirmation():
+    ui = read("MiningVolume.Plugin2023/UI/DataPage.cs")
+    success = ui.split("int duplicateGroups = existing.DuplicateXYGroupCount",1)[1].split(
+        "catch (OperationCanceledException)",1)[0]
+    assert "int duplicateVertices = existing.DuplicateXYSourceVertices" in success
+    assert "int sameXYZ = existing.SameXYZDuplicateVertices" in success
+    assert "Đề nghị kiểm tra hệ thống điểm và đường đồng mức" in success
+    assert "Không cần loại từng điểm thủ công." in success
+    assert "MessageBoxButtons.OK" in success
