@@ -522,6 +522,7 @@ namespace MiningVolume2023.UI
                 state.TinRegionHandle = handle;
                 state.TinRegionPolygon.Clear();
                 state.TinRegionPolygon.AddRange(polygon);
+                state.MarkTinRegionChanged();
 
                 // Thay đổi phạm vi tạo TIN làm cả hai TIN cũ mất hiệu lực.
                 SurfaceWorkflowService.InvalidateTin(
@@ -553,6 +554,7 @@ namespace MiningVolume2023.UI
             bool hadRegion = state.HasTinRegion;
             state.TinRegionHandle = null;
             state.TinRegionPolygon.Clear();
+            state.MarkTinRegionChanged();
 
             if (hadRegion)
             {
