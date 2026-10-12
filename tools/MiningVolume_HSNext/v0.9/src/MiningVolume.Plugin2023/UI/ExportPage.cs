@@ -1,6 +1,7 @@
 using System;
 using System.Drawing;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using MiningVolume.Core.Reporting;
@@ -164,6 +165,11 @@ namespace MiningVolume2023.UI
                 DeveloperContact = ExportOptions.FixedDeveloperContact
             };
             var currentResult = st.VolumeResult;
+            var approvedProfiles = st.SectionProfiles.ToArray();
+            var existingTin = st.Existing.Tin;
+            var designTin = st.Design.Tin;
+            long existingRevision = st.Existing.Source.Revision;
+            long designRevision = st.Design.Source.Revision;
             bool excelWritten = false;
             try
             {
@@ -171,21 +177,23 @@ namespace MiningVolume2023.UI
                 UseWaitCursor = true;
                 if (exportCad)
                     SurfaceWorkflowService.EnsureBothTinsReady(synchronizeCadLayers: true);
+                EnsureExportInputsCurrent(doc, st, currentResult, approvedProfiles,
+                    existingTin, designTin, existingRevision, designRevision);
 
                 if (exportExcel)
                 {
                     _status.Text = "Đang lập workbook và ghi file Excel...";
                     var report = await Task.Run(() => ExportWorkflowService.BuildReport(st, opt));
+                    EnsureExportInputsCurrent(doc, st, currentResult, approvedProfiles,
+                        existingTin, designTin, existingRevision, designRevision);
                     await Task.Run(() => ExportWorkflowService.WriteXlsx(excelPath, report));
                     excelWritten = true;
                 }
 
                 if (exportCad)
                 {
-                    if (!ReferenceEquals(doc, Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument))
-                        throw new InvalidOperationException("Bản vẽ AutoCAD đã thay đổi trong lúc xuất; không chèn bảng vào bản vẽ khác.");
-                    if (!ReferenceEquals(currentResult, st.VolumeResult))
-                        throw new InvalidOperationException("Khối lượng đã thay đổi trong lúc xuất; hãy xuất lại để tránh dùng bảng cũ.");
+                    EnsureExportInputsCurrent(doc, st, currentResult, approvedProfiles,
+                        existingTin, designTin, existingRevision, designRevision);
                     _status.Text = "Đang chèn bảng khối lượng TABLE vào AutoCAD...";
                     using (doc.LockDocument())
                         CadVolumeTableService.Insert(doc.Database, currentResult, cadInsertion.Value);
@@ -209,6 +217,31 @@ namespace MiningVolume2023.UI
                 UseWaitCursor = false;
                 RefreshState();
             }
+        }
+
+        private static void EnsureExportInputsCurrent(
+            Autodesk.AutoCAD.ApplicationServices.Document doc,
+            ProjectState state,
+            MiningVolume.Core.Volumes.VolumeResult expectedVolume,
+            MiningVolume.Core.Sections.SectionProfile[] expectedProfiles,
+            MiningVolume.Core.Surface.TinSurface existing,
+            MiningVolume.Core.Surface.TinSurface design,
+            long existingRevision, long designRevision)
+        {
+            if (doc == null ||
+                !ReferenceEquals(doc, Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument) ||
+                !ReferenceEquals(expectedVolume, state.VolumeResult) ||
+                !ReferenceEquals(existing, state.Existing.Tin) ||
+                !ReferenceEquals(design, state.Design.Tin) ||
+                !state.Existing.IsTinCurrent || !state.Design.IsTinCurrent ||
+                state.Existing.Source.Revision != existingRevision ||
+                state.Design.Source.Revision != designRevision ||
+                expectedProfiles.Length != state.SectionProfiles.Count ||
+                expectedProfiles.Where((p, index) => !ReferenceEquals(p, state.SectionProfiles[index])).Any())
+                throw new InvalidOperationException(
+                    "DWG, TIN, mặt cắt hoặc kết quả khối lượng đã thay đổi trong khi xuất. " +
+                    "Không sử dụng báo cáo cũ; hãy tính lại.");
+            EditableSectionCadService.EnsureProfilesMatch(doc.Database, expectedProfiles);
         }
 
         private void StateChanged(object sender, EventArgs e)
