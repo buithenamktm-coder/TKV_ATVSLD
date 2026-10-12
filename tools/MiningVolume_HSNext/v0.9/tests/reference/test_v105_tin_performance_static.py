@@ -131,20 +131,24 @@ def test_large_mine_uses_one_verified_mesh_then_adaptive_storage():
     assert "10 triệu đỉnh" in workflow
 
 
-def test_large_tin_is_file_backed_and_cad_render_is_bounded_preview():
+def test_large_tin_is_file_backed_and_cad_render_uses_complete_mesh():
     store = read("src/MiningVolume.Surface/FileBackedTiledTriangleList.cs")
     tiled = read("src/MiningVolume.Surface/TiledConformingTinBuilder.cs")
     workflow = read("src/MiningVolume.Plugin2023/Services/SurfaceWorkflowService.cs")
-    state = read("src/MiningVolume.Plugin2023/Services/ProjectState.cs")
+    renderer = read("src/MiningVolume.Plugin2023/Services/TinCadRenderer.cs")
     assert "ITiledTriangleSource" in store
     assert "FileOptions.SequentialScan" in store
     assert "cacheTiles:6" in read("src/MiningVolume.Surface/AdaptiveTinStore.cs")
-    assert "PreviewTriangles" in tiled
-    assert "Math.Min(200000,tiles.Count)" in tiled
-    assert "tiles.Count/200000.0" in tiled
-    assert "TinCadIsPreview" in state
-    assert "cadPreview" in workflow
-    assert "BuildCadPreview" in workflow
+    assert "PreviewTriangles=Array.Empty<Triangle3>()" in tiled
+    assert "Math.Min(200000,tiles.Count)" not in tiled
+    assert "var ht = existing.Tin;" in workflow
+    assert "var tk = design.Tin;" in workflow
+    assert "var cadTin = tin;" in workflow
+    assert "bool cadPreview = false;" in workflow
+    assert "BuildCadPreview" not in workflow
+    assert "foreach (var t in tin.Triangles)" in renderer
+    assert "foreach (var t in tin.VerticalFaces)" in renderer
+    assert "if((written&1023)==0)progress.Poll(written,true);" in renderer
 
 
 def test_large_tin_ui_has_progress_and_user_cancel():
