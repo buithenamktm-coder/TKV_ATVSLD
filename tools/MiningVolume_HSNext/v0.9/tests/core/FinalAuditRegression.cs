@@ -170,6 +170,52 @@ internal static class FinalAuditRegression
                 state.MiningUnitName=nameBefore;
             }
         };
+        tests["v2_async_excel_export_keeps_original_project_organization"]=()=>{
+            var st=State();
+            string previousGroup=st.MiningUnitGroup,previousName=st.MiningUnitName;
+            try {
+                st.MiningUnitGroup=MiningUnitCatalog.Coal;
+                st.MiningUnitName="Công ty Cổ phần Than Cao Sơn - TKV";
+                var report=ExportWorkflowService.BuildReport(st,new ExportOptions());
+                var summary=report.Sheets.Single(x=>x.Name=="Tổng khối");
+                var info=report.Sheets.Single(x=>x.Name=="Thông tin");
+                // Emulate switching DWG / project after workbook generation and
+                // before the background Excel writer starts.
+                st.MiningUnitGroup=MiningUnitCatalog.OutsideTkv;
+                st.MiningUnitName="Công ty ngoài TKV hoàn toàn khác";
+                string expected=ExportWorkflowService.TkvParentHeading+"\n"+
+                    "Công ty Cổ phần Than Cao Sơn - TKV\n";
+                Check(report.Sheets.All(x=>x.Title.StartsWith(expected,StringComparison.Ordinal)),
+                    "Report header changed after switching Project while exporting");
+                Check(info.Rows.Any(r=>r.Any(c=>Equals(c.Value,"Công ty Cổ phần Than Cao Sơn - TKV"))),
+                    "Original unit missing from report metadata snapshot");
+                Check(!summary.Rows.SelectMany(r=>r).Any(c=>Equals(c.Value,st.MiningUnitName)),
+                    "The new project's unit contaminated the old report");
+
+                // This must remain true even if the report goes through the
+                // real writer once ProjectState.Current has changed.
+                string dir=Path.Combine(Path.GetTempPath(),"imsat-unit-snapshot-"+Guid.NewGuid().ToString("N"));
+                Directory.CreateDirectory(dir);
+                try {
+                    string file=Path.Combine(dir,"unit-async.xlsx");
+                    ExportWorkflowService.WriteXlsx(file,report);
+                    using(var archive=ZipFile.OpenRead(file))
+                    using(var stream=archive.GetEntry("xl/worksheets/sheet1.xml").Open()){
+                        var xml=XDocument.Load(stream);
+                        string cell=xml.Descendants().Where(x=>x.Name.LocalName=="c"
+                            && (string)x.Attribute("r")=="A1")
+                            .Descendants().First(x=>x.Name.LocalName=="t").Value;
+                        Check(cell.StartsWith(expected,StringComparison.Ordinal),
+                            "Excel writer relabeled frozen volume report with a later project");
+                        Check(!cell.Contains("ngoài TKV hoàn toàn khác"),
+                            "Background XLSX I/O read mutable ProjectState.Current");
+                    }
+                } finally {Directory.Delete(dir,true);}
+            } finally {
+                st.MiningUnitGroup=previousGroup;
+                st.MiningUnitName=previousName;
+            }
+        };
         tests["rf03_full_grip_plus_one_area_and_volume"]=()=>{
             var a=Profile(1,5);var b=Profile(2,5);var old=Calculate(a,b);
             var ea=Edit(a,6,6);var eb=Edit(b,6,6);var now=Calculate(ea,eb);
