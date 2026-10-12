@@ -87,6 +87,30 @@ internal static class FinalAuditRegression
             Check(rejected,"Stale grid committed after boundary handle changed");
             GridWorkflowService.Invalidate();
         };
+        tests["rf15_grip_modified_same_handle_boundary_blocks_export"]=()=>{
+            var st=ProjectState.Current;
+            st.Reset();
+            var existing=Plane(5);var design=Plane(0);
+            st.Existing.Tin=existing;st.Design.Tin=design;
+            st.Existing.TinBuiltFromSourceRevision=st.Existing.Source.Revision;
+            st.Design.TinBuiltFromSourceRevision=st.Design.Source.Revision;
+            st.GridBoundaryHandle="SAME-CAD-HANDLE";
+            st.GridSizeX=5;st.GridSizeY=5;st.GridRotationDegrees=0;
+            var accepted=Boundary.ToArray();
+            var opt=new GridVolumeOptions{Boundary=accepted,SizeX=5,SizeY=5,RotationDegrees=0};
+            var report=new GridVolumeCalculator().Calculate(existing,design,opt);
+            GridWorkflowService.Commit(report,opt,existing,design,
+                st.Existing.Source.Revision,st.Design.Source.Revision,"SAME-CAD-HANDLE");
+            GridWorkflowService.EnsureBoundaryCurrent(Boundary.ToArray());
+            Check(GridWorkflowService.IsCurrent,"Unmodified CAD boundary spuriously invalidated grid");
+            var grip=Boundary.ToArray();grip[1]=new Vec2(11,0);
+            bool stopped=false;
+            try{GridWorkflowService.EnsureBoundaryCurrent(grip);}
+            catch(InvalidOperationException){stopped=true;}
+            Check(stopped && !GridWorkflowService.IsCurrent && GridWorkflowService.Report==null,
+                "CAD grip changed boundary without new handle, but stale grid remains exportable");
+            GridWorkflowService.Invalidate();
+        };
         tests["rf13_invalidate_volume_clears_success_timing"]=()=>{
             var s=ProjectState.Current;s.VolumeResult=Calculate(Profile(1,5),Profile(2,5));s.VolumeCalculatedUtc=DateTime.UtcNow;s.VolumeCalculationSeconds=1.23;
             s.VolumeResult=null;Check(!s.VolumeCalculatedUtc.HasValue&&!s.VolumeCalculationSeconds.HasValue,"Stale timing survives invalidation");
