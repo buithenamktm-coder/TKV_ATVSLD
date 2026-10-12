@@ -512,11 +512,11 @@ namespace MiningVolume2023.UI
                 // resolved simply by picking one of several Z values.
                 string detail = $"Đã tự kiểm tra {groups:n0} vị trí xung đột nhưng có giao cắt/chồng " +
                     "đường đồng mức với các cao độ không thể nối thành TIN 3D an toàn." +
-                    "\\r\\n\\r\\nKhông yêu cầu loại từng điểm trùng thủ công. " +
+                    "\r\n\r\nKhông yêu cầu loại từng điểm trùng thủ công. " +
                     "Dữ liệu gốc không bị thay đổi. Vui lòng kiểm tra tính liên tục của các " +
                     "đường đồng mức liên quan; đây là lỗi hình học chưa được bộ dựng hỗ trợ, " +
                     "không phải bước loại điểm bắt buộc." +
-                    "\\r\\nCó thể mở 'Thống kê điểm trùng' để xem tọa độ khi cần.";
+                    "\r\nCó thể mở 'Thống kê điểm trùng' để xem tọa độ khi cần.";
                 MessageBox.Show(detail, "IMSAT VOLUME - Không thể dựng topology TIN",
                     MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 _status.Text = "Không dựng được topology đường đồng mức xung đột; không xóa dữ liệu nguồn.";
