@@ -18,6 +18,7 @@ namespace MiningVolume2023.UI
         private readonly CheckBox _autoOpen;
         private readonly ComboBox _miningGroup;
         private readonly ComboBox _miningUnit;
+        private readonly Label _miningUnitLabel;
         private readonly ComboBox _periodType;
         private readonly NumericUpDown _periodNumber;
         private readonly NumericUpDown _periodYear;
@@ -50,7 +51,8 @@ namespace MiningVolume2023.UI
             m.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             for (int k = 0; k < 4; k++) m.RowStyles.Add(new RowStyle(SizeType.Percent, 25));
             _miningGroup = new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList };
-            _miningGroup.Items.AddRange(new object[] { MiningUnitCatalog.Coal, MiningUnitCatalog.Mineral });
+            _miningGroup.Items.AddRange(new object[] { MiningUnitCatalog.Coal, MiningUnitCatalog.Mineral,
+                MiningUnitCatalog.TkvOther, MiningUnitCatalog.OutsideTkv });
             _miningUnit = new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDown,
                 AutoCompleteMode = AutoCompleteMode.SuggestAppend,
                 AutoCompleteSource = AutoCompleteSource.ListItems };
@@ -67,7 +69,8 @@ namespace MiningVolume2023.UI
                 Padding = new Padding(5, 5, 0, 0) });
             periodValues.Controls.Add(_periodYear);
             m.Controls.Add(KeyLabel("Loại đơn vị"), 0, 0); m.Controls.Add(_miningGroup, 1, 0);
-            m.Controls.Add(KeyLabel("Tên đơn vị"), 0, 1); m.Controls.Add(_miningUnit, 1, 1);
+            _miningUnitLabel = KeyLabel("Tên đơn vị");
+            m.Controls.Add(_miningUnitLabel, 0, 1); m.Controls.Add(_miningUnit, 1, 1);
             m.Controls.Add(KeyLabel("Khối lượng kỳ"), 0, 2); m.Controls.Add(_periodType, 1, 2);
             m.Controls.Add(KeyLabel("Kỳ / năm"), 0, 3); m.Controls.Add(periodValues, 1, 3);
             metadata.Controls.Add(m);
@@ -119,20 +122,35 @@ namespace MiningVolume2023.UI
         {
             if (_syncingMetadata) return;
             var state = ProjectState.Current;
-            var group = _miningGroup.SelectedIndex == 1
-                ? MiningUnitCatalog.Mineral : MiningUnitCatalog.Coal;
+            var group = _miningGroup.SelectedItem as string ?? MiningUnitCatalog.Coal;
             state.MiningUnitGroup = group;
             _syncingMetadata = true;
             try
             {
-                _miningUnit.Items.Clear();
-                foreach (string unit in MiningUnitCatalog.ForCategory(group))
-                    _miningUnit.Items.Add(unit);
+                PopulateMiningUnits(group);
                 _miningUnit.Text = string.Empty;
                 state.MiningUnitName = string.Empty;
             }
             finally { _syncingMetadata = false; }
             state.NotifyChanged();
+        }
+
+        private void PopulateMiningUnits(string group)
+        {
+            bool outside = string.Equals(group, MiningUnitCatalog.OutsideTkv, StringComparison.Ordinal);
+            _miningUnit.BeginUpdate();
+            try
+            {
+                _miningUnit.Items.Clear();
+                foreach (string unit in MiningUnitCatalog.ForCategory(group))
+                    _miningUnit.Items.Add(unit);
+            }
+            finally { _miningUnit.EndUpdate(); }
+            _miningUnit.AutoCompleteMode = outside ? AutoCompleteMode.None : AutoCompleteMode.SuggestAppend;
+            _miningUnitLabel.Text = outside ? "Tên đơn vị (nhập)" : "Tên đơn vị";
+            // DropDown permits user-entered TKV companies not yet in the directory,
+            // as well as arbitrary non-TKV organizations.
+            _miningUnit.DropDownStyle = ComboBoxStyle.DropDown;
         }
 
         private void MiningUnitChanged(object sender, EventArgs e)
@@ -164,6 +182,10 @@ namespace MiningVolume2023.UI
             try
             {
                 SetBusy(true, "Đang lưu Project vào DWG...");
+                if (ProjectState.Current.MiningUnitGroup == MiningUnitCatalog.OutsideTkv &&
+                    string.IsNullOrWhiteSpace(ProjectState.Current.MiningUnitName))
+                    throw new InvalidOperationException(
+                        "Đã chọn 'Đơn vị khác (ngoài TKV)'. Hãy nhập tên đầy đủ của đơn vị trước khi lưu Project.");
                 var saved = ProjectPersistenceService.SaveCurrentProject();
                 _status.Text = "Đã lưu Project vào DWG lúc " + saved.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss") + ".";
             }
@@ -229,13 +251,14 @@ namespace MiningVolume2023.UI
             _syncingMetadata = true;
             try
             {
-                int groupIndex = st.MiningUnitGroup == MiningUnitCatalog.Mineral ? 1 : 0;
-                if (_miningGroup.SelectedIndex != groupIndex || _miningUnit.Items.Count == 0)
+                string group = MiningUnitCatalog.IsKnownGroup(st.MiningUnitGroup)
+                    ? st.MiningUnitGroup : MiningUnitCatalog.Coal;
+                int groupIndex = _miningGroup.Items.IndexOf(group);
+                if (_miningGroup.SelectedIndex != groupIndex ||
+                    (MiningUnitCatalog.ForCategory(group).Count > 0 && _miningUnit.Items.Count == 0))
                 {
                     _miningGroup.SelectedIndex = groupIndex;
-                    _miningUnit.Items.Clear();
-                    foreach (string unit in MiningUnitCatalog.ForCategory(st.MiningUnitGroup))
-                        _miningUnit.Items.Add(unit);
+                    PopulateMiningUnits(group);
                 }
                 if (_miningUnit.Text != (st.MiningUnitName ?? string.Empty))
                     _miningUnit.Text = st.MiningUnitName ?? string.Empty;
