@@ -61,4 +61,30 @@ if($diff -lt 38) {
 $bitmap.Save((Join-Path $out 'UI_BUTTON_CONTRAST.png'),[Drawing.Imaging.ImageFormat]::Png)
 $bitmap.Dispose();$form.Close();$form.Dispose()
 @{scope='Actual WinForms UiTheme, without AutoCAD host';source_sha=$env:SOURCE_SHA;buttons=$results;autocad_runtime='NOT TESTED'} | ConvertTo-Json -Depth 5 | Set-Content -Encoding UTF8 (Join-Path $out 'UI_BUTTON_CONTRAST.json')
+# Independently render the new Liquid Glass-inspired chrome. It must be
+# a real nonblank WinForms surface, not a color token or illustration only.
+$glassType=$assembly.GetType('MiningVolume2023.UI.GlassPanel',$true)
+$glass=[System.Windows.Forms.Panel][Activator]::CreateInstance($glassType,$true)
+$glassForm=New-Object Windows.Forms.Form
+$glassForm.ClientSize=New-Object Drawing.Size(530,270)
+$glassForm.StartPosition=[Windows.Forms.FormStartPosition]::Manual
+$glassForm.Location=New-Object Drawing.Point(-1800,-1800)
+$glassForm.ShowInTaskbar=$false
+$glass.Dock=[Windows.Forms.DockStyle]::Fill
+$glassForm.Controls.Add($glass)
+$glassForm.Show()
+$glass.Invalidate();$glass.Update()
+[Windows.Forms.Application]::DoEvents()
+$glassImage=New-Object Drawing.Bitmap(530,270)
+$glassForm.DrawToBitmap($glassImage,(New-Object Drawing.Rectangle(0,0,530,270)))
+$top=$glassImage.GetPixel(500,35)
+$bottom=$glassImage.GetPixel(500,215)
+$gradientDelta=[Math]::Abs([int]$top.R-[int]$bottom.R)+[Math]::Abs([int]$top.G-[int]$bottom.G)+[Math]::Abs([int]$top.B-[int]$bottom.B)
+if($gradientDelta -lt 9) {
+ $glassImage.Dispose();$glassForm.Close();$glassForm.Dispose()
+ throw "Liquid Glass chrome did not render the expected depth gradient; top=$top bottom=$bottom"
+}
+$glassImage.Save((Join-Path $out 'UI_GLASS_CHROME.png'),[Drawing.Imaging.ImageFormat]::Png)
+$glassImage.Dispose();$glassForm.Close();$glassForm.Dispose()
+@{style='Liquid Glass-inspired, WinForms opaque chrome';glass_gradient_delta=$gradientDelta;source_sha=$env:SOURCE_SHA;autocad_runtime='NOT TESTED'} | ConvertTo-Json -Depth 3 | Set-Content -Encoding UTF8 (Join-Path $out 'UI_GLASS_CHROME.json')
 Write-Host 'PASS: actual Windows WinForms buttons, text contrast >=4.5; AutoCAD runtime NOT TESTED'
