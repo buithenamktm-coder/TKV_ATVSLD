@@ -366,6 +366,20 @@ internal static class FinalAuditRegression
             string Read(string name){using(var r=new StreamReader(zip.GetEntry(name).Open()))return r.ReadToEnd();}
             var sheets=zip.Entries.Where(x=>x.FullName.StartsWith("xl/worksheets/sheet")&&x.FullName.EndsWith(".xml")).Select(x=>Read(x.FullName)).ToArray();
             var all=string.Join("\n",sheets);Check(all.Contains("Đơn vị đối chứng IMSAT")&&all.Contains("NGƯỜI TÍNH TOÁN")&&all.Contains("NGƯỜI KIỂM TRA")&&all.Contains("0967280686"),"Missing metadata/signature/contact");
+            foreach(var worksheetXml in sheets) {
+                var doc=XDocument.Parse(worksheetXml);
+                var titleCell=doc.Descendants().FirstOrDefault(x=>x.Name.LocalName=="c"
+                    && (string)x.Attribute("r")=="A1");
+                var actualTitle=titleCell?.Descendants().FirstOrDefault(x=>x.Name.LocalName=="t")?.Value??"";
+                string expected=ExportWorkflowService.TkvParentHeading+"\n"+"Đơn vị đối chứng IMSAT"+"\n";
+                Check(actualTitle.StartsWith(expected,StringComparison.Ordinal),
+                    "Workbook organization does not show TKV immediately above selected mining unit");
+                var row1=doc.Descendants().FirstOrDefault(x=>x.Name.LocalName=="row"
+                    && (string)x.Attribute("r")=="1");
+                Check(row1!=null&&double.Parse((string)row1.Attribute("ht"),
+                    System.Globalization.CultureInfo.InvariantCulture)>=60,
+                    "Merged company/title Excel row height clips text");
+            }
             Check(all.Contains("Kỳ tính khối lượng")&&!all.Contains("#REF!"),"Period/formula references missing");
             Check(sheets.Any(x=>x.Contains("<f>")),"No real Excel formulas");
             var styles=Read("xl/styles.xml");Check(styles.Contains("Arial")&&styles.Contains("val=\"12\""),"Wrong font");
