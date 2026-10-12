@@ -37,6 +37,28 @@ namespace MiningVolume2023.Services
             }
         }
 
+        internal static void EnsureProfilesMatch(
+            Database db, IReadOnlyList<SectionProfile> approved)
+        {
+            if (db == null) throw new ArgumentNullException(nameof(db));
+            if (approved == null || approved.Count == 0)
+                throw new InvalidOperationException("Chưa có mặt cắt để xác minh trước khi xuất.");
+            if (!HasEditableProfiles(db))
+            {
+                if (approved.Any(p => p != null && p.IsUserEdited))
+                    throw new InvalidOperationException(
+                        "Hệ mặt cắt đã hiệu chỉnh không còn tồn tại trên CAD. " +
+                        "Không xuất số liệu cũ; hãy khôi phục đường đã chỉnh.");
+                return;
+            }
+
+            var actual = ReadEditedProfiles(db, approved);
+            if (!EditedSectionProfileBuilder.SameGeometry(approved, actual))
+                throw new InvalidOperationException(
+                    "Đường mặt cắt trên CAD đã thay đổi sau lần cập nhật khối lượng. " +
+                    "Hãy bấm CẬP NHẬT MẶT CẮT và tính lại trước khi xuất Excel/CAD.");
+        }
+
         internal static IReadOnlyList<SectionProfile> ReadEditedProfiles(
             Database db, IReadOnlyList<SectionProfile> originals)
         {
