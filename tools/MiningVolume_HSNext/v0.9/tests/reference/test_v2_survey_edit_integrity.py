@@ -38,3 +38,20 @@ def test_invalidate_tin_clears_cad_before_disposal_and_clears_grid_report():
     )
     assert "GridWorkflowService.Invalidate();" in part
     assert "session.TinBuiltFromRegionRevision = null;" in part
+
+
+def test_dwg_project_restore_releases_unadopted_file_backed_tin_stores():
+    project = source("src/MiningVolume.Plugin2023/Services/ProjectPersistenceService.cs")
+    restore = project.split("private static void RebuildSavedTins(", 1)[1].split(
+        "private static void TryRebuildTin(", 1
+    )[0]
+    assert "SurfaceBuildResult[] builds = null;" in restore
+    assert "finally" in restore
+    assert "foreach (var build in builds)" in restore
+    assert "!ReferenceEquals(ProjectState.Current.Get(build.Role).Tin, build.Tin)" in restore
+    assert "(build.Tin.Triangles as IDisposable)?.Dispose();" in restore
+    single = project.split("private static void TryRebuildTin(", 1)[1]
+    assert "SurfaceBuildResult build = null;" in single
+    assert "finally" in single
+    assert "!ReferenceEquals(session.Tin, build.Tin)" in single
+    assert "(build.Tin.Triangles as IDisposable)?.Dispose();" in single
