@@ -228,6 +228,10 @@ namespace MiningVolume2023.UI
             MiningVolume.Core.Surface.TinSurface design,
             long existingRevision, long designRevision)
         {
+            // Excel-only exports must obey the same clipping-region validity
+            // gate as CAD exports. A grip-edited TIN boundary otherwise leaves
+            // the stored volume linked to the previous (unseen) region.
+            SurfaceWorkflowService.EnsureBothTinsReady(synchronizeCadLayers: false);
             if (doc == null ||
                 !ReferenceEquals(doc, Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument) ||
                 !ReferenceEquals(expectedVolume, state.VolumeResult) ||
