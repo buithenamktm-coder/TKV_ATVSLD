@@ -47,6 +47,9 @@ namespace MiningVolume.Core.Reporting
     {
         public string Name { get; set; }
         public string Title { get; set; }
+        // Captures the unprefixed title so changing selected mining unit before
+        // a second export replaces the heading rather than stacking old names.
+        public string OrganizationBaseTitle { get; set; }
         public List<string> Notes { get; } = new List<string>();
         public List<string> Headers { get; } = new List<string>();
         public List<IReadOnlyList<ReportCell>> Rows { get; } = new List<IReadOnlyList<ReportCell>>();
