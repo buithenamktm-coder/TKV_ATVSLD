@@ -656,10 +656,12 @@ namespace MiningVolume2023.Services
                     $"Layer {session.TinLayer} có {unexpected:n0} đối tượng không phải 3DFACE. " +
                     "Không dùng layer này để tính nhằm tránh xóa nhầm dữ liệu CAD.");
 
-            int expectedCadFaces = session.TinCadFaceCount > 0
-                ? session.TinCadFaceCount
-                : session.Tin.Triangles.Count + session.Tin.VerticalFaces.Count;
-            if (exists && count == expectedCadFaces)
+            // Always validate against FULL official geometry. Old V2 QA sessions
+            // could carry a 200k-face sampled layer and a matching sampled count;
+            // that legacy layer must never be accepted as a complete CAD TIN.
+            int expectedCadFaces = checked(session.Tin.Triangles.Count +
+                session.Tin.VerticalFaces.Count);
+            if (exists && count == expectedCadFaces && !session.TinCadIsPreview)
                 return;
 
             // Rebuild the COMPLETE verified mesh. A spatially sampled subset
