@@ -67,6 +67,20 @@ internal static class CoreRegression
     static void RunTests()
     {
         var tests=new Dictionary<string,Action> {
+            ["raw_duplicate_xy_preserves_all_elevations_without_entity_handles"] = ()=>{
+                var opt=new SurfaceBuildOptions{PreserveDuplicateXYVerticalFaces=true};
+                var input=new SurfaceInputPreparer().PrepareRaw(new[]{
+                    P(0,0,10), P(10,0,0), P(10,10,0), P(0,10,0),
+                    P(0,0,20)},null,opt);
+                Check(!input.HasErrors&&input.VerticalConflictGroups.Count==1,
+                    "Raw XY repeat silently dropped high Z without 3D provenance");
+                var tin=Build(input,opt);
+                Check(tin.VerticalFaces.Count>0&&tin.RequiresSectionReview,
+                    "Raw duplicate Z did not create vertical 3D faces / section review gate");
+                Check(tin.VerticalConflicts[0].Sources.Any(x=>x.Z==10)&&
+                      tin.VerticalConflicts[0].Sources.Any(x=>x.Z==20),
+                    "Raw high/low Z were not retained separately");
+            },
             ["same_xyz_duplicates_are_counted_but_do_not_block_tin"] = ()=>{
                 var options=new SurfaceBuildOptions{PreserveDuplicateXYVerticalFaces=true};
                 var model=Model(Entity("a",SourceEntityType.Point,P(0,0,5)),
