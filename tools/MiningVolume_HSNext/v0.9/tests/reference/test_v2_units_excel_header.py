@@ -32,7 +32,11 @@ def test_organization_above_excel_title_without_shifting_formula_rows():
     assert 'TkvParentHeading = "TẬP ĐOÀN CÔNG NGHIỆP THAN - KHOÁNG SẢN VIỆT NAM"' in report
     assert 'string prefix = outside ? unit : TkvParentHeading + "\\n" + unit;' in report
     assert 'sheet.Title = prefix + "\\n" + sheet.OrganizationBaseTitle;' in report
-    assert "ApplyOrganizationHeader(report, ProjectState.Current);" in report
+    assert "ApplyOrganizationHeader(report, frozenGroup, frozenUnit);" in report
+    assert "ApplyOrganizationHeader(report, ProjectState.Current);" not in report
+    assert "ExportWorkflowService.ApplyOrganizationHeader(r, ProjectState.Current);" in grid
+    mineral = source("src/MiningVolume.Plugin2023/Services/MineralVolumeExcelReportBuilder.cs")
+    assert "ExportWorkflowService.ApplyOrganizationHeader(report, state);" in mineral
     assert "OrganizationBaseTitle" in writer
     assert "int titleLines = sheet.Title.Split('\\n').Length;" in writer
     assert "Math.Max(24, titleLines * 19 + 6)" in writer
