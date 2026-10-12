@@ -133,6 +133,13 @@ namespace MiningVolume2023.Services
         public string TinRegionHandle { get; set; }
         public List<Vec2> TinRegionPolygon { get; } = new List<Vec2>();
         public bool HasTinRegion => TinRegionPolygon.Count >= 3;
+        // A source revision alone is insufficient when the TIN's clipping
+        // polygon changes during a background build. Every scope mutation
+        // increments this independent generation counter.
+        private long _tinRegionRevision;
+        public long TinRegionRevision => System.Threading.Interlocked.Read(ref _tinRegionRevision);
+        public void MarkTinRegionChanged() =>
+            System.Threading.Interlocked.Increment(ref _tinRegionRevision);
 
         public Vec2? SectionDirection { get; set; }
         public SectionSystem SectionSystem { get; set; }
@@ -184,6 +191,7 @@ namespace MiningVolume2023.Services
             BoundaryHandle = null;
             TinRegionHandle = null;
             TinRegionPolygon.Clear();
+            MarkTinRegionChanged();
             SectionDirection = null;
             SectionSystem = null;
             SectionProfiles.Clear();
