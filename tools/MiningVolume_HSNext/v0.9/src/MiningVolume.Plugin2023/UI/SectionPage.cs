@@ -442,7 +442,9 @@ namespace MiningVolume2023.UI
                     {
                         _status.Text = $"Đang vẽ mặt cắt {done:n0}/{total:n0} xuống AutoCAD...";
                         _status.Refresh();
-                        Application.DoEvents();
+                        // Do not pump WinForms events while an AutoCAD drawing
+                        // transaction is active: it permits reentrant edits or
+                        // document switches that break all-or-nothing drawing.
                     },
                     (double)_layoutGap.Value,
                     profiles);
