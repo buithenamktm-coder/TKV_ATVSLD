@@ -134,7 +134,7 @@ internal static class FinalAuditRegression
                 string originalFormula=(string)summary.Rows[0][2].Value;
                 ExportWorkflowService.ApplyOrganizationHeader(report,state);
                 string parent=ExportWorkflowService.TkvParentHeading;
-                string expected=parent+"\\n"+state.MiningUnitName+"\\n";
+                string expected=parent+"\n"+state.MiningUnitName+"\n";
                 Check(report.Sheets.All(x=>x.Title.StartsWith(expected,
                     StringComparison.Ordinal)), "TKV parent and selected unit are not stacked in sheet header");
                 Check((string)summary.Rows[0][2].Value==originalFormula,
@@ -145,8 +145,8 @@ internal static class FinalAuditRegression
                     StringComparison.Ordinal)<0), "Duplicated group header");
                 state.MiningUnitName="Công ty Cổ phần Than Hà Tu - Vinacomin";
                 ExportWorkflowService.ApplyOrganizationHeader(report,state);
-                Check(report.Sheets.All(x=>x.Title.StartsWith(parent+"\\n"+
-                    state.MiningUnitName+"\\n",StringComparison.Ordinal) &&
+                Check(report.Sheets.All(x=>x.Title.StartsWith(parent+"\n"+
+                    state.MiningUnitName+"\n",StringComparison.Ordinal) &&
                     !x.Title.Contains("Công ty Cổ phần Than Cao Sơn - TKV")),
                     "Changing selected organization stacked the old company in Excel");
 
@@ -155,7 +155,7 @@ internal static class FinalAuditRegression
                 var outsideReport=ExportWorkflowService.BuildReport(state,new ExportOptions());
                 ExportWorkflowService.ApplyOrganizationHeader(outsideReport,state);
                 Check(outsideReport.Sheets.All(x=>
-                    x.Title.StartsWith(state.MiningUnitName+"\\n",StringComparison.Ordinal)
+                    x.Title.StartsWith(state.MiningUnitName+"\n",StringComparison.Ordinal)
                     && !x.Title.Contains(parent)), "Non-TKV unit falsely shown under TKV");
                 Check(outsideReport.Sheets.Single(x=>x.Name=="Thông tin").Rows
                     .Any(row=>row.Any(cell=>Equals(cell.Value,state.MiningUnitName))),
