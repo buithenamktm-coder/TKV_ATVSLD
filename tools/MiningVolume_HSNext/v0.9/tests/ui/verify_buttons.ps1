@@ -23,7 +23,13 @@ $nativeForm=[System.Windows.Forms.Control]$form.PSObject.BaseObject
 $invokeArgs=[object[]]::new(1)
 $invokeArgs[0]=$nativeForm
 $apply.Invoke($null,$invokeArgs) | Out-Null
-$form.CreateControl()
+# Create an actual visible WinForms layout: an unshown Form.DrawToBitmap
+# can return a blank rectangle even though color properties pass.
+$form.StartPosition=[Windows.Forms.FormStartPosition]::Manual
+$form.Location=New-Object Drawing.Point(-1800,-1800)
+$form.ShowInTaskbar=$false
+$form.Show()
+[Windows.Forms.Application]::DoEvents()
 function Luminance($c) {
  $v=@($c.R,$c.G,$c.B) | ForEach-Object { $x=$_/255.0; if($x -le 0.04045){$x/12.92}else{[Math]::Pow(($x+0.055)/1.055,2.4)} }
  return .2126*$v[0]+.7152*$v[1]+.0722*$v[2]
@@ -39,7 +45,17 @@ foreach($b in $buttons) {
 $out=Join-Path $Root 'dist';New-Item -ItemType Directory -Force $out | Out-Null
 $bitmap=New-Object Drawing.Bitmap(530,270)
 $form.DrawToBitmap($bitmap,(New-Object Drawing.Rectangle(0,0,530,270)))
+# A blank screenshot must fail the probe. Sample an interior point of
+# each primary button away from the label and rounded border.
+$first=$buttons[0]
+$pixel=$bitmap.GetPixel($first.Left+18,$first.Top+8)
+$target=$first.BackColor
+$diff=[Math]::Abs([int]$pixel.R-[int]$target.R)+[Math]::Abs([int]$pixel.G-[int]$target.G)+[Math]::Abs([int]$pixel.B-[int]$target.B)
+if($diff -gt 36) {
+ $bitmap.Dispose();$form.Close();$form.Dispose()
+ throw "Button bitmap is blank/incorrect: expected primary background $target, actual pixel $pixel"
+}
 $bitmap.Save((Join-Path $out 'UI_BUTTON_CONTRAST.png'),[Drawing.Imaging.ImageFormat]::Png)
-$bitmap.Dispose();$form.Dispose()
+$bitmap.Dispose();$form.Close();$form.Dispose()
 @{scope='Actual WinForms UiTheme, without AutoCAD host';source_sha=$env:SOURCE_SHA;buttons=$results;autocad_runtime='NOT TESTED'} | ConvertTo-Json -Depth 5 | Set-Content -Encoding UTF8 (Join-Path $out 'UI_BUTTON_CONTRAST.json')
 Write-Host 'PASS: actual Windows WinForms buttons, text contrast >=4.5; AutoCAD runtime NOT TESTED'
