@@ -95,19 +95,22 @@ namespace MiningVolume.Core.Surface
     public sealed class TinSurface
     {
         public TinSurface(string name, IReadOnlyList<Triangle3> triangles, IReadOnlyList<ValidationIssue> issues,
-            IReadOnlyList<Triangle3> verticalFaces = null, IReadOnlyList<ConflictGroup> verticalConflicts = null)
+            IReadOnlyList<Triangle3> verticalFaces = null, IReadOnlyList<ConflictGroup> verticalConflicts = null,
+            int sameXYZDuplicates = 0)
         {
             Name = name;
             Triangles = triangles;
             Issues = issues;
             VerticalFaces = verticalFaces ?? Array.Empty<Triangle3>();
             VerticalConflicts = verticalConflicts ?? Array.Empty<ConflictGroup>();
+            SameXYZDuplicateVertices = sameXYZDuplicates;
         }
         public string Name { get; }
         public IReadOnlyList<Triangle3> Triangles { get; }
         // Never pass vertical faces to a single-Z-at-XY elevation sampler.
         public IReadOnlyList<Triangle3> VerticalFaces { get; }
         public IReadOnlyList<ConflictGroup> VerticalConflicts { get; }
+        public int SameXYZDuplicateVertices { get; }
         public bool RequiresSectionReview => VerticalConflicts.Count > 0;
         public IReadOnlyList<ValidationIssue> Issues { get; }
     }
