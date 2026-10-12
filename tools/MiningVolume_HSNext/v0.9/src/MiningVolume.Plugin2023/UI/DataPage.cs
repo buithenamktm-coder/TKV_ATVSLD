@@ -106,7 +106,9 @@ namespace MiningVolume2023.UI
             source.SetColumnSpan(_via4Preset, 4);
             sourceBox.Controls.Add(source);
             body.Controls.Add(sourceBox);
-            var review = Btn("Điểm trùng tọa độ — kiểm tra nguồn TIN", (s, e) =>
+            // Optional diagnostic only: a user never has to delete duplicate
+            // survey points to use the default automatic TIN workflow.
+            var review = Btn("Thống kê điểm trùng (kiểm tra tùy chọn)", (s, e) =>
                 DuplicateXYConflictUi.Show(ProjectState.Current.ActiveRole));
             review.Width = 520;
             body.Controls.Add(review);
@@ -477,6 +479,10 @@ namespace MiningVolume2023.UI
                 int duplicateGroups = existing.DuplicateXYGroupCount + design.DuplicateXYGroupCount;
                 int duplicateVertices = existing.DuplicateXYSourceVertices + design.DuplicateXYSourceVertices;
                 int sameXYZ = existing.SameXYZDuplicateVertices + design.SameXYZDuplicateVertices;
+                if (duplicateGroups > 0 || sameXYZ > 0)
+                    _status.Text = $"Đã dựng TIN. Cảnh báo dữ liệu nguồn: {duplicateGroups:n0} nhóm XY khác Z; " +
+                                   $"{duplicateVertices:n0} đỉnh liên quan; {sameXYZ:n0} đỉnh trùng XYZ. " +
+                                   "Đề nghị kiểm tra điểm/đồng mức và hệ mặt cắt.";
                 MessageBox.Show(
                     "ĐÃ DỰNG ĐỦ HAI MÔ HÌNH TIN\r\n\r\n" +
                     $"Hiện trạng → {st.Existing.TinLayer}: {builds[0].Summary}\r\n" +
@@ -497,6 +503,23 @@ namespace MiningVolume2023.UI
             catch (OperationCanceledException)
             {
                 _status.Text = "Đã hủy dựng TIN theo yêu cầu. Dữ liệu nguồn không bị thay đổi.";
+            }
+            catch (DuplicateXYConflictException ex)
+            {
+                int groups = ex.Report?.Groups?.Count ?? 0;
+                // This is not the common duplicate Point/Contour workflow.
+                // An unsupported conflicting breakline topology cannot be
+                // resolved simply by picking one of several Z values.
+                string detail = $"Đã tự kiểm tra {groups:n0} vị trí xung đột nhưng có giao cắt/chồng " +
+                    "đường đồng mức với các cao độ không thể nối thành TIN 3D an toàn." +
+                    "\\r\\n\\r\\nKhông yêu cầu loại từng điểm trùng thủ công. " +
+                    "Dữ liệu gốc không bị thay đổi. Vui lòng kiểm tra tính liên tục của các " +
+                    "đường đồng mức liên quan; đây là lỗi hình học chưa được bộ dựng hỗ trợ, " +
+                    "không phải bước loại điểm bắt buộc." +
+                    "\\r\\nCó thể mở 'Thống kê điểm trùng' để xem tọa độ khi cần.";
+                MessageBox.Show(detail, "IMSAT VOLUME - Không thể dựng topology TIN",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                _status.Text = "Không dựng được topology đường đồng mức xung đột; không xóa dữ liệu nguồn.";
             }
             catch (SurfaceValidationException ex)
             {
@@ -540,14 +563,12 @@ namespace MiningVolume2023.UI
             CancellationToken token)
         {
             token.ThrowIfCancellationRequested();
-            try {
-                return await Task.Run(() => SurfaceWorkflowService.BuildCoreDetailed(
-                    role, message => SetBuildStatus(message), token), token);
-            } catch (DuplicateXYConflictException ex) {
-                token.ThrowIfCancellationRequested();
-                DuplicateXYConflictUi.Show(role, ex.Report);
-                throw new OperationCanceledException("Cần xử lý nguồn xung đột và quét lại trước khi tạo TIN.", token);
-            }
+            // Duplicate XY with differing Z is an automatic 3D vertical-face
+            // input, not a condition to interrupt work for manual deletions.
+            // A true unsupported crossing still propagates as a validation
+            // exception; never create plausible but incorrect CAD geometry.
+            return await Task.Run(() => SurfaceWorkflowService.BuildCoreDetailed(
+                role, message => SetBuildStatus(message), token), token);
         }
 
         private void SetBuildStatus(string message)
