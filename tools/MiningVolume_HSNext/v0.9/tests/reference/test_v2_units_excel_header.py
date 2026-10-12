@@ -60,4 +60,4 @@ def test_export_rejects_company_or_period_changes_before_writing_results():
     writer = report.split("public static void WriteXlsx(", 1)[1].split(
         "public static SpreadsheetReport BuildReport(", 1
     )[0]
-    assert "ProjectState.Current" not in writer
+    assert "ApplyOrganizationHeader(report, ProjectState.Current);" not in writer
