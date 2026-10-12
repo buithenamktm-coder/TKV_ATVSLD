@@ -291,6 +291,7 @@ namespace MiningVolume2023.Services
             if (snap.TinRegion != null)
                 foreach (var p in snap.TinRegion)
                     state.TinRegionPolygon.Add(new Vec2(p.X, p.Y));
+            state.MarkTinRegionChanged();
             if (snap.HasDirection) state.SectionDirection = new Vec2(snap.DirectionX, snap.DirectionY);
 
             RestoreModel(ModelRole.Existing, snap.Existing, warnings);
