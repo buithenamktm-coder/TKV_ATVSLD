@@ -129,7 +129,13 @@ def test_palette_has_direct_show_hide_toggle_and_startup_default_off():
     project = read("src/MiningVolume.Plugin2023/UI/ProjectPage.cs")
     settings = read("src/MiningVolume.Plugin2023/Services/UserSettingsService.cs")
     assert "internal static void TogglePalette()" in entry
-    assert "Palette.Visible = !Palette.Visible" in entry
+    # Showing an existing palette must reload the active DWG before making
+    # controls interactive; hiding is direct and preserves the saved preference.
+    toggle = entry.split("internal static void TogglePalette()", 1)[1].split(
+        '[CommandMethod("TKL"', 1)[0]
+    assert "if (Palette == null || !Palette.Visible)" in toggle
+    assert "Open(AppPage.Project);" in toggle
+    assert "Palette.Visible = false;" in toggle
     assert 'CommandMethod("MV_TOGGLE"' in entry
     assert 'Btn("Ẩn / Hiện bảng", RibbonAction.TogglePalette)' in ribbon
     assert "EntryPoint.TogglePalette();" in ribbon
