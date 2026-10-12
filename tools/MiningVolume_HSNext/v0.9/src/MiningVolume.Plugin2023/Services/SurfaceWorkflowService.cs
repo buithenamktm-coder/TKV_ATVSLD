@@ -111,6 +111,7 @@ namespace MiningVolume2023.Services
             state.TinRegionHandle = boundaryHandle;
             state.TinRegionPolygon.Clear();
             state.TinRegionPolygon.AddRange(polygon);
+            state.MarkTinRegionChanged();
             // Use the same boundary for section-based volume calculation.
             state.BoundaryHandle = boundaryHandle;
             state.SectionSystem = null;
