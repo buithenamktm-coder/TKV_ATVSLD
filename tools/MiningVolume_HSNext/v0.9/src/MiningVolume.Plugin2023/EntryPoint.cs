@@ -16,6 +16,7 @@ namespace MiningVolume2023
         internal static PaletteSet Palette;
         internal static MainPaletteControl MainControl;
         private static bool _idleHooked;
+        private static bool _documentHooked;
         private static bool _startupUiOpened;
         internal static string StartupUiError { get; private set; }
         private static string _loadedDrawingFingerprint;
@@ -25,11 +26,45 @@ namespace MiningVolume2023
             StartupLog("Initialize: MiningVolume V2.0 QA");
             TryRibbon();
             HookIdle();
+            AcApp.DocumentManager.DocumentActivated += OnDocumentActivated;
+            _documentHooked = true;
         }
 
         public void Terminate()
         {
             if (_idleHooked) AcApp.Idle -= OnIdle;
+            if (_documentHooked)
+            {
+                AcApp.DocumentManager.DocumentActivated -= OnDocumentActivated;
+                _documentHooked = false;
+            }
+        }
+
+        private static void OnDocumentActivated(
+            object sender,
+            Autodesk.AutoCAD.ApplicationServices.DocumentCollectionEventArgs e)
+        {
+            // Never leave the globally shared palette active with another
+            // drawing's HT/TK sources or accepted volume result. Defer costly
+            // DWG/TIN restoration until the user next opens IMSAT.
+            if (string.IsNullOrEmpty(_loadedDrawingFingerprint)) return;
+            var current = CurrentFingerprint();
+            if (string.Equals(current, _loadedDrawingFingerprint,
+                StringComparison.OrdinalIgnoreCase)) return;
+
+            _loadedDrawingFingerprint = null;
+            GridWorkflowService.Invalidate();
+            if (Palette != null && Palette.Visible)
+            {
+                Palette.Visible = false;
+                try
+                {
+                    e.Document?.Editor.WriteMessage(
+                        "\\nIMSAT VOLUME: đã đổi bản vẽ. Mở lại Ribbon IMSAT để nạp Project của DWG hiện tại; không dùng kết quả của DWG trước.");
+                }
+                catch { }
+            }
+            StartupLog("Active DWG changed; old palette hidden and grid invalidated.");
         }
 
         private static void OnIdle(object sender, EventArgs e)
@@ -153,14 +188,17 @@ namespace MiningVolume2023
 
         internal static void TogglePalette()
         {
-            if (Palette == null)
+            if (Palette == null || !Palette.Visible)
             {
+                // A new active DWG must restore its own project before Palette
+                // becomes interactive again.
                 Open(AppPage.Project);
+                StartupLog("Palette visibility toggled: ON");
                 return;
             }
 
-            Palette.Visible = !Palette.Visible;
-            StartupLog("Palette visibility toggled: " + (Palette.Visible ? "ON" : "OFF"));
+            Palette.Visible = false;
+            StartupLog("Palette visibility toggled: OFF");
         }
 
         [CommandMethod("TKL", CommandFlags.Session)]
@@ -182,8 +220,16 @@ namespace MiningVolume2023
         [CommandMethod("MV_PROJECT", CommandFlags.Session)] public static void OpenProject() => Open(AppPage.Project);
         [CommandMethod("MV_DATA", CommandFlags.Session)] public static void OpenData() => Open(AppPage.Data);
         [CommandMethod("MV_MODEL", CommandFlags.Session)] public static void OpenModel() => Open(AppPage.Model);
-        [CommandMethod("MV_VIEW3D_HT", CommandFlags.Session)] public static void View3DExisting() => Tin3DViewService.Start(ModelRole.Existing);
-        [CommandMethod("MV_VIEW3D_TK", CommandFlags.Session)] public static void View3DDesign() => Tin3DViewService.Start(ModelRole.Design);
+        [CommandMethod("MV_VIEW3D_HT", CommandFlags.Session)] public static void View3DExisting()
+        {
+            EnsureCurrentDrawingProjectLoaded();
+            Tin3DViewService.Start(ModelRole.Existing);
+        }
+        [CommandMethod("MV_VIEW3D_TK", CommandFlags.Session)] public static void View3DDesign()
+        {
+            EnsureCurrentDrawingProjectLoaded();
+            Tin3DViewService.Start(ModelRole.Design);
+        }
         [CommandMethod("MV_SECTION", CommandFlags.Session)] public static void OpenSection() => Open(AppPage.Section);
         [CommandMethod("MV_VOLUME", CommandFlags.Session)] public static void OpenVolume() => Open(AppPage.Volume);
         [CommandMethod("MV_GRID", CommandFlags.Session)] public static void OpenGrid() => Open(AppPage.Grid);
@@ -194,6 +240,7 @@ namespace MiningVolume2023
         [CommandMethod("MV_PROJECT_SAVE", CommandFlags.Session)]
         public static void SaveProject()
         {
+            EnsureCurrentDrawingProjectLoaded();
             var saved = Services.ProjectPersistenceService.SaveCurrentProject();
             AcApp.DocumentManager.MdiActiveDocument?.Editor.WriteMessage("\nIMSAT VOLUME: đã lưu Project vào DWG lúc " + saved.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss") + ".");
         }
