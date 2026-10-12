@@ -333,20 +333,19 @@ namespace MiningVolume.Core.Surface
                 }
             }
 
-            // Fail closed if an error cannot be attributed to an actual unsafe
-            // segment, unless the remaining graph was already normalized safely.
-            // Errors from an earlier stage can be stale after an initial local
-            // relaxation; in that case no additional geometry is discarded.
+            // A reported topology error without any identifiable offending
+            // edge is NOT proof of a safe TIN. Retain the blocking error so the
+            // caller can inspect the source, rather than silently approving a
+            // surface after removing zero constraints.
+            if (unsafeEdges.Count == 0) return;
+
             int retained = total - unsafeEdges.Count;
-            if (unsafeEdges.Count > 0)
-            {
-                var safe = new List<Segment3>(retained);
-                for (int i = 0; i < total; i++)
-                    if (!unsafeEdges.Contains(i)) safe.Add(constraints[i]);
-                constraints.Clear();
-                constraints.AddRange(safe);
-                result.RelaxedBreaklineConstraints += unsafeEdges.Count;
-            }
+            var safe = new List<Segment3>(retained);
+            for (int i = 0; i < total; i++)
+                if (!unsafeEdges.Contains(i)) safe.Add(constraints[i]);
+            constraints.Clear();
+            constraints.AddRange(safe);
+            result.RelaxedBreaklineConstraints += unsafeEdges.Count;
             result.Issues.RemoveAll(x => x.Severity == ValidationSeverity.Error);
             result.Issues.Add(new ValidationIssue(ValidationSeverity.Warning,
                 "LOCALLY_RELAXED_UNRESOLVED_TOPOLOGY",
