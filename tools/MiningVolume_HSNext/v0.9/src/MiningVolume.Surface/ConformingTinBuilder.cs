@@ -112,6 +112,9 @@ namespace MiningVolume.Surface
                 var indices = new int[checked(count * 3)];
                 if (mv_cdt_copy(mesh, indices, indices.Length) != 0)
                     throw new InvalidOperationException("Không đọc được kết quả lưới ràng buộc.");
+                var verticalFaces = VerticalFaceBuilder.Build(
+                    input.Sites, indices, input.VerticalConflictGroups,
+                    options.XyTolerance, options.ZConflictTolerance, cancellationToken);
                 if (fileBacked)
                 {
                     int retainedSmall;
@@ -120,7 +123,8 @@ namespace MiningVolume.Surface
                     var storedIssues = input.Issues.ToList();
                     if (retainedSmall > 0) storedIssues.Add(new ValidationIssue(ValidationSeverity.Warning,
                         "RETAIN_SMALL_TRIANGLES", $"Giữ {retainedSmall:n0} tam giác diện tích nhỏ dương để bảo toàn điểm và breakline."));
-                    return new TinSurface(name, store, storedIssues);
+                    return new TinSurface(name, store, storedIssues,
+                        verticalFaces, input.VerticalConflictGroups);
                 }
                 var output = new List<Triangle3>(count);
                 var clipper = options.ClipBoundary == null ? null : new TinPolygonClipper(options.ClipBoundary, cancellationToken);
@@ -141,7 +145,8 @@ namespace MiningVolume.Surface
                 var issues = input.Issues.ToList();
                 if (small > 0) issues.Add(new ValidationIssue(ValidationSeverity.Warning, "RETAIN_SMALL_TRIANGLES",
                     $"Giữ {small:n0} tam giác diện tích nhỏ dương để bảo toàn điểm và breakline."));
-                return new TinSurface(name, output, issues);
+                return new TinSurface(name, output, issues,
+                    verticalFaces, input.VerticalConflictGroups);
             }
             catch (DllNotFoundException ex) { throw new InvalidOperationException("Thiếu thư viện dựng TIN. Hãy cài lại đầy đủ bộ cài IMSAT VOLUME.", ex); }
             finally { if (mesh != IntPtr.Zero) mv_cdt_free(mesh); }
