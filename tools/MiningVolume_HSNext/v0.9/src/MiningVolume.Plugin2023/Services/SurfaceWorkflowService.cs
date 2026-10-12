@@ -32,6 +32,7 @@ namespace MiningVolume2023.Services
         public double MaxZ { get; set; }
         public DateTime SourceModifiedUtc { get; set; }
         public long SourceRevision { get; set; }
+        public long TinRegionRevision { get; set; }
         public long PrepareMilliseconds { get; set; }
         public long TriangulationMilliseconds { get; set; }
         internal SurfaceModel SourceModel { get; set; }
@@ -263,6 +264,7 @@ namespace MiningVolume2023.Services
             var source = session.Source;
             var sourceModified = source.LastModifiedUtc;
             var sourceRevision = source.Revision;
+            var regionRevision = state.TinRegionRevision;
             var clipBoundary = state.HasTinRegion
                 ? state.TinRegionPolygon.ToArray()
                 : null;
@@ -325,7 +327,9 @@ namespace MiningVolume2023.Services
                     tiled.Surface.Triangles.Count == 0)
                     throw new InvalidOperationException($"TIN {session.Name} không tạo được tam giác hợp lệ.");
 
-                if (!ReferenceEquals(session.Source, source) || source.Revision != sourceRevision)
+                if (!ReferenceEquals(session.Source, source) ||
+                    source.Revision != sourceRevision ||
+                    state.TinRegionRevision != regionRevision)
                 {
                     (tiled.Surface.Triangles as IDisposable)?.Dispose();
                     throw new InvalidOperationException(
@@ -344,6 +348,8 @@ namespace MiningVolume2023.Services
                     MaxZ = tiled.MaxZ,
                     SourceModifiedUtc = sourceModified,
                     SourceRevision = sourceRevision,
+                TinRegionRevision = regionRevision,
+                    TinRegionRevision = regionRevision,
                     PrepareMilliseconds = tiled.PrepareMilliseconds,
                     TriangulationMilliseconds = tiled.TriangulationMilliseconds,
                     SourceModel = source,
@@ -381,7 +387,9 @@ namespace MiningVolume2023.Services
             if (tin == null || tin.Triangles == null || tin.Triangles.Count == 0)
                 throw new InvalidOperationException($"TIN {session.Name} không tạo được tam giác hợp lệ.");
 
-            if (!ReferenceEquals(session.Source, source) || source.Revision != sourceRevision)
+            if (!ReferenceEquals(session.Source, source) ||
+                source.Revision != sourceRevision ||
+                state.TinRegionRevision != regionRevision)
                 throw new InvalidOperationException(
                     $"Dữ liệu {session.Name} đã thay đổi trong lúc đang dựng TIN. " +
                     "Kết quả tạm bị hủy; hãy tạo/cập nhật TIN lại.");
@@ -445,7 +453,8 @@ namespace MiningVolume2023.Services
                 throw new InvalidOperationException("Không có bản vẽ AutoCAD đang hoạt động.");
             foreach (var build in builds)
                 if (!ReferenceEquals(state.Get(build.Role).Source, build.SourceModel) ||
-                    build.SourceModel.Revision != build.SourceRevision)
+                    build.SourceModel.Revision != build.SourceRevision ||
+                    build.TinRegionRevision != state.TinRegionRevision)
                     throw new InvalidOperationException("Nguồn TIN đã đổi; không ghi kết quả cũ.");
             // The CAD layer is authoritative geometry, never a sampled preview.
             var ht = existing.Tin;
@@ -474,6 +483,9 @@ namespace MiningVolume2023.Services
         {
             if (build == null) throw new ArgumentNullException(nameof(build));
             if (build.Role != role) throw new InvalidOperationException("Kết quả dựng TIN không đúng mô hình cần ghi.");
+            if (build.TinRegionRevision != ProjectState.Current.TinRegionRevision)
+                throw new InvalidOperationException(
+                    "Vùng tạo TIN đã thay đổi trong khi tính. Không ghi TIN cũ; hãy dựng lại theo vùng mới.");
             DrawTinInternal(
                 role,
                 build.Tin,
