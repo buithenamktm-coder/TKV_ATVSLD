@@ -479,16 +479,20 @@ namespace MiningVolume2023.UI
                 int duplicateGroups = existing.DuplicateXYGroupCount + design.DuplicateXYGroupCount;
                 int duplicateVertices = existing.DuplicateXYSourceVertices + design.DuplicateXYSourceVertices;
                 int sameXYZ = existing.SameXYZDuplicateVertices + design.SameXYZDuplicateVertices;
+                int extraZVertices = Math.Max(0, duplicateVertices - duplicateGroups);
+                int totalDuplicateVertices = extraZVertices + sameXYZ;
                 if (duplicateGroups > 0 || sameXYZ > 0)
-                    _status.Text = $"Đã dựng TIN. Cảnh báo dữ liệu nguồn: {duplicateGroups:n0} nhóm XY khác Z; " +
-                                   $"{duplicateVertices:n0} đỉnh liên quan; {sameXYZ:n0} đỉnh trùng XYZ. " +
+                    _status.Text = $"Đã dựng TIN; cảnh báo {totalDuplicateVertices:n0} đỉnh trùng " +
+                                   $"({extraZVertices:n0} đỉnh khác Z ở {duplicateGroups:n0} XY; {sameXYZ:n0} đỉnh trùng XYZ). " +
                                    "Đề nghị kiểm tra điểm/đồng mức và hệ mặt cắt.";
                 MessageBox.Show(
                     "ĐÃ DỰNG ĐỦ HAI MÔ HÌNH TIN\r\n\r\n" +
                     $"Hiện trạng → {st.Existing.TinLayer}: {builds[0].Summary}\r\n" +
                     $"Thiết kế → {st.Design.TinLayer}: {builds[1].Summary}" +
                     (duplicateGroups > 0 || sameXYZ > 0
-                        ? $"\r\n\r\nCẢNH BÁO: {duplicateGroups:n0} nhóm XY khác Z ({duplicateVertices:n0} đỉnh nguồn), " +
+                        ? $"\r\n\r\nCẢNH BÁO: Có {totalDuplicateVertices:n0} đỉnh trùng. " +
+                          $"{extraZVertices:n0} đỉnh khác Z tại {duplicateGroups:n0} nhóm XY " +
+                          $"({duplicateVertices:n0} đỉnh nguồn liên quan); " +
                           $"{sameXYZ:n0} đỉnh trùng cả XYZ. Không cần loại từng điểm thủ công." +
                           "\r\nĐề nghị kiểm tra hệ thống điểm và đường đồng mức để tính khối lượng chính xác." +
                           (duplicateGroups > 0
