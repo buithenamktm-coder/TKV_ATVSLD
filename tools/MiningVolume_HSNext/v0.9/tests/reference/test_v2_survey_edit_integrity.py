@@ -55,3 +55,21 @@ def test_dwg_project_restore_releases_unadopted_file_backed_tin_stores():
     assert "finally" in single
     assert "!ReferenceEquals(session.Tin, build.Tin)" in single
     assert "(build.Tin.Triangles as IDisposable)?.Dispose();" in single
+
+
+def test_dwg_restore_does_not_erase_saved_tin_before_replacement_is_ready():
+    workflow = source("src/MiningVolume.Plugin2023/Services/SurfaceWorkflowService.cs")
+    project = source("src/MiningVolume.Plugin2023/Services/ProjectPersistenceService.cs")
+    assert "bool clearPreviousCadTin = true" in workflow
+    assert "InvalidateTin(role, clearCadLayer: clearPreviousCadTin, notify: false);" in workflow
+    restore = project.split("private static void RestoreModel(", 1)[1].split(
+        "private static void RebuildSavedTins(", 1
+    )[0]
+    assert "SurfaceWorkflowService.LoadLayer(role, snap.Layer, types, clearPreviousCadTin: false)" in restore
+    assert "SurfaceWorkflowService.LoadSelectedHandles(role, snap.SelectedHandles, types, clearPreviousCadTin: false)" in restore
+    rebuild = project.split("private static void RebuildSavedTins(", 1)[1].split(
+        "private static void TryRebuildTin(", 1
+    )[0]
+    assert "SurfaceWorkflowService.DrawTinPair(builds);" in rebuild
+    assert "SurfaceWorkflowService.InvalidateTin(ModelRole.Existing, clearCadLayer: false" in rebuild
+    assert "SurfaceWorkflowService.InvalidateTin(ModelRole.Design, clearCadLayer: false" in rebuild
