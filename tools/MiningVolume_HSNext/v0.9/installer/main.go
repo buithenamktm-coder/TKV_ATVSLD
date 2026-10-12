@@ -95,7 +95,9 @@ func install() {
         os.RemoveAll(target)
         restoreErr := restoreBackup(backup, target)
         registryErr := undoRegistration()
-        msg(fmt.Sprintf("Cài đặt chưa hoàn tất: %v. Khôi phục bundle: %v; đăng ký: %v", err, restoreErr, registryErr), 0x10); return
+        details := fmt.Sprintf("Status=FAILED\\r\\nStage=registerUninstall\\r\\nError=%v\\r\\nRestoreBundle=%v\\r\\nRestoreRegistration=%v", err, restoreErr, registryErr)
+        writePersistentLog("install_error", details)
+        msg(fmt.Sprintf("Cài đặt chưa hoàn tất: %v. Khôi phục bundle: %v; đăng ký: %v\\n\\nChi tiết: C:\\ProgramData\\MiningVolume2023\\Logs\\install_error.txt", err, restoreErr, registryErr), 0x10); return
     }
     os.RemoveAll(backup)
     writePersistentLog("install", "Status=INSTALLED\r\nAutoCAD="+filepath.Join(cad,"acad.exe"))
@@ -298,8 +300,19 @@ func registerUninstall(bundlePath, cadDir string) error {
         {"/v","DisplayIcon","/t","REG_SZ","/d",stored+",0","/f"},
         {"/v","UninstallString","/t","REG_SZ","/d","\""+stored+"\" --uninstall","/f"},
     }
-    for _,v := range vals { a:=append([]string{"add",uninstallKey},v...); if err:=exec.Command("reg",a...).Run(); err!=nil{return err} }
-    if err := createStartMenuShortcut(cadDir, stored); err != nil { return err }
+    for _,v := range vals {
+        a:=append([]string{"add",uninstallKey},v...)
+        output,err:=exec.Command("reg",a...).CombinedOutput()
+        if err!=nil{return fmt.Errorf("không ghi được giá trị đăng ký %s: %w; reg.exe: %s",v[1],err,strings.TrimSpace(string(output)))}
+    }
+    // Windows policies or redirected Start Menu folders may block shortcut
+    // creation even when the bundle and uninstall registry are valid.
+    // A shortcut is optional; never roll back a correctly registered plugin
+    // solely because WScript.Shell is unavailable.
+    if err := createStartMenuShortcut(cadDir, stored); err != nil {
+        writePersistentLog("installer_shortcut_warning",
+            "Status=WARNING\\r\\nStage=CreateStartMenuShortcut\\r\\nError="+err.Error())
+    }
     return nil
 }
 
@@ -315,8 +328,8 @@ func createStartMenuShortcut(cadDir, iconExe string) error {
         "$s.Description='IMSAT VOLUME - Mine Survey & Earthwork';" +
         "$s.IconLocation=" + psQuote(iconExe + ",0") + ";" +
         "$s.Save()"
-    if err := exec.Command("powershell.exe","-NoProfile","-WindowStyle","Hidden","-Command",ps).Run(); err != nil {
-        return err
+    if output,err := exec.Command("powershell.exe","-NoProfile","-NonInteractive","-WindowStyle","Hidden","-Command",ps).CombinedOutput(); err != nil {
+        return fmt.Errorf("shortcut IMSAT VOLUME: %w; powershell: %s",err,strings.TrimSpace(string(output)))
     }
     // Give users an explicit uninstall entry in Start Menu as well as
     // Windows Settings > Apps > Installed apps.
@@ -327,7 +340,10 @@ func createStartMenuShortcut(cadDir, iconExe string) error {
         "$s.Description='Gỡ IMSAT VOLUME khỏi AutoCAD (không xóa DWG/Project)';" +
         "$s.IconLocation=" + psQuote(iconExe + ",0") + ";" +
         "$s.Save()"
-    return exec.Command("powershell.exe", "-NoProfile", "-WindowStyle", "Hidden", "-Command", removePs).Run()
+    if output,err:=exec.Command("powershell.exe","-NoProfile","-NonInteractive","-WindowStyle","Hidden","-Command",removePs).CombinedOutput();err!=nil{
+        return fmt.Errorf("shortcut gỡ IMSAT VOLUME: %w; powershell: %s",err,strings.TrimSpace(string(output)))
+    }
+    return nil
 }
 
 func findAutoCAD2023() (string,error) {
