@@ -138,7 +138,8 @@ internal static class CoreRegression
                 var opt=new SurfaceBuildOptions{PreserveDuplicateXYVerticalFaces=true};
                 var input=new SurfaceInputPreparer().Prepare(model,opt);
                 Check(!input.HasErrors,"Doubled contour start forced manual point removal");
-                Check(input.Breaklines.Count>=2,"TIN ignored valid contour constraints");
+                Check(input.RelaxedBreaklineConstraints==2,
+                    "Conflicting contour edges were not explicitly counted and relaxed");
                 var tin=Build(input,opt);
                 Check(tin.VerticalFaces.Count>0 && tin.VerticalConflicts.Count==1,
                     "Contour duplicate Z not represented by vertical CAD faces");
@@ -152,6 +153,65 @@ internal static class CoreRegression
                     "Section crossing double-Z position has no review warning");
                 Check(low.Vertices[0].Position.Z==10&&high.Vertices[0].Position.Z==20,
                     "Contour source elevations were modified");
+            },
+            ["hsm0_generated_crossing_different_z_builds_without_manual_deletion"] = ()=>{
+                var a=Entity("crossA",SourceEntityType.Contour,P(0,5,10),P(10,5,10));
+                var b=Entity("crossB",SourceEntityType.Contour,P(5,0,20),P(5,10,20));
+                var model=Model(Entity("p0",SourceEntityType.Point,P(0,0,1)),
+                    Entity("p1",SourceEntityType.Point,P(10,0,1)),
+                    Entity("p2",SourceEntityType.Point,P(10,10,1)),
+                    Entity("p3",SourceEntityType.Point,P(0,10,1)),a,b);
+                var opt=new SurfaceBuildOptions{PreserveDuplicateXYVerticalFaces=true};
+                var prepared=new SurfaceInputPreparer().Prepare(model,opt);
+                Check(!prepared.HasErrors,
+                    "Generated crossing from two incompatible contours still blocks the automatic workflow");
+                Check(prepared.VerticalConflictGroups.Count==1,
+                    "Generated XY crossing is not carried into vertical-face source groups");
+                Check(prepared.RelaxedBreaklineConstraints==2 && prepared.Breaklines.Count==0,
+                    "Crossing contour constraints were not safely isolated from planar CDT");
+                var tin=Build(prepared,opt);
+                Check(tin.VerticalFaces.Count>0 && tin.RequiresSectionReview,
+                    "Generated crossing failed to create vertical faces and mandatory section review");
+                Check(tin.VerticalConflicts[0].Sources.Any(x=>Math.Abs(x.Z-10)<1e-8) &&
+                      tin.VerticalConflicts[0].Sources.Any(x=>Math.Abs(x.Z-20)<1e-8),
+                    "Breakline-crossing original Z values were lost");
+                Check(a.Vertices[0].Original.Z==10&&b.Vertices[0].Original.Z==20 &&
+                    model.Entities.Count==6,"Original CAD contours were changed or deleted");
+            },
+            ["hsm0_point_on_contour_different_z_builds_without_manual_deletion"] = ()=>{
+                var contour=Entity("contour",SourceEntityType.Contour,P(0,5,10),P(10,5,10));
+                var model=Model(
+                    Entity("p0",SourceEntityType.Point,P(0,0,1)),
+                    Entity("p1",SourceEntityType.Point,P(10,0,1)),
+                    Entity("p2",SourceEntityType.Point,P(10,10,1)),
+                    Entity("p3",SourceEntityType.Point,P(0,10,1)),
+                    Entity("high",SourceEntityType.Point,P(5,5,20)),contour);
+                var opt=new SurfaceBuildOptions{PreserveDuplicateXYVerticalFaces=true};
+                var prepared=new SurfaceInputPreparer().Prepare(model,opt);
+                Check(!prepared.HasErrors && prepared.RelaxedBreaklineConstraints==1,
+                    "Point above contour still requires manual deletion");
+                var tin=Build(prepared,opt);
+                Check(tin.VerticalFaces.Count>0 && tin.RequiresSectionReview,
+                    "Point above contour did not create vertical 3D face");
+                Check(contour.Vertices[0].Position.Z==10,
+                    "CAD contour was altered to resolve point-on-contour conflict");
+            },
+            ["hsm0_overlapping_contours_different_z_builds_without_manual_deletion"] = ()=>{
+                var lo=Entity("lo",SourceEntityType.Contour,P(0,5,10),P(10,5,10));
+                var hi=Entity("hi",SourceEntityType.Contour,P(3,5,20),P(7,5,20));
+                var model=Model(Entity("p0",SourceEntityType.Point,P(0,0,1)),
+                    Entity("p1",SourceEntityType.Point,P(10,0,1)),
+                    Entity("p2",SourceEntityType.Point,P(10,10,1)),
+                    Entity("p3",SourceEntityType.Point,P(0,10,1)),lo,hi);
+                var opt=new SurfaceBuildOptions{PreserveDuplicateXYVerticalFaces=true};
+                var prepared=new SurfaceInputPreparer().Prepare(model,opt);
+                Check(!prepared.HasErrors && prepared.VerticalConflictGroups.Count>=2,
+                    "Overlapping contours at different Z still block TIN");
+                var tin=Build(prepared,opt);
+                Check(tin.VerticalFaces.Count>0 && tin.RequiresSectionReview &&
+                    tin.RelaxedBreaklineConstraints>=2,
+                    "Overlapping contours did not retain vertical faces and relaxed-edge count");
+                Check(hi.Vertices[0].Position.Z==20,"Source contours were modified");
             },
             ["mean_z_preview_all_entities_and_original_unchanged"] = ()=>{
                 var contour=Entity("contour",SourceEntityType.Contour,P(0,0,0),P(10,0,0));
