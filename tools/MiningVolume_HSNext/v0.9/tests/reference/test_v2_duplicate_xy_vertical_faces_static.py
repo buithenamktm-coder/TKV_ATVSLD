@@ -38,7 +38,8 @@ def test_user_sees_warning_not_manual_point_removal():
     ui = read("MiningVolume.Plugin2023/UI/DataPage.cs")
     assert "duplicateGroups = existing.DuplicateXYGroupCount + design.DuplicateXYGroupCount" in ui
     assert "duplicateVertices = existing.DuplicateXYSourceVertices + design.DuplicateXYSourceVertices" in ui
-    assert "không phải loại điểm thủ công" in ui
+    assert "Không cần loại từng điểm thủ công" in ui
+    assert "sameXYZ = existing.SameXYZDuplicateVertices + design.SameXYZDuplicateVertices" in ui
     assert "CẬP NHẬT MẶT CẮT" in ui
 
 
