@@ -39,8 +39,38 @@ namespace MiningVolume2023.Services
             WriteXlsx(filePath, report);
         }
 
+        public const string TkvParentHeading = "TẬP ĐOÀN CÔNG NGHIỆP THAN - KHOÁNG SẢN VIỆT NAM";
+
+        // Stacks the organizational hierarchy in the existing first title row
+        // instead of inserting rows: ALL Excel formula addresses remain intact.
+        // Do not falsely affiliate users selecting "outside TKV" with the group.
+        public static void ApplyOrganizationHeader(SpreadsheetReport report, ProjectState state)
+        {
+            if (report == null) throw new ArgumentNullException(nameof(report));
+            if (state == null) throw new ArgumentNullException(nameof(state));
+            string unit = (state.MiningUnitName ?? string.Empty).Trim();
+            if (string.Equals(state.MiningUnitGroup, MiningUnitCatalog.OutsideTkv,
+                    StringComparison.Ordinal) && unit.Length == 0)
+                throw new InvalidOperationException(
+                    "Đã chọn 'Đơn vị khác (ngoài TKV)'. Hãy nhập tên đơn vị trước khi xuất Excel.");
+            if (unit.Length == 0) return;
+            bool outside = string.Equals(state.MiningUnitGroup, MiningUnitCatalog.OutsideTkv,
+                StringComparison.Ordinal);
+            string prefix = outside ? unit : TkvParentHeading + "\n" + unit;
+            foreach (var sheet in report.Sheets)
+            {
+                if (sheet == null || string.IsNullOrWhiteSpace(sheet.Title)) continue;
+                // Re-running the writer must not add duplicate company headings.
+                if (sheet.Title.StartsWith(prefix + "\n", StringComparison.Ordinal)) continue;
+                sheet.Title = prefix + "\n" + sheet.Title;
+            }
+        }
+
         public static void WriteXlsx(string filePath, SpreadsheetReport report)
         {
+            // Applies to section volumes, grid volumes and seam/mineral reports,
+            // including their formula-linked detail/summary worksheets.
+            ApplyOrganizationHeader(report, ProjectState.Current);
             var target=Path.GetFullPath(filePath);
             var directory=Path.GetDirectoryName(target);
             Directory.CreateDirectory(directory);
@@ -90,8 +120,10 @@ namespace MiningVolume2023.Services
             s.Landscape = false;
             s.AutoFilter = false;
             s.Notes.Add("Báo cáo được xuất tự động từ IMSAT VOLUME.");
-            AddKV(s, "Đơn vị khai thác", EmptyAsNotSet(st.MiningUnitName));
-            AddKV(s, "Nhóm khai thác", st.MiningUnitGroup);
+            if (st.MiningUnitGroup != MiningUnitCatalog.OutsideTkv)
+                AddKV(s, "Đơn vị cấp trên", TkvParentHeading);
+            AddKV(s, "Đơn vị tính toán", EmptyAsNotSet(st.MiningUnitName));
+            AddKV(s, "Loại đơn vị", st.MiningUnitGroup);
             AddKV(s, "Kỳ tính khối lượng", st.VolumePeriodLabel);
             AddKV(s, "Thời điểm tính khối lượng", FormatCalculationTime(st.VolumeCalculatedUtc));
             AddKV(s, "Thời gian thực tính khối lượng, giây", FormatDuration(st.VolumeCalculationSeconds));
@@ -311,9 +343,12 @@ namespace MiningVolume2023.Services
             // Append the project metadata and sign-off block after the fixed
             // calculation rows. Do not put extra Notes above the table.
             s.Rows.Add(new[] { ReportCell.Text(""), ReportCell.Text(""), ReportCell.Text("") });
-            s.Rows.Add(new[] { ReportCell.Text("Đơn vị khai thác", true), ReportCell.Text(""),
+            if (st.MiningUnitGroup != MiningUnitCatalog.OutsideTkv)
+                s.Rows.Add(new[] { ReportCell.Text("Đơn vị cấp trên", true),
+                    ReportCell.Text(""), ReportCell.Text(TkvParentHeading) });
+            s.Rows.Add(new[] { ReportCell.Text("Đơn vị tính toán", true), ReportCell.Text(""),
                 ReportCell.Text(EmptyAsNotSet(st.MiningUnitName)) });
-            s.Rows.Add(new[] { ReportCell.Text("Nhóm khai thác", true), ReportCell.Text(""),
+            s.Rows.Add(new[] { ReportCell.Text("Loại đơn vị", true), ReportCell.Text(""),
                 ReportCell.Text(st.MiningUnitGroup) });
             s.Rows.Add(new[] { ReportCell.Text("Kỳ tính khối lượng", true), ReportCell.Text(""),
                 ReportCell.Text(st.VolumePeriodLabel) });
