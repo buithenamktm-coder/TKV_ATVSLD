@@ -234,8 +234,11 @@ namespace MiningVolume.Core.Surface
             // Conflicting elevations require a user decision before expensive topology work.
             if (result.HasErrors) return result;
             NormalizeBreaklineTopology(result, options, progress, cancellationToken);
+            RecoverConflictingContourTopology(result, options);
+            if (result.HasErrors) return result;
             ResolveDuplicateSites(result, options, progress, cancellationToken);
             ValidateNormalizedTopology(result, options, progress, cancellationToken);
+            RecoverConflictingContourTopology(result, options);
 
             if (result.Sites.Count < 3)
                 result.Issues.Add(new ValidationIssue(
@@ -244,6 +247,40 @@ namespace MiningVolume.Core.Surface
                     "Mô hình cần ít nhất 3 điểm XY hợp lệ để dựng TIN."));
 
             return result;
+        }
+
+        private static void RecoverConflictingContourTopology(
+            PreparedSurfaceInput result, SurfaceBuildOptions options)
+        {
+            // Normalization occasionally exposes a *second* incompatible
+            // crossing after near-XY snapping, even though the scanner has
+            // already documented conflicting source Z. In the automatic 3D
+            // mode only, retain every survey site, expose the fallback and
+            // relax the remaining planar constraints. Never hide input errors
+            // such as insufficient points/nonfinite geometry.
+            if (!options.PreserveDuplicateXYVerticalFaces ||
+                result.VerticalConflictGroups.Count == 0 || !result.HasErrors)
+                return;
+            var errors = result.Issues.Where(x => x.Severity == ValidationSeverity.Error).ToList();
+            var allowed = new HashSet<string>(StringComparer.Ordinal) {
+                "POINT_ON_BREAKLINE_Z_CONFLICT",
+                "BREAKLINE_CROSSING_Z_CONFLICT",
+                "BREAKLINE_OVERLAP_Z_CONFLICT",
+                "BREAKLINE_NODE_Z_CONFLICT",
+                "BREAKLINE_DUPLICATE_Z_CONFLICT",
+                "BREAKLINE_NORMALIZE_CROSSING_FAILED",
+                "BREAKLINE_NORMALIZE_OVERLAP_FAILED"
+            };
+            if (errors.Count == 0 || errors.Any(x => !allowed.Contains(x.Code))) return;
+            int affected = result.Breaklines.Count;
+            result.RelaxedBreaklineConstraints += affected;
+            result.Breaklines.Clear(); // support only, never source CAD
+            result.Issues.RemoveAll(x => x.Severity == ValidationSeverity.Error);
+            result.Issues.Add(new ValidationIssue(ValidationSeverity.Warning,
+                "RELAXED_REMAINING_CONTOUR_TOPOLOGY",
+                $"Đã giữ TIN và các điểm nguồn. Còn {errors.Count:n0} cảnh báo topology " +
+                $"sau chuẩn hóa; nới thêm {affected:n0} ràng buộc chỉ trong lưới hỗ trợ. " +
+                "Bắt buộc kiểm tra/hiệu chỉnh mặt cắt trước khi chốt khối lượng."));
         }
 
         private sealed class SplitMark
