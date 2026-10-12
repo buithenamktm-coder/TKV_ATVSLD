@@ -8,6 +8,7 @@ using Autodesk.AutoCAD.DatabaseServices;
 using System.Globalization;
 using MiningVolume.Cad2023;
 using MiningVolume.Core.Model;
+using MiningVolume.Core.Geometry;
 using MiningVolume.Core.Surface;
 using MiningVolume.Surface;
 
@@ -159,6 +160,7 @@ namespace MiningVolume2023.Services
             if (objectIds == null || objectIds.Count == 0)
                 throw new InvalidOperationException("Chưa chọn đối tượng CAD nào.");
 
+            EnsureTinRegionMatchesCad();
             var state = ProjectState.Current;
             var doc = Application.DocumentManager.MdiActiveDocument ??
                       throw new InvalidOperationException("Không có bản vẽ AutoCAD đang hoạt động.");
@@ -482,6 +484,7 @@ namespace MiningVolume2023.Services
         public static void DrawTin(ModelRole role, SurfaceBuildResult build)
         {
             if (build == null) throw new ArgumentNullException(nameof(build));
+            EnsureTinRegionMatchesCad();
             if (build.Role != role) throw new InvalidOperationException("Kết quả dựng TIN không đúng mô hình cần ghi.");
             if (build.TinRegionRevision != ProjectState.Current.TinRegionRevision)
                 throw new InvalidOperationException(
@@ -521,6 +524,7 @@ namespace MiningVolume2023.Services
                     $"Dữ liệu {session.Name} đã thay đổi sau khi dựng TIN. " +
                     "Không ghi TIN cũ xuống AutoCAD; hãy tạo/cập nhật lại TIN.");
 
+            EnsureTinRegionMatchesCad();
             var doc = Application.DocumentManager.MdiActiveDocument ??
                       throw new InvalidOperationException("Không có bản vẽ AutoCAD đang hoạt động.");
 
@@ -625,14 +629,47 @@ namespace MiningVolume2023.Services
             if (notify) state.NotifyChanged();
         }
 
+        // A grip edit changes the CAD boundary geometry without changing its
+        // handle or the model's source revision. Never accept results clipped
+        // to a stale region under that circumstance.
+        private static void EnsureTinRegionMatchesCad()
+        {
+            var state = ProjectState.Current;
+            if (!state.HasTinRegion) return;
+            if (string.IsNullOrWhiteSpace(state.TinRegionHandle))
+                throw new InvalidOperationException(
+                    "Vùng tạo TIN chưa có đường bao CAD để kiểm chứng. Hãy chọn lại vùng.");
+
+            IReadOnlyList<Vec2> actual;
+            try { actual = BoundaryGeometryService.ReadBoundary(state.TinRegionHandle); }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException(
+                    "Không xác minh được vùng tạo TIN trên CAD. Hãy chọn lại đường bao và dựng TIN trước khi tính.",
+                    ex);
+            }
+
+            var expected = state.TinRegionPolygon;
+            if (actual.Count != expected.Count)
+                throw new InvalidOperationException(
+                    "Đường bao tạo TIN trên CAD đã thay đổi số đỉnh. Hãy chọn lại vùng và dựng TIN.");
+            for (int i = 0; i < actual.Count; i++)
+                if (!Geometry2D.AlmostSame(actual[i], expected[i], 1e-7))
+                    throw new InvalidOperationException(
+                        "Đường bao tạo TIN trên CAD đã bị chỉnh Grip. " +
+                        "TIN đang lưu thuộc vùng cũ; hãy chọn lại vùng và dựng TIN trước khi tính.");
+        }
+
         public static void EnsureBothTinsReady(bool synchronizeCadLayers)
         {
+            EnsureTinRegionMatchesCad();
             EnsureTinReady(ModelRole.Existing, synchronizeCadLayers);
             EnsureTinReady(ModelRole.Design, synchronizeCadLayers);
         }
 
         public static void EnsureTinReady(ModelRole role, bool synchronizeCadLayer)
         {
+            EnsureTinRegionMatchesCad();
             var session = ProjectState.Current.Get(role);
             if (session.Source == null || session.Source.Entities.Count == 0)
                 throw new InvalidOperationException($"Chưa nạp dữ liệu {session.Name}.");
