@@ -87,6 +87,15 @@ internal static class FinalAuditRegression
             Check(rejected,"Stale grid committed after boundary handle changed");
             GridWorkflowService.Invalidate();
         };
+        tests["rf16_section_geometry_tolerance_detects_real_grip_edit"]=()=>{
+            var initial=Profile(1,5);
+            var close=Edit(initial,5+1e-9,5-1e-9);
+            Check(EditedSectionProfileBuilder.SameGeometry(new[]{initial},new[]{close}),
+                "CAD X/Y roundtrip noise was incorrectly considered a real edit");
+            var changed=Edit(initial,5,5.001);
+            Check(!EditedSectionProfileBuilder.SameGeometry(new[]{initial},new[]{changed}),
+                "One-millimetre vertical grip edit was silently treated as roundtrip noise");
+        };
         tests["rf15_grip_modified_same_handle_boundary_blocks_export"]=()=>{
             var st=ProjectState.Current;
             st.Reset();
