@@ -97,7 +97,7 @@ func install() {
         registryErr := undoRegistration()
         details := fmt.Sprintf("Status=FAILED\\r\\nStage=registerUninstall\\r\\nError=%v\\r\\nRestoreBundle=%v\\r\\nRestoreRegistration=%v", err, restoreErr, registryErr)
         writePersistentLog("install_error", details)
-        msg(fmt.Sprintf("Cài đặt chưa hoàn tất: %v. Khôi phục bundle: %v; đăng ký: %v\\n\\nChi tiết: C:\\ProgramData\\MiningVolume2023\\Logs\\install_error.txt", err, restoreErr, registryErr), 0x10); return
+        msg(fmt.Sprintf("Cài đặt chưa hoàn tất: %v. Khôi phục bundle: %v; đăng ký: %v", err, restoreErr, registryErr) + "\n\nChi tiết: " + filepath.Join(programData,"MiningVolume2023","Logs","install_error.txt"), 0x10); return
     }
     os.RemoveAll(backup)
     writePersistentLog("install", "Status=INSTALLED\r\nAutoCAD="+filepath.Join(cad,"acad.exe"))
