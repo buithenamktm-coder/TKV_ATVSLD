@@ -243,11 +243,11 @@ namespace MiningVolume.Core.Surface
             // Conflicting elevations require a user decision before expensive topology work.
             if (result.HasErrors) return result;
             NormalizeBreaklineTopology(result, options, progress, cancellationToken);
-            RecoverConflictingContourTopology(result, options);
+            RecoverConflictingContourTopology(result, options, cancellationToken);
             if (result.HasErrors) return result;
             ResolveDuplicateSites(result, options, progress, cancellationToken);
             ValidateNormalizedTopology(result, options, progress, cancellationToken);
-            RecoverConflictingContourTopology(result, options);
+            RecoverConflictingContourTopology(result, options, cancellationToken);
 
             if (result.Sites.Count < 3)
                 result.Issues.Add(new ValidationIssue(
@@ -259,14 +259,11 @@ namespace MiningVolume.Core.Surface
         }
 
         private static void RecoverConflictingContourTopology(
-            PreparedSurfaceInput result, SurfaceBuildOptions options)
+            PreparedSurfaceInput result, SurfaceBuildOptions options, CancellationToken token)
         {
-            // Normalization occasionally exposes a *second* incompatible
-            // crossing after near-XY snapping, even though the scanner has
-            // already documented conflicting source Z. In the automatic 3D
-            // mode only, retain every survey site, expose the fallback and
-            // relax the remaining planar constraints. Never hide input errors
-            // such as insufficient points/nonfinite geometry.
+            // Automatic 3D support may relax only constraints directly involved in
+            // an unresolved planar conflict. Never clear all remaining breaklines
+            // just because one incompatible Z crossing was reported.
             if (!options.PreserveDuplicateXYVerticalFaces ||
                 result.VerticalConflictGroups.Count == 0 || !result.HasErrors)
                 return;
@@ -281,15 +278,82 @@ namespace MiningVolume.Core.Surface
                 "BREAKLINE_NORMALIZE_OVERLAP_FAILED"
             };
             if (errors.Count == 0 || errors.Any(x => !allowed.Contains(x.Code))) return;
-            int affected = result.Breaklines.Count;
-            result.RelaxedBreaklineConstraints += affected;
-            result.Breaklines.Clear(); // support only, never source CAD
+            token.ThrowIfCancellationRequested();
+            var constraints = result.Breaklines;
+            int total = constraints.Count;
+            var unsafeEdges = new HashSet<int>();
+
+            // Only calculate the expensive site/segment incidence when point-on-
+            // breakline or conflicting node errors were actually detected.
+            bool needsSiteReview = errors.Any(x =>
+                x.Code == "POINT_ON_BREAKLINE_Z_CONFLICT" ||
+                x.Code == "BREAKLINE_NODE_Z_CONFLICT");
+            if (needsSiteReview && result.Sites.Count > 0 && total > 0)
+            {
+                var sites = new PointGridIndex(result.Sites, options.XyTolerance, token);
+                for (int i = 0; i < total; i++)
+                {
+                    token.ThrowIfCancellationRequested();
+                    var seg = constraints[i];
+                    foreach (int j in sites.Query(seg.A.X, seg.A.Y, seg.B.X, seg.B.Y,
+                        options.XyTolerance))
+                    {
+                        var site = result.Sites[j];
+                        if (!Geometry2D.PointOnSegment(
+                            site.XY, seg.A.XY, seg.B.XY, options.XyTolerance)) continue;
+                        var expected = Geometry2D.InterpolateZOnSegment(site.XY, seg);
+                        if (Math.Abs(expected - site.Z) <= options.ZConflictTolerance) continue;
+                        unsafeEdges.Add(i);
+                        break;
+                    }
+                }
+            }
+
+            // After normalization no two constrained edges may cross or overlap:
+            // both edges of a surviving conflict are unsafe for the planar CDT.
+            // Use spatial candidate indexing; never scan all N*N edge pairs.
+            if (total > 1)
+            {
+                var index = new SegmentGridIndex(constraints, options.XyTolerance, token);
+                for (int i = 0; i < total; i++)
+                {
+                    token.ThrowIfCancellationRequested();
+                    var left = constraints[i];
+                    foreach (int j in index.Query(i))
+                    {
+                        if (j <= i) continue;
+                        var right = constraints[j];
+                        if (!Geometry2D.ProperIntersection(left.A.XY, left.B.XY,
+                                right.A.XY, right.B.XY, options.XyTolerance) &&
+                            !CollinearOverlap(left, right, options.XyTolerance))
+                            continue;
+                        unsafeEdges.Add(i);
+                        unsafeEdges.Add(j);
+                    }
+                }
+            }
+
+            // Fail closed if an error cannot be attributed to an actual unsafe
+            // segment, unless the remaining graph was already normalized safely.
+            // Errors from an earlier stage can be stale after an initial local
+            // relaxation; in that case no additional geometry is discarded.
+            int retained = total - unsafeEdges.Count;
+            if (unsafeEdges.Count > 0)
+            {
+                var safe = new List<Segment3>(retained);
+                for (int i = 0; i < total; i++)
+                    if (!unsafeEdges.Contains(i)) safe.Add(constraints[i]);
+                constraints.Clear();
+                constraints.AddRange(safe);
+                result.RelaxedBreaklineConstraints += unsafeEdges.Count;
+            }
             result.Issues.RemoveAll(x => x.Severity == ValidationSeverity.Error);
             result.Issues.Add(new ValidationIssue(ValidationSeverity.Warning,
-                "RELAXED_REMAINING_CONTOUR_TOPOLOGY",
-                $"Đã giữ TIN và các điểm nguồn. Còn {errors.Count:n0} cảnh báo topology " +
-                $"sau chuẩn hóa; nới thêm {affected:n0} ràng buộc chỉ trong lưới hỗ trợ. " +
-                "Bắt buộc kiểm tra/hiệu chỉnh mặt cắt trước khi chốt khối lượng."));
+                "LOCALLY_RELAXED_UNRESOLVED_TOPOLOGY",
+                $"Đã kiểm tra {total:n0} ràng buộc còn lại; chỉ nới {unsafeEdges.Count:n0} " +
+                $"đoạn trực tiếp xung đột, giữ {retained:n0} đoạn khác. " +
+                $"Còn {errors.Count:n0} vấn đề Z/topology nguồn cần kiểm tra mặt cắt " +
+                "trước khi xác nhận khối lượng. CAD gốc không thay đổi."));
         }
 
         private sealed class SplitMark
