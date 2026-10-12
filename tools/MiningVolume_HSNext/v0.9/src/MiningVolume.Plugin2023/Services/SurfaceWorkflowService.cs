@@ -38,6 +38,7 @@ namespace MiningVolume2023.Services
         public int TriangleCount => Tin?.Triangles?.Count ?? 0;
         public int VerticalFaceCount => Tin?.VerticalFaces?.Count ?? 0;
         public int DuplicateXYGroupCount => Tin?.VerticalConflicts?.Count ?? 0;
+        public int SameXYZDuplicateVertices => Tin?.SameXYZDuplicateVertices ?? 0;
         public int DuplicateXYSourceVertices => Tin?.VerticalConflicts?.Sum(g => g.Sources.Count(x => !x.Generated && x.VertexIndex >= 0)) ?? 0;
         public long CoreMilliseconds => PrepareMilliseconds + TriangulationMilliseconds;
         public bool IsLargeDataset { get; set; }
@@ -47,7 +48,8 @@ namespace MiningVolume2023.Services
         public string Summary =>
             $"{SiteCount:n0} điểm TIN • {BreaklineCount:n0} đoạn breakline • {TriangleCount:n0} tam giác" +
             (IsLargeDataset ? $" • TIN dữ liệu lớn {TileCount:n0} ô" : string.Empty) +
-            (DuplicateXYGroupCount > 0 ? $" • {DuplicateXYGroupCount:n0} vị trí XY trùng / {DuplicateXYSourceVertices:n0} đỉnh nguồn • {VerticalFaceCount:n0} mặt đứng" : "") +
+            (DuplicateXYGroupCount > 0 ? $" • {DuplicateXYGroupCount:n0} vị trí XY khác Z / {DuplicateXYSourceVertices:n0} đỉnh nguồn • {VerticalFaceCount:n0} mặt đứng" : "") +
+            (SameXYZDuplicateVertices > 0 ? $" • {SameXYZDuplicateVertices:n0} đỉnh trùng cả XYZ" : "") +
             $" • Z: {MinZ:0.###} → {MaxZ:0.###}" +
             $" • dựng {CoreMilliseconds / 1000.0:0.00}s" +
             (WarningCount > 0 ? $" • {WarningCount:n0} cảnh báo" : string.Empty);
@@ -480,7 +482,8 @@ namespace MiningVolume2023.Services
                               previewTriangles.Count < tin.Triangles.Count;
             var cadTin = cadPreview
                 ? new TinSurface(session.Name + " - CAD preview", previewTriangles,
-                    Array.Empty<ValidationIssue>(), tin.VerticalFaces, tin.VerticalConflicts)
+                    Array.Empty<ValidationIssue>(), tin.VerticalFaces, tin.VerticalConflicts,
+                    tin.SameXYZDuplicateVertices)
                 : tin;
 
             int written;
