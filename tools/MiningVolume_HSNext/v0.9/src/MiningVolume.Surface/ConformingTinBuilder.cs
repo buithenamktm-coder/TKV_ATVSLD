@@ -125,7 +125,8 @@ namespace MiningVolume.Surface
                         "RETAIN_SMALL_TRIANGLES", $"Giữ {retainedSmall:n0} tam giác diện tích nhỏ dương để bảo toàn điểm và breakline."));
                     return new TinSurface(name, store, storedIssues,
                         verticalFaces, input.VerticalConflictGroups,
-                    input.ConflictReport?.SameXYZDuplicates ?? 0);
+                    input.ConflictReport?.SameXYZDuplicates ?? 0,
+                        input.RelaxedBreaklineConstraints);
                 }
                 var output = new List<Triangle3>(count);
                 var clipper = options.ClipBoundary == null ? null : new TinPolygonClipper(options.ClipBoundary, cancellationToken);
@@ -148,7 +149,8 @@ namespace MiningVolume.Surface
                     $"Giữ {small:n0} tam giác diện tích nhỏ dương để bảo toàn điểm và breakline."));
                 return new TinSurface(name, output, issues,
                     verticalFaces, input.VerticalConflictGroups,
-                    input.ConflictReport?.SameXYZDuplicates ?? 0);
+                    input.ConflictReport?.SameXYZDuplicates ?? 0,
+                        input.RelaxedBreaklineConstraints);
             }
             catch (DllNotFoundException ex) { throw new InvalidOperationException("Thiếu thư viện dựng TIN. Hãy cài lại đầy đủ bộ cài IMSAT VOLUME.", ex); }
             finally { if (mesh != IntPtr.Zero) mv_cdt_free(mesh); }
