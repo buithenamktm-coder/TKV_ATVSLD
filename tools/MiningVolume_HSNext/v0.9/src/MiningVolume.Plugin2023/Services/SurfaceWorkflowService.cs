@@ -222,6 +222,9 @@ namespace MiningVolume2023.Services
             model.Touch();
 
             var session = ProjectState.Current.Get(role);
+            // Fail before mutating the source if AutoCAD refuses to clear the
+            // previous TIN layer. Preserve the last accepted session on error.
+            InvalidateTin(role, clearCadLayer: true, notify: false);
             session.Layer = sourceMode == SourceSelectionMode.Layer ? layer : null;
             session.SourceMode = sourceMode;
             session.SelectedHandles.Clear();
@@ -234,8 +237,7 @@ namespace MiningVolume2023.Services
                 foreach (var t in allowedTypes) session.AllowedTypes.Add(t);
             session.Source = model;
 
-            // Bất kỳ thay đổi nguồn nào cũng làm TIN trước đó mất hiệu lực.
-            InvalidateTin(role, clearCadLayer: true, notify: false);
+            // Source is committed only after the previous CAD/TIN invalidation.
             EnsureOutputLayer(role);
 
             ProjectState.Current.SectionProfiles.Clear();
@@ -572,6 +574,7 @@ namespace MiningVolume2023.Services
             }
             session.TinBuiltFromSourceUtc = sourceModifiedUtc;
             session.TinBuiltFromSourceRevision = sourceRevision;
+            session.TinBuiltFromRegionRevision = ProjectState.Current.TinRegionRevision;
             session.LastBuiltUtc = DateTime.UtcNow;
             session.TinVisible = true;
             session.TinCadFaceCount = written;
@@ -594,19 +597,9 @@ namespace MiningVolume2023.Services
         {
             var state = ProjectState.Current;
             var session = state.Get(role);
-            var oldTin = session.Tin;
-            session.Tin = null;
-            if (oldTin != null)
-            {
-                try { (oldTin.Triangles as IDisposable)?.Dispose(); } catch { }
-            }
-            session.TinBuiltFromSourceUtc = null;
-            session.TinBuiltFromSourceRevision = null;
-            session.LastBuiltUtc = null;
-            session.TinVisible = false;
-            session.TinCadFaceCount = 0;
-            session.TinCadIsPreview = false;
-
+            // Clear the CAD layer transactionally BEFORE disposing the prior
+            // file-backed triangulation and wiping accepted state. If AutoCAD
+            // rejects the edit, the old session remains available.
             if (clearCadLayer)
             {
                 var doc = Application.DocumentManager.MdiActiveDocument;
@@ -623,6 +616,21 @@ namespace MiningVolume2023.Services
                     try { doc.Editor.Regen(); } catch { }
                 }
             }
+
+
+            var oldTin = session.Tin;
+            session.Tin = null;
+            if (oldTin != null)
+            {
+                try { (oldTin.Triangles as IDisposable)?.Dispose(); } catch { }
+            }
+            session.TinBuiltFromSourceUtc = null;
+            session.TinBuiltFromSourceRevision = null;
+            session.TinBuiltFromRegionRevision = null;
+            session.LastBuiltUtc = null;
+            session.TinVisible = false;
+            session.TinCadFaceCount = 0;
+            session.TinCadIsPreview = false;
 
             state.SectionProfiles.Clear();
             state.VolumeResult = null;
