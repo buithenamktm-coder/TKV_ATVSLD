@@ -79,6 +79,7 @@ namespace MiningVolume.Core.Surface
 
             var faces = new List<Triangle3>();
             var created = new HashSet<(int site, int neighbor, int level)>();
+            var completedSites = new HashSet<int>();
             for (int i = 0; i + 2 < meshIndices.Count; i += 3)
             {
                 token.ThrowIfCancellationRequested();
@@ -88,7 +89,7 @@ namespace MiningVolume.Core.Surface
                 Add(c, a); Add(c, b);
             }
             foreach (int site in elevations.Keys)
-                if (!created.Any(x => x.site == site))
+                if (!completedSites.Contains(site))
                     throw new InvalidOperationException("Nút trùng XY không có tam giác kề; không thể dựng mặt đứng 3D.");
 
             return faces;
@@ -102,6 +103,7 @@ namespace MiningVolume.Core.Surface
                 for (int j = 1; j < levels.Count; j++)
                 {
                     if (!created.Add((center, neighbor, j))) continue;
+                    completedSites.Add(center);
                     faces.Add(new Triangle3(
                         new Vec3(root.X, root.Y, levels[j - 1]),
                         new Vec3(root.X, root.Y, levels[j]),
