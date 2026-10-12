@@ -229,6 +229,8 @@ jobs:
             security_scan = (Get-Content dist/V2_SECURITY_SCAN.txt | Select-Object -First 1)
             windows_ui_probe = 'UI_BUTTON_CONTRAST.json'
             windows_ui_probe_sha256 = (Get-FileHash dist/UI_BUTTON_CONTRAST.png -Algorithm SHA256).Hash.ToLowerInvariant()
+            liquid_glass_chrome = 'UI_GLASS_CHROME.json'
+            liquid_glass_chrome_sha256 = (Get-FileHash dist/UI_GLASS_CHROME.png -Algorithm SHA256).Hash.ToLowerInvariant()
             autocad_2023_interactive = 'NOT TESTED'
             excel_desktop_recalculation = 'NOT TESTED'
             windows_interactive_upgrade_uninstall = 'NOT TESTED'
@@ -324,6 +326,8 @@ jobs:
             tools/MiningVolume_HSNext/v0.9/dist/FINAL_BUILD_EVIDENCE.json
             tools/MiningVolume_HSNext/v0.9/dist/UI_BUTTON_CONTRAST.png
             tools/MiningVolume_HSNext/v0.9/dist/UI_BUTTON_CONTRAST.json
+            tools/MiningVolume_HSNext/v0.9/dist/UI_GLASS_CHROME.png
+            tools/MiningVolume_HSNext/v0.9/dist/UI_GLASS_CHROME.json
             tools/MiningVolume_HSNext/v0.9/docs/V2_FINAL_QA_REPORT.md
             tools/MiningVolume_HSNext/v0.9/docs/V2_RELEASE_GATES.md
             tools/MiningVolume_HSNext/v0.9/docs/V2_AUTOCAD_ACCEPTANCE.md
