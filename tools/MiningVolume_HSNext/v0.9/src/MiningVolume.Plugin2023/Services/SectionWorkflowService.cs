@@ -21,6 +21,9 @@ namespace MiningVolume2023.Services
                 FirstNumber = 1,
                 AppendLastOffset = true
             });
+            // Never invalidate accepted section/volume state before the CAD
+            // preview transaction has successfully committed.
+            DrawPreview(system);
             state.SectionSpacing = spacing;
             state.SectionDirection = direction;
             state.SectionSystem = system;
@@ -28,7 +31,6 @@ namespace MiningVolume2023.Services
             state.VolumeResult = null;
             state.VolumeCalculatedUtc = null;
             state.VolumeCalculationSeconds = null;
-            DrawPreview(system);
             state.NotifyChanged();
             return system;
         }
@@ -38,14 +40,17 @@ namespace MiningVolume2023.Services
             var state = ProjectState.Current;
             EnsureSystem();
             var offsets = state.SectionSystem.Lines.Where(x => !string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase)).Select(x => x.Offset).ToList();
-            state.SectionSystem = RebuildAtOffsets(offsets);
+            // Draw the candidate first. A CAD error must not invalidate
+            // the previous accepted section geometry or calculated volume.
+            var candidate = RebuildAtOffsets(offsets);
+            DrawPreview(candidate);
+            state.SectionSystem = candidate;
             state.SectionProfiles.Clear();
             state.VolumeResult = null;
             state.VolumeCalculatedUtc = null;
             state.VolumeCalculationSeconds = null;
-            DrawPreview(state.SectionSystem);
             state.NotifyChanged();
-            return state.SectionSystem;
+            return candidate;
         }
 
         public static SectionSystem AddLineAtPoint(Vec2 point)
@@ -55,14 +60,17 @@ namespace MiningVolume2023.Services
             double offset = Dot(point, state.SectionSystem.Normal);
             var offsets = state.SectionSystem.Lines.Select(x => x.Offset).ToList();
             if (!offsets.Any(x => Math.Abs(x - offset) < 1e-6)) offsets.Add(offset);
-            state.SectionSystem = RebuildAtOffsets(offsets);
+            // Draw the candidate first. A CAD error must not invalidate
+            // the previous accepted section geometry or calculated volume.
+            var candidate = RebuildAtOffsets(offsets);
+            DrawPreview(candidate);
+            state.SectionSystem = candidate;
             state.SectionProfiles.Clear();
             state.VolumeResult = null;
             state.VolumeCalculatedUtc = null;
             state.VolumeCalculationSeconds = null;
-            DrawPreview(state.SectionSystem);
             state.NotifyChanged();
-            return state.SectionSystem;
+            return candidate;
         }
 
         public static SectionSystem MoveLineToPoint(string name, Vec2 point)
@@ -71,14 +79,17 @@ namespace MiningVolume2023.Services
             EnsureSystem();
             double offset = Dot(point, state.SectionSystem.Normal);
             var offsets = state.SectionSystem.Lines.Select(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase) ? offset : x.Offset).ToList();
-            state.SectionSystem = RebuildAtOffsets(offsets);
+            // Draw the candidate first. A CAD error must not invalidate
+            // the previous accepted section geometry or calculated volume.
+            var candidate = RebuildAtOffsets(offsets);
+            DrawPreview(candidate);
+            state.SectionSystem = candidate;
             state.SectionProfiles.Clear();
             state.VolumeResult = null;
             state.VolumeCalculatedUtc = null;
             state.VolumeCalculationSeconds = null;
-            DrawPreview(state.SectionSystem);
             state.NotifyChanged();
-            return state.SectionSystem;
+            return candidate;
         }
 
         public static void EnsureProfileInputsReady()
