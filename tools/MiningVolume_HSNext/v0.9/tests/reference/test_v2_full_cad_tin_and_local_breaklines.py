@@ -67,3 +67,36 @@ def test_rebuilding_lost_cad_tin_layer_preserves_accepted_calculations():
     assert "state.SectionProfiles.Clear(" not in sync
     assert "state.VolumeResult = null" not in sync
     assert "state.VolumeCalculatedUtc = null" not in sync
+
+
+def test_section_batch_writes_commit_atomically_and_do_not_pump_ui_events():
+    service = read("src/MiningVolume.Plugin2023/Services/SectionWorkflowService.cs")
+    section = service.split("public static void DrawProfiles(", 1)[1].split(
+        "public static void ClearPreview(", 1
+    )[0]
+    assert "allSections = doc.Database.TransactionManager.StartTransaction()" in section
+    assert "allSections.Commit();" in section
+    assert section.index("SectionCadRenderer.ReplaceProfilesBatched(") < section.index(
+        "allSections.Commit();"
+    )
+    assert "Application.DoEvents()" not in section
+    page = read("src/MiningVolume.Plugin2023/UI/SectionPage.cs")
+    draw = page.split("private async void BuildProfiles(", 1)[1].split(
+        "private async void UpdateEditedProfiles(", 1
+    )[0]
+    assert "Application.DoEvents();" not in draw
+    assert "SectionWorkflowService.CommitProfiles(profiles);" in draw
+    assert draw.index("SectionWorkflowService.DrawProfiles(") < draw.index(
+        "SectionWorkflowService.CommitProfiles(profiles);"
+    )
+
+
+def test_no_topology_errors_downgraded_without_an_unsafe_segment():
+    code = read("src/MiningVolume.Core/Surface/SurfaceInputPreparer.cs")
+    fallback = code.split(
+        "private static void RecoverConflictingContourTopology(", 1
+    )[1].split("private sealed class SplitMark", 1)[0]
+    assert "if (unsafeEdges.Count == 0) return;" in fallback
+    assert fallback.index("if (unsafeEdges.Count == 0) return;") < fallback.index(
+        "result.Issues.RemoveAll(x => x.Severity == ValidationSeverity.Error);"
+    )
