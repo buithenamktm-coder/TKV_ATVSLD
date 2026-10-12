@@ -25,6 +25,8 @@
 | G5 — Trial, activation RSA, cài/nâng cấp/gỡ | **BLOCKED** | Windows Go installer tests PASS, V1→V2 cleanup/rollback đã thêm; nhưng chưa thực hiện cài/gỡ trên Windows/AutoCAD và public trust anchor RSA vẫn rỗng. Private signing key không được lưu vào repo. |
 | G6 — Hồ sơ nghiệm thu, checksum và bản phát hành | **PARTIAL** | Có QA report, PlanCode 14 RF + 22 test, artifact QA, checksum, run links; chưa có biên bản host, chứng cứ license và ký xác nhận release. |
 
+**Thay đổi nghiệp vụ ngày 12/10 — HSMo vertical-face:** Người dùng xác nhận HSMo cho phép nhóm trùng XY, khác Z biểu diễn hình học gần mặt đứng dạng chóp và mặt cắt có thể chỉnh tay sau khi vẽ. V2 phải có cơ chế bảo toàn tất cả Z nguồn, TIN 3D/mặt đứng và chỉnh MC trước khi tính khối lượng; không tự gộp trung bình hay buộc xóa nguồn. **Chưa triển khai mã nguồn tương thích HSMo; hiện vẫn BLOCKED cho trường hợp này**, dù CI của nhánh 2,5D đang PASS. Chi tiết ADR: `ADR_V2_DUPLICATE_XY_VERTICAL_FACE_SECTION_EDIT_20261012.md`.
+
 ## 3. Những việc chưa được phép gắn PASS
 
 - RF-06: Đã lưu dấu hệ mặt cắt CAD và SHA-256 toàn bộ hình học nguồn HT/TK để chặn khôi phục âm thầm khi nguồn hoặc đường mặt cắt đã thay đổi. Migrate metadata của hình mặt cắt đời trước vẫn cần chính sách an toàn; SAVE/SAVEAS/reopen phải nghiệm thu thực tế.
