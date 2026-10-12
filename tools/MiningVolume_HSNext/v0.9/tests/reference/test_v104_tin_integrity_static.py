@@ -53,10 +53,10 @@ def test_model_page_has_explicit_existing_design_and_pair_tin_build():
     s = read("src/MiningVolume.Plugin2023/UI/ModelPage.cs")
     assert "TẠO / CẬP NHẬT TIN HIỆN TRẠNG" in s
     assert "TẠO / CẬP NHẬT TIN THIẾT KẾ" in s
-    assert "TẠO / CẬP NHẬT CẢ HAI TIN" in s
-    assert "BuildBothTinAsync" in s
-    assert "BuildPairCoreDetailed" in s
-    assert "DrawTinPair" in s
+    assert "TẠO / CẬP NHẬT CẢ HAI TIN" not in s
+    assert "BuildBothTinAsync" not in s
+    assert "BuildCoreDetailed" in s
+    assert "DrawTin(" in s
 
 def test_sections_and_volume_are_gated_by_verified_tin_pair():
     section = read("src/MiningVolume.Plugin2023/Services/SectionWorkflowService.cs")

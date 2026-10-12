@@ -25,13 +25,37 @@ namespace MiningVolume2023.Services
 
         public static int Replace(Database db, string layerName, TinSurface tin, short aciColor)
         {
+            using (var tr = db.TransactionManager.StartTransaction())
+            {
+                int written = ReplaceInTransaction(db, tr, layerName, tin, aciColor);
+                tr.Commit();
+                return written;
+            }
+        }
+
+        public static int[] ReplacePair(Database db, string existingLayer, TinSurface existing,
+            string designLayer, TinSurface design)
+        {
+            if (string.Equals(existingLayer, designLayer, StringComparison.OrdinalIgnoreCase))
+                throw new ArgumentException("Hai TIN phải có hai layer riêng.");
+            using (var tr = db.TransactionManager.StartTransaction())
+            {
+                int ht = ReplaceInTransaction(db, tr, existingLayer, existing, 1);
+                int tk = ReplaceInTransaction(db, tr, designLayer, design, 3);
+                // No state adoption or old-store disposal before both writes succeed.
+                tr.Commit();
+                return new[] { ht, tk };
+            }
+        }
+
+        private static int ReplaceInTransaction(Database db, Transaction tr, string layerName, TinSurface tin, short aciColor)
+        {
             if (tin == null) throw new ArgumentNullException(nameof(tin));
             if (tin.Triangles == null || tin.Triangles.Count == 0)
                 throw new InvalidOperationException("TIN không có tam giác để ghi xuống AutoCAD.");
 
             int written = 0;
-            using(var progress=new TinCadProgress(tin.Triangles.Count+tin.VerticalFaces.Count))
-            using (var tr = db.TransactionManager.StartTransaction())
+            using(var progress=new TinCadProgress(tin.Triangles.Count+tin.VerticalFaces.Count, layerName))
             {
                 var layerId = EnsureLayer(db, tr, layerName, aciColor);
                 MoveCurrentLayerAwayIfNeeded(db, tr, layerId);
@@ -98,8 +122,10 @@ namespace MiningVolume2023.Services
                     if((written&1023)==0)progress.Poll(written,true);
                 }
 
+                if (written != tin.Triangles.Count + tin.VerticalFaces.Count)
+                    throw new InvalidOperationException("Số mặt TIN ghi CAD không khớp; hoàn tác toàn bộ thao tác.");
+                progress.Poll(written, true);
                 outLayer.IsLocked = true;
-                tr.Commit();
             }
             return written;
         }

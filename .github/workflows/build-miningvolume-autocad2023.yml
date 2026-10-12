@@ -77,6 +77,13 @@ jobs:
           Set-Location $env:MV_ROOT
           dotnet build MiningVolume.HSNext.sln -c Release --no-restore -p:UseAutoCADNuGet=true -p:SourceRevisionId=$env:SOURCE_SHA
 
+      - name: Verify actual Windows button contrast
+        shell: powershell
+        working-directory: tools/MiningVolume_HSNext/v0.9
+        run: |
+          $source = Get-Content .\tests\ui\verify_buttons.ps1 -Raw -Encoding UTF8
+          & ([scriptblock]::Create($source)) -Root (Get-Location).Path
+
       - name: Build and self-test offline license issuer (admin tool)
         shell: pwsh
         run: |
@@ -296,6 +303,8 @@ jobs:
             tools/MiningVolume_HSNext/v0.9/dist/V2_SHA256SUMS.txt
             tools/MiningVolume_HSNext/v0.9/dist/V2_BUILD_VERIFICATION.txt
             tools/MiningVolume_HSNext/v0.9/dist/V2_SECURITY_SCAN.txt
+            tools/MiningVolume_HSNext/v0.9/dist/UI_BUTTON_CONTRAST.png
+            tools/MiningVolume_HSNext/v0.9/dist/UI_BUTTON_CONTRAST.json
             tools/MiningVolume_HSNext/v0.9/docs/V2_FINAL_QA_REPORT.md
             tools/MiningVolume_HSNext/v0.9/docs/V2_RELEASE_GATES.md
             tools/MiningVolume_HSNext/v0.9/docs/V2_AUTOCAD_ACCEPTANCE.md

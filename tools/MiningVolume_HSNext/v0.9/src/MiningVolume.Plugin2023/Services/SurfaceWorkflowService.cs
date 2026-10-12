@@ -65,6 +65,22 @@ namespace MiningVolume2023.Services
 
     public static class SurfaceWorkflowService
     {
+        private static int _interactiveBuild;
+        public static IDisposable EnterInteractiveBuild()
+        {
+            if (Interlocked.CompareExchange(ref _interactiveBuild, 1, 0) != 0)
+                throw new InvalidOperationException("Đang có một lượt dựng TIN. Hãy đợi hoàn tất hoặc hủy trước khi tạo TIN tiếp theo.");
+            return new BuildLease();
+        }
+        private sealed class BuildLease : IDisposable
+        {
+            private int _released;
+            public void Dispose() {
+                if (Interlocked.Exchange(ref _released, 1) == 0)
+                    Interlocked.Exchange(ref _interactiveBuild, 0);
+            }
+        }
+
         public static SurfaceLoadResult[] LoadVia4Preset(ISet<SourceEntityType> allowedTypes)
         {
             // Validate both inputs and the unique boundary before replacing either session.
@@ -100,6 +116,9 @@ namespace MiningVolume2023.Services
             state.SectionSystem = null;
             state.SectionProfiles.Clear();
             state.VolumeResult = null;
+            state.VolumeCalculatedUtc = null;
+            state.VolumeCalculationSeconds = null;
+            GridWorkflowService.Invalidate();
             state.NotifyChanged();
             return result;
         }
@@ -420,28 +439,33 @@ namespace MiningVolume2023.Services
             if (existing == null || design == null)
                 throw new InvalidOperationException("Thiếu kết quả TIN hiện trạng hoặc TIN thiết kế.");
 
-            try
-            {
-                progress?.Invoke($"Đang ghi TIN hiện trạng xuống AutoCAD: {existing.TriangleCount:n0} tam giác...");
-                DrawTin(ModelRole.Existing, existing);
-                progress?.Invoke($"Đang ghi TIN thiết kế xuống AutoCAD: {design.TriangleCount:n0} tam giác...");
-                DrawTin(ModelRole.Design, design);
-
-                // Both layers were just written under document lock by this workflow.
-                // Re-scanning the whole ModelSpace immediately would be redundant and
-                // very expensive on production mine drawings.
-                EnsureBothTinsReady(synchronizeCadLayers: false);
-                progress?.Invoke("Đã ghi xong cặp TIN và kiểm tra trạng thái nguồn.");
-            }
-            catch
-            {
-                // A pair is an atomic calculation prerequisite. Never leave one new TIN
-                // paired with an old/missing counterpart after a write failure.
-                InvalidateTin(ModelRole.Existing, clearCadLayer: true, notify: false);
-                InvalidateTin(ModelRole.Design, clearCadLayer: true, notify: false);
-                ProjectState.Current.NotifyChanged();
-                throw;
-            }
+            var state = ProjectState.Current;
+            var doc = Application.DocumentManager.MdiActiveDocument ??
+                throw new InvalidOperationException("Không có bản vẽ AutoCAD đang hoạt động.");
+            foreach (var build in builds)
+                if (!ReferenceEquals(state.Get(build.Role).Source, build.SourceModel) ||
+                    build.SourceModel.Revision != build.SourceRevision)
+                    throw new InvalidOperationException("Nguồn TIN đã đổi; không ghi kết quả cũ.");
+            var ht = CadSurface(state.Existing, existing.Tin, existing.IsLargeDataset ? existing.PreviewTriangles : null);
+            var tk = CadSurface(state.Design, design.Tin, design.IsLargeDataset ? design.PreviewTriangles : null);
+            progress?.Invoke("Đang ghi TIN hiện trạng xuống AutoCAD, tiếp đến thiết kế; Esc để hủy cả thao tác...");
+            int[] written;
+            using (doc.LockDocument())
+                written = TinCadRenderer.ReplacePair(doc.Database, state.Existing.TinLayer, ht,
+                    state.Design.TinLayer, tk);
+            // Both CAD layers committed together. Only now transfer ownership of stores.
+            AdoptTin(state.Existing, existing.Tin, existing.SourceRevision, existing.SourceModifiedUtc,
+                written[0], !ReferenceEquals(ht, existing.Tin));
+            AdoptTin(state.Design, design.Tin, design.SourceRevision, design.SourceModifiedUtc,
+                written[1], !ReferenceEquals(tk, design.Tin));
+            state.SectionProfiles.Clear();
+            state.VolumeResult = null;
+            state.VolumeCalculatedUtc = null;
+            state.VolumeCalculationSeconds = null;
+            GridWorkflowService.Invalidate();
+            EnsureBothTinsReady(synchronizeCadLayers: false);
+            state.NotifyChanged();
+            try { doc.Editor.Regen(); } catch { }
         }
 
         public static void DrawTin(ModelRole role, SurfaceBuildResult build)
@@ -486,13 +510,8 @@ namespace MiningVolume2023.Services
             var doc = Application.DocumentManager.MdiActiveDocument ??
                       throw new InvalidOperationException("Không có bản vẽ AutoCAD đang hoạt động.");
 
-            bool cadPreview = previewTriangles != null && previewTriangles.Count > 0 &&
-                              previewTriangles.Count < tin.Triangles.Count;
-            var cadTin = cadPreview
-                ? new TinSurface(session.Name + " - CAD preview", previewTriangles,
-                    Array.Empty<ValidationIssue>(), tin.VerticalFaces, tin.VerticalConflicts,
-                    tin.SameXYZDuplicateVertices, tin.RelaxedBreaklineConstraints)
-                : tin;
+            var cadTin = CadSurface(session, tin, previewTriangles);
+            bool cadPreview = !ReferenceEquals(cadTin, tin);
 
             int written;
             using (doc.LockDocument())
@@ -511,6 +530,30 @@ namespace MiningVolume2023.Services
                     $"Ghi TIN {session.Name} xuống AutoCAD không đầy đủ: cần {expectedCadFaces:n0} mặt CAD, " +
                     $"đã ghi {written:n0}.");
 
+            AdoptTin(session, tin, sourceRevision, sourceModifiedUtc, written, cadPreview);
+            state.SectionProfiles.Clear();
+            state.VolumeResult = null;
+            state.VolumeCalculatedUtc = null;
+            state.VolumeCalculationSeconds = null;
+            GridWorkflowService.Invalidate();
+            state.NotifyChanged();
+
+            try { doc.Editor.Regen(); } catch { }
+        }
+
+        private static TinSurface CadSurface(ModelSession session, TinSurface tin,
+            IReadOnlyList<MiningVolume.Core.Geometry.Triangle3> previewTriangles)
+        {
+            return previewTriangles != null && previewTriangles.Count > 0 && previewTriangles.Count < tin.Triangles.Count
+                ? new TinSurface(session.Name + " - CAD preview", previewTriangles,
+                    Array.Empty<ValidationIssue>(), tin.VerticalFaces, tin.VerticalConflicts,
+                    tin.SameXYZDuplicateVertices, tin.RelaxedBreaklineConstraints)
+                : tin;
+        }
+
+        private static void AdoptTin(ModelSession session, TinSurface tin, long sourceRevision,
+            DateTime sourceModifiedUtc, int written, bool cadPreview)
+        {
             var previousTin = session.Tin;
             session.Tin = tin;
             if (previousTin != null && !ReferenceEquals(previousTin, tin))
@@ -523,11 +566,6 @@ namespace MiningVolume2023.Services
             session.TinVisible = true;
             session.TinCadFaceCount = written;
             session.TinCadIsPreview = cadPreview;
-            state.SectionProfiles.Clear();
-            state.VolumeResult = null;
-            state.NotifyChanged();
-
-            try { doc.Editor.Regen(); } catch { }
         }
 
         public static void EnsureOutputLayer(ModelRole role)

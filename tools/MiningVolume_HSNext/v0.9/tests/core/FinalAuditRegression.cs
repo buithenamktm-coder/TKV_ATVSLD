@@ -31,6 +31,18 @@ internal static class FinalAuditRegression
         new SectionSystem(new Vec2(1,0),new Vec2(0,1),Boundary,p.Select(x=>x.Line).ToArray(),Array.Empty<string>()),p,Plane(5),Plane(0),
         new VolumeCalculationOptions{FromLevel=0,ToLevel=10,LevelStep=5});
     public static void Add(IDictionary<string,Action> tests) {
+        tests["normalizer_cell_keys_preserve_neighbors_at_positive_and_negative_mine_coordinates"] = () => {
+            foreach(double origin in new[]{0d,2500000d,-2500000d}) {
+                var raw=new[]{new Vec3(origin,450000,5),new Vec3(origin+0.0000005,450000,5),
+                    new Vec3(origin+10,450000,5),new Vec3(origin+10,450010,5),new Vec3(origin,450010,5)};
+                var options=new SurfaceBuildOptions();
+                var input=new SurfaceInputPreparer().PrepareRaw(raw,null,options);
+                Check(input.Sites.Count==4 && !input.HasErrors,"Neighbor duplicate changed after cell-key optimization");
+                var mesh=new MiningVolume.Surface.ConformingTinBuilder().Build("translated-cell-test",input,options);
+                Near(mesh.Triangles.Sum(t=>t.Area2D),100);
+                Check(raw.Length==5 && raw[1].Z==5,"Source was changed");
+            }
+        };
         tests["rf11_catalog_retains_current_legal_names"] = () => {
             Check(!MiningUnitCatalog.CoalUnits.Any(x=>x.Contains("Tây Nam Đá Mài")), "Merged company still listed independently");
             Check(MiningUnitCatalog.MineralUnits.Contains("Công ty TNHH MTV Nhôm Lâm Đồng - TKV"), "Incorrect legal form");

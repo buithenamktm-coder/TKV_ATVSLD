@@ -18,7 +18,8 @@ namespace MiningVolume2023.UI
         private readonly CheckedListBox _types;
         private readonly Label _status;
         private readonly Label _tinRegionStatus;
-        private readonly Button _buildPair;
+        private readonly Button _buildExisting;
+        private readonly Button _buildDesign;
         private readonly Button _cancelBuild;
         private readonly Button _via4Preset;
         private CancellationTokenSource _buildCts;
@@ -194,28 +195,30 @@ namespace MiningVolume2023.UI
             var actions = new TableLayoutPanel
             {
                 Width = 520,
-                Height = 44,
-                ColumnCount = 3,
-                RowCount = 1,
+                Height = 88,
+                ColumnCount = 2,
+                RowCount = 2,
                 Margin = new Padding(0),
                 Padding = new Padding(0)
             };
-            actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 27));
-            actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 46));
-            actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 27));
+            actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+            actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+            actions.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
+            actions.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
 
             var refresh = Btn("Làm mới layer", (s, e) => RefreshLayers());
             refresh.Dock = DockStyle.Fill;
             refresh.Margin = new Padding(0, 0, 6, 0);
-            actions.Controls.Add(refresh, 0, 0);
+            actions.Controls.Add(refresh, 0, 1);
 
-            _buildPair = Btn("TẠO CẶP TIN", async (s, e) => await BuildPairTinAsync());
-            _buildPair.Font = new Font("Arial", 9F, FontStyle.Bold);
-            _buildPair.Dock = DockStyle.Fill;
-            _buildPair.Margin = new Padding(0);
-            _buildPair.Enabled = false;
-            actions.Controls.Add(_buildPair, 1, 0);
-
+            _buildExisting = Btn("TẠO TIN HIỆN TRẠNG", async (s,e) => await BuildSingleTinAsync(ModelRole.Existing));
+            _buildDesign = Btn("TẠO TIN THIẾT KẾ", async (s,e) => await BuildSingleTinAsync(ModelRole.Design));
+            _buildExisting.Dock = DockStyle.Fill;
+            _buildDesign.Dock = DockStyle.Fill;
+            _buildExisting.Margin = new Padding(0,0,3,4);
+            _buildDesign.Margin = new Padding(3,0,0,4);
+            actions.Controls.Add(_buildExisting,0,0);
+            actions.Controls.Add(_buildDesign,1,0);
             _cancelBuild = Btn("Hủy", (s, e) =>
             {
                 if (_buildCts == null || _buildCts.IsCancellationRequested) return;
@@ -225,7 +228,7 @@ namespace MiningVolume2023.UI
             _cancelBuild.Dock = DockStyle.Fill;
             _cancelBuild.Margin = new Padding(6, 0, 0, 0);
             _cancelBuild.Enabled = false;
-            actions.Controls.Add(_cancelBuild, 2, 0);
+            actions.Controls.Add(_cancelBuild, 1, 1);
 
             body.Controls.Add(actions);
 
@@ -261,7 +264,7 @@ namespace MiningVolume2023.UI
 
             RefreshLayers();
             RefreshTinRegionStatus();
-            RefreshPairButton();
+            RefreshBuildButtons();
         }
 
         private void ApplyResponsiveSourceLayout(int width)
@@ -376,7 +379,7 @@ namespace MiningVolume2023.UI
                 var loaded = SurfaceWorkflowService.LoadVia4Preset(AllowedTypes());
                 RefreshLayers();
                 RefreshTinRegionStatus();
-                RefreshPairButton();
+                RefreshBuildButtons();
                 _status.Text = $"Vỉa 4 đã nạp • Hiện trạng: {loaded[0].Summary} • Thiết kế: {loaded[1].Summary}. Phạm vi: LO_TINHKL.";
             }
             catch (Exception ex) { _status.Text = "Không nạp được mẫu Vỉa 4: " + ex.Message; }
@@ -413,152 +416,65 @@ namespace MiningVolume2023.UI
             return set;
         }
 
-        private void RefreshPairButton()
+        private void RefreshBuildButtons()
         {
-            var st = ProjectState.Current;
-            _buildPair.Enabled =
-                st.Existing.Source != null && st.Existing.Source.Entities.Count > 0 &&
-                st.Design.Source != null && st.Design.Source.Entities.Count > 0;
+            var st=ProjectState.Current;
+            _buildExisting.Enabled=_buildCts==null && st.Existing.Source!=null && st.Existing.Source.Entities.Count>0;
+            _buildDesign.Enabled=_buildCts==null && st.Design.Source!=null && st.Design.Source.Entities.Count>0;
         }
 
-        private async Task BuildPairTinAsync()
+        private async Task BuildSingleTinAsync(ModelRole role)
         {
-            var st = ProjectState.Current;
-            var activeDoc = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument;
-            if (activeDoc == null)
-                throw new InvalidOperationException("Không có bản vẽ AutoCAD đang hoạt động.");
-            if (st.Existing.Source == null || st.Existing.Source.Entities.Count == 0 ||
-                st.Design.Source == null || st.Design.Source.Entities.Count == 0)
-            {
-                MessageBox.Show(
-                    "Phải nạp đủ dữ liệu Hiện trạng và Thiết kế trước khi tạo cặp TIN.",
-                    "IMSAT VOLUME - TIN",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Warning);
-                return;
-            }
-
-            _buildCts?.Dispose();
-            _buildCts = new CancellationTokenSource();
-            var token = _buildCts.Token;
-
+            if(_buildCts!=null || !LicenseUiGuard.Check())return;
+            var st=ProjectState.Current;
+            var activeDoc=Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument;
+            if(activeDoc==null)return;
+            SurfaceBuildResult build=null;
+            IDisposable operation=null;
+            _buildCts=new CancellationTokenSource();
+            var token=_buildCts.Token;
             try
             {
-                _buildPair.Enabled = false;
-                _cancelBuild.Enabled = true;
-                UseWaitCursor = true;
-                var totalWatch = Stopwatch.StartNew();
-
-                SetBuildStatus(
-                    st.HasTinRegion
-                        ? $"Đang dựng TIN hiện trạng trong vùng chọn ({st.TinRegionPolygon.Count:n0} đỉnh biên)..."
-                        : $"Đang dựng TIN hiện trạng từ {st.Existing.ActiveVertexCount:n0} đỉnh...");
-                var existing = await BuildRoleWithConflictChoiceAsync(ModelRole.Existing, token);
-
-                SetBuildStatus(
-                    $"Hiện trạng xong ({existing.TriangleCount:n0} tam giác, {existing.CoreMilliseconds / 1000.0:0.00}s). " +
-                    $"Đang dựng TIN thiết kế từ {st.Design.ActiveVertexCount:n0} đỉnh...");
-                var design = await BuildRoleWithConflictChoiceAsync(ModelRole.Design, token);
-
+                operation=SurfaceWorkflowService.EnterInteractiveBuild();
+                RefreshBuildButtons();_cancelBuild.Enabled=true;
+                _sourceBox.Enabled=false;_types.Enabled=false;
+                var totalWatch=Stopwatch.StartNew();
+                SetBuildStatus($"Đang dựng TIN {st.Get(role).Name}...");
+                build=await BuildRoleWithConflictChoiceAsync(role,token);
                 token.ThrowIfCancellationRequested();
-                if (!ReferenceEquals(activeDoc,
-                    Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument))
-                    throw new InvalidOperationException(
-                        "Đã đổi DWG trong lúc dựng cặp TIN. Không ghi kết quả từ bản vẽ cũ sang bản vẽ mới.");
-                var builds = new[] { existing, design };
-                var cadWatch = Stopwatch.StartNew();
-                SurfaceWorkflowService.DrawTinPair(builds, message => SetBuildStatus(message));
-                cadWatch.Stop();
-                totalWatch.Stop();
-
-                SetBuildStatus(
-                    $"Cặp TIN hợp lệ: {st.Existing.TinLayer} = {existing.TriangleCount:n0}; " +
-                    $"{st.Design.TinLayer} = {design.TriangleCount:n0} tam giác. " +
-                    $"Ghi CAD {cadWatch.Elapsed.TotalSeconds:0.00}s; tổng {totalWatch.Elapsed.TotalSeconds:0.00}s.");
-
-                int duplicateGroups = existing.DuplicateXYGroupCount + design.DuplicateXYGroupCount;
-                int duplicateVertices = existing.DuplicateXYSourceVertices + design.DuplicateXYSourceVertices;
-                int sameXYZ = existing.SameXYZDuplicateVertices + design.SameXYZDuplicateVertices;
-                int extraZVertices = Math.Max(0, duplicateVertices - duplicateGroups);
-                int totalDuplicateVertices = extraZVertices + sameXYZ;
-                if (duplicateGroups > 0 || sameXYZ > 0)
-                    _status.Text = $"Đã dựng TIN; cảnh báo {totalDuplicateVertices:n0} đỉnh trùng " +
-                                   $"({extraZVertices:n0} đỉnh khác Z ở {duplicateGroups:n0} XY; {sameXYZ:n0} đỉnh trùng XYZ). " +
-                                   "Đề nghị kiểm tra điểm/đồng mức và hệ mặt cắt.";
-                MessageBox.Show(
-                    "ĐÃ DỰNG ĐỦ HAI MÔ HÌNH TIN\r\n\r\n" +
-                    $"Hiện trạng → {st.Existing.TinLayer}: {builds[0].Summary}\r\n" +
-                    $"Thiết kế → {st.Design.TinLayer}: {builds[1].Summary}" +
-                    (duplicateGroups > 0 || sameXYZ > 0
-                        ? $"\r\n\r\nCẢNH BÁO: Có {totalDuplicateVertices:n0} đỉnh trùng. " +
-                          $"{extraZVertices:n0} đỉnh khác Z tại {duplicateGroups:n0} nhóm XY " +
-                          $"({duplicateVertices:n0} đỉnh nguồn liên quan); " +
-                          $"{sameXYZ:n0} đỉnh trùng cả XYZ. Không cần loại từng điểm thủ công." +
-                          "\r\nĐề nghị kiểm tra hệ thống điểm và đường đồng mức để tính khối lượng chính xác." +
-                          (duplicateGroups > 0
-                             ? "\r\nMặt đứng 3D giữ các cao độ khác nhau. " +
-                               "Hãy xem/chỉnh Grip đường mặt cắt và bấm CẬP NHẬT MẶT CẮT trước khi chốt khối lượng."
-                             : "")
-                        : ""),
-                    "IMSAT VOLUME - Hoàn thành dựng TIN",
-                    MessageBoxButtons.OK,
-                    duplicateGroups > 0 || sameXYZ > 0 ? MessageBoxIcon.Warning : MessageBoxIcon.Information);
+                if(!ReferenceEquals(activeDoc,Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument))
+                    throw new InvalidOperationException("Đã đổi DWG; không ghi TIN sang bản vẽ khác.");
+                SetBuildStatus($"Đang ghi TIN {st.Get(role).Name} xuống AutoCAD; Esc để hủy...");
+                var cadWatch=Stopwatch.StartNew();
+                SurfaceWorkflowService.DrawTin(role,build);
+                cadWatch.Stop();totalWatch.Stop();
+                SetBuildStatus($"{st.Get(role).Name}: {build.TriangleCount:n0} tam giác. Ghi CAD {cadWatch.Elapsed.TotalSeconds:0.00}s; tổng {totalWatch.Elapsed.TotalSeconds:0.00}s.");
+                int duplicateGroups = build.DuplicateXYGroupCount;
+                int duplicateVertices = build.DuplicateXYSourceVertices;
+                int sameXYZ = build.SameXYZDuplicateVertices;
+                string review = duplicateGroups > 0 || sameXYZ > 0
+                    ? $"\r\n{duplicateGroups:n0} nhóm XY nhiều Z / {duplicateVertices:n0} đỉnh nguồn; {sameXYZ:n0} đỉnh trùng XYZ. " +
+                      "Không cần loại từng điểm thủ công. Đề nghị kiểm tra hệ thống điểm và đường đồng mức; " +
+                      "xem/chỉnh mặt cắt rồi bấm CẬP NHẬT MẶT CẮT trước khi chốt khối lượng."
+                    : string.Empty;
+                MessageBox.Show(build.Summary + review + "\r\n\r\nTIN còn lại được giữ nguyên.",
+                    "IMSAT VOLUME — TIN " + st.Get(role).Name,MessageBoxButtons.OK,
+                    build.WarningCount>0?MessageBoxIcon.Warning:MessageBoxIcon.Information);
             }
-            catch (OperationCanceledException)
-            {
-                _status.Text = "Đã hủy dựng TIN theo yêu cầu. Dữ liệu nguồn không bị thay đổi.";
+            catch(OperationCanceledException) { _status.Text="Đã hủy. Giữ TIN trước thao tác và dữ liệu CAD gốc."; }
+            catch(DuplicateXYConflictException ex) {
+                MessageBox.Show("Không thể dựng topology TIN an toàn. Không yêu cầu loại từng điểm trùng thủ công.\r\n"+ex.Message,
+                    "Kiểm tra topology nguồn",MessageBoxButtons.OK,MessageBoxIcon.Warning);
             }
-            catch (DuplicateXYConflictException ex)
-            {
-                int groups = ex.Report?.Groups?.Count ?? 0;
-                // This is not the common duplicate Point/Contour workflow.
-                // An unsupported conflicting breakline topology cannot be
-                // resolved simply by picking one of several Z values.
-                string detail = $"Đã tự kiểm tra {groups:n0} vị trí xung đột nhưng có giao cắt/chồng " +
-                    "đường đồng mức với các cao độ không thể nối thành TIN 3D an toàn." +
-                    "\r\n\r\nKhông yêu cầu loại từng điểm trùng thủ công. " +
-                    "Dữ liệu gốc không bị thay đổi. Vui lòng kiểm tra tính liên tục của các " +
-                    "đường đồng mức liên quan; đây là lỗi hình học chưa được bộ dựng hỗ trợ, " +
-                    "không phải bước loại điểm bắt buộc." +
-                    "\r\nCó thể mở 'Thống kê điểm trùng' để xem tọa độ khi cần.";
-                MessageBox.Show(detail, "IMSAT VOLUME - Không thể dựng topology TIN",
-                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                _status.Text = "Không dựng được topology đường đồng mức xung đột; không xóa dữ liệu nguồn.";
-            }
-            catch (SurfaceValidationException ex)
-            {
-                var lines = new List<string>();
-                foreach (var issue in ex.Issues)
-                    lines.Add($"[{issue.Severity}] {issue.Code}: {issue.Message}");
-                MessageBox.Show(
-                    $"Không dựng được TIN {ex.ModelName}.\r\n\r\n" +
-                    string.Join("\r\n", lines.GetRange(0, Math.Min(20, lines.Count))),
-                    "Kiểm tra dữ liệu TIN",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Warning);
-                _status.Text = $"TIN {ex.ModelName} chưa hợp lệ.";
-            }
-            catch (Exception ex)
-            {
-                string detail = ex.Message;
-                if (ex.InnerException != null && !string.IsNullOrWhiteSpace(ex.InnerException.Message) &&
-                    !detail.Contains(ex.InnerException.Message))
-                    detail += "\r\n\r\nChi tiết: " + ex.InnerException.Message;
-
-                MessageBox.Show(
-                    detail,
-                    "IMSAT VOLUME - Không tạo được cặp TIN",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Error);
-                _status.Text = "Chưa tạo được cặp TIN. Xem thông báo để biết lỗi dữ liệu hoặc phép dựng.";
-            }
+            catch(Exception ex) { MessageBox.Show(ex.Message,"Không tạo được TIN",MessageBoxButtons.OK,MessageBoxIcon.Warning); }
             finally
             {
-                UseWaitCursor = false;
-                _cancelBuild.Enabled = false;
-                _buildCts.Dispose();
-                _buildCts = null;
-                RefreshPairButton();
+                if(build!=null && !ReferenceEquals(build.Tin,st.Get(role).Tin))
+                    (build.Tin.Triangles as IDisposable)?.Dispose();
+                operation?.Dispose();
+                _buildCts.Dispose();_buildCts=null;
+                _cancelBuild.Enabled=false;_sourceBox.Enabled=true;_types.Enabled=true;
+                RefreshBuildButtons();
             }
         }
 
@@ -687,7 +603,7 @@ namespace MiningVolume2023.UI
                 _status.Text =
                     $"Đã nạp {session.Name} bằng chọn trực tiếp: {result.Summary}. " +
                     $"Nguồn có thể nằm trên nhiều layer. Đã chuẩn bị layer TIN: {result.OutputTinLayer}.";
-                RefreshPairButton();
+                RefreshBuildButtons();
             }
             catch (Exception ex)
             {
@@ -721,7 +637,7 @@ namespace MiningVolume2023.UI
                 _status.Text =
                     $"Đã nạp {ProjectState.Current.Get(role).Name}: {r.Summary}. " +
                     $"Đã chuẩn bị layer TIN: {r.OutputTinLayer}.";
-                RefreshPairButton();
+                RefreshBuildButtons();
             }
             catch (Exception ex)
             {

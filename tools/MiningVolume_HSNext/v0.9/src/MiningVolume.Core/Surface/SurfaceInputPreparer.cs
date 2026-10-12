@@ -22,6 +22,15 @@ namespace MiningVolume.Core.Surface
     /// </summary>
     public sealed class SurfaceInputPreparer
     {
+        private readonly struct XYCell : IEquatable<XYCell>
+        {
+            private readonly long _x, _y;
+            public XYCell(long x, long y) { _x=x; _y=y; }
+            public bool Equals(XYCell other) => _x==other._x && _y==other._y;
+            public override bool Equals(object obj) => obj is XYCell other && Equals(other);
+            public override int GetHashCode() { unchecked { return _x.GetHashCode()*397 ^ _y.GetHashCode(); } }
+        }
+
         public PreparedSurfaceInput Prepare(SurfaceModel model, SurfaceBuildOptions options,
             Action<string> progress = null, CancellationToken cancellationToken = default(CancellationToken))
         {
@@ -614,7 +623,7 @@ namespace MiningVolume.Core.Surface
                         result.Sites.Add(node.Point);
                     }
             var unique = new List<Vec3>();
-            var grid = new Dictionary<string, List<int>>();
+            var grid = new Dictionary<XYCell, List<int>>();
             int verticalPairs = 0;
             // Raw/tiled sources have no ConflictScanner entity provenance.
             // Still retain EVERY elevation in a synthetic vertical group
@@ -623,9 +632,15 @@ namespace MiningVolume.Core.Surface
                 result.VerticalConflictGroups.Count == 0
                 ? new Dictionary<int, ConflictGroup>() : null;
 
+            int processed=0;
+            var progressWatch=System.Diagnostics.Stopwatch.StartNew();
             foreach (var p in result.Sites)
             {
                 cancellationToken.ThrowIfCancellationRequested();
+                if ((++processed & 4095)==0 && progressWatch.ElapsedMilliseconds>=500) {
+                    progress?.Invoke($"Chuẩn hóa tọa độ {processed:n0}/{result.Sites.Count:n0}...");
+                    progressWatch.Restart();
+                }
                 long ix = (long)Math.Floor(p.X / options.XyTolerance);
                 long iy = (long)Math.Floor(p.Y / options.XyTolerance);
                 int match = -1;
@@ -634,7 +649,7 @@ namespace MiningVolume.Core.Surface
                 for (long dy = -1; dy <= 1 && match < 0; dy++)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    string k = (ix + dx) + ":" + (iy + dy);
+                    var k = new XYCell(ix + dx, iy + dy);
                     List<int> ids;
                     if (!grid.TryGetValue(k, out ids)) continue;
                     foreach (int id in ids)
@@ -650,7 +665,7 @@ namespace MiningVolume.Core.Surface
 
                 if (match < 0)
                 {
-                    string key = ix + ":" + iy;
+                    var key = new XYCell(ix, iy);
                     List<int> ids;
                     if (!grid.TryGetValue(key, out ids))
                     {
@@ -722,7 +737,7 @@ namespace MiningVolume.Core.Surface
         }
 
         private static Vec3 FindCanonicalNode(Vec3 p, IReadOnlyList<Vec3> sites,
-            Dictionary<string, List<int>> grid, double tolerance)
+            Dictionary<XYCell, List<int>> grid, double tolerance)
         {
             long ix = (long)Math.Floor(p.X / tolerance);
             long iy = (long)Math.Floor(p.Y / tolerance);
@@ -731,7 +746,7 @@ namespace MiningVolume.Core.Surface
             for (long dy = -1; dy <= 1; dy++)
             {
                 List<int> ids;
-                if (!grid.TryGetValue((ix + dx) + ":" + (iy + dy), out ids)) continue;
+                if (!grid.TryGetValue(new XYCell(ix + dx, iy + dy), out ids)) continue;
                 foreach (int id in ids)
                     if (sites[id].XY.DistanceTo(p.XY) <= tolerance) return sites[id];
             }

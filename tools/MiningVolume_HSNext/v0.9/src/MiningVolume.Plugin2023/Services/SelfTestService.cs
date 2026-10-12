@@ -220,6 +220,16 @@ namespace MiningVolume2023.Services
                     int writtenExisting = TinCadRenderer.Replace(doc.Database, existingLayer, existing, 1);
                     int writtenDesign = TinCadRenderer.Replace(doc.Database, designLayer, design, 3);
 
+                    var invalidFace = new Triangle3(new Vec3(0,0,0),new Vec3(1,0,0),new Vec3(2,0,0));
+                    var invalidTin = new TinSurface("invalid-runtime",new[]{invalidFace},Array.Empty<ValidationIssue>());
+                    bool pairRejected=false;
+                    try { TinCadRenderer.ReplacePair(doc.Database,existingLayer,tinyTin,designLayer,invalidTin); }
+                    catch(InvalidOperationException) { pairRejected=true; }
+                    Check(r,pairRejected &&
+                        TinCadRenderer.CountFaces(doc.Database,existingLayer)==existing.Triangles.Count &&
+                        TinCadRenderer.CountFaces(doc.Database,designLayer)==design.Triangles.Count,
+                        "TIN thứ hai lỗi: transaction giữ nguyên cả HT và TK trước thao tác");
+
                     int countExisting = TinCadRenderer.CountFaces(doc.Database, existingLayer);
                     int countDesign = TinCadRenderer.CountFaces(doc.Database, designLayer);
 

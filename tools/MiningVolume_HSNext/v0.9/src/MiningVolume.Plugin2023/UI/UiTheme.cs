@@ -23,7 +23,12 @@ namespace MiningVolume2023.UI
         public static readonly Color Muted = Color.FromArgb(82, 99, 117);
         public static readonly Color Border = Color.FromArgb(183, 204, 225);
         public static readonly Color Soft = Color.FromArgb(229, 239, 248);
-        public static readonly Color Danger = Color.FromArgb(177, 44, 55);
+        public static readonly Color Danger = Color.FromArgb(157, 31, 43);
+        // CAD-tool buttons: clear outline against light panels, dark labels,
+        // blue only for primary commands. Preserve the agreed vertical layout.
+        public static readonly Color ButtonBorder = Color.FromArgb(82, 103, 124);
+        public static readonly Color ButtonSecondary = Color.FromArgb(223, 232, 241);
+        public static readonly Color ButtonText = Color.FromArgb(24, 43, 61);
 
         public static void ApplyPage(Control root)
         {
@@ -97,8 +102,9 @@ namespace MiningVolume2023.UI
         {
             button.FlatStyle = FlatStyle.Flat;
             button.FlatAppearance.BorderSize = 1;
-            button.FlatAppearance.BorderColor = Border;
-            button.Font = new Font("Arial", 9F, button.Font.Bold ? FontStyle.Bold : FontStyle.Regular);
+            button.FlatAppearance.BorderColor = ButtonBorder;
+            button.Font = new Font("Arial", 9F, FontStyle.Bold);
+            button.UseVisualStyleBackColor = false;
             button.Cursor = Cursors.Hand;
             if (button.MinimumSize.Height < 34)
                 button.MinimumSize = new Size(button.MinimumSize.Width, 34);
@@ -114,11 +120,11 @@ namespace MiningVolume2023.UI
                 button.FlatAppearance.MouseOverBackColor = AccentDark;
                 button.FlatAppearance.MouseDownBackColor = AccentDark;
             }
-            else if (text.StartsWith("XÓA"))
+            else if (text.StartsWith("XÓA") || text.StartsWith("LOẠI ") || text.StartsWith("HỦY"))
             {
                 button.BackColor = Color.FromArgb(255, 246, 246);
                 button.ForeColor = Danger;
-                button.FlatAppearance.BorderColor = Color.FromArgb(234, 181, 181);
+                button.FlatAppearance.BorderColor = Danger;
                 button.FlatAppearance.MouseOverBackColor = Color.FromArgb(253, 234, 235);
                 button.FlatAppearance.MouseDownBackColor = Color.FromArgb(249, 222, 224);
             }
@@ -126,11 +132,11 @@ namespace MiningVolume2023.UI
             {
                 // A subtle blue tint and a defined border keep secondary actions
                 // visible on the light palette without making every button dominant.
-                button.BackColor = Color.FromArgb(241, 247, 253);
-                button.ForeColor = Color.FromArgb(31, 62, 94);
-                button.FlatAppearance.BorderColor = Border;
-                button.FlatAppearance.MouseOverBackColor = Color.FromArgb(225, 238, 250);
-                button.FlatAppearance.MouseDownBackColor = Color.FromArgb(212, 231, 248);
+                button.BackColor = ButtonSecondary;
+                button.ForeColor = ButtonText;
+                button.FlatAppearance.BorderColor = ButtonBorder;
+                button.FlatAppearance.MouseOverBackColor = Color.FromArgb(203, 220, 236);
+                button.FlatAppearance.MouseDownBackColor = Color.FromArgb(184, 205, 225);
             }
         }
 

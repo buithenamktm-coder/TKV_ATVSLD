@@ -24,7 +24,6 @@ namespace MiningVolume2023.UI
         private readonly Label _info;
         private readonly ProgressBar _progress;
         private readonly Button _build;
-        private readonly Button _buildBoth;
         private readonly Button _toggleTin;
         private readonly Button _view3D;
         private readonly Button _meanZBuild;
@@ -70,14 +69,11 @@ namespace MiningVolume2023.UI
             };
             _build = Button("TẠO / CẬP NHẬT TIN", async (s, e) => await BuildTinAsync());
             _build.Width = 220;
-            _buildBoth = Button("TẠO / CẬP NHẬT CẢ HAI TIN", async (s, e) => await BuildBothTinAsync());
-            _buildBoth.Width = 205;
             _toggleTin = Button("Ẩn TIN", (s, e) => ToggleTin());
             _toggleTin.Width = 90;
             _view3D = Button("VIEW TIN 3D", (s, e) => ViewTin3D());
             _view3D.Width = 115;
             second.Controls.Add(_build);
-            second.Controls.Add(_buildBoth);
             second.Controls.Add(_toggleTin);
             second.Controls.Add(_view3D);
             _meanZBuild = Button("TIN Z TRUNG BÌNH – THỬ", async (s,e) => await BuildMeanZPreviewAsync());
@@ -182,9 +178,6 @@ namespace MiningVolume2023.UI
             _build.Enabled = !_busy && s.Source != null && s.Source.Entities.Count > 0;
             _meanZBuild.Enabled = !_busy && s.Source != null && s.Source.Entities.Count > 0;
             _meanZCancel.Enabled = _busy && (_meanZCts != null || _buildCts != null);
-            _buildBoth.Enabled = !_busy &&
-                ProjectState.Current.Existing.Source != null && ProjectState.Current.Existing.Source.Entities.Count > 0 &&
-                ProjectState.Current.Design.Source != null && ProjectState.Current.Design.Source.Entities.Count > 0;
         }
 
         private void GridCellValueNeeded(object sender, DataGridViewCellValueEventArgs e)
@@ -299,19 +292,22 @@ namespace MiningVolume2023.UI
         {
             if (_busy || !LicenseUiGuard.Check()) return;
             var role = CurrentRole;
+            var originalState=ProjectState.Current;
             var startingDocument=Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument;
             _buildCts=new CancellationTokenSource();
+            SurfaceBuildResult build=null;
+            IDisposable operation=null;
             try
             {
+                operation=SurfaceWorkflowService.EnterInteractiveBuild();
                 SetBusy(true, $"Đang kiểm tra dữ liệu và dựng TIN {ProjectState.Current.Get(role).Name}...");
-                SurfaceBuildResult build;
                 IProgress<string> progress=new Progress<string>(text=>{if(!IsDisposed)_info.Text=text;});
                 try { build = await Task.Run(() => SurfaceWorkflowService.BuildCoreDetailed(role,progress.Report,_buildCts.Token)); }
-                catch (DuplicateXYConflictException ex) { DuplicateXYConflictUi.Show(role, ex.Report); return; }
+                catch (DuplicateXYConflictException ex) { MessageBox.Show("Không thể dựng topology TIN an toàn. Không yêu cầu loại từng điểm trùng thủ công.\r\n"+ex.Message,"Kiểm tra topology nguồn",MessageBoxButtons.OK,MessageBoxIcon.Warning); return; }
                 if(!ReferenceEquals(startingDocument,Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument)) {
-                    (build.Tin.Triangles as IDisposable)?.Dispose();
                     throw new InvalidOperationException("Bản vẽ đã đổi trong lúc dựng TIN. Hãy chạy lại trên đúng bản vẽ.");
                 }
+                _buildCts.Token.ThrowIfCancellationRequested();
                 SurfaceWorkflowService.DrawTin(role, build);
                 MessageBox.Show(
                     $"TIN {ProjectState.Current.Get(role).Name} đã tạo thành công.\r\n\r\n" +
@@ -329,49 +325,12 @@ namespace MiningVolume2023.UI
             {
                 MessageBox.Show(ex.Message, "Không tạo được TIN", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
-            finally { _buildCts?.Dispose();_buildCts=null;SetBusy(false, null); }
-        }
-
-        private async Task BuildBothTinAsync()
-        {
-            if (_busy || !LicenseUiGuard.Check()) return;
-            var st = ProjectState.Current;
-            if (st.Existing.Source == null || st.Existing.Source.Entities.Count == 0 ||
-                st.Design.Source == null || st.Design.Source.Entities.Count == 0)
-            {
-                MessageBox.Show(
-                    "Phải nạp đủ dữ liệu Hiện trạng và Thiết kế trước khi tạo cặp TIN.",
-                    "IMSAT VOLUME - TIN",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Warning);
-                return;
+            finally {
+                if(build!=null && !ReferenceEquals(build.Tin,originalState.Get(role).Tin))
+                    (build.Tin.Triangles as IDisposable)?.Dispose();
+                operation?.Dispose();
+                _buildCts?.Dispose();_buildCts=null;SetBusy(false,null);
             }
-
-            try
-            {
-                SetBusy(true, "Đang dựng đồng thời cặp TIN hiện trạng / thiết kế...");
-                SurfaceBuildResult[] builds;
-                try { builds = await Task.Run(() => SurfaceWorkflowService.BuildPairCoreDetailed()); }
-                catch (DuplicateXYConflictException ex) { DuplicateXYConflictUi.Ask(this, ex); return; }
-
-                SurfaceWorkflowService.DrawTinPair(builds);
-                MessageBox.Show(
-                    "ĐÃ TẠO ĐỦ 2 TIN DÙNG CHO TÍNH KHỐI LƯỢNG\r\n\r\n" +
-                    $"Hiện trạng → {st.Existing.TinLayer}: {builds[0].Summary}\r\n" +
-                    $"Thiết kế → {st.Design.TinLayer}: {builds[1].Summary}",
-                    "IMSAT VOLUME - Cặp TIN hợp lệ",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Information);
-            }
-            catch (SurfaceValidationException ex)
-            {
-                ShowValidation(ex.ModelName, ex.Issues);
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show(ex.Message, "Không tạo được cặp TIN", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
-            finally { SetBusy(false, null); }
         }
 
         /// <summary>
@@ -533,9 +492,6 @@ namespace MiningVolume2023.UI
         {
             _busy = busy;
             _build.Enabled = !busy && CurrentSession.Source != null && CurrentSession.Source.Entities.Count > 0;
-            _buildBoth.Enabled = !busy &&
-                ProjectState.Current.Existing.Source != null && ProjectState.Current.Existing.Source.Entities.Count > 0 &&
-                ProjectState.Current.Design.Source != null && ProjectState.Current.Design.Source.Entities.Count > 0;
             _toggleTin.Enabled = !busy && CurrentSession.Tin != null;
             _meanZBuild.Enabled = !busy && CurrentSession.Source != null && CurrentSession.Source.Entities.Count > 0;
             _meanZCancel.Enabled = busy && (_meanZCts != null || _buildCts != null);

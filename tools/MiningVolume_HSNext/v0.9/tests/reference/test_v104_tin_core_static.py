@@ -23,17 +23,18 @@ def test_model_page_has_explicit_existing_design_and_pair_tin_actions():
     s = read("src/MiningVolume.Plugin2023/UI/ModelPage.cs")
     assert "TẠO / CẬP NHẬT TIN HIỆN TRẠNG" in s
     assert "TẠO / CẬP NHẬT TIN THIẾT KẾ" in s
-    assert "TẠO / CẬP NHẬT CẢ HAI TIN" in s
-    assert "BuildPairCoreDetailed" in s
-    assert "DrawTinPair" in s
+    assert "TẠO / CẬP NHẬT CẢ HAI TIN" not in s
+    assert "BuildCoreDetailed" in s
+    assert "DrawTin(" in s
 
 def test_data_page_can_build_validated_tin_pair_in_one_click():
     s = read("src/MiningVolume.Plugin2023/UI/DataPage.cs")
-    assert "TẠO CẶP TIN" in s
+    assert "TẠO CẶP TIN" not in s
+    assert "TẠO TIN HIỆN TRẠNG" in s and "TẠO TIN THIẾT KẾ" in s
     assert "BuildCoreDetailed(" in s and "ModelRole.Existing" in s
     assert "BuildCoreDetailed(" in s and "ModelRole.Design" in s
-    assert "DrawTinPair" in s
-    assert "Cặp TIN hợp lệ" in s
+    assert "DrawTin(" in s
+    assert "TIN còn lại được giữ nguyên" in s
 
 def test_renderer_replaces_verifies_and_locks_tin_faces():
     s = read("src/MiningVolume.Plugin2023/Services/TinCadRenderer.cs")
