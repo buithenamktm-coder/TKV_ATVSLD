@@ -115,6 +115,61 @@ internal static class FinalAuditRegression
             Check(!MiningUnitCatalog.CoalUnits.Any(x=>x.Contains("Tây Nam Đá Mài")), "Merged company still listed independently");
             Check(MiningUnitCatalog.MineralUnits.Contains("Công ty TNHH MTV Nhôm Lâm Đồng - TKV"), "Incorrect legal form");
         };
+        tests["v2_selected_tkv_unit_appears_below_parent_in_all_excel_sheets"]=()=>{
+            var state=State();
+            string groupBefore=state.MiningUnitGroup, nameBefore=state.MiningUnitName;
+            try {
+                state.MiningUnitGroup=MiningUnitCatalog.Coal;
+                state.MiningUnitName="Công ty Cổ phần Than Cao Sơn - TKV";
+                Check(MiningUnitCatalog.CoalUnits.Contains(state.MiningUnitName),
+                    "Requested Cao Sơn legal name missing");
+                Check(MiningUnitCatalog.CoalUnits.Contains(
+                    "Công ty Cổ phần Than Đèo Nai - Cọc Sáu - TKV"),
+                    "Requested Đèo Nai - Cọc Sáu name missing");
+                Check(MiningUnitCatalog.CoalUnits.Contains(
+                    "Công ty Cổ phần Than Hà Tu - Vinacomin"),
+                    "Requested Hà Tu name missing");
+                var report=ExportWorkflowService.BuildReport(state,new ExportOptions());
+                var summary=report.Sheets.Single(x=>x.Name=="Tổng khối");
+                string originalFormula=(string)summary.Rows[0][2].Value;
+                ExportWorkflowService.ApplyOrganizationHeader(report,state);
+                string parent=ExportWorkflowService.TkvParentHeading;
+                string expected=parent+"\\n"+state.MiningUnitName+"\\n";
+                Check(report.Sheets.All(x=>x.Title.StartsWith(expected,
+                    StringComparison.Ordinal)), "TKV parent and selected unit are not stacked in sheet header");
+                Check((string)summary.Rows[0][2].Value==originalFormula,
+                    "Company heading changed formula links/row indexes");
+                ExportWorkflowService.ApplyOrganizationHeader(report,state);
+                Check(report.Sheets.All(x=>x.Title.StartsWith(expected,
+                    StringComparison.Ordinal) && x.Title.IndexOf(parent,expected.Length,
+                    StringComparison.Ordinal)<0), "Duplicated group header");
+                state.MiningUnitName="Công ty Cổ phần Than Hà Tu - Vinacomin";
+                ExportWorkflowService.ApplyOrganizationHeader(report,state);
+                Check(report.Sheets.All(x=>x.Title.StartsWith(parent+"\\n"+
+                    state.MiningUnitName+"\\n",StringComparison.Ordinal) &&
+                    !x.Title.Contains("Công ty Cổ phần Than Cao Sơn - TKV")),
+                    "Changing selected organization stacked the old company in Excel");
+
+                state.MiningUnitGroup=MiningUnitCatalog.OutsideTkv;
+                state.MiningUnitName="Công ty TNHH Mỏ ngoài TKV";
+                var outsideReport=ExportWorkflowService.BuildReport(state,new ExportOptions());
+                ExportWorkflowService.ApplyOrganizationHeader(outsideReport,state);
+                Check(outsideReport.Sheets.All(x=>
+                    x.Title.StartsWith(state.MiningUnitName+"\\n",StringComparison.Ordinal)
+                    && !x.Title.Contains(parent)), "Non-TKV unit falsely shown under TKV");
+                Check(outsideReport.Sheets.Single(x=>x.Name=="Thông tin").Rows
+                    .Any(row=>row.Any(cell=>Equals(cell.Value,state.MiningUnitName))),
+                    "Non-TKV unit missing in information worksheet");
+                state.MiningUnitName=" ";
+                bool rejected=false;
+                try{ExportWorkflowService.BuildReport(state,new ExportOptions());}
+                catch(InvalidOperationException){rejected=true;}
+                Check(rejected,"Missing external-unit name must block misleading Excel export");
+            } finally {
+                state.MiningUnitGroup=groupBefore;
+                state.MiningUnitName=nameBefore;
+            }
+        };
         tests["rf03_full_grip_plus_one_area_and_volume"]=()=>{
             var a=Profile(1,5);var b=Profile(2,5);var old=Calculate(a,b);
             var ea=Edit(a,6,6);var eb=Edit(b,6,6);var now=Calculate(ea,eb);
