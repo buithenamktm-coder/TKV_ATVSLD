@@ -474,13 +474,21 @@ namespace MiningVolume2023.UI
                     $"{st.Design.TinLayer} = {design.TriangleCount:n0} tam giác. " +
                     $"Ghi CAD {cadWatch.Elapsed.TotalSeconds:0.00}s; tổng {totalWatch.Elapsed.TotalSeconds:0.00}s.");
 
+                int duplicateGroups = existing.DuplicateXYGroupCount + design.DuplicateXYGroupCount;
+                int duplicateVertices = existing.DuplicateXYSourceVertices + design.DuplicateXYSourceVertices;
                 MessageBox.Show(
-                    "ĐÃ TẠO ĐỦ 2 TIN DÙNG CHO TÍNH KHỐI LƯỢNG\r\n\r\n" +
+                    "ĐÃ DỰNG ĐỦ HAI MÔ HÌNH TIN\r\n\r\n" +
                     $"Hiện trạng → {st.Existing.TinLayer}: {builds[0].Summary}\r\n" +
-                    $"Thiết kế → {st.Design.TinLayer}: {builds[1].Summary}",
-                    "IMSAT VOLUME - Cặp TIN hợp lệ",
+                    $"Thiết kế → {st.Design.TinLayer}: {builds[1].Summary}" +
+                    (duplicateGroups > 0
+                        ? $"\r\n\r\nCẢNH BÁO: {duplicateGroups:n0} vị trí XY trùng, {duplicateVertices:n0} đỉnh nguồn liên quan. " +
+                          "Các cao độ khác nhau được giữ trong các mặt đứng 3D; không phải loại điểm thủ công." +
+                          "\r\nĐề nghị kiểm tra dữ liệu điểm, đường đồng mức và hệ mặt cắt. " +
+                          "Sau khi xem/chỉnh đường mặt cắt, bấm CẬP NHẬT MẶT CẮT trước khi tính khối lượng."
+                        : ""),
+                    "IMSAT VOLUME - Hoàn thành dựng TIN",
                     MessageBoxButtons.OK,
-                    MessageBoxIcon.Information);
+                    duplicateGroups > 0 ? MessageBoxIcon.Warning : MessageBoxIcon.Information);
             }
             catch (OperationCanceledException)
             {
