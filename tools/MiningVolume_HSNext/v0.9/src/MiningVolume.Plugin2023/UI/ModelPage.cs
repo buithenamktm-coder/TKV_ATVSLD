@@ -230,39 +230,50 @@ namespace MiningVolume2023.UI
                 string.Join("\r\n",rows.Take(8).Select(r=>"Handle "+r.Entity.Handle+" / đỉnh "+r.Vertex.Index+
                     " / Z "+r.Vertex.Position.Z))+"\r\nChỉ loại khỏi mô hình; CAD gốc giữ nguyên."))return;
             if(!ReferenceEquals(source,CurrentSession.Source)||source.Revision!=revision)return;
-            foreach (var r in rows) CurrentSession.Source.SetVertexEnabled(r.Entity.Id, r.Vertex.Index, false);
+            // Invalidate the prior CAD surface before altering model vertices.
+            // If AutoCAD refuses to clear a locked layer, the source stays unchanged.
             SurfaceWorkflowService.InvalidateTin(CurrentRole, clearCadLayer: true);
+            foreach (var r in rows) source.SetVertexEnabled(r.Entity.Id, r.Vertex.Index, false);
+            ProjectState.Current.NotifyChanged();
         }
 
         private void DisableSelectedEntities()
         {
             var ids = SelectedRows().Select(r => r.Entity.Id).Distinct().ToList();
             if (ids.Count == 0) return;
-            foreach (var id in ids) CurrentSession.Source.RemoveEntityFromModel(id);
+            var source = CurrentSession.Source;
             SurfaceWorkflowService.InvalidateTin(CurrentRole, clearCadLayer: true);
+            foreach (var id in ids) source.RemoveEntityFromModel(id);
+            ProjectState.Current.NotifyChanged();
         }
 
         private void RestoreSelected()
         {
-            foreach(var row in SelectedRows().ToList()) {
-                CurrentSession.Source.RestoreEntity(row.Entity.Id);
-                CurrentSession.Source.RestoreVertex(row.Entity.Id,row.Vertex.Index);
-            }
+            var rows = SelectedRows().ToList();
+            if (rows.Count == 0) return;
+            var source = CurrentSession.Source;
             SurfaceWorkflowService.InvalidateTin(CurrentRole, clearCadLayer: true);
+            foreach(var row in rows) {
+                source.RestoreEntity(row.Entity.Id);
+                source.RestoreVertex(row.Entity.Id,row.Vertex.Index);
+            }
+            ProjectState.Current.NotifyChanged();
         }
 
         private void RestoreAll()
         {
             if (CurrentSession.Source == null) return;
-            foreach (var entity in CurrentSession.Source.Entities)
+            var source = CurrentSession.Source;
+            SurfaceWorkflowService.InvalidateTin(CurrentRole, clearCadLayer: true);
+            foreach (var entity in source.Entities)
             {
                 entity.SetEnabled(true);
             }
-            CurrentSession.Source.RestoreVertices(CurrentSession.Source.Entities.SelectMany(e=>e.Vertices
+            source.RestoreVertices(source.Entities.SelectMany(e=>e.Vertices
                 .Where(v=>!v.IsEnabled||v.Position.Z!=v.Original.Z)
                 .Select(v=>new KeyValuePair<string,int>(e.Id,v.Index))));
-            CurrentSession.Source.Touch();
-            SurfaceWorkflowService.InvalidateTin(CurrentRole, clearCadLayer: true);
+            source.Touch();
+            ProjectState.Current.NotifyChanged();
         }
 
         private void EditZ()
@@ -277,8 +288,9 @@ namespace MiningVolume2023.UI
                     "Handle "+row.Entity.Handle+" / đỉnh "+row.Vertex.Index+"\r\nZ cũ "+row.Vertex.Position.Z+
                     " → Z mới "+form.Value+"\r\nChỉ sửa mô hình; CAD gốc giữ nguyên."))return;
                 if(CurrentRole!=role || !ReferenceEquals(source,CurrentSession.Source) || source.Revision!=revision)return;
+                SurfaceWorkflowService.InvalidateTin(role, clearCadLayer: true);
                 source.OverrideVertexZ(row.Entity.Id, row.Vertex.Index, form.Value);
-                SurfaceWorkflowService.InvalidateTin(CurrentRole, clearCadLayer: true);
+                ProjectState.Current.NotifyChanged();
             }
         }
 
