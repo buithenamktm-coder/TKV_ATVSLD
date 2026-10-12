@@ -1,7 +1,17 @@
 # ADR — Điểm trùng XY, khác Z: bề mặt 3D có mặt đứng và hiệu chỉnh mặt cắt
 
-**Ngày chốt nghiệp vụ:** 12/10/2026. **Trạng thái triển khai:** DESIGN ACCEPTED — CODE NOT IMPLEMENTED; không được tuyên bố hoàn tất hay QA PASS trước khi có TIN 3D và kiểm thử thực.  
+**Ngày chốt nghiệp vụ:** 12/10/2026. **Trạng thái triển khai:** CORE CODE IMPLEMENTED / NATIVE TEST PASSED — HOST AUTOCAD NOT TESTED. Chế độ cảnh báo–dựng TIN mặt đứng đã triển khai, nhưng chưa được kết luận tương thích 100% hình học HSMo và chưa nghiệm thu trên AutoCAD thật.  
 **Đầu vào:** Người dùng đã kiểm tra thao tác của HSMo: nhóm điểm cùng XY, khác Z được coi là một vị trí mặt bằng; khi dựng mô hình có thể xuất hiện mảng/mặt gần thẳng đứng dạng hình chóp. Tuyến mặt cắt có thể đi qua khu vực đó và người dùng **tự hiệu chỉnh đường mặt cắt**, sau đó cập nhật khối lượng.
+
+## Cập nhật thực hiện theo quyết định mới của người dùng (12/10)
+
+**Quy tắc vận hành đã đổi:** không yêu cầu loại/sửa thủ công từng đỉnh trùng XY trước khi dựng TIN. Mặc định tại workflow AutoCAD, phần mềm tự xử lý, **chỉ thông báo số nhóm XY trùng và số đỉnh nguồn liên quan**, khuyến cáo rà soát Point/Polyline/Line/đường đồng mức trước khi chốt khối lượng. Vẫn có thể sử dụng bảng dữ liệu nguồn để kiểm tra khi muốn nhưng không phải điều kiện bắt buộc của trường hợp duplicate-XY được hỗ trợ.
+
+**Đã code:** `SurfaceBuildOptions.PreserveDuplicateXYVerticalFaces` bật trong `SurfaceWorkflowService.BuildCoreDetailed`; `SurfaceInputPreparer` thu thập `VerticalConflictGroups` và chuẩn hóa một nút XY support cho thư viện native CDT, chọn Z thấp nhất **chỉ cho phần lưới support 2,5D**, không xóa hoặc thay đổi Z nguồn. `VerticalFaceBuilder` tạo các mặt tam giác 3D từ các tầng Z khác nhau đến nút tam giác kề, bảo toàn đa cao độ trong lớp mặt đứng riêng; `TinCadRenderer` ghi cả mặt đứng dạng `3DFACE`. TIN lớn dùng cùng logic file-backed. `TinSectionSampler` gắn cảnh báo vào những mặt cắt liên quan; `SectionPage` hiện CẦN KIỂM TRA MC; `VolumeWorkflowService` buộc người dùng xem/chỉnh Grip đường mặt cắt rồi bấm `CẬP NHẬT MẶT CẮT` **một lần cho hệ MC**, không phải sửa từng điểm. Không cho dùng ngay F/V chưa duyệt khi nguồn có vertical faces.
+
+**Đã test (không thay nghiệm thu host):** `CoreRegression.cs` có ca hai Point cùng XY khác Z và hai contour có đỉnh trùng XY khác Z, kiểm `VerticalFaces`, giữ Z nguồn và cảnh báo mặt cắt. `tests/reference/test_v2_duplicate_xy_vertical_faces_static.py` khóa luồng UI/CAD/volume.
+
+**Giới hạn còn lại:** bộ sampler 2,5D tính một cao độ từ support TIN và gắn cảnh báo; **chưa tự thể hiện đoạn thẳng đứng tại đúng station trên mặt cắt**, do đường mặt cắt 2D hiện yêu cầu station tăng nghiêm ngặt. Người dùng có thể sửa Grip profile và cập nhật, nhưng không khẳng định trùng tuyệt đối thuật toán HSMo nếu chưa có DWG/mặt cắt đối chứng. Breakline giao nhau với Z trái nhau nhưng không có đủ hai đỉnh nguồn cùng XY vẫn có thể bị chặn để tránh xuất sai; cần test tiếp ca dữ liệu thực. Không phát hành V2.0 chính thức dựa duy nhất vào CI.
 
 ## 1. Nguyên tắc bắt buộc
 
