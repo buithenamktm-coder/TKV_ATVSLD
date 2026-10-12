@@ -664,15 +664,27 @@ namespace MiningVolume2023.Services
             if (exists && count == expectedCadFaces && !session.TinCadIsPreview)
                 return;
 
-            // Rebuild the COMPLETE verified mesh. A spatially sampled subset
-            // cannot be used as a replacement for a damaged/missing official layer.
-            DrawTinInternal(
-                role,
-                session.Tin,
-                session.Source,
-                session.TinBuiltFromSourceRevision.Value,
-                session.TinBuiltFromSourceUtc ?? session.Source.LastModifiedUtc,
-                null);
+            // Restore only the CAD drawing representation of the existing,
+            // unchanged TIN. Calling DrawTinInternal here would incorrectly
+            // invalidate previously reviewed section profiles, earthwork volume
+            // and grid volume even though source data and geometry are identical.
+            // Do not adopt/dispose the current TIN or alter calculation timestamps.
+            int written;
+            using (doc.LockDocument())
+            {
+                written = TinCadRenderer.Replace(doc.Database,
+                    session.TinLayer, session.Tin,
+                    role == ModelRole.Existing ? (short)1 : (short)3);
+                if (!session.TinVisible)
+                    TinCadRenderer.SetVisible(doc.Database, session.TinLayer, false);
+            }
+            if (written != expectedCadFaces)
+                throw new InvalidOperationException(
+                    $"Khôi phục layer TIN không đầy đủ: cần {expectedCadFaces:n0} mặt, " +
+                    $"đã tạo {written:n0}. Không cập nhật trạng thái mô hình.");
+            session.TinCadFaceCount = written;
+            session.TinCadIsPreview = false;
+            try { doc.Editor.Regen(); } catch { }
         }
 
         public static string TinStatusText(ModelRole role)
