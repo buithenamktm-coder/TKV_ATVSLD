@@ -7,6 +7,8 @@ import (
     "bytes"
     "embed"
     "encoding/xml"
+    "crypto/sha256"
+    "encoding/hex"
     "fmt"
     "io"
     "os"
@@ -137,6 +139,8 @@ func validatePrebuiltBundle(root string) error {
             return fmt.Errorf("Bundle chứa DLL ngoài danh sách cho phép: %s", entry.Name())
         }
     }
+
+    if err:=verifyBuildIdentity(windowsDir,allowedDll);err!=nil{return err}
 
     xmlBytes, err := os.ReadFile(packageXml)
     if err != nil { return fmt.Errorf("Không đọc được PackageContents.xml: %w", err) }
@@ -426,4 +430,22 @@ func captureRegistration(programData, staging string) (func() error,error) {
         if existed {record(exec.Command("reg","import",regFile).Run())} else { _=exec.Command("reg","delete",uninstallKey,"/f").Run() }
         return first
     },nil
+}
+
+// Validate the exact DLL bytes embedded in Setup before replacing any installation.
+func verifyBuildIdentity(dir string, allowed map[string]bool) error {
+    b,err:=os.ReadFile(filepath.Join(dir,"BUILD_IDENTITY.txt"))
+    if os.IsNotExist(err)&&version=="1.0.0" {return nil} // legacy V1 payload compatibility
+    if err!=nil{return fmt.Errorf("missing build identity: %w",err)}
+    seen:=map[string]bool{}; source:=false
+    for _,line:=range strings.Split(string(b),"\n") {
+        line=strings.TrimSpace(line)
+        if strings.HasPrefix(line,"SOURCE_SHA=") {h:=strings.TrimPrefix(line,"SOURCE_SHA=");_,err:=hex.DecodeString(h);source=len(h)==40&&err==nil;continue}
+        if line=="" {continue}; fields:=strings.Fields(line)
+        if len(fields)!=2||len(fields[0])!=64||filepath.Base(fields[1])!=fields[1]||!allowed[strings.ToLower(fields[1])] {return fmt.Errorf("invalid build manifest")}
+        key:=strings.ToLower(fields[1]);if seen[key]{return fmt.Errorf("duplicate manifest DLL")};seen[key]=true
+        data,err:=os.ReadFile(filepath.Join(dir,fields[1]));if err!=nil{return err};sum:=sha256.Sum256(data)
+        if !strings.EqualFold(hex.EncodeToString(sum[:]),fields[0]){return fmt.Errorf("DLL checksum mismatch: %s",fields[1])}
+    }
+    if !source||len(seen)!=len(allowed){return fmt.Errorf("incomplete build identity")};return nil
 }

@@ -4,6 +4,8 @@ package main
 
 import (
     "os"
+    "crypto/sha256"
+    "encoding/hex"
     "os/exec"
     "path/filepath"
     "strings"
@@ -65,4 +67,15 @@ func TestInstalledSetupCleanupTargetsOnlyOwnedVersions(t *testing.T) {
     for _, target := range next {
         if filepath.Dir(target) != root { t.Fatalf("cleanup escaped installed directory: %s", target) }
     }
+}
+
+func TestBuildIdentityRejectsTamperedDLL(t *testing.T) {
+    dir:=t.TempDir();data:=[]byte("verified DLL bytes");sum:=sha256.Sum256(data)
+    os.WriteFile(filepath.Join(dir,"test.dll"),data,0644)
+    manifest:="SOURCE_SHA="+strings.Repeat("a",40)+"\n"+hex.EncodeToString(sum[:])+"  test.dll\n"
+    os.WriteFile(filepath.Join(dir,"BUILD_IDENTITY.txt"),[]byte(manifest),0644)
+    allowed:=map[string]bool{"test.dll":true}
+    if err:=verifyBuildIdentity(dir,allowed);err!=nil{t.Fatal(err)}
+    os.WriteFile(filepath.Join(dir,"test.dll"),[]byte("old or modified DLL"),0644)
+    if verifyBuildIdentity(dir,allowed)==nil{t.Fatal("tampered DLL accepted")}
 }

@@ -25,6 +25,7 @@ namespace MiningVolume2023
         public void Initialize()
         {
             StartupLog("Initialize: MiningVolume V2.0 QA");
+            try { StartupLog(RuntimeBuildIdentity.Describe()); } catch(System.Exception ex) { StartupLog("Build identity: "+ex.Message); }
             TryRibbon();
             HookIdle();
             AcApp.DocumentManager.DocumentActivated += OnDocumentActivated;
@@ -187,6 +188,14 @@ namespace MiningVolume2023
             }
             Palette.Visible = true;
             MainControl.ShowPage(page);
+        }
+
+        [CommandMethod("MVBUILDINFO", CommandFlags.Session)]
+        public static void BuildInfo()
+        {
+            string report=RuntimeBuildIdentity.Describe();
+            AcApp.DocumentManager.MdiActiveDocument?.Editor.WriteMessage("\n"+report);
+            System.Windows.Forms.MessageBox.Show(report,"IMSAT — Kiểm tra DLL đang nạp");
         }
 
         [CommandMethod("MVOPEN", CommandFlags.Session)] public static void OpenPalette() => Open(AppPage.Project);

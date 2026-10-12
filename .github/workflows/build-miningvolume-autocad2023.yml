@@ -75,7 +75,7 @@ jobs:
         shell: pwsh
         run: |
           Set-Location $env:MV_ROOT
-          dotnet build MiningVolume.HSNext.sln -c Release --no-restore -p:UseAutoCADNuGet=true
+          dotnet build MiningVolume.HSNext.sln -c Release --no-restore -p:UseAutoCADNuGet=true -p:SourceRevisionId=$env:SOURCE_SHA
 
       - name: Build and self-test offline license issuer (admin tool)
         shell: pwsh
@@ -104,6 +104,12 @@ jobs:
           Copy-Item 'src/MiningVolume.Cad2023/bin/Release/net48/MiningVolume.Cad2023.dll' $out
           New-Item -ItemType Directory -Force "$out/Assets" | Out-Null
           Copy-Item 'src/MiningVolume.Plugin2023/Assets/imsat_logo_64.png' "$out/Assets/imsat_logo_64.png"
+          $identity = @("SOURCE_SHA=$env:SOURCE_SHA")
+          Get-ChildItem "$out/*.dll" | Sort-Object Name | ForEach-Object {
+            $identity += "$( (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant() )  $($_.Name)"
+          }
+          $identity | Set-Content -Encoding ascii "$out/BUILD_IDENTITY.txt"
+
 
       - name: Verify release bundle policy
         shell: pwsh
@@ -204,6 +210,7 @@ jobs:
             'Production license trust anchor and acceptance: NOT APPROVED'
           ) | Set-Content -Encoding utf8 dist/V2_BUILD_VERIFICATION.txt
           Get-Content dist/V2_BUILD_VERIFICATION.txt
+          & ./release/scan_qa_setup.ps1
 
       - name: Create checksums and source archive
         shell: pwsh
@@ -288,6 +295,7 @@ jobs:
             tools/MiningVolume_HSNext/v0.9/dist/V2_QA_CANDIDATE_NOT_RELEASE.txt
             tools/MiningVolume_HSNext/v0.9/dist/V2_SHA256SUMS.txt
             tools/MiningVolume_HSNext/v0.9/dist/V2_BUILD_VERIFICATION.txt
+            tools/MiningVolume_HSNext/v0.9/dist/V2_SECURITY_SCAN.txt
             tools/MiningVolume_HSNext/v0.9/docs/V2_FINAL_QA_REPORT.md
             tools/MiningVolume_HSNext/v0.9/docs/V2_RELEASE_GATES.md
             tools/MiningVolume_HSNext/v0.9/docs/V2_AUTOCAD_ACCEPTANCE.md

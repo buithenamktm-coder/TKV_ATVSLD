@@ -67,6 +67,34 @@ internal static class CoreRegression
     static void RunTests()
     {
         var tests=new Dictionary<string,Action> {
+            ["cad_validation_1681755_faces_retains_tiny_positive"] = ()=>{
+                const double x=2500000,y=450000;
+                var tiny=new Triangle3(P(x,y,1),P(x+0.000001,y,1),P(x,y+0.000001,1));
+                Check(tiny.Area2D>0&&tiny.Area2D<=1e-12,"Fixture does not reproduce old CAD cutoff");
+                var normal=new Triangle3(P(x,y),P(x+1,y),P(x,y+1));
+                for(int i=0;i<1681755;i++)TinTriangleQuality.ValidateForCad(i==1681754?tiny:normal);
+                var surface=new TinSurface("tiny",new[]{tiny},Array.Empty<ValidationIssue>());
+                Check(new TinSectionSampler().TryElevation(surface,tiny.A.XY,1e-7,out var z)&&z==1,"Sampler silently lost tiny face");
+                Check(tiny.Area2D==Math.Abs((tiny.B.X-tiny.A.X)*(tiny.C.Y-tiny.A.Y))/2,"Area oracle mismatch");
+            },
+            ["exact_orientation_cancellation_fallback"] = ()=>{
+                // Exact determinant is -1; the two 2^54-scale products round to the same double.
+                var a=new Vec2(0,0);var b=new Vec2(134217729,134217728);var c=new Vec2(134217728,134217727);
+                Check(Vec2.Cross(a,b,c)==0,"Fixture no longer exercises cancellation");
+                Check(RobustOrientation.Determinant(a,b,c)==-1,"Exact sign/area lost");
+                TinTriangleQuality.ValidateForCad(new Triangle3(P(a.X,a.Y),P(b.X,b.Y),P(c.X,c.Y)));
+            },
+            ["zero_face_removal_proves_coverage_and_breaklines"] = ()=>{
+                var p=new[]{P(0,0),P(1,0),P(2,0),P(1,1)};
+                Check(TinTriangleQuality.VerifyZeroAreaRemoval(p,new[]{0,1,2,0,1,3,1,2,3},new[]{0,1,1,2},CancellationToken.None)==1,"Safe zero face not classified");
+                bool rejected=false;try{TinTriangleQuality.VerifyZeroAreaRemoval(p,new[]{0,1,2,0,2,3},new[]{0,1},CancellationToken.None);}catch(InvalidOperationException){rejected=true;}
+                Check(rejected,"Removing sole owner of site/breakline accepted");
+                rejected=false;try{TinTriangleQuality.ValidateForCad(new Triangle3(P(0,0),P(1,1),P(2,2)));}catch(InvalidOperationException){rejected=true;}
+                Check(rejected,"True zero face accepted as support TIN");
+                rejected=false;try{TinTriangleQuality.CheckedArea(new Triangle3(P(0,0,double.NaN),P(1,0),P(0,1)));}catch(InvalidOperationException){rejected=true;}
+                Check(rejected,"Nonfinite face silently skipped");
+            },
+
             ["raw_duplicate_xy_preserves_all_elevations_without_entity_handles"] = ()=>{
                 var opt=new SurfaceBuildOptions{PreserveDuplicateXYVerticalFaces=true};
                 var input=new SurfaceInputPreparer().PrepareRaw(new[]{
@@ -407,7 +435,7 @@ internal static class CoreRegression
                     "DWG snapshot silently lost the CAD section preservation gate");
                 Check(decoded.Existing.FullSourceFingerprint==modelHash,
                     "DWG snapshot silently lost the full HT/TK model source fingerprint");
-                var legacy=new MiningVolume2023.Services.ProjectSnapshot {FormatVersion=2,HadProfiles=true};
+                var legacy=new MiningVolume2023.Services.ProjectSnapshot {FormatVersion=2,HadProfiles=true,SavedUtc=new DateTime(2026,10,12,0,0,0,DateTimeKind.Utc)};
                 var legacyRoundtrip=MiningVolume2023.Services.ProjectSnapshotCodec.Decode(MiningVolume2023.Services.ProjectSnapshotCodec.Encode(legacy));
                 Check(!legacyRoundtrip.HadEditableSectionCad,
                     "Backward-compatible project without CAD edit marker must remain readable");
@@ -815,9 +843,9 @@ internal static class CoreRegression
         }
         return m;
     }
-    static void Fixture(string path, string boundary, int seconds, DuplicateXYConflictPolicy policy)
+    static void Fixture(string path, string boundary, int seconds, DuplicateXYConflictPolicy policy, bool vertical=false)
     {
-        var sw=Stopwatch.StartNew();var m=ReadModel(path);var o=new SurfaceBuildOptions {DuplicateXYConflictPolicy=policy};
+        var sw=Stopwatch.StartNew();var m=ReadModel(path);var o=new SurfaceBuildOptions {DuplicateXYConflictPolicy=policy,PreserveDuplicateXYVerticalFaces=vertical};
         Console.WriteLine(JsonSerializer.Serialize(new{phase="loaded",entities=m.Entities.Count,vertices=m.Entities.Sum(x=>x.Vertices.Count),ms=sw.ElapsedMilliseconds}));
         using(var c=new CancellationTokenSource(TimeSpan.FromSeconds(seconds)))try {
             if(boundary!="-") {using(var r=new BinaryReader(File.OpenRead(boundary))){int n=r.ReadInt32();var b=new Vec2[n];for(int i=0;i<n;i++)b[i]=new Vec2(r.ReadDouble(),r.ReadDouble());o.ClipBoundary=b;}m=SurfaceRegionClipper.Clip(m,o.ClipBoundary,o.XyTolerance,c.Token);}
@@ -826,7 +854,14 @@ internal static class CoreRegression
             TinSurface tin;
             if(vertices>=200000){var r=new TiledConformingTinBuilder().Build(m.Name,m,o,(d,t,s)=>Console.WriteLine(JsonSerializer.Serialize(new{phase="progress",done=d,total=t,message=s})),c.Token);tin=r.Surface;}
             else {var p=new SurfaceInputPreparer().Prepare(m,o,s=>Console.WriteLine(s),c.Token);Console.WriteLine(JsonSerializer.Serialize(new{phase="prepared",sites=p.Sites.Count,breaklines=p.Breaklines.Count,errors=p.Issues.Count(x=>x.Severity==ValidationSeverity.Error),issues=p.Issues.GroupBy(x=>x.Code).ToDictionary(x=>x.Key,x=>x.Count()),ms=sw.ElapsedMilliseconds}));if(p.HasErrors){Environment.ExitCode=2;return;}tin=new ConformingTinBuilder().Build(m.Name,p,o,s=>Console.WriteLine(s),c.Token);}
-            Console.WriteLine(JsonSerializer.Serialize(new{phase="complete",triangles=tin.Triangles.Count,ms=sw.ElapsedMilliseconds,managedBytes=GC.GetTotalMemory(false)}));(tin.Triangles as IDisposable)?.Dispose();
+            int oldCadRejected=0;double smallestArea=double.PositiveInfinity;double coverage=0;
+            foreach(var triangle in tin.Triangles) {
+                TinTriangleQuality.ValidateForCad(triangle);
+                if(Math.Abs(Vec2.Cross(triangle.A.XY,triangle.B.XY,triangle.C.XY))*0.5<=1e-12)oldCadRejected++;
+                smallestArea=Math.Min(smallestArea,triangle.Area2D);coverage+=triangle.Area2D;
+            }
+            Console.WriteLine(JsonSerializer.Serialize(new{phase="cad_validation",oldCadRejected,smallestArea,coverage}));
+            Console.WriteLine(JsonSerializer.Serialize(new{phase="complete",verticalFaces=tin.VerticalFaces.Count,issues=tin.Issues.Select(x=>x.Code).ToArray(),triangles=tin.Triangles.Count,ms=sw.ElapsedMilliseconds,managedBytes=GC.GetTotalMemory(false)}));(tin.Triangles as IDisposable)?.Dispose();
         } catch(Exception ex){Console.WriteLine(JsonSerializer.Serialize(new{phase="error",kind=ex.GetType().Name,message=ex.Message,issues=(ex as DuplicateXYConflictException)?.Issues.GroupBy(x=>x.Code).ToDictionary(x=>x.Key,x=>x.Count()),ms=sw.ElapsedMilliseconds}));Environment.ExitCode=2;}
     }
     static void ReviewFixture(string path,string boundary,int seconds)
@@ -870,5 +905,5 @@ internal static class CoreRegression
                 triangles=tin.Triangles.Select(t=>new[]{t.A,t.B,t.C}.Select(p=>new[]{p.X,p.Y,p.Z}))}));
         }
     }
-    static void Main(string[] args){if(args.Length==0)RunTests();else if(args[0]=="--report-fixtures")FinalAuditRegression.Fixtures(args[1]);else if(args[0]=="--clip-oracle")ClipOracle();else if(args[0]=="--review-fixture")ReviewFixture(args[1],args[2],int.Parse(args[3]));else Fixture(args[0],args.Length>1?args[1]:"-",args.Length>2?int.Parse(args[2]):120,args.Length>3?(DuplicateXYConflictPolicy)Enum.Parse(typeof(DuplicateXYConflictPolicy),args[3]):DuplicateXYConflictPolicy.Stop);}
+    static void Main(string[] args){if(args.Length==0)RunTests();else if(args[0]=="--vertical-fixture")Fixture(args[1],args[2],int.Parse(args[3]),DuplicateXYConflictPolicy.Stop,true);else if(args[0]=="--report-fixtures")FinalAuditRegression.Fixtures(args[1]);else if(args[0]=="--clip-oracle")ClipOracle();else if(args[0]=="--review-fixture")ReviewFixture(args[1],args[2],int.Parse(args[3]));else Fixture(args[0],args.Length>1?args[1]:"-",args.Length>2?int.Parse(args[2]):120,args.Length>3?(DuplicateXYConflictPolicy)Enum.Parse(typeof(DuplicateXYConflictPolicy),args[3]):DuplicateXYConflictPolicy.Stop);}
 }

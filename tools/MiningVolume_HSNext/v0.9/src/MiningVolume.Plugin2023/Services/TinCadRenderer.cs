@@ -30,6 +30,7 @@ namespace MiningVolume2023.Services
                 throw new InvalidOperationException("TIN không có tam giác để ghi xuống AutoCAD.");
 
             int written = 0;
+            using(var progress=new TinCadProgress(tin.Triangles.Count+tin.VerticalFaces.Count))
             using (var tr = db.TransactionManager.StartTransaction())
             {
                 var layerId = EnsureLayer(db, tr, layerName, aciColor);
@@ -46,8 +47,10 @@ namespace MiningVolume2023.Services
                 // One ModelSpace pass only: validate the reserved layer and erase the
                 // previous MiningVolume faces in the same transaction. This avoids a
                 // second full scan on large mine drawings.
+                int scanned=0;
                 foreach (ObjectId id in ms)
                 {
+                    if((++scanned&1023)==0)progress.Poll(0,false);
                     var ent = tr.GetObject(id, OpenMode.ForRead) as Entity;
                     if (ent == null || ent.LayerId != layerId) continue;
                     if (!(ent is Face))
@@ -73,6 +76,7 @@ namespace MiningVolume2023.Services
                     ms.AppendEntity(face);
                     tr.AddNewlyCreatedDBObject(face, true);
                     written++;
+                    if((written&1023)==0)progress.Poll(written,true);
                 }
 
                 // These faces have zero XY area by design. They are valid
@@ -91,6 +95,7 @@ namespace MiningVolume2023.Services
                     ms.AppendEntity(face);
                     tr.AddNewlyCreatedDBObject(face, true);
                     written++;
+                    if((written&1023)==0)progress.Poll(written,true);
                 }
 
                 outLayer.IsLocked = true;
@@ -297,13 +302,7 @@ namespace MiningVolume2023.Services
 
         private static void ValidateTriangle(MiningVolume.Core.Geometry.Triangle3 t)
         {
-            if (!Finite(t.A.X) || !Finite(t.A.Y) || !Finite(t.A.Z) ||
-                !Finite(t.B.X) || !Finite(t.B.Y) || !Finite(t.B.Z) ||
-                !Finite(t.C.X) || !Finite(t.C.Y) || !Finite(t.C.Z))
-                throw new InvalidOperationException("TIN có tam giác chứa tọa độ NaN/Infinity.");
-
-            if (t.Area2D <= 1e-12)
-                throw new InvalidOperationException("TIN có tam giác suy biến, diện tích XY gần bằng 0.");
+            TinTriangleQuality.ValidateForCad(t);
         }
 
         private static void ValidateVerticalFace(MiningVolume.Core.Geometry.Triangle3 t)

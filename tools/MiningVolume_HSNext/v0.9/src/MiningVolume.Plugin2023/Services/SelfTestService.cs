@@ -209,6 +209,14 @@ namespace MiningVolume2023.Services
                     TinCadRenderer.Clear(doc.Database, existingLayer);
                     TinCadRenderer.Clear(doc.Database, designLayer);
 
+                    // Exact runtime regression for the former Area2D <= 1e-12 gate.
+                    var tiny=new MiningVolume.Core.Geometry.Triangle3(
+                        new Vec3(2500000,450000,10),new Vec3(2500000.000001,450000,10),new Vec3(2500000,450000.000001,10));
+                    var tinyTin=new TinSurface("tiny-positive-runtime",new[]{tiny},Array.Empty<ValidationIssue>());
+                    Check(r,TinCadRenderer.Replace(doc.Database,existingLayer,tinyTin,1)==1 &&
+                        TinCadRenderer.CountFaces(doc.Database,existingLayer)==1,
+                        "AutoCAD 3DFACE giữ tam giác XY dương nhỏ hơn 1e-12 tại tọa độ mỏ lớn");
+
                     int writtenExisting = TinCadRenderer.Replace(doc.Database, existingLayer, existing, 1);
                     int writtenDesign = TinCadRenderer.Replace(doc.Database, designLayer, design, 3);
 

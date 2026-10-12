@@ -59,7 +59,8 @@ namespace MiningVolume2023.Services
             (RelaxedBreaklineConstraints > 0 ? $" • {RelaxedBreaklineConstraints:n0} ràng buộc đồng mức xung đột đã nới trên lưới hỗ trợ (nguồn giữ nguyên)" : "") +
             $" • Z: {MinZ:0.###} → {MaxZ:0.###}" +
             $" • dựng {CoreMilliseconds / 1000.0:0.00}s" +
-            (WarningCount > 0 ? $" • {WarningCount:n0} cảnh báo" : string.Empty);
+            (WarningCount > 0 ? $" • {WarningCount:n0} cảnh báo" : string.Empty) +
+            string.Concat((Tin?.Issues ?? Array.Empty<ValidationIssue>()).Where(x=>x.Code=="SKIPPED_DEGENERATE_TRIANGLES").Select(x=>" • "+x.Message));
     }
 
     public static class SurfaceWorkflowService

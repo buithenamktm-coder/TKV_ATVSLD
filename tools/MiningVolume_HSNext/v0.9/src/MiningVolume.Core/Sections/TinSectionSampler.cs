@@ -250,13 +250,10 @@ namespace MiningVolume.Core.Sections
 
         private static bool TryElevationOnTriangle(Triangle3 t, Vec2 p, double tol, out double z)
         {
-            double den = (t.B.Y - t.C.Y) * (t.A.X - t.C.X) +
-                         (t.C.X - t.B.X) * (t.A.Y - t.C.Y);
-            if (Math.Abs(den) <= tol) { z = 0; return false; }
-            double w1 = ((t.B.Y - t.C.Y) * (p.X - t.C.X) +
-                         (t.C.X - t.B.X) * (p.Y - t.C.Y)) / den;
-            double w2 = ((t.C.Y - t.A.Y) * (p.X - t.C.X) +
-                         (t.A.X - t.C.X) * (p.Y - t.C.Y)) / den;
+            double den = RobustOrientation.Determinant(t.A.XY,t.B.XY,t.C.XY);
+            if (den == 0) { z = 0; return false; }
+            double w1 = RobustOrientation.Determinant(p,t.B.XY,t.C.XY)/den;
+            double w2 = RobustOrientation.Determinant(t.A.XY,p,t.C.XY)/den;
             double w3 = 1.0 - w1 - w2;
             if (w1 < -tol || w2 < -tol || w3 < -tol) { z = 0; return false; }
             z = w1 * t.A.Z + w2 * t.B.Z + w3 * t.C.Z;

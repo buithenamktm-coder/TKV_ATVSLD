@@ -30,6 +30,7 @@ namespace MiningVolume2023.UI
         private readonly Button _meanZBuild;
         private readonly Button _meanZCancel;
         private CancellationTokenSource _meanZCts;
+        private CancellationTokenSource _buildCts;
         private readonly List<RowRef> _rows = new List<RowRef>();
         private bool _busy;
 
@@ -81,7 +82,7 @@ namespace MiningVolume2023.UI
             second.Controls.Add(_view3D);
             _meanZBuild = Button("TIN Z TRUNG BÌNH – THỬ", async (s,e) => await BuildMeanZPreviewAsync());
             _meanZBuild.Width = 224;
-            _meanZCancel = Button("HỦY TIN THỬ", (s,e) => _meanZCts?.Cancel());
+            _meanZCancel = Button("HỦY DỰNG TIN", (s,e) => { _meanZCts?.Cancel(); _buildCts?.Cancel(); });
             _meanZCancel.Width = 118;
             _meanZCancel.Enabled = false;
             second.Controls.Add(_meanZBuild);
@@ -180,7 +181,7 @@ namespace MiningVolume2023.UI
             _view3D.Enabled = s.IsTinCurrent && !_busy;
             _build.Enabled = !_busy && s.Source != null && s.Source.Entities.Count > 0;
             _meanZBuild.Enabled = !_busy && s.Source != null && s.Source.Entities.Count > 0;
-            _meanZCancel.Enabled = _busy && _meanZCts != null;
+            _meanZCancel.Enabled = _busy && (_meanZCts != null || _buildCts != null);
             _buildBoth.Enabled = !_busy &&
                 ProjectState.Current.Existing.Source != null && ProjectState.Current.Existing.Source.Entities.Count > 0 &&
                 ProjectState.Current.Design.Source != null && ProjectState.Current.Design.Source.Entities.Count > 0;
@@ -298,12 +299,19 @@ namespace MiningVolume2023.UI
         {
             if (_busy || !LicenseUiGuard.Check()) return;
             var role = CurrentRole;
+            var startingDocument=Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument;
+            _buildCts=new CancellationTokenSource();
             try
             {
                 SetBusy(true, $"Đang kiểm tra dữ liệu và dựng TIN {ProjectState.Current.Get(role).Name}...");
                 SurfaceBuildResult build;
-                try { build = await Task.Run(() => SurfaceWorkflowService.BuildCoreDetailed(role)); }
+                IProgress<string> progress=new Progress<string>(text=>{if(!IsDisposed)_info.Text=text;});
+                try { build = await Task.Run(() => SurfaceWorkflowService.BuildCoreDetailed(role,progress.Report,_buildCts.Token)); }
                 catch (DuplicateXYConflictException ex) { DuplicateXYConflictUi.Show(role, ex.Report); return; }
+                if(!ReferenceEquals(startingDocument,Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument)) {
+                    (build.Tin.Triangles as IDisposable)?.Dispose();
+                    throw new InvalidOperationException("Bản vẽ đã đổi trong lúc dựng TIN. Hãy chạy lại trên đúng bản vẽ.");
+                }
                 SurfaceWorkflowService.DrawTin(role, build);
                 MessageBox.Show(
                     $"TIN {ProjectState.Current.Get(role).Name} đã tạo thành công.\r\n\r\n" +
@@ -321,7 +329,7 @@ namespace MiningVolume2023.UI
             {
                 MessageBox.Show(ex.Message, "Không tạo được TIN", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
-            finally { SetBusy(false, null); }
+            finally { _buildCts?.Dispose();_buildCts=null;SetBusy(false, null); }
         }
 
         private async Task BuildBothTinAsync()
@@ -530,7 +538,7 @@ namespace MiningVolume2023.UI
                 ProjectState.Current.Design.Source != null && ProjectState.Current.Design.Source.Entities.Count > 0;
             _toggleTin.Enabled = !busy && CurrentSession.Tin != null;
             _meanZBuild.Enabled = !busy && CurrentSession.Source != null && CurrentSession.Source.Entities.Count > 0;
-            _meanZCancel.Enabled = busy && _meanZCts != null;
+            _meanZCancel.Enabled = busy && (_meanZCts != null || _buildCts != null);
             _view3D.Enabled = !busy && CurrentSession.IsTinCurrent;
             _model.Enabled = !busy;
             _grid.Enabled = !busy;

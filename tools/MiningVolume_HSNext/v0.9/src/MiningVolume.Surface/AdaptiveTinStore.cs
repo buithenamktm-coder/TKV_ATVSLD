@@ -33,7 +33,7 @@ namespace MiningVolume.Surface
             {
                 token.ThrowIfCancellationRequested();
                 var t = Triangle(i);
-                if (!(t.Area2D > 0) || double.IsInfinity(t.Area2D))
+                if (TinTriangleQuality.CheckedArea(t) == 0)
                 {
                     // Zero-area XY faces cannot represent a surface. Ignore only the face,
                     // never remove source vertices or constrained breakline segments.

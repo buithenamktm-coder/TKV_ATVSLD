@@ -112,6 +112,7 @@ namespace MiningVolume.Surface
                 var indices = new int[checked(count * 3)];
                 if (mv_cdt_copy(mesh, indices, indices.Length) != 0)
                     throw new InvalidOperationException("Không đọc được kết quả lưới ràng buộc.");
+                TinTriangleQuality.VerifyZeroAreaRemoval(input.Sites, indices, edges, cancellationToken);
                 var verticalFaces = VerticalFaceBuilder.Build(
                     input.Sites, indices, input.VerticalConflictGroups,
                     options.XyTolerance, options.ZConflictTolerance, cancellationToken);
@@ -122,7 +123,7 @@ namespace MiningVolume.Surface
                         cancellationToken, out retainedSmall, out skippedDegenerate);
                     var storedIssues = input.Issues.ToList();
                     if (skippedDegenerate > 0) storedIssues.Add(new ValidationIssue(ValidationSeverity.Warning,
-                        "SKIPPED_DEGENERATE_TRIANGLES", $"Bỏ qua {skippedDegenerate:n0} tam giác suy biến có diện tích XY bằng 0; giữ nguyên dữ liệu CAD gốc. Kiểm tra chất lượng TIN trước khi tính khối lượng."));
+                        "SKIPPED_DEGENERATE_TRIANGLES", $"Bỏ qua {skippedDegenerate:n0} tam giác suy biến có diện tích XY bằng 0 chính xác; diện tích loại 0 m², đã kiểm bảo toàn đỉnh/breakline; giữ nguyên dữ liệu CAD gốc. Kiểm tra chất lượng TIN trước khi tính khối lượng."));
                     if (retainedSmall > 0) storedIssues.Add(new ValidationIssue(ValidationSeverity.Warning,
                         "RETAIN_SMALL_TRIANGLES", $"Giữ {retainedSmall:n0} tam giác diện tích nhỏ dương để bảo toàn điểm và breakline."));
                     return new TinSurface(name, store, storedIssues,
@@ -137,7 +138,7 @@ namespace MiningVolume.Surface
                 {
                     cancellationToken.ThrowIfCancellationRequested();
                     var t = new Triangle3(input.Sites[indices[3 * i]], input.Sites[indices[3 * i + 1]], input.Sites[indices[3 * i + 2]]);
-                    if (!(t.Area2D > 0) || double.IsInfinity(t.Area2D))
+                    if (TinTriangleQuality.CheckedArea(t) == 0)
                     {
                         skippedDegenerateInMemory++;
                         continue;
@@ -151,7 +152,7 @@ namespace MiningVolume.Surface
                 if (output.Count == 0) throw new InvalidOperationException("TIN không tạo được tam giác hợp lệ trong phạm vi tính.");
                 var issues = input.Issues.ToList();
                 if (skippedDegenerateInMemory > 0) issues.Add(new ValidationIssue(ValidationSeverity.Warning,
-                    "SKIPPED_DEGENERATE_TRIANGLES", $"Bỏ qua {skippedDegenerateInMemory:n0} tam giác suy biến có diện tích XY bằng 0; giữ nguyên dữ liệu CAD gốc. Kiểm tra chất lượng TIN trước khi tính khối lượng."));
+                    "SKIPPED_DEGENERATE_TRIANGLES", $"Bỏ qua {skippedDegenerateInMemory:n0} tam giác suy biến có diện tích XY bằng 0 chính xác; diện tích loại 0 m², đã kiểm bảo toàn đỉnh/breakline; giữ nguyên dữ liệu CAD gốc. Kiểm tra chất lượng TIN trước khi tính khối lượng."));
                 if (small > 0) issues.Add(new ValidationIssue(ValidationSeverity.Warning, "RETAIN_SMALL_TRIANGLES",
                     $"Giữ {small:n0} tam giác diện tích nhỏ dương để bảo toàn điểm và breakline."));
                 return new TinSurface(name, output, issues,

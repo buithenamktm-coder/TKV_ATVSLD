@@ -162,11 +162,11 @@ namespace MiningVolume.Core.Grid
 
         private static double Elevation(Triangle3 t, Vec2 p)
         {
-            double det = Vec2.Cross(t.A.XY, t.B.XY, t.C.XY);
-            if (Math.Abs(det) <= 1e-15)
+            double det = RobustOrientation.Determinant(t.A.XY, t.B.XY, t.C.XY);
+            if (det == 0)
                 throw new InvalidOperationException("Tam giác TIN bị suy biến.");
-            double a = Vec2.Cross(p, t.B.XY, t.C.XY) / det;
-            double b = Vec2.Cross(t.A.XY, p, t.C.XY) / det;
+            double a = RobustOrientation.Determinant(p, t.B.XY, t.C.XY) / det;
+            double b = RobustOrientation.Determinant(t.A.XY, p, t.C.XY) / det;
             double c = 1.0 - a - b;
             return a * t.A.Z + b * t.B.Z + c * t.C.Z;
         }
