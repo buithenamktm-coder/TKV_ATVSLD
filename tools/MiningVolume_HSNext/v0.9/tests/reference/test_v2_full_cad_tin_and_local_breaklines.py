@@ -29,6 +29,8 @@ def test_large_tin_does_not_use_stride_sampled_mesh_as_official_geometry():
         "public static void EnsureTinLayerSynchronized(", 1
     )[1].split("public static string TinStatusText(", 1)[0]
     assert "TinCadRenderer.Replace(" in draw
+    assert "int expectedCadFaces = checked(session.Tin.Triangles.Count +" in workflow
+    assert "count == expectedCadFaces && !session.TinCadIsPreview" in workflow
 
 
 def test_topology_fallback_never_clears_all_unrelated_breaklines():
