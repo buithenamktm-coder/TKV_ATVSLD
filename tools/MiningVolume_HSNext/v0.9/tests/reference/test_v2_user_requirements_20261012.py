@@ -59,7 +59,9 @@ def test_project_unit_and_period_saved_to_dwg_and_excel():
     for label in ("Tháng", "Quý", "Năm"):
         assert label in state
     assert "DropDownStyle = ComboBoxStyle.DropDown" in p
-    assert "Đơn vị khai thác" in excel
+    assert "Đơn vị tính toán" in excel
+    assert "TkvParentHeading" in excel
+    assert 'MiningUnitCatalog.IsKnownGroup(snap.MiningUnitGroup)' in persistence
     assert "Kỳ tính khối lượng" in excel
 
 
