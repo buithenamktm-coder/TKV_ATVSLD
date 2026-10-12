@@ -57,3 +57,36 @@ def test_excel_only_export_rechecks_live_clipping_boundary():
     )[0]
     assert "if (exportExcel)" in run
     assert "EnsureExportInputsCurrent(doc, st, currentResult, approvedProfiles," in run
+
+
+def test_tin_region_revision_participates_in_calculation_freshness():
+    state = read("src/MiningVolume.Plugin2023/Services/ProjectState.cs")
+    workflow = read("src/MiningVolume.Plugin2023/Services/SurfaceWorkflowService.cs")
+    assert "public long? TinBuiltFromRegionRevision" in state
+    assert "TinBuiltFromRegionRevision.Value == ProjectState.Current.TinRegionRevision" in state
+    assert "s.TinBuiltFromRegionRevision = null;" in state
+    assert "session.TinBuiltFromRegionRevision = ProjectState.Current.TinRegionRevision;" in workflow
+    invalidate = workflow.split("public static void InvalidateTin(", 1)[1].split(
+        "private static void EnsureTinRegionMatchesCad()", 1
+    )[0]
+    assert "session.TinBuiltFromRegionRevision = null;" in invalidate
+
+
+def test_refusing_to_clear_old_cad_layer_preserves_accepted_tin_and_source():
+    workflow = read("src/MiningVolume.Plugin2023/Services/SurfaceWorkflowService.cs")
+    invalid = workflow.split("public static void InvalidateTin(", 1)[1].split(
+        "private static void EnsureTinRegionMatchesCad()", 1
+    )[0]
+    assert invalid.index("TinCadRenderer.Clear(doc.Database, session.TinLayer)") < invalid.index(
+        "session.Tin = null;"
+    )
+    assert invalid.index("TinCadRenderer.Clear(doc.Database, session.TinLayer)") < invalid.index(
+        "state.SectionProfiles.Clear();"
+    )
+    source_commit = workflow.split("private static SurfaceLoadResult CommitLoadedSource(", 1)[1].split(
+        "private const int LargeDatasetVertexThreshold", 1
+    )[0]
+    assert source_commit.index("InvalidateTin(role, clearCadLayer: true, notify: false);") < source_commit.index(
+        "session.Source = model;"
+    )
+    assert source_commit.count("InvalidateTin(role, clearCadLayer: true, notify: false);") == 1
