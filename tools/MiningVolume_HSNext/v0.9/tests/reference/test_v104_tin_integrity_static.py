@@ -17,7 +17,8 @@ def test_project_state_tracks_tin_source_revision():
 def test_loading_or_editing_source_invalidates_old_tin():
     workflow = read("src/MiningVolume.Plugin2023/Services/SurfaceWorkflowService.cs")
     model = read("src/MiningVolume.Plugin2023/UI/ModelPage.cs")
-    assert "InvalidateTin(role, clearCadLayer: true" in workflow
+    assert "InvalidateTin(role, clearCadLayer: clearPreviousCadTin" in workflow
+    assert "bool clearPreviousCadTin = true" in workflow
     for token in [
         "DisableSelectedVertices",
         "DisableSelectedEntities",
