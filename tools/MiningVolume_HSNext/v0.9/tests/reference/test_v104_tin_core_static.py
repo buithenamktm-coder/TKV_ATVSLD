@@ -14,7 +14,8 @@ def test_official_tin_layers_are_fixed_and_separate():
 
 def test_loading_source_prepares_output_layer_and_invalidates_old_tin():
     s = read("src/MiningVolume.Plugin2023/Services/SurfaceWorkflowService.cs")
-    assert "InvalidateTin(role, clearCadLayer: true, notify: false)" in s
+    assert "InvalidateTin(role, clearCadLayer: clearPreviousCadTin, notify: false)" in s
+    assert "bool clearPreviousCadTin = true" in s
     assert "EnsureOutputLayer(role)" in s
     assert "OutputTinLayer = session.TinLayer" in s
     assert "Không được dùng layer TIN đầu ra làm dữ liệu nguồn" in s
