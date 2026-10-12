@@ -43,6 +43,52 @@ internal static class FinalAuditRegression
                 Check(raw.Length==5 && raw[1].Z==5,"Source was changed");
             }
         };
+        tests["p0_unresolved_breaklines_are_relaxed_only_at_conflict"] = () => {
+            var prepared=new PreparedSurfaceInput();
+            prepared.Sites.AddRange(new[]{new Vec3(0,0,1),new Vec3(0,10,1),
+                new Vec3(2,5,10),new Vec3(8,5,10),new Vec3(5,2,20),new Vec3(5,8,20)});
+            prepared.Breaklines.Add(new Segment3(new Vec3(0,0,1),new Vec3(0,10,1),"SAFE-CONTOUR"));
+            prepared.Breaklines.Add(new Segment3(new Vec3(2,5,10),new Vec3(8,5,10),"CONFLICT-A"));
+            prepared.Breaklines.Add(new Segment3(new Vec3(5,2,20),new Vec3(5,8,20),"CONFLICT-B"));
+            var crossing=new ConflictGroup{Position=new Vec2(5,5)};
+            crossing.Sources.Add(new ConflictSource{Z=10,Generated=true});
+            crossing.Sources.Add(new ConflictSource{Z=20,Generated=true});
+            prepared.VerticalConflictGroups.Add(crossing);
+            prepared.Issues.Add(new ValidationIssue(ValidationSeverity.Error,
+                "BREAKLINE_NORMALIZE_CROSSING_FAILED","Conflicting crossing after snap."));
+            var method=typeof(SurfaceInputPreparer).GetMethod("RecoverConflictingContourTopology",
+                System.Reflection.BindingFlags.Static|System.Reflection.BindingFlags.NonPublic);
+            Check(method!=null,"Local conflict resolver not found");
+            method.Invoke(null,new object[]{prepared,
+                new SurfaceBuildOptions{PreserveDuplicateXYVerticalFaces=true},
+                System.Threading.CancellationToken.None});
+            Check(!prepared.HasErrors,"Locally resolved crossing still blocks TIN");
+            Check(prepared.Breaklines.Count==1 &&
+                prepared.Breaklines[0].SourceId=="SAFE-CONTOUR",
+                "Unrelated safe contour was removed by fallback");
+            Check(prepared.RelaxedBreaklineConstraints==2,
+                "Only the two conflicting segments may be locally relaxed");
+            Check(prepared.Issues.Any(x=>x.Code=="LOCALLY_RELAXED_UNRESOLVED_TOPOLOGY"),
+                "Missing audit warning for local constraint relaxation");
+            Check(prepared.Sites.Count==6,"Conflict recovery changed original survey sites");
+        };
+        tests["p0_unrecoverable_validation_error_must_not_clear_constraints"] = () => {
+            var prepared=new PreparedSurfaceInput();
+            prepared.Breaklines.Add(new Segment3(new Vec3(0,0,0),new Vec3(10,0,0),"SAFE"));
+            var group=new ConflictGroup{Position=new Vec2(5,5)};
+            group.Sources.Add(new ConflictSource{Z=0});
+            group.Sources.Add(new ConflictSource{Z=10});
+            prepared.VerticalConflictGroups.Add(group);
+            prepared.Issues.Add(new ValidationIssue(ValidationSeverity.Error,
+                "TOO_FEW_POINTS","Invalid source must remain invalid."));
+            var method=typeof(SurfaceInputPreparer).GetMethod("RecoverConflictingContourTopology",
+                System.Reflection.BindingFlags.Static|System.Reflection.BindingFlags.NonPublic);
+            method.Invoke(null,new object[]{prepared,
+                new SurfaceBuildOptions{PreserveDuplicateXYVerticalFaces=true},
+                System.Threading.CancellationToken.None});
+            Check(prepared.HasErrors && prepared.Breaklines.Count==1,
+                "Unsupported error must fail closed without losing CAD constraints");
+        };
         tests["rf11_catalog_retains_current_legal_names"] = () => {
             Check(!MiningUnitCatalog.CoalUnits.Any(x=>x.Contains("Tây Nam Đá Mài")), "Merged company still listed independently");
             Check(MiningUnitCatalog.MineralUnits.Contains("Công ty TNHH MTV Nhôm Lâm Đồng - TKV"), "Incorrect legal form");
