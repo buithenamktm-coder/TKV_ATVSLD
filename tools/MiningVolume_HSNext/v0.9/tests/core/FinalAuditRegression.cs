@@ -89,6 +89,28 @@ internal static class FinalAuditRegression
             Check(prepared.HasErrors && prepared.Breaklines.Count==1,
                 "Unsupported error must fail closed without losing CAD constraints");
         };
+        tests["p0_unattributed_topology_error_must_remain_blocking"] = () => {
+            var prepared=new PreparedSurfaceInput();
+            prepared.Sites.AddRange(new[]{
+                new Vec3(0,0,0),new Vec3(10,0,0),new Vec3(10,10,0),new Vec3(0,10,0)
+            });
+            prepared.Breaklines.Add(new Segment3(new Vec3(0,0,0),new Vec3(10,0,0),"SAFE"));
+            var group=new ConflictGroup{Position=new Vec2(5,5)};
+            group.Sources.Add(new ConflictSource{Z=0});
+            group.Sources.Add(new ConflictSource{Z=10});
+            prepared.VerticalConflictGroups.Add(group);
+            prepared.Issues.Add(new ValidationIssue(ValidationSeverity.Error,
+                "BREAKLINE_NORMALIZE_CROSSING_FAILED",
+                "Unattributed topology failure must not be downgraded"));
+            var method=typeof(SurfaceInputPreparer).GetMethod("RecoverConflictingContourTopology",
+                System.Reflection.BindingFlags.Static|System.Reflection.BindingFlags.NonPublic);
+            method.Invoke(null,new object[]{prepared,
+                new SurfaceBuildOptions{PreserveDuplicateXYVerticalFaces=true},
+                System.Threading.CancellationToken.None});
+            Check(prepared.HasErrors && prepared.Breaklines.Count==1 &&
+                prepared.RelaxedBreaklineConstraints==0,
+                "Topology error silently accepted without an identifiable unsafe edge");
+        };
         tests["rf11_catalog_retains_current_legal_names"] = () => {
             Check(!MiningUnitCatalog.CoalUnits.Any(x=>x.Contains("Tây Nam Đá Mài")), "Merged company still listed independently");
             Check(MiningUnitCatalog.MineralUnits.Contains("Công ty TNHH MTV Nhôm Lâm Đồng - TKV"), "Incorrect legal form");
