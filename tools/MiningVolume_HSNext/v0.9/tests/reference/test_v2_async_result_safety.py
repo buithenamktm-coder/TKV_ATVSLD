@@ -91,3 +91,35 @@ def test_palette_cannot_remain_live_on_wrong_dwg_or_bypass_load():
     for command in ("View3DExisting()", "View3DDesign()"):
         start = entry.split("public static void " + command, 1)[1].split("}", 1)[0]
         assert "EnsureCurrentDrawingProjectLoaded();" in start
+
+def test_grid_same_handle_grip_requires_revalidation_on_cad_and_excel():
+    page = read(UI / "GridPage.cs")
+    service = read(SERVICES / "GridWorkflowService.cs")
+    draw = page.split("private void DrawCad()", 1)[1].split(
+        "private async Task ExportExcelAsync()", 1)[0]
+    export = page.split("private async Task ExportExcelAsync()", 1)[1].split(
+        "private void RefreshCells()", 1)[0]
+    for method in (draw, export):
+        assert "GridWorkflowService.EnsureBoundaryCurrent(" in method
+        assert "BoundaryGeometryService.ReadBoundary(ProjectState.Current.GridBoundaryHandle)" in method
+    assert "Geometry2D.AlmostSame(" in service
+    assert "Invalidate();" in service.split("public static void EnsureBoundaryCurrent(", 1)[1].split(
+        "public static GridVolumeReport Report", 1)[0]
+
+
+def test_section_export_blocks_cad_grip_changes_and_dwg_switch():
+    ui = read(UI / "ExportPage.cs")
+    cad = read(SERVICES / "EditableSectionCadService.cs")
+    guard = ui.split("private static void EnsureExportInputsCurrent(", 1)[1].split(
+        "private void StateChanged(", 1)[0]
+    assert "EditableSectionCadService.EnsureProfilesMatch(doc.Database, expectedProfiles)" in guard
+    assert "!ReferenceEquals(doc, Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument)" in guard
+    assert "state.Existing.Source.Revision != existingRevision" in guard
+    assert "state.Design.Source.Revision != designRevision" in guard
+    start = ui.split("private async void ExportClicked(", 1)[1].split(
+        "private static void EnsureExportInputsCurrent(", 1)[0]
+    assert start.count("EnsureExportInputsCurrent(doc, st, currentResult, approvedProfiles,") >= 3
+    assert "var report = await Task.Run(" in start
+    assert "await Task.Run(() => ExportWorkflowService.WriteXlsx(" in start
+    assert "var actual = ReadEditedProfiles(db, approved)" in cad
+    assert "EditedSectionProfileBuilder.SameGeometry(approved, actual)" in cad
