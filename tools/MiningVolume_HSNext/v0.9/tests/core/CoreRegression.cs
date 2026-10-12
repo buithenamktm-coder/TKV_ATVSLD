@@ -67,6 +67,37 @@ internal static class CoreRegression
     static void RunTests()
     {
         var tests=new Dictionary<string,Action> {
+            ["vertical_xy_auto_tin_preserves_both_original_z_and_renders_3d_faces"] = ()=>{
+                var low=Entity("low",SourceEntityType.Point,P(5,5,10));
+                var high=Entity("high",SourceEntityType.Point,P(5,5,20));
+                var model=Model(
+                    Entity("a",SourceEntityType.Point,P(0,0)),
+                    Entity("b",SourceEntityType.Point,P(10,0)),
+                    Entity("c",SourceEntityType.Point,P(10,10)),
+                    Entity("d",SourceEntityType.Point,P(0,10)),
+                    low,high);
+                var strict=new SurfaceInputPreparer().Prepare(model,new SurfaceBuildOptions());
+                Check(strict.HasErrors&&strict.ConflictReport.HasBlockingConflicts,
+                    "Strict 2.5D policy unexpectedly lost its explicit error behavior");
+                var opt=new SurfaceBuildOptions{PreserveDuplicateXYVerticalFaces=true};
+                var prepared=new SurfaceInputPreparer().Prepare(model,opt);
+                Check(!prepared.HasErrors,"Auto vertical mode still blocks duplicate XY survey points");
+                Check(prepared.VerticalConflictGroups.Count==1,
+                    "Expected exactly one retained XY group with two original Z elevations");
+                Check(prepared.Sites.Count==5,"CDT support XY sites should be unique");
+                var tin=Build(prepared,opt);
+                Check(tin.Triangles.Count>0&&tin.VerticalFaces.Count>0,
+                    "TIN did not include both regular facets and non-degenerate 3D vertical facets");
+                Check(tin.VerticalConflicts.Count==1&&tin.RequiresSectionReview,
+                    "Vertical conflict was not retained as an explicit section-review obligation");
+                Check(tin.VerticalFaces.Any(t=>
+                    t.A.X==5&&t.A.Y==5&&t.B.X==5&&t.B.Y==5&&
+                    Math.Abs(t.A.Z-10)<1e-7&&Math.Abs(t.B.Z-20)<1e-7&&
+                    t.Area2D<1e-15),
+                    "Vertical CAD triangle does not contain the original two elevations");
+                Check(low.Vertices[0].Position.Z==10&&high.Vertices[0].Position.Z==20,
+                    "Source CAD data changed or discarded");
+            },
             ["mean_z_preview_all_entities_and_original_unchanged"] = ()=>{
                 var contour=Entity("contour",SourceEntityType.Contour,P(0,0,0),P(10,0,0));
                 var poly=Entity("p3",SourceEntityType.Polyline3d,P(0,0,94.862),P(10,10,30));
