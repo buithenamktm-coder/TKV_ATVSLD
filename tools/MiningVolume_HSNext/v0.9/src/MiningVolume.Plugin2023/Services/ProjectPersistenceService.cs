@@ -423,11 +423,12 @@ namespace MiningVolume2023.Services
 
             if (hadExisting && hadDesign)
             {
+                SurfaceBuildResult[] builds = null;
                 try
                 {
                     // A saved calculation-ready project must restore the two TINs as one pair.
                     // Build both cores first, then let DrawTinPair enforce the CAD atomicity gate.
-                    var builds = SurfaceWorkflowService.BuildPairCoreDetailed();
+                    builds = SurfaceWorkflowService.BuildPairCoreDetailed();
                     SurfaceWorkflowService.DrawTinPair(builds);
                     SurfaceWorkflowService.SetTinVisible(ModelRole.Existing, snap.Existing.TinVisible);
                     SurfaceWorkflowService.SetTinVisible(ModelRole.Design, snap.Design.TinVisible);
@@ -441,6 +442,19 @@ namespace MiningVolume2023.Services
                     ProjectState.Current.NotifyChanged();
                     warnings.Add("Không dựng lại được cặp TIN hiện trạng/thiết kế: " + ex.Message);
                 }
+                finally
+                {
+                    if (builds != null)
+                        foreach (var build in builds)
+                        {
+                            // A file-backed mesh is owned by ProjectState only after
+                            // successful adoption into the live AutoCAD session.
+                            // Release all remaining temporary stores on failure.
+                            if (build?.Tin != null &&
+                                !ReferenceEquals(ProjectState.Current.Get(build.Role).Tin, build.Tin))
+                                try { (build.Tin.Triangles as IDisposable)?.Dispose(); } catch { }
+                        }
+                }
                 return;
             }
 
@@ -453,13 +467,19 @@ namespace MiningVolume2023.Services
             if (snap == null || !snap.HadTin) return;
             var session = ProjectState.Current.Get(role);
             if (session.Source == null || session.Source.Entities.Count == 0) return;
+            SurfaceBuildResult build = null;
             try
             {
-                var build = SurfaceWorkflowService.BuildCoreDetailed(role);
+                build = SurfaceWorkflowService.BuildCoreDetailed(role);
                 SurfaceWorkflowService.DrawTin(role, build);
                 SurfaceWorkflowService.SetTinVisible(role, snap.TinVisible);
             }
             catch (Exception ex) { warnings.Add($"Không dựng lại được TIN {session.Name}: {ex.Message}"); }
+            finally
+            {
+                if (build?.Tin != null && !ReferenceEquals(session.Tin, build.Tin))
+                    try { (build.Tin.Triangles as IDisposable)?.Dispose(); } catch { }
+            }
         }
 
         private static double PositiveOr(double value, double fallback) => value > 0 ? value : fallback;
