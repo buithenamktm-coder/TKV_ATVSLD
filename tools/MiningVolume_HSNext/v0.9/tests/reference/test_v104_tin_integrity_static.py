@@ -26,7 +26,10 @@ def test_loading_or_editing_source_invalidates_old_tin():
         "EditZ"
     ]:
         assert token in model
-    assert model.count("InvalidateTin(CurrentRole, clearCadLayer: true)") >= 5
+    assert model.count("InvalidateTin(CurrentRole, clearCadLayer: true)") >= 4
+    assert "SurfaceWorkflowService.InvalidateTin(role, clearCadLayer: true)" in model
+    # Full operation-by-operation ordering and failure cleanup are enforced by
+    # test_v2_survey_edit_integrity.py, not by counting matching text alone.
 
 def test_tin_renderer_creates_visible_writable_dedicated_layer_and_verifies_faces():
     s = read("src/MiningVolume.Plugin2023/Services/TinCadRenderer.cs")
