@@ -218,6 +218,24 @@ jobs:
           ) | Set-Content -Encoding utf8 dist/V2_BUILD_VERIFICATION.txt
           Get-Content dist/V2_BUILD_VERIFICATION.txt
           & ./release/scan_qa_setup.ps1
+          $evidence = [ordered]@{
+            build_type = 'QA_CANDIDATE_NOT_RELEASE'
+            source_sha = $env:SOURCE_SHA
+            checked_out_sha = $env:CHECKED_OUT_SHA
+            github_run_id = $env:GITHUB_RUN_ID
+            executable = 'IMSAT_MiningVolume_V2_0_QA_CANDIDATE.exe'
+            executable_sha256 = $v2Hash
+            executable_bytes = (Get-Item dist/IMSAT_MiningVolume_V2_0_QA_CANDIDATE.exe).Length
+            security_scan = (Get-Content dist/V2_SECURITY_SCAN.txt | Select-Object -First 1)
+            windows_ui_probe = 'UI_BUTTON_CONTRAST.json'
+            windows_ui_probe_sha256 = (Get-FileHash dist/UI_BUTTON_CONTRAST.png -Algorithm SHA256).Hash.ToLowerInvariant()
+            autocad_2023_interactive = 'NOT TESTED'
+            excel_desktop_recalculation = 'NOT TESTED'
+            windows_interactive_upgrade_uninstall = 'NOT TESTED'
+            license_production_activation = 'BLOCKED'
+          }
+          $evidence | ConvertTo-Json -Depth 5 | Set-Content -Encoding utf8 dist/FINAL_BUILD_EVIDENCE.json
+          if (-not (Test-Path dist/FINAL_BUILD_EVIDENCE.json)) { throw 'Missing V2 build evidence manifest' }
 
       - name: Create checksums and source archive
         shell: pwsh
@@ -303,6 +321,7 @@ jobs:
             tools/MiningVolume_HSNext/v0.9/dist/V2_SHA256SUMS.txt
             tools/MiningVolume_HSNext/v0.9/dist/V2_BUILD_VERIFICATION.txt
             tools/MiningVolume_HSNext/v0.9/dist/V2_SECURITY_SCAN.txt
+            tools/MiningVolume_HSNext/v0.9/dist/FINAL_BUILD_EVIDENCE.json
             tools/MiningVolume_HSNext/v0.9/dist/UI_BUTTON_CONTRAST.png
             tools/MiningVolume_HSNext/v0.9/dist/UI_BUTTON_CONTRAST.json
             tools/MiningVolume_HSNext/v0.9/docs/V2_FINAL_QA_REPORT.md
