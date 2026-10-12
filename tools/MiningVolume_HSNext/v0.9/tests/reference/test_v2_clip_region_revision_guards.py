@@ -86,7 +86,7 @@ def test_refusing_to_clear_old_cad_layer_preserves_accepted_tin_and_source():
     source_commit = workflow.split("private static SurfaceLoadResult CommitLoadedSource(", 1)[1].split(
         "private const int LargeDatasetVertexThreshold", 1
     )[0]
-    assert source_commit.index("InvalidateTin(role, clearCadLayer: true, notify: false);") < source_commit.index(
+    assert source_commit.index("InvalidateTin(role, clearCadLayer: clearPreviousCadTin, notify: false);") < source_commit.index(
         "session.Source = model;"
     )
-    assert source_commit.count("InvalidateTin(role, clearCadLayer: true, notify: false);") == 1
+    assert source_commit.count("InvalidateTin(role, clearCadLayer: clearPreviousCadTin, notify: false);") == 1
