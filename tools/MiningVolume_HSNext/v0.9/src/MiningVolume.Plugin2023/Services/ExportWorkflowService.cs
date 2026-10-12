@@ -60,9 +60,11 @@ namespace MiningVolume2023.Services
             foreach (var sheet in report.Sheets)
             {
                 if (sheet == null || string.IsNullOrWhiteSpace(sheet.Title)) continue;
-                // Re-running the writer must not add duplicate company headings.
-                if (sheet.Title.StartsWith(prefix + "\n", StringComparison.Ordinal)) continue;
-                sheet.Title = prefix + "\n" + sheet.Title;
+                if (string.IsNullOrWhiteSpace(sheet.OrganizationBaseTitle))
+                    sheet.OrganizationBaseTitle = sheet.Title;
+                // The selected unit may change between exports of the SAME
+                // report; replace instead of appending an old heading.
+                sheet.Title = prefix + "\n" + sheet.OrganizationBaseTitle;
             }
         }
 
