@@ -55,7 +55,10 @@ def test_surface_workflow_keeps_face_count_by_atomic_replace_and_runtime_verific
 
 def test_source_edits_invalidate_old_tin():
     s = read("src/MiningVolume.Plugin2023/UI/ModelPage.cs")
-    assert s.count("SurfaceWorkflowService.InvalidateTin(CurrentRole, clearCadLayer: true)") >= 5
+    assert s.count("InvalidateTin(CurrentRole, clearCadLayer: true)") >= 4
+    assert "SurfaceWorkflowService.InvalidateTin(role, clearCadLayer: true)" in s
+    # Full operation-by-operation ordering and failure cleanup are enforced by
+    # test_v2_survey_edit_integrity.py, not by counting matching text alone.
 
 def test_sections_and_volume_require_verified_tin_pair():
     sec = read("src/MiningVolume.Plugin2023/Services/SectionWorkflowService.cs")
