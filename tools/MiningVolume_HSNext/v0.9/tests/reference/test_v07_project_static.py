@@ -58,7 +58,7 @@ def test_model_edits_are_delta_not_duplicate_full_xyz():
 
 def test_restore_reloads_source_then_reapplies_user_edits():
     s = read('src/MiningVolume.Plugin2023/Services/ProjectPersistenceService.cs')
-    assert 'SurfaceWorkflowService.LoadLayer(role, snap.Layer, types)' in s
+    assert 'SurfaceWorkflowService.LoadLayer(role, snap.Layer, types, clearPreviousCadTin: false)' in s
     assert 'entity.SetEnabled(edit.Enabled)' in s
     assert 'entity.Vertices[ve.Index].SetEnabled(ve.Enabled)' in s
     assert 'entity.Vertices[ve.Index].OverrideZ(ve.Z)' in s
