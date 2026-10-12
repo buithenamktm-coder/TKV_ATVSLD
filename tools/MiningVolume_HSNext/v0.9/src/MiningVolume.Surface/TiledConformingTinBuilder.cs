@@ -98,7 +98,10 @@ namespace MiningVolume.Surface
                 var result=new Result {
                     Surface=surface,InputVertexCount=inputVertices,InputBreaklineCount=inputBreaklines,
                     TileCount=tiles.Tiles.Count,WarningCount=surface.Issues.Count(i=>i.Severity==ValidationSeverity.Warning),
-                    MinZ=prepared.Sites.Min(p=>p.Z),MaxZ=prepared.Sites.Max(p=>p.Z),
+                    MinZ=prepared.Sites.Min(p=>p.Z),
+                    MaxZ=Math.Max(prepared.Sites.Max(p=>p.Z),
+                        prepared.VerticalConflictGroups.Count==0?double.NegativeInfinity:
+                        prepared.VerticalConflictGroups.Max(g=>g.Sources.Max(v=>v.Z))),
                     PrepareMilliseconds=prepareMs,TriangulationMilliseconds=triangulationMs,
                     PreviewTriangles=preview
                 };
