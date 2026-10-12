@@ -48,3 +48,22 @@ def test_topology_fallback_never_clears_all_unrelated_breaklines():
     tests = read("tests/core/FinalAuditRegression.cs")
     assert "p0_unresolved_breaklines_are_relaxed_only_at_conflict" in tests
     assert "p0_unrecoverable_validation_error_must_not_clear_constraints" in tests
+
+
+def test_rebuilding_lost_cad_tin_layer_preserves_accepted_calculations():
+    workflow = read("src/MiningVolume.Plugin2023/Services/SurfaceWorkflowService.cs")
+    sync = workflow.split("public static void EnsureTinLayerSynchronized(", 1)[1].split(
+        "public static string TinStatusText(", 1
+    )[0]
+    assert "TinCadRenderer.Replace(doc.Database," in sync
+    assert "int expectedCadFaces = checked(session.Tin.Triangles.Count +" in sync
+    assert "if (written != expectedCadFaces)" in sync
+    assert "session.TinCadFaceCount = written;" in sync
+    assert "session.TinCadIsPreview = false;" in sync
+    assert "if (!session.TinVisible)" in sync
+    assert "DrawTinInternal(" not in sync
+    assert "AdoptTin(" not in sync
+    assert "GridWorkflowService.Invalidate(" not in sync
+    assert "state.SectionProfiles.Clear(" not in sync
+    assert "state.VolumeResult = null" not in sync
+    assert "state.VolumeCalculatedUtc = null" not in sync
