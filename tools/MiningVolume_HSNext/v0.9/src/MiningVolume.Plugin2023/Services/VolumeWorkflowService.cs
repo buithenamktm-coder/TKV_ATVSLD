@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using MiningVolume.Core.Sections;
 using MiningVolume.Core.Surface;
 using MiningVolume.Core.Volumes;
@@ -16,6 +17,17 @@ namespace MiningVolume2023.Services
             if (existing == null || design == null) throw new InvalidOperationException("Chưa có đủ TIN hiện trạng và TIN thiết kế.");
             if (levelStep <= 0) throw new ArgumentOutOfRangeException(nameof(levelStep), "Mức chia tầng phải lớn hơn 0.");
             if (Math.Abs(fromLevel - toLevel) < 1e-9) throw new InvalidOperationException("Mức tính từ và mức tính đến phải khác nhau.");
+            // The support CDT is single-Z at each XY. Vertical 3D faces
+            // preserve the other survey heights, but cannot be interpolated as
+            // a unique elevation by a 2.5D section sampler. A single review of
+            // the drawn section system is required, not point-by-point cleanup.
+            if ((existing.RequiresSectionReview || design.RequiresSectionReview) &&
+                profiles.Any(p => p != null && p.HasData && !p.IsUserEdited))
+                throw new InvalidOperationException(
+                    "TIN chứa các đỉnh trùng XY nhưng khác Z và đã dựng mặt đứng 3D. " +
+                    "Hãy kiểm tra các đường mặt cắt, chỉnh Grip tại vị trí cần thiết, " +
+                    "rồi bấm CẬP NHẬT MẶT CẮT trước khi chốt khối lượng. " +
+                    "Không cần loại từng điểm trùng trong dữ liệu nguồn.");
 
             return new SectionVolumeCalculator().Calculate(system, profiles, existing, design,
                 new VolumeCalculationOptions
