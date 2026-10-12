@@ -87,14 +87,11 @@ namespace MiningVolume.Surface
             {
                 long triangulationMs=watch.ElapsedMilliseconds;
                 var tiles=(ITiledTriangleSource)surface.Triangles;
-                var preview=new List<Triangle3>(Math.Min(200000,tiles.Count));
-                int stride=Math.Max(1,(int)Math.Ceiling(tiles.Count/200000.0)),index=0;
-                progress?.Invoke(2,3,"Chuẩn bị bản xem trước; tính toán vẫn dùng toàn bộ TIN...");
-                foreach(var triangle in tiles)
-                {
-                    cancellationToken.ThrowIfCancellationRequested();
-                    if(index++%stride==0)preview.Add(triangle);
-                }
+                // The official CAD TIN must use the complete file-backed surface.
+                // Sampling every Nth face produces holes and is not a valid 3D model.
+                // Keep the compatibility property empty: never silently substitute
+                // a reduced triangle set for authoritative AutoCAD geometry.
+                progress?.Invoke(2,3,"Đã chuẩn bị TIN đầy đủ; ghi CAD sẽ sử dụng toàn bộ tam giác...");
                 var result=new Result {
                     Surface=surface,InputVertexCount=inputVertices,InputBreaklineCount=inputBreaklines,
                     TileCount=tiles.Tiles.Count,WarningCount=surface.Issues.Count(i=>i.Severity==ValidationSeverity.Warning),
@@ -103,7 +100,7 @@ namespace MiningVolume.Surface
                         prepared.VerticalConflictGroups.Count==0?double.NegativeInfinity:
                         prepared.VerticalConflictGroups.Max(g=>g.Sources.Max(v=>v.Z))),
                     PrepareMilliseconds=prepareMs,TriangulationMilliseconds=triangulationMs,
-                    PreviewTriangles=preview
+                    PreviewTriangles=Array.Empty<Triangle3>()
                 };
                 progress?.Invoke(3,3,$"TIN hoàn thành: {tiles.Count:n0} tam giác • {tiles.Tiles.Count:n0} vùng lưu.");
                 transferred=true;
