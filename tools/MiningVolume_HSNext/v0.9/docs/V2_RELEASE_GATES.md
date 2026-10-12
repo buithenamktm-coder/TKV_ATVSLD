@@ -5,18 +5,18 @@
 ## 1. Trạng thái mã nguồn đã kiểm chứng
 
 - Repository: `buithenamktm-coder/TKV_ATVSLD`; nhánh chính V2 đang tiếp quản: `miningvolume-v2-chatgpt-p0-continuation`, PR #27. Không sửa nhánh `miningvolume-v1.0`.
-- Source SHA **`e97a4a6e07ee4d38f8ecbc51857c728b054e6f6a`** là mốc CODE đã kiểm tra dưới đây (commit tài liệu sau đó không thay thế số liệu test của CODE).
-- CI **PASS trên cùng code SHA**: [Run 38185748918](https://github.com/buithenamktm-coder/TKV_ATVSLD/actions/runs/38185748918), [Run 38185752716](https://github.com/buithenamktm-coder/TKV_ATVSLD/actions/runs/38185752716).
-- Python pytest/reference: **230/230 PASS**; Core Regression C# thực + native CDT: **73/73 PASS**; Windows installer Go tests: **4/4 PASS**. AutoCAD 2023 API plugin .NET Release build PASS; license issuer backup/restore self-test PASS; V2 QA Setup build PASS.
-- QA artifact thuộc run 38185748918: **`IMSAT-MiningVolume-V2.0-QA-CANDIDATE-NOT-RELEASE`**, artifact ID **11720040080**. Tệp EXE trong artifact: `IMSAT_MiningVolume_V2_0_QA_CANDIDATE.exe`. **SHA256 EXE: `ee3e5a6aed388f6b9d9ddc0c6f873e63b97ad276857a05997442fca555e99cde`**. KHÔNG lấy hash của V1 hoặc ZIP thay hash EXE V2.
+- Source SHA **`536f3aaa8875ebf4ab9fe4fcf7ba677db2e018de`** là mốc CODE đã kiểm tra dưới đây (commit tài liệu sau đó không thay thế số liệu test của CODE).
+- CI **PASS trên cùng code SHA**: [Run 38186674934](https://github.com/buithenamktm-coder/TKV_ATVSLD/actions/runs/38186674934), [Run 38186670773](https://github.com/buithenamktm-coder/TKV_ATVSLD/actions/runs/38186670773).
+- Python pytest/reference: **235/235 PASS**; Core Regression C# thực + native CDT: **74/74 PASS**; Windows installer Go tests: **4/4 PASS**. AutoCAD 2023 API plugin .NET Release build PASS; license issuer backup/restore self-test PASS; V2 QA Setup build PASS.
+- QA artifact thuộc run 38186674934: **`IMSAT-MiningVolume-V2.0-QA-CANDIDATE-NOT-RELEASE`**, artifact ID **11720415555**. Tệp EXE trong artifact: `IMSAT_MiningVolume_V2_0_QA_CANDIDATE.exe`. **SHA256 EXE: `8793337e020a4398d64675a48a3ac9d63ab4599bdfcc35c4e3846ed72eb30b69`**. KHÔNG lấy hash của V1 hoặc ZIP thay hash EXE V2.
 
-**Bổ sung đã kiểm chứng bằng mã nguồn và unit tests:** giữ nguyên mặt cắt đã chỉnh khi hủy chọn điểm chèn; cảnh báo mặc định Không trước khi vẽ đè; sau khi nạp DWG kiểm tra dấu vết đường CAD đã lưu và fingerprint SHA-256 tất cả điểm/đường nguồn của TIN hiện trạng, thiết kế. Bộ acceptance đã thêm ca hủy, thiếu CAD, đổi DWG khi đang tính, SAVEAS. Các luồng này **chưa được chạy AutoCAD thật**.
+**Bổ sung đã kiểm chứng bằng mã nguồn và unit tests:** giữ nguyên mặt cắt đã chỉnh khi hủy chọn điểm chèn; cảnh báo mặc định Không trước khi vẽ đè; khi nạp DWG kiểm tra đường CAD và SHA-256 toàn bộ nguồn TIN hiện trạng/thiết kế; đổi đường bao/hướng mặt cắt hủy khối lượng cũ; kiểm tra DWG/TIN/revision/cặp mặt cắt/thông số mức trước khi commit kết quả async; lưới ô vuông kiểm tra cả đường bao và kích thước ô. Chuyển DWG ẩn Palette cũ, lệnh mở Palette/3D/lưu Project nạp đúng bản vẽ hiện hành. **Đã có test lõi và compile, nhưng chưa nghiệm thu trong AutoCAD thực tế**.
 
 ## 2. Sáu chốt nghiệm thu
 
 | Gate | Trạng thái | Bằng chứng và thiếu sót |
 |---|---|---|
-| G1 — Source, reference/core, Windows build, QA Setup | **PASS trên CODE SHA e97a4a6e** | 230 pytest, 73 core, 4 Go, build .NET API, issuer self-test, SHA256 V2 và 2 Windows CI đều PASS. Nếu HEAD CODE mới thì bắt buộc chạy lại. |
+| G1 — Source, reference/core, Windows build, QA Setup | **PASS trên CODE SHA 536f3aaa** | 235 pytest, 74 core, 4 Go, build .NET API, issuer self-test, SHA256 V2 và 2 Windows CI đều PASS. Nếu HEAD CODE mới thì bắt buộc chạy lại. |
 | G2 — Strict/mean-Z TIN, X/Y/Z, provenance, Cancel và editor | **PASS phần lõi; HOST NOT TESTED** | Các bài test ngưỡng ΔZ, sửa/khôi phục, không đổi CAD gốc đã qua; chưa thao tác AutoCAD 2023 thực. Không được biến nút chưa thử thành PASS. |
 | G3 — TIN mỏ thật SQ và hai nguồn DXF/DWG | **BLOCKED** | Nguồn SQ có xung đột Z >3 m; phải có quyết định chuyên môn về Z. Chưa dựng, so, lưu/mở hai TIN chính thức với AutoCAD 2023 thực tế. Không tự thay Z bằng trung bình. |
 | G4 — Toàn bộ V2 end-to-end | **HOST NOT TESTED** | Mặt cắt chỉnh CAD, khối lượng theo tầng, Excel công thức, grid, quặng, menu/Ribbon/Palette nhiều DPI, ESC, nhiều DWG và AutoCAD TABLE đều đã có code/test một phần, nhưng chưa có ảnh/log DWG nghiệm thu thật cho T01–T22. |
