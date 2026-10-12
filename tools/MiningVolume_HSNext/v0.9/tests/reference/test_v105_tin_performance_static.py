@@ -100,7 +100,10 @@ def test_section_profiles_are_parallelized_but_keep_original_order():
     s = read("src/MiningVolume.Core/Sections/TinSectionSampler.cs")
     assert "Parallel.For(0, lines.Count" in s
     assert "var result = new SectionProfile[lines.Count]" in s
-    assert "result[i] = BuildProfileIndexed" in s
+    # Each parallel iteration still writes to result[i] in input order;
+    # the wrapper adds conflict diagnostics without serializing sampling.
+    assert "result[i] = AnnotateVerticalConflicts(" in s
+    assert "BuildProfileIndexed(lines[i], existingIndex, designIndex, tol)" in s
     assert "Interlocked.Increment" in s
 
 def test_section_cad_output_is_batched_to_avoid_one_giant_transaction():
