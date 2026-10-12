@@ -31,4 +31,8 @@ def test_export_page_supports_cad_xlsx_or_both_without_forcing_xlsx():
     assert "if (exportCad)" in s
     assert "CadVolumeTableService.Insert" in s
     assert "ExportWorkflowService.WriteXlsx" in s
-    assert "ReferenceEquals(currentResult, st.VolumeResult)" in s
+    # Recheck the authoritative CAD section paths and approved volume before
+    # either output; the guard also rejects a DWG/TIN switch mid-export.
+    assert "EnsureExportInputsCurrent(doc, st, currentResult, approvedProfiles," in s
+    assert "!ReferenceEquals(expectedVolume, state.VolumeResult)" in s
+    assert "EditableSectionCadService.EnsureProfilesMatch(doc.Database, expectedProfiles)" in s
