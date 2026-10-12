@@ -72,3 +72,22 @@ def test_pair_tin_never_writes_after_switching_active_dwg():
     assert "ReferenceEquals(activeDoc," in method
     assert method.index("ReferenceEquals(activeDoc,") < method.index(
         "SurfaceWorkflowService.DrawTinPair(builds")
+
+def test_palette_cannot_remain_live_on_wrong_dwg_or_bypass_load():
+    entry = read(ROOT / "EntryPoint.cs")
+    assert "DocumentActivated += OnDocumentActivated" in entry
+    assert "DocumentActivated -= OnDocumentActivated" in entry
+    event = entry.split("private static void OnDocumentActivated(", 1)[1].split(
+        "private static void OnIdle(", 1)[0]
+    assert "_loadedDrawingFingerprint = null;" in event
+    assert "GridWorkflowService.Invalidate();" in event
+    assert "Palette.Visible = false;" in event
+    toggle = entry.split("internal static void TogglePalette()", 1)[1].split(
+        '[CommandMethod("TKL"', 1)[0]
+    assert "Open(AppPage.Project);" in toggle
+    save = entry.split("public static void SaveProject()", 1)[1].split(
+        '[CommandMethod("MV_PROJECT_LOAD"', 1)[0]
+    assert "EnsureCurrentDrawingProjectLoaded();" in save
+    for command in ("View3DExisting()", "View3DDesign()"):
+        start = entry.split("public static void " + command, 1)[1].split("}", 1)[0]
+        assert "EnsureCurrentDrawingProjectLoaded();" in start
