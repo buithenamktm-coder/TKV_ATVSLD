@@ -244,8 +244,8 @@ namespace MiningVolume2023.Services
             state.VerticalScale = PositiveOr(snap.VerticalScale, 500);
             state.DeveloperName = "Bùi Thế Nam";
             state.DeveloperContact = "ĐT/Zalo: 0967280686";
-            state.MiningUnitGroup = snap.MiningUnitGroup == MiningUnitCatalog.Mineral
-                ? MiningUnitCatalog.Mineral : MiningUnitCatalog.Coal;
+            state.MiningUnitGroup = MiningUnitCatalog.IsKnownGroup(snap.MiningUnitGroup)
+                ? snap.MiningUnitGroup : MiningUnitCatalog.Coal;
             state.MiningUnitName = snap.MiningUnitName ?? string.Empty;
             state.VolumePeriodType = snap.VolumePeriodType == VolumePeriodCatalog.Year
                 ? VolumePeriodCatalog.Year
