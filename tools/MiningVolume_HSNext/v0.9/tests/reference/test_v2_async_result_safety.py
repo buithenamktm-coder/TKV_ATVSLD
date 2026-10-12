@@ -123,3 +123,16 @@ def test_section_export_blocks_cad_grip_changes_and_dwg_switch():
     assert "await Task.Run(() => ExportWorkflowService.WriteXlsx(" in start
     assert "var actual = ReadEditedProfiles(db, approved)" in cad
     assert "EditedSectionProfileBuilder.SameGeometry(approved, actual)" in cad
+
+def test_saveas_copies_with_same_fingerprint_still_switch_projects():
+    entry = read(ROOT / "EntryPoint.cs")
+    assert "Autodesk.AutoCAD.ApplicationServices.Document _loadedDocument;" in entry
+    handler = entry.split("private static void OnDocumentActivated(", 1)[1].split(
+        "private static void OnIdle(", 1)[0]
+    assert "ReferenceEquals(e.Document, _loadedDocument)" in handler
+    assert "_loadedDocument = null;" in handler
+    restore = entry.split("private static void EnsureCurrentDrawingProjectLoaded()", 1)[1].split(
+        "private static string CurrentFingerprint()", 1)[0]
+    assert "ReferenceEquals(_loadedDocument, doc)" in restore
+    assert "_loadedDocument = doc;" in restore
+    assert "ProjectState.Current.Reset();" in restore
