@@ -235,7 +235,7 @@ namespace MiningVolume2023.UI
             {
                 if(string.IsNullOrWhiteSpace(st.GridBoundaryHandle))
                     throw new InvalidOperationException("Hãy chọn đường bao ô lưới trên bình đồ CAD.");
-                var activeDoc = Application.DocumentManager.MdiActiveDocument;
+                var activeDoc = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument;
                 if (activeDoc == null)
                     throw new InvalidOperationException("Không có bản vẽ AutoCAD đang hoạt động.");
                 string boundaryHandle = st.GridBoundaryHandle;
@@ -262,7 +262,7 @@ namespace MiningVolume2023.UI
                         "Đang tính ô "+done.ToString("n0")+"/"+total.ToString("n0")),
                     cts.Token));
                 cts.Token.ThrowIfCancellationRequested();
-                if (!ReferenceEquals(activeDoc, Application.DocumentManager.MdiActiveDocument) ||
+                if (!ReferenceEquals(activeDoc, Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument) ||
                     !string.Equals(st.GridBoundaryHandle, boundaryHandle, StringComparison.OrdinalIgnoreCase) ||
                     !ReferenceEquals(st.Existing.Tin, existing) ||
                     !ReferenceEquals(st.Design.Tin, design) ||
