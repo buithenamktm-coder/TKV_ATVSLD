@@ -12,13 +12,21 @@ namespace MiningVolume2023.Services
     public enum ModelRole { Existing, Design }
     public enum SourceSelectionMode { Layer = 0, ManualSelection = 1 }
 
-    /// <summary>Starter list for TKV coal and mineral surface operations.
-    /// Editable in UI; a project may contain another organizational unit.</summary>
+    /// <summary>
+    /// Danh mục đơn vị tham khảo thuộc TKV, đối chiếu tên theo cổng thông tin
+    /// TKV (vinacomin.vn / web.vinacomin.vn), cập nhật 13/10/2026.
+    /// Các đơn vị không có trong danh mục vẫn có thể nhập trực tiếp;
+    /// không lưu mã chỉ mục để bảo toàn tên pháp lý trên DWG/Excel.
+    /// </summary>
     public static class MiningUnitCatalog
     {
+        // Keep existing serialized category labels for older V2 DWG projects.
         public const string Coal = "Than lộ thiên";
         public const string Mineral = "Quặng/khoáng sản lộ thiên";
-        public static readonly IReadOnlyList<string> CoalUnits = new[]
+        public const string TkvOther = "Đơn vị TKV khác";
+        public const string OutsideTkv = "Đơn vị khác (ngoài TKV)";
+
+        public static readonly IReadOnlyList<string> CoalUnits = Array.AsReadOnly(new[]
         {
             "Công ty Cổ phần Than Cao Sơn - TKV",
             "Công ty Cổ phần Than Đèo Nai - Cọc Sáu - TKV",
@@ -26,17 +34,95 @@ namespace MiningVolume2023.Services
             "Công ty Than Na Dương - VVMI",
             "Công ty Than Khánh Hòa - VVMI",
             "Công ty Than Núi Hồng - VVMI",
-            "Công ty Cổ phần Than - Điện Nông Sơn - TKV"
-        };
-        public static readonly IReadOnlyList<string> MineralUnits = new[]
+            "Công ty Cổ phần Than - Điện Nông Sơn - TKV",
+            "Tổng công ty Công nghiệp mỏ Việt Bắc TKV - CTCP"
+        });
+
+        public static readonly IReadOnlyList<string> MineralUnits = Array.AsReadOnly(new[]
         {
+            "Tổng công ty Khoáng sản TKV - CTCP",
             "Chi nhánh Mỏ tuyển đồng Sin Quyền, Lào Cai - Vimico",
             "Công ty Cổ phần Đồng Tả Phời - Vinacomin",
             "Công ty TNHH MTV Nhôm Lâm Đồng - TKV",
-            "Công ty Nhôm Đắk Nông - TKV"
-        };
-        public static IReadOnlyList<string> ForCategory(string group) =>
-            string.Equals(group, Mineral, StringComparison.Ordinal) ? MineralUnits : CoalUnits;
+            "Công ty Nhôm Đắk Nông - TKV",
+            "Công ty Cổ phần Khoáng sản 3 - Vimico",
+            "Công ty Cổ phần Đất hiếm Lai Châu - Vimico",
+            "Công ty Cổ phần Khoáng sản và Luyện kim Cao Bằng - Vimico",
+            "Công ty Cổ phần Kim loại màu Thái Nguyên - Vimico",
+            "Công ty Cổ phần Cromit Cổ Định Thanh Hóa - Vinacomin",
+            "Công ty Cổ phần Sắt Thạch Khê - Vinacomin"
+        });
+
+        public static readonly IReadOnlyList<string> OtherTkvUnits = Array.AsReadOnly(new[]
+        {
+            "Tập đoàn Công nghiệp Than - Khoáng sản Việt Nam",
+            "Viện Khoa học Công nghệ mỏ - Vinacomin",
+            "Viện Cơ khí năng lượng và mỏ - Vinacomin",
+            "Công ty Than Nam Mẫu - TKV",
+            "Công ty Than Thống Nhất - TKV",
+            "Công ty Than Dương Huy - TKV",
+            "Công ty Than Quang Hanh - TKV",
+            "Công ty Than Khe Chàm - TKV",
+            "Công ty Than Mạo Khê - TKV",
+            "Công ty Than Hòn Gai - TKV",
+            "Công ty Than Hạ Long - TKV",
+            "Công ty Than Uông Bí - TKV",
+            "Công ty Cổ phần Than Hà Lầm - Vinacomin",
+            "Công ty Cổ phần Than Mông Dương - Vinacomin",
+            "Công ty Cổ phần Than Núi Béo - Vinacomin",
+            "Công ty Cổ phần Than Vàng Danh - Vinacomin",
+            "Công ty Tuyển than Cửa Ông - TKV",
+            "Công ty Tuyển than Hòn Gai - Vinacomin",
+            "Công ty Chế biến Than Quảng Ninh - TKV",
+            "Công ty Kho vận và Cảng Cẩm Phả - Vinacomin",
+            "Công ty Kho vận Đá Bạc - Vinacomin",
+            "Công ty Xây lắp mỏ - TKV",
+            "Công ty TNHH MTV Môi trường - TKV",
+            "Công ty Cổ phần Địa chất mỏ - TKV",
+            "Công ty Cổ phần Địa chất Việt Bắc - TKV",
+            "Công ty Cổ phần Địa chất và Khoáng sản - Vinacomin",
+            "Công ty Cổ phần Tư vấn đầu tư Mỏ và Công nghiệp - Vinacomin",
+            "Công ty Cổ phần Tin học, Công nghệ và Môi trường - Vinacomin",
+            "Công ty Cổ phần Giám định - Vinacomin",
+            "Công ty Cổ phần Vật tư - TKV",
+            "Công ty Cổ phần Chế tạo máy - Vinacomin",
+            "Công ty Cổ phần Cơ điện Uông Bí - Vinacomin",
+            "Công ty Cổ phần Cơ khí Mạo Khê - Vinacomin",
+            "Công ty Cổ phần Công nghiệp Ô tô - Vinacomin",
+            "Công ty Cổ phần Vận tải và đưa đón thợ mỏ - Vinacomin",
+            "Công ty Cổ phần Kinh doanh than Cẩm Phả - Vinacomin",
+            "Công ty Cổ phần Kinh doanh than Miền Bắc - Vinacomin",
+            "Công ty Cổ phần Xuất nhập khẩu Than - Vinacomin",
+            "Công ty Cổ phần Hoa tiêu Hàng hải - TKV",
+            "Công ty Cổ phần Du lịch và Thương mại - Vinacomin",
+            "Công ty Cổ phần Gang thép Cao Bằng",
+            "Công ty Cổ phần Xi măng La Hiên - VVMI",
+            "Công ty Cổ phần Xi măng Quán Triều - VVMI",
+            "Công ty Cổ phần Xi măng Tân Quang - VVMI",
+            "Tổng công ty Công nghiệp Hóa chất mỏ - Vinacomin",
+            "Tổng công ty Điện lực TKV - CTCP",
+            "Công ty Cổ phần Nhiệt điện Cẩm Phả - TKV",
+            "Công ty Thủy điện Đồng Nai 5 - TKV",
+            "Trung tâm Cấp cứu mỏ - Vinacomin",
+            "Trường Cao đẳng Than - Khoáng sản Việt Nam",
+            "Trường Quản trị kinh doanh - Vinacomin",
+            "Bệnh viện Than - Khoáng sản",
+            "Ban Quản lý dự án chuyên ngành mỏ than - TKV"
+        });
+
+        public static bool IsKnownGroup(string group) =>
+            string.Equals(group, Coal, StringComparison.Ordinal) ||
+            string.Equals(group, Mineral, StringComparison.Ordinal) ||
+            string.Equals(group, TkvOther, StringComparison.Ordinal) ||
+            string.Equals(group, OutsideTkv, StringComparison.Ordinal);
+
+        public static IReadOnlyList<string> ForCategory(string group)
+        {
+            if (string.Equals(group, Coal, StringComparison.Ordinal)) return CoalUnits;
+            if (string.Equals(group, Mineral, StringComparison.Ordinal)) return MineralUnits;
+            if (string.Equals(group, TkvOther, StringComparison.Ordinal)) return OtherTkvUnits;
+            return Array.Empty<string>(); // Outside TKV: user enters full name.
+        }
     }
 
     /// <summary>A reporting period is not a calculation timestamp.</summary>
