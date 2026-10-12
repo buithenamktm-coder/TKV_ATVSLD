@@ -75,6 +75,24 @@ namespace MiningVolume2023.Services
                     written++;
                 }
 
+                // These faces have zero XY area by design. They are valid
+                // 3D triangles with one upright edge, not planar CDT cells.
+                foreach (var t in tin.VerticalFaces)
+                {
+                    ValidateVerticalFace(t);
+                    var a = new Point3d(t.A.X, t.A.Y, t.A.Z);
+                    var b = new Point3d(t.B.X, t.B.Y, t.B.Z);
+                    var c = new Point3d(t.C.X, t.C.Y, t.C.Z);
+                    var face = new Face(a, b, c, c, true, true, true, false)
+                    {
+                        LayerId = layerId,
+                        ColorIndex = 256
+                    };
+                    ms.AppendEntity(face);
+                    tr.AddNewlyCreatedDBObject(face, true);
+                    written++;
+                }
+
                 outLayer.IsLocked = true;
                 tr.Commit();
             }
@@ -286,6 +304,18 @@ namespace MiningVolume2023.Services
 
             if (t.Area2D <= 1e-12)
                 throw new InvalidOperationException("TIN có tam giác suy biến, diện tích XY gần bằng 0.");
+        }
+
+        private static void ValidateVerticalFace(MiningVolume.Core.Geometry.Triangle3 t)
+        {
+            if (!Finite(t.A.X) || !Finite(t.A.Y) || !Finite(t.A.Z) ||
+                !Finite(t.B.X) || !Finite(t.B.Y) || !Finite(t.B.Z) ||
+                !Finite(t.C.X) || !Finite(t.C.Y) || !Finite(t.C.Z))
+                throw new InvalidOperationException("Mặt đứng 3D có tọa độ không hợp lệ.");
+            double dz = t.B.Z - t.A.Z;
+            if (t.A.XY.DistanceTo(t.B.XY) > 1e-6 || Math.Abs(dz) <= 1e-8 ||
+                t.A.XY.DistanceTo(t.C.XY) <= 1e-8)
+                throw new InvalidOperationException("Mặt đứng 3D không phải tam giác hợp lệ.");
         }
 
         private static bool Finite(double v) => !double.IsNaN(v) && !double.IsInfinity(v);
