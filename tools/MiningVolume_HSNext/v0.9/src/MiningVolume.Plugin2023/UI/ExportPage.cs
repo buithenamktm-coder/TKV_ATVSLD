@@ -170,6 +170,11 @@ namespace MiningVolume2023.UI
             var designTin = st.Design.Tin;
             long existingRevision = st.Existing.Source.Revision;
             long designRevision = st.Design.Source.Revision;
+            // Keep the approved reporting identity in lockstep with the
+            // original volume result during asynchronous Excel creation.
+            string selectedUnitGroup = st.MiningUnitGroup;
+            string selectedUnitName = st.MiningUnitName;
+            string selectedPeriod = st.VolumePeriodLabel;
             bool excelWritten = false;
             try
             {
@@ -178,14 +183,16 @@ namespace MiningVolume2023.UI
                 if (exportCad)
                     SurfaceWorkflowService.EnsureBothTinsReady(synchronizeCadLayers: true);
                 EnsureExportInputsCurrent(doc, st, currentResult, approvedProfiles,
-                    existingTin, designTin, existingRevision, designRevision);
+                    existingTin, designTin, existingRevision, designRevision,
+                    selectedUnitGroup, selectedUnitName, selectedPeriod);
 
                 if (exportExcel)
                 {
                     _status.Text = "Đang lập workbook và ghi file Excel...";
                     var report = await Task.Run(() => ExportWorkflowService.BuildReport(st, opt));
                     EnsureExportInputsCurrent(doc, st, currentResult, approvedProfiles,
-                        existingTin, designTin, existingRevision, designRevision);
+                        existingTin, designTin, existingRevision, designRevision,
+                    selectedUnitGroup, selectedUnitName, selectedPeriod);
                     await Task.Run(() => ExportWorkflowService.WriteXlsx(excelPath, report));
                     excelWritten = true;
                 }
@@ -193,7 +200,8 @@ namespace MiningVolume2023.UI
                 if (exportCad)
                 {
                     EnsureExportInputsCurrent(doc, st, currentResult, approvedProfiles,
-                        existingTin, designTin, existingRevision, designRevision);
+                        existingTin, designTin, existingRevision, designRevision,
+                    selectedUnitGroup, selectedUnitName, selectedPeriod);
                     _status.Text = "Đang chèn bảng khối lượng TABLE vào AutoCAD...";
                     using (doc.LockDocument())
                         CadVolumeTableService.Insert(doc.Database, currentResult, cadInsertion.Value);
@@ -226,7 +234,8 @@ namespace MiningVolume2023.UI
             MiningVolume.Core.Sections.SectionProfile[] expectedProfiles,
             MiningVolume.Core.Surface.TinSurface existing,
             MiningVolume.Core.Surface.TinSurface design,
-            long existingRevision, long designRevision)
+            long existingRevision, long designRevision,
+            string selectedUnitGroup, string selectedUnitName, string selectedPeriod)
         {
             // Excel-only exports must obey the same clipping-region validity
             // gate as CAD exports. A grip-edited TIN boundary otherwise leaves
@@ -240,6 +249,9 @@ namespace MiningVolume2023.UI
                 !state.Existing.IsTinCurrent || !state.Design.IsTinCurrent ||
                 state.Existing.Source.Revision != existingRevision ||
                 state.Design.Source.Revision != designRevision ||
+                !string.Equals(state.MiningUnitGroup, selectedUnitGroup, StringComparison.Ordinal) ||
+                !string.Equals(state.MiningUnitName, selectedUnitName, StringComparison.Ordinal) ||
+                !string.Equals(state.VolumePeriodLabel, selectedPeriod, StringComparison.Ordinal) ||
                 expectedProfiles.Length != state.SectionProfiles.Count ||
                 expectedProfiles.Where((p, index) => !ReferenceEquals(p, state.SectionProfiles[index])).Any())
                 throw new InvalidOperationException(
