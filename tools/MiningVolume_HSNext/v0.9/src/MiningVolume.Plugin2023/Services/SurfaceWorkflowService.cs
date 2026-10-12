@@ -126,7 +126,7 @@ namespace MiningVolume2023.Services
             return result;
         }
 
-        public static SurfaceLoadResult LoadLayer(ModelRole role, string layer, ISet<SourceEntityType> allowedTypes)
+        public static SurfaceLoadResult LoadLayer(ModelRole role, string layer, ISet<SourceEntityType> allowedTypes, bool clearPreviousCadTin = true)
         {
             if (string.IsNullOrWhiteSpace(layer))
                 throw new InvalidOperationException("Chưa chọn layer dữ liệu nguồn.");
@@ -152,10 +152,10 @@ namespace MiningVolume2023.Services
                 throw new InvalidOperationException(
                     $"Layer '{layer}' không có đối tượng POINT/LINE/POLYLINE hợp lệ theo loại dữ liệu đang chọn.");
 
-            return CommitLoadedSource(role, layer, SourceSelectionMode.Layer, entities, allowedTypes);
+            return CommitLoadedSource(role, layer, SourceSelectionMode.Layer, entities, allowedTypes, clearPreviousCadTin);
         }
 
-        public static SurfaceLoadResult LoadSelection(ModelRole role, IReadOnlyList<ObjectId> objectIds, ISet<SourceEntityType> allowedTypes)
+        public static SurfaceLoadResult LoadSelection(ModelRole role, IReadOnlyList<ObjectId> objectIds, ISet<SourceEntityType> allowedTypes, bool clearPreviousCadTin = true)
         {
             if (objectIds == null || objectIds.Count == 0)
                 throw new InvalidOperationException("Chưa chọn đối tượng CAD nào.");
@@ -182,10 +182,10 @@ namespace MiningVolume2023.Services
                     "Các đối tượng đã chọn không có POINT/LINE/POLYLINE hợp lệ theo loại dữ liệu đang bật, " +
                     "hoặc chỉ thuộc layer TIN đầu ra của IMSAT VOLUME.");
 
-            return CommitLoadedSource(role, null, SourceSelectionMode.ManualSelection, entities, allowedTypes);
+            return CommitLoadedSource(role, null, SourceSelectionMode.ManualSelection, entities, allowedTypes, clearPreviousCadTin);
         }
 
-        public static SurfaceLoadResult LoadSelectedHandles(ModelRole role, IEnumerable<string> handles, ISet<SourceEntityType> allowedTypes)
+        public static SurfaceLoadResult LoadSelectedHandles(ModelRole role, IEnumerable<string> handles, ISet<SourceEntityType> allowedTypes, bool clearPreviousCadTin = true)
         {
             var doc = Application.DocumentManager.MdiActiveDocument ??
                       throw new InvalidOperationException("Không có bản vẽ AutoCAD đang hoạt động.");
@@ -207,7 +207,7 @@ namespace MiningVolume2023.Services
             }
             if (ids.Count == 0)
                 throw new InvalidOperationException("Không còn đối tượng CAD đã chọn trước đây để khôi phục mô hình.");
-            return LoadSelection(role, ids, allowedTypes);
+            return LoadSelection(role, ids, allowedTypes, clearPreviousCadTin);
         }
 
         private static SurfaceLoadResult CommitLoadedSource(
@@ -215,7 +215,8 @@ namespace MiningVolume2023.Services
             string layer,
             SourceSelectionMode sourceMode,
             IReadOnlyList<SourceEntity> entities,
-            ISet<SourceEntityType> allowedTypes)
+            ISet<SourceEntityType> allowedTypes,
+            bool clearPreviousCadTin = true)
         {
             var model = new SurfaceModel(role == ModelRole.Existing ? "Hiện trạng" : "Thiết kế");
             model.Entities.AddRange(entities);
@@ -224,7 +225,9 @@ namespace MiningVolume2023.Services
             var session = ProjectState.Current.Get(role);
             // Fail before mutating the source if AutoCAD refuses to clear the
             // previous TIN layer. Preserve the last accepted session on error.
-            InvalidateTin(role, clearCadLayer: true, notify: false);
+            // DWG restore must not erase the persisted CAD TIN before a
+            // replacement model is successfully constructed and committed.
+            InvalidateTin(role, clearCadLayer: clearPreviousCadTin, notify: false);
             session.Layer = sourceMode == SourceSelectionMode.Layer ? layer : null;
             session.SourceMode = sourceMode;
             session.SelectedHandles.Clear();
