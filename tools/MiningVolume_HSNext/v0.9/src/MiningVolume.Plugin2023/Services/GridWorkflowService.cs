@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using MiningVolume.Core.Geometry;
 using MiningVolume.Core.Grid;
 using MiningVolume.Core.Surface;
 
@@ -41,6 +43,28 @@ namespace MiningVolume2023.Services
                        _options.SizeY == state.GridSizeY &&
                        _options.RotationDegrees == state.GridRotationDegrees;
             }
+        }
+
+        // The CAD boundary handle does not change after grip-editing its
+        // vertices. Validate the actual polygon before drawing or exporting
+        // previously computed results; a stale shape must never be published.
+        public static void EnsureBoundaryCurrent(IReadOnlyList<Vec2> cadBoundary)
+        {
+            var accepted = _options?.Boundary;
+            bool same = IsCurrent && accepted != null && cadBoundary != null &&
+                        accepted.Count == cadBoundary.Count;
+            if (same)
+                for (int i = 0; i < accepted.Count; i++)
+                    if (!Geometry2D.AlmostSame(accepted[i], cadBoundary[i], 1e-7))
+                    {
+                        same = false;
+                        break;
+                    }
+            if (same) return;
+            Invalidate();
+            throw new InvalidOperationException(
+                "Đường bao lưới trên CAD hoặc dữ liệu tính đã thay đổi. " +
+                "Không vẽ/xuất khối lượng cũ; hãy tính lại lưới ô vuông.");
         }
 
         public static GridVolumeReport Report => IsCurrent ? _report : null;
