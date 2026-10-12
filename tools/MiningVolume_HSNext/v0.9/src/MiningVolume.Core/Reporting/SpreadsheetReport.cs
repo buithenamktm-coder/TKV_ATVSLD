@@ -369,7 +369,13 @@ namespace MiningVolume.Core.Reporting
                 int row = 1;
                 if (!string.IsNullOrWhiteSpace(sheet.Title))
                 {
-                    WriteRowStart(x, row, 24); WriteCell(x, 1, row, ReportCell.Text(sheet.Title, true), StyleTitle); x.WriteEndElement(); row++;
+                    // The organization hierarchy occupies the EXISTING
+                    // merged title row. Increase height for each visible line,
+                    // while leaving all row indices and formula references fixed.
+                    int titleLines = sheet.Title.Split('\n').Length;
+                    WriteRowStart(x, row, Math.Min(409, Math.Max(24, titleLines * 19 + 6)));
+                    WriteCell(x, 1, row, ReportCell.Text(sheet.Title, true), StyleTitle);
+                    x.WriteEndElement(); row++;
                 }
                 foreach (var note in sheet.Notes)
                 {
