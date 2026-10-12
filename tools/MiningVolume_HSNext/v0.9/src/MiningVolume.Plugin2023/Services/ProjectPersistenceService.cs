@@ -378,9 +378,9 @@ namespace MiningVolume2023.Services
                     : SourceSelectionMode.Layer;
 
                 if (sourceMode == SourceSelectionMode.ManualSelection && snap.SelectedHandles != null && snap.SelectedHandles.Count > 0)
-                    SurfaceWorkflowService.LoadSelectedHandles(role, snap.SelectedHandles, types);
+                    SurfaceWorkflowService.LoadSelectedHandles(role, snap.SelectedHandles, types, clearPreviousCadTin: false);
                 else if (!string.IsNullOrWhiteSpace(snap.Layer))
-                    SurfaceWorkflowService.LoadLayer(role, snap.Layer, types);
+                    SurfaceWorkflowService.LoadLayer(role, snap.Layer, types, clearPreviousCadTin: false);
                 else
                     return;
 
