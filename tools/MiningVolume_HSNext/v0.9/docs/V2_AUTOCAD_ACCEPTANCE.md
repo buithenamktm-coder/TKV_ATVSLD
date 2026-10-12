@@ -34,6 +34,14 @@ Dùng Windows x64 + AutoCAD 2023 có bản quyền, phiên tương tác. Sao ch�
 - Sao chép DWG A thành B bằng **SAVEAS** (có thể giữ cùng `FingerprintGuid`), mở **cả hai DWG** trong cùng AutoCAD. Trên A và B đặt Project khác nhau, kiểm tra chuyển tab, Palette tự ẩn, mở lại đúng đơn vị/TIN/kỳ báo cáo của mỗi DWG. Lưu, đóng và mở lại từng bản vẽ để bảo đảm không có dữ liệu chéo. Không dùng mỗi `FingerprintGuid` làm kết luận phân biệt hai bản vẽ.
 - Trong lúc cửa sổ chọn tên Excel còn mở, hoặc lúc phần mềm đang kết xuất workbook, đổi DWG hoặc chỉnh đường HT/TK. Báo cáo phải bị từ chối nếu dữ liệu đã thay đổi, không được ghi đè Excel chốt từ lần trước.
 
+### Bổ sung ca nghiệm thu HSMo trùng XY khác Z — 12/10/2026
+
+- **V-01 Point:** dựng bộ thử 4 điểm khung + hai Point trùng XY tại (5,5), cao độ 10 m và 20 m. Không yêu cầu loại điểm. Báo đúng một nhóm XY trùng và hai đỉnh nguồn; dựng đủ TIN 3DFACE gồm phần mặt đứng, giữ nguyên bản vẽ gốc. Kiểm tra hình 3D bằng góc nhìn isometric.
+- **V-02 Đường đồng mức:** hai Polyline/Contour có đỉnh tại cùng XY nhưng cao độ khác; có các đoạn breakline đi ra. Không bắt sửa từng điểm; đường đồng mức hợp lệ khác vẫn được giữ trong ràng buộc CDT, hình chóp/mặt đứng hiển thị ở 3D. Đối chiếu với mẫu HSMo tại đúng XY/Z.
+- **V-03 Mặt cắt:** tuyến MC cắt qua vị trí nhiều Z phải hiện CẦN KIỂM TRA MC; thử Grip đường HT/TK rồi bấm CẬP NHẬT MẶT CẮT, so F đào/đắp và V theo tầng/khoảng MC, lưu SAVE/SAVEAS, mở lại phải giữ kết quả theo nguồn.
+- **V-04 Không chốt sai:** trước khi xác nhận MC, bấm TÍNH KHỐI LƯỢNG phải cảnh báo và không tạo kết quả chốt. Khi có mặt đứng, ô lưới 2,5D phải từ chối tính tự động do không có duy nhất Z(X,Y), không tạo Excel khối lượng giả. Sau khi duyệt MC thì Excel MC mới được phát hành.
+- **V-05 Dữ liệu thực:** chạy SQ thực, báo đúng thống kê số nhóm XY trùng/số đỉnh, không treo, không xóa CAD nguồn; đối chứng 3D và profile với HSMo. Nếu xảy ra giao điểm breakline khác Z **không trùng đỉnh nguồn** và chưa dựng được topology, ghi FAIL có log/dữ liệu mẫu, không tự xóa và không tuyên bố hoàn thành.
+
 Mỗi ca ghi Expected, Actual, PASS/FAIL/NOT TESTED, ảnh/log, commit, máy chạy và người xác nhận. Mọi mục trên hiện **NOT TESTED trong AutoCAD**; yêu cầu người nghiệm thu ký duyệt trước Release.
 
 Verifier tự động có sẵn: `release/verify_autocad2023_runtime.ps1` (đọc trước khi chạy; cần Administrator, phiên Windows tương tác và AutoCAD 2023). Verifier chỉ là một phần bằng chứng, không tự PASS các thao tác UI/mỏ/bản quyền ở trên.
