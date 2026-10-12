@@ -29,6 +29,7 @@ namespace MiningVolume2023.Services
             r.Sheets.Add(GridSummary(grid));
             r.Sheets.Add(Totals(grid));
             r.Sheets.Add(CalculationDetail(grid));
+            ExportWorkflowService.ApplyOrganizationHeader(r, ProjectState.Current);
             return r;
         }
 
