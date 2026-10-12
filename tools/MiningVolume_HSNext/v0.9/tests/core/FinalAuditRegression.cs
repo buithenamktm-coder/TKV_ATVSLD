@@ -177,6 +177,8 @@ internal static class FinalAuditRegression
             st.Design.Tin=design;
             st.Existing.TinBuiltFromSourceRevision=st.Existing.Source.Revision;
             st.Design.TinBuiltFromSourceRevision=st.Design.Source.Revision;
+            st.Existing.TinBuiltFromRegionRevision=st.TinRegionRevision;
+            st.Design.TinBuiltFromRegionRevision=st.TinRegionRevision;
             st.GridBoundaryHandle="BOUNDARY-1";
             st.GridSizeX=5;st.GridSizeY=5;st.GridRotationDegrees=15;
             var options=new GridVolumeOptions{Boundary=Boundary,SizeX=5,SizeY=5,RotationDegrees=15};
@@ -198,6 +200,31 @@ internal static class FinalAuditRegression
             Check(rejected,"Stale grid committed after boundary handle changed");
             GridWorkflowService.Invalidate();
         };
+        tests["p0_tin_region_change_must_invalidate_grid_and_both_tins"]=()=>{
+            var st=ProjectState.Current;
+            st.Reset();
+            var existing=Plane(5);var design=Plane(0);
+            st.Existing.Tin=existing;st.Design.Tin=design;
+            st.Existing.TinBuiltFromSourceRevision=st.Existing.Source.Revision;
+            st.Design.TinBuiltFromSourceRevision=st.Design.Source.Revision;
+            st.Existing.TinBuiltFromRegionRevision=st.TinRegionRevision;
+            st.Design.TinBuiltFromRegionRevision=st.TinRegionRevision;
+            st.GridBoundaryHandle="R";
+            st.GridSizeX=5;st.GridSizeY=5;st.GridRotationDegrees=0;
+            var options=new GridVolumeOptions{Boundary=Boundary,SizeX=5,SizeY=5,RotationDegrees=0};
+            var result=new GridVolumeCalculator().Calculate(existing,design,options);
+            GridWorkflowService.Commit(result,options,existing,design,
+                st.Existing.Source.Revision,st.Design.Source.Revision,"R");
+            Check(GridWorkflowService.IsCurrent,"Fresh region unexpectedly rejected");
+            long old=st.TinRegionRevision;
+            st.MarkTinRegionChanged();
+            Check(st.TinRegionRevision>old,"TIN region revision did not advance");
+            Check(!st.Existing.IsTinCurrent&&!st.Design.IsTinCurrent,
+                "Clipping region changed but old TIN remains current");
+            Check(!GridWorkflowService.IsCurrent && GridWorkflowService.Report==null,
+                "Old grid volumes were still exportable after clipping region changed");
+            GridWorkflowService.Invalidate();
+        };
         tests["rf16_section_geometry_tolerance_detects_real_grip_edit"]=()=>{
             var initial=Profile(1,5);
             var close=Edit(initial,5+1e-9,5-1e-9);
@@ -214,6 +241,8 @@ internal static class FinalAuditRegression
             st.Existing.Tin=existing;st.Design.Tin=design;
             st.Existing.TinBuiltFromSourceRevision=st.Existing.Source.Revision;
             st.Design.TinBuiltFromSourceRevision=st.Design.Source.Revision;
+            st.Existing.TinBuiltFromRegionRevision=st.TinRegionRevision;
+            st.Design.TinBuiltFromRegionRevision=st.TinRegionRevision;
             st.GridBoundaryHandle="SAME-CAD-HANDLE";
             st.GridSizeX=5;st.GridSizeY=5;st.GridRotationDegrees=0;
             var accepted=Boundary.ToArray();
