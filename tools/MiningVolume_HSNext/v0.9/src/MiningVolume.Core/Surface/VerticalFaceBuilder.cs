@@ -41,14 +41,21 @@ namespace MiningVolume.Core.Surface
             Cell At(Vec2 p) => new Cell(
                 checked((long)Math.Floor(p.X / xyTolerance)),
                 checked((long)Math.Floor(p.Y / xyTolerance)));
-            var spatial = new Dictionary<Cell, List<int>>();
+            // Do not allocate a List<int> for every ordinary survey point.
+            // Large mine drawings can contain millions of unique XY cells.
+            var first = new Dictionary<Cell, int>();
+            var overflow = new Dictionary<Cell, List<int>>();
             for (int i = 0; i < sites.Count; i++)
             {
                 token.ThrowIfCancellationRequested();
                 var cell = At(sites[i].XY);
-                if (!spatial.TryGetValue(cell, out var list))
-                    spatial.Add(cell, list = new List<int>(1));
-                list.Add(i);
+                if (!first.ContainsKey(cell)) first.Add(cell, i);
+                else
+                {
+                    if (!overflow.TryGetValue(cell, out var extra))
+                        overflow.Add(cell, extra = new List<int>(2));
+                    extra.Add(i);
+                }
             }
 
             // Distinct vertical groups are much fewer than ordinary survey
@@ -61,10 +68,16 @@ namespace MiningVolume.Core.Surface
                 int site = -1;
                 for (long dx = -1; dx <= 1 && site < 0; dx++)
                 for (long dy = -1; dy <= 1 && site < 0; dy++)
-                    if (spatial.TryGetValue(new Cell(cell.X + dx, cell.Y + dy), out var candidates))
-                        foreach (int j in candidates)
-                            if (sites[j].XY.DistanceTo(group.Position) <= xyTolerance)
-                            { site = j; break; }
+                {
+                    var key = new Cell(cell.X + dx, cell.Y + dy);
+                    if (!first.TryGetValue(key, out int candidate)) continue;
+                    if (sites[candidate].XY.DistanceTo(group.Position) <= xyTolerance)
+                    { site = candidate; break; }
+                    if (!overflow.TryGetValue(key, out var extra)) continue;
+                    foreach (int j in extra)
+                        if (sites[j].XY.DistanceTo(group.Position) <= xyTolerance)
+                        { site = j; break; }
+                }
                 if (site < 0)
                     throw new InvalidOperationException("Không tìm thấy nút CDT tại XY trùng Z; không được làm mất mặt đứng.");
 
