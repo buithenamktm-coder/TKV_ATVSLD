@@ -76,6 +76,7 @@ namespace MiningVolume2023.Services
         public TinSurface Tin { get; set; }
         public DateTime? TinBuiltFromSourceUtc { get; set; }
         public long? TinBuiltFromSourceRevision { get; set; }
+        public long? TinBuiltFromRegionRevision { get; set; }
         public bool TinVisible { get; set; } = true;
         public int TinCadFaceCount { get; set; }
         public bool TinCadIsPreview { get; set; }
@@ -88,7 +89,9 @@ namespace MiningVolume2023.Services
                        Tin.Triangles.Count > 0 &&
                        TinBuiltFromSourceRevision.HasValue &&
                        Source != null &&
-                       TinBuiltFromSourceRevision.Value == Source.Revision;
+                       TinBuiltFromSourceRevision.Value == Source.Revision &&
+                       TinBuiltFromRegionRevision.HasValue &&
+                       TinBuiltFromRegionRevision.Value == ProjectState.Current.TinRegionRevision;
             }
         }
         public HashSet<SourceEntityType> AllowedTypes { get; } = new HashSet<SourceEntityType>();
@@ -232,6 +235,7 @@ namespace MiningVolume2023.Services
             s.Tin = null;
             s.TinBuiltFromSourceUtc = null;
             s.TinBuiltFromSourceRevision = null;
+            s.TinBuiltFromRegionRevision = null;
             s.TinVisible = true;
             s.TinCadFaceCount = 0;
             s.TinCadIsPreview = false;
