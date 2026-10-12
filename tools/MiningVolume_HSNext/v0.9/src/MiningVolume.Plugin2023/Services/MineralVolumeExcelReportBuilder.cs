@@ -92,8 +92,10 @@ namespace MiningVolume2023.Services
             totals.HasSignatures=true;
             var state=ProjectState.Current;
             void Metadata(string label,string value)=>totals.Rows.Add(new[]{ReportCell.Text(label),ReportCell.Text(value)});
-            Metadata("Đơn vị khai thác",string.IsNullOrWhiteSpace(state.MiningUnitName)?"Chưa thiết lập":state.MiningUnitName);
-            Metadata("Nhóm khai thác",state.MiningUnitGroup);
+            if (state.MiningUnitGroup != MiningUnitCatalog.OutsideTkv)
+                Metadata("Đơn vị cấp trên",ExportWorkflowService.TkvParentHeading);
+            Metadata("Đơn vị tính toán",string.IsNullOrWhiteSpace(state.MiningUnitName)?"Chưa thiết lập":state.MiningUnitName);
+            Metadata("Loại đơn vị",state.MiningUnitGroup);
             Metadata("Kỳ tính khối lượng",state.VolumePeriodLabel);
             Metadata("Thời điểm tính thành công",summary.CalculatedUtc?.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss")??"Chưa xác nhận");
             Metadata("Thời gian thực tính, giây",summary.CalculationSeconds?.ToString("0.000")??"Chưa xác nhận");
@@ -120,6 +122,7 @@ namespace MiningVolume2023.Services
             waste.Rows.Add(new[]{ReportCell.Text("Hệ số bóc theo tấn"),ReportCell.Formula3(
                 "IF(B"+(DataStart+3)+">0,B"+(DataStart+2)+"/B"+(DataStart+3)+",\"\")"),ReportCell.Text("m³/tấn")});
             report.Sheets.Add(waste);
+            ExportWorkflowService.ApplyOrganizationHeader(report, state);
             return report;
         }
 
