@@ -30,7 +30,7 @@ namespace MiningVolume.Core.Surface
         public List<ConflictSource> Sources { get; } = new List<ConflictSource>();
         internal HashSet<string> SourceKeys { get; } = new HashSet<string>(StringComparer.Ordinal);
         public double DeltaZ => Sources.Count==0?0:Sources.Max(s=>s.Z)-Sources.Min(s=>s.Z);
-        public string Status => "Chưa xử lý — cần kiểm tra nguồn; TIN 2.5D chỉ có một Z tại mỗi XY";
+        public string Status => "Giữ nguyên mọi Z nguồn; cảnh báo kiểm tra mặt đứng 3D và mặt cắt";
     }
 
     public sealed class ConflictReport
@@ -186,7 +186,7 @@ namespace MiningVolume.Core.Surface
             }
             report.Groups.Sort((a,b)=>{int c=a.Position.X.CompareTo(b.Position.X);return c!=0?c:a.Position.Y.CompareTo(b.Position.Y);});
             for(int i=0;i<report.Groups.Count;i++)report.Groups[i].Id="XY-"+(i+1).ToString("000");
-            progress?.Invoke($"Kiểm tra xong: {report.Groups.Count:n0} nhóm chặn • {report.SourceRecordCount:n0} bản ghi nguồn.");
+            progress?.Invoke($"Đã thống kê: {report.Groups.Count:n0} nhóm XY nhiều Z • {report.SourceRecordCount:n0} bản ghi nguồn; tiếp tục dựng TIN tự động.");
             return report;
         }
         private static bool Finite(double value)=>!double.IsNaN(value)&&!double.IsInfinity(value);
