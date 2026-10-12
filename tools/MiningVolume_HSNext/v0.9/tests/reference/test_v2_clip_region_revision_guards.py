@@ -42,3 +42,18 @@ def test_edited_cad_clip_boundary_cannot_silently_preserve_old_tin():
     assert "Geometry2D.AlmostSame(actual[i], expected[i], 1e-7)" in method
     assert "Đường bao tạo TIN trên CAD đã bị chỉnh Grip" in method
     assert workflow.count("EnsureTinRegionMatchesCad();") >= 4
+
+
+def test_excel_only_export_rechecks_live_clipping_boundary():
+    export = read("src/MiningVolume.Plugin2023/UI/ExportPage.cs")
+    method = export.split("private static void EnsureExportInputsCurrent(", 1)[1].split(
+        "private void StateChanged(", 1
+    )[0]
+    assert "SurfaceWorkflowService.EnsureBothTinsReady(synchronizeCadLayers: false);" in method
+    assert "EditableSectionCadService.EnsureProfilesMatch(doc.Database, expectedProfiles);" in method
+    # CAD drawing of the report is optional; the guard is called for both outputs.
+    run = export.split("private async void ExportClicked(", 1)[1].split(
+        "private static void EnsureExportInputsCurrent(", 1
+    )[0]
+    assert "if (exportExcel)" in run
+    assert "EnsureExportInputsCurrent(doc, st, currentResult, approvedProfiles," in run
