@@ -209,3 +209,38 @@ Cả hai workflow ở source SHA `983e3e27` đã đủ bằng chứng để đó
 | Nguồn SQ còn ΔZ >3 m, khóa công khai RSA chưa provision | **BLOCKED** |
 
 **Kết luận:** mã nguồn và Setup QA xây dựng thành công. Release V2.0 chính thức vẫn **BLOCKED** theo `V2_RELEASE_GATES.md`; không có bằng chứng Windows/AutoCAD tương tác, cũng không tự quyết định sửa Z khảo sát hoặc tự tạo khóa kích hoạt giả.
+
+---
+
+## Phụ lục E — TIN tự xử lý điểm trùng XY khác Z (HSMo-like, 12/10/2026)
+
+**Yêu cầu chốt:** bỏ bước bắt buộc loại/sửa thủ công từng đỉnh trùng XY khác Z trước khi tạo TIN. Sau khi nạp dữ liệu Point/đường đồng mức/Polyline/Line, phần mềm thống kê nhóm trùng XY nhiều Z và đỉnh trùng cả XYZ, cảnh báo trước khi dùng khối lượng, nhưng vẫn dựng TIN 3D có mặt đứng. Cho phép hiệu chỉnh MC đã vẽ và bấm CẬP NHẬT MẶT CẮT để chốt F/V.
+
+### Đã thực hiện bằng mã nguồn
+
+- `SurfaceInputPreparer`: chế độ `PreserveDuplicateXYVerticalFaces` (mặc định bật tại workflow CAD) chuẩn hóa một XY hỗ trợ CDT bằng Z thấp nhất, trong khi toàn bộ Z khác và nguồn gốc nằm ở các `VerticalConflictGroups`, **không sửa/chỉnh dữ liệu CAD gốc**. Hỗ trợ cả dữ liệu tọa độ thô không có handle, tránh mất Z âm thầm.
+- `VerticalFaceBuilder`: tạo tam giác 3D có cạnh đứng từ từng cặp cao độ liên tiếp và cạnh tam giác kề; giữ ở `TinSurface.VerticalFaces` tách khỏi tam giác planar CDT.
+- `TinCadRenderer` + `SurfaceWorkflowService`: ghi cả các mặt đứng ở dạng `3DFACE` đúng layer kết quả hiện trạng/thiết kế, kiểm tra số mặt, dựng lại từ Project, kể cả vùng dữ liệu lớn/file-backed.
+- `ConflictScanner` + `TinSurface` + DataPage: thống kê số nhóm XY khác Z, số đỉnh nguồn và số đỉnh trùng hoàn toàn XYZ; một cảnh báo sau khi dựng TIN yêu cầu kiểm tra dữ liệu điểm/đường đồng mức, **không yêu cầu loại đỉnh thủ công**.
+- `TinSectionSampler` đánh dấu mặt cắt cần kiểm tra khi có mặt đứng; `SectionPage` hiển thị `CẦN KIỂM TRA MC`; `VolumeWorkflowService` và `SectionVolumeCalculator` không chốt khối lượng cho tới khi mặt cắt được duyệt/cập nhật Grip. `GridVolumeCalculator` không tạo kết quả ô lưới 2,5D sai giả khi có nhiều Z trên cùng XY.
+- Mọi chức năng strict 2,5D khi gọi core không bật tùy chọn vẫn kiểm tra lỗi nguồn, không vô tình làm thay đổi nghiệp vụ các phiên bản cũ.
+
+### Kiểm thử trên mã nguồn
+
+**Source SHA:** `b81011af0149565585d081a9ba3fb0a9a458c02b`.  
+**CI SUCCESS cùng SHA:** [Push 38192286646](https://github.com/buithenamktm-coder/TKV_ATVSLD/actions/runs/38192286646), [PR 38192289465](https://github.com/buithenamktm-coder/TKV_ATVSLD/actions/runs/38192289465).
+
+| Hạng mục | Kết quả |
+|---|---:|
+| Python regression/reference | **242 PASS** |
+| C# CoreRegression + native CDT | **81 PASS** |
+| Go Windows Installer regression | **4 PASS** |
+| Plugin AutoCAD 2023 .NET Release / QA Setup | **PASS trong CI** |
+| Dữ liệu thử Point XY=(5,5), Z=10/20 và contour trùng XY khác Z | TIN có `VerticalFaces`, nguồn Z giữ nguyên, MC có cảnh báo: **PASS core** |
+| Trùng hoàn toàn XYZ, dữ liệu raw không handle, vùng multiple-Z 2,5D grid | Đếm đúng, giữ nguyên nguồn, không phát sinh mặt đứng giả, chặn khối lượng lưới không phù hợp: **PASS core** |
+| Windows artifact V2 QA | `IMSAT-MiningVolume-V2.0-QA-CANDIDATE-NOT-RELEASE` ID **11722695028** |
+| SHA-256 của EXE QA | `a928f542d4905c02f39e4fdc57bf9ec4847875fe7ed974fc23b3cbdd2ea057d0` |
+
+**Chưa nghiệm thu:** AutoCAD 2023 thực tế, TIN/mặt cắt đối chứng với HSMo tại mỏ SQ, lưu/khôi phục trong DWG, Excel Desktop và Setup trên Windows thực. Đặc biệt hình học 3D mặt đứng kiểu fan *chưa được chứng minh trùng hoàn toàn thuật toán HSMo*; phần MC hiện lấy đường từ support 2,5D và báo hiệu chỉnh, chưa tự biểu diễn nhánh đoạn đứng ở một station trên profile. Một số giao cắt breakline khác Z **không có hai đỉnh gốc trùng XY** còn có thể cần thuật toán topology 3D chuyên biệt. Không coi phần này là RELEASE chính thức chỉ nhờ CI xanh.
+
+Xem `ADR_V2_DUPLICATE_XY_VERTICAL_FACE_SECTION_EDIT_20261012.md`, `V2_AUTOCAD_ACCEPTANCE.md` ca V-01 đến V-05 và `V2_RELEASE_GATES.md` bản mới.
