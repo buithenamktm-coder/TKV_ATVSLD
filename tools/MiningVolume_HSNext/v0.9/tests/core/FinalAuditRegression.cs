@@ -57,6 +57,33 @@ internal static class FinalAuditRegression
                 Check(rejected,"Invalid/oversized band input accepted");}
             var bands=SectionVolumeCalculator.BuildBands(11,0,5);Check(bands.Count==3,"Descending bands wrong");Near(bands.Last().EndZ,0);
         };
+        tests["hsm0_vertical_faces_require_section_review_and_block_2_5d_grid"]=()=>{
+            var center = new ConflictGroup { Position = new Vec2(5,5) };
+            center.Sources.Add(new ConflictSource {Z=5,VertexIndex=0});
+            center.Sources.Add(new ConflictSource {Z=9,VertexIndex=0});
+            var support=Plane(5);
+            var vertical=new TinSurface("vertical",support.Triangles,
+                Array.Empty<ValidationIssue>(),
+                new[]{new Triangle3(new Vec3(5,5,5),new Vec3(5,5,9),new Vec3(10,5,5))},
+                new[]{center});
+            var design=Plane(0);
+            var profiles=new[]{Profile(1,5),Profile(2,5)};
+            var sectionSystem=new SectionSystem(new Vec2(1,0),new Vec2(0,1),
+                Boundary,profiles.Select(p=>p.Line).ToArray(),Array.Empty<string>());
+            var volumeOptions=new VolumeCalculationOptions{FromLevel=0,ToLevel=10,LevelStep=5};
+            bool rejected=false;
+            try{new SectionVolumeCalculator().Calculate(sectionSystem,profiles,vertical,design,volumeOptions);}
+            catch(InvalidOperationException){rejected=true;}
+            Check(rejected,"Unreviewed multi-Z section was accepted into final earthwork volume");
+            rejected=false;
+            try{new GridVolumeCalculator().Calculate(vertical,design,
+                new GridVolumeOptions{Boundary=Boundary,SizeX=5,SizeY=5});}
+            catch(InvalidOperationException){rejected=true;}
+            Check(rejected,"2.5D grid silently integrated a non-single-valued vertical surface");
+            var reviewed=profiles.Select(p=>Edit(p,5,5)).ToArray();
+            var volumes=new SectionVolumeCalculator().Calculate(sectionSystem,reviewed,vertical,design,volumeOptions);
+            Check(volumes.TotalCutVolume>0,"Accepted section volume did not calculate");
+        };
         tests["rf15_grid_rejects_stale_boundary_and_cell_settings"]=()=>{
             var st=ProjectState.Current;
             st.Reset();
