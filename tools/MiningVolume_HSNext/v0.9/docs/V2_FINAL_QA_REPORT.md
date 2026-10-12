@@ -150,3 +150,32 @@ Cả hai workflow ở source SHA `983e3e27` đã đủ bằng chứng để đó
 | DXF SQ nguồn có ΔZ >3 m, RSA verifier public key | Chưa xử lý dữ liệu chuyên môn/cấp khóa công khai | BLOCKED |
 
 **Bản QA có thể tải từ artifact của run 38185748918 để thử trên môi trường kiểm soát.** Không dùng artifact tên V1.0, không phát hành chính thức khi host, SQ và licensing chưa qua gate. Chi tiết gate mới nhất: `V2_RELEASE_GATES.md`.
+
+---
+
+## Phụ lục C — chống kết quả khối lượng cũ và chuyển nhiều DWG (12/10/2026)
+
+**Bản code đã xác minh:** `536f3aaa8875ebf4ab9fe4fcf7ba677db2e018de`. Hai CI độc lập cùng SHA [38186674934](https://github.com/buithenamktm-coder/TKV_ATVSLD/actions/runs/38186674934), [38186670773](https://github.com/buithenamktm-coder/TKV_ATVSLD/actions/runs/38186670773) đều **SUCCESS**.
+
+### Các lỗi vừa sửa thực tế
+
+- Chọn lại đường bao/hướng mặt cắt tự vô hiệu kết quả khối lượng trước; không cho Excel đọc lại V cũ.
+- Trang khối lượng so document/TIN/source revision/danh sách mặt cắt/giới hạn mức trước khi commit phép tính chạy ở Task.Run; nếu thay đổi, giữ nguyên kết quả cũ và yêu cầu tính lại.
+- Lưới ô vuông lưu boundary handle và thông số ô cùng kết quả; khi tính bất đồng bộ phải kiểm lại active DWG, TIN, boundary handle, tọa độ đa giác, kích thước và góc quay. Core regression xác minh thay boundary hoặc size không thể commit output cũ.
+- Khi dựng cặp TIN HT/TK bất đồng bộ, chặn ghi kết quả từ DWG trước sang DWG khác đã được kích hoạt.
+- Khi AutoCAD kích hoạt DWG khác, Palette kết quả cũ được ẩn và report lưới bị vô hiệu; Ribbon khi mở lại sẽ nạp Project theo DWG đang hoạt động. Toggle Palette, 3D và lệnh lưu Project đều qua kiểm tra nguồn hiện hành. Chưa nghiệm thu hiển thị/khôi phục trên AutoCAD.
+- Các kiểm thử cũ về layout-gaps và Toggle Palette được cập nhật để đánh giá hành vi mới (giữ xác nhận giãn cách, bật/tắt thật), không bỏ test.
+
+### Bằng chứng tự động
+
+| Hạng mục | Bằng chứng | Trạng thái |
+|---|---|---|
+| Python static/reference | **235/235 passed** | PASS |
+| C# CoreRegression + native CDT, bao gồm kiểm stale-grid | **74/74 passed** | PASS |
+| Go Windows installer | **4/4 passed** | PASS |
+| Release build AutoCAD 2023 API + issuer test + QA Setup | 2 workflow cùng SHA | PASS trên CI |
+| QA V2 artifact | `IMSAT-MiningVolume-V2.0-QA-CANDIDATE-NOT-RELEASE`, ID **11720415555** (run 38186674934) | Đã build, không phải Release |
+| SHA256 QA EXE | `8793337e020a4398d64675a48a3ac9d63ab4599bdfcc35c4e3846ed72eb30b69` | Đối chiếu Windows CI |
+| AutoCAD 2023 tương tác, T01–T22, data SQ, Excel Desktop, license RSA thật | Chưa có bằng chứng host/nguồn được quyết định | **NOT TESTED / BLOCKED** |
+
+**Trạng thái bàn giao:** QA CANDIDATE, chưa đạt hard release gates. Cần một đợt nghiệm thu trên Windows AutoCAD 2023 thật trước khi kết luận V2.0 chính thức. Không sửa nhánh `miningvolume-v1.0`.
