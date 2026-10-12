@@ -100,3 +100,28 @@ def test_no_topology_errors_downgraded_without_an_unsafe_segment():
     assert fallback.index("if (unsafeEdges.Count == 0) return;") < fallback.index(
         "result.Issues.RemoveAll(x => x.Severity == ValidationSeverity.Error);"
     )
+
+
+def test_section_preview_failure_preserves_accepted_state_and_volume():
+    code = read("src/MiningVolume.Plugin2023/Services/SectionWorkflowService.cs")
+    preview = code.split("public static SectionSystem Preview(", 1)[1].split(
+        "public static SectionSystem DeleteLine(", 1
+    )[0]
+    assert preview.index("DrawPreview(system);") < preview.index(
+        "state.SectionSystem = system;"
+    )
+    for name, next_name in [
+        ("DeleteLine", "AddLineAtPoint"),
+        ("AddLineAtPoint", "MoveLineToPoint"),
+        ("MoveLineToPoint", "EnsureProfileInputsReady"),
+    ]:
+        segment = code.split("public static SectionSystem " + name + "(", 1)[1].split(
+            "public static " + ("SectionSystem " + next_name if next_name != "EnsureProfileInputsReady" else "void " + next_name) + "(", 1
+        )[0]
+        assert "var candidate = RebuildAtOffsets(offsets);" in segment
+        assert segment.index("DrawPreview(candidate);") < segment.index(
+            "state.SectionSystem = candidate;"
+        )
+        assert segment.index("DrawPreview(candidate);") < segment.index(
+            "state.VolumeResult = null;"
+        )
