@@ -20,6 +20,7 @@ namespace MiningVolume2023
         private static bool _startupUiOpened;
         internal static string StartupUiError { get; private set; }
         private static string _loadedDrawingFingerprint;
+        private static Autodesk.AutoCAD.ApplicationServices.Document _loadedDocument;
 
         public void Initialize()
         {
@@ -47,11 +48,15 @@ namespace MiningVolume2023
             // Never leave the globally shared palette active with another
             // drawing's HT/TK sources or accepted volume result. Defer costly
             // DWG/TIN restoration until the user next opens IMSAT.
-            if (string.IsNullOrEmpty(_loadedDrawingFingerprint)) return;
+            if (_loadedDocument == null) return;
             var current = CurrentFingerprint();
-            if (string.Equals(current, _loadedDrawingFingerprint,
-                StringComparison.OrdinalIgnoreCase)) return;
+            // SaveAs and copies can share a FingerprintGuid. The in-session
+            // Document reference is the actual boundary between projects.
+            if (ReferenceEquals(e.Document, _loadedDocument) &&
+                string.Equals(current, _loadedDrawingFingerprint,
+                    StringComparison.OrdinalIgnoreCase)) return;
 
+            _loadedDocument = null;
             _loadedDrawingFingerprint = null;
             GridWorkflowService.Invalidate();
             if (Palette != null && Palette.Visible)
@@ -250,6 +255,7 @@ namespace MiningVolume2023
         {
             var r = Services.ProjectPersistenceService.LoadCurrentProject(true);
             AcApp.DocumentManager.MdiActiveDocument?.Editor.WriteMessage("\nIMSAT VOLUME: " + r.Message);
+            _loadedDocument = AcApp.DocumentManager.MdiActiveDocument;
             _loadedDrawingFingerprint = CurrentFingerprint();
             Open(AppPage.Project);
         }
@@ -259,7 +265,9 @@ namespace MiningVolume2023
             var doc = AcApp.DocumentManager.MdiActiveDocument;
             if (doc == null) return;
             string fingerprint = CurrentFingerprint();
-            if (string.Equals(_loadedDrawingFingerprint, fingerprint, StringComparison.OrdinalIgnoreCase)) return;
+            if (ReferenceEquals(_loadedDocument, doc) &&
+                string.Equals(_loadedDrawingFingerprint, fingerprint,
+                    StringComparison.OrdinalIgnoreCase)) return;
 
             ProjectState.Current.Reset();
             try
@@ -275,6 +283,7 @@ namespace MiningVolume2023
             {
                 doc.Editor.WriteMessage("\nIMSAT VOLUME: chưa tự nạp được Project - " + ex.Message);
             }
+            _loadedDocument = doc;
             _loadedDrawingFingerprint = fingerprint;
         }
 
