@@ -57,6 +57,14 @@ namespace MiningVolume.Core.Grid
                 throw new ArgumentException("TIN hiện trạng chưa hợp lệ.", nameof(existing));
             if (design == null || design.Triangles == null || design.Triangles.Count == 0)
                 throw new ArgumentException("TIN thiết kế chưa hợp lệ.", nameof(design));
+            // Exact grid integration assumes one elevation per planar XY.
+            // Vertical-face regions cannot be certified by that numerical
+            // method. Users can still use edited section-based volumes.
+            if (existing.RequiresSectionReview || design.RequiresSectionReview)
+                throw new InvalidOperationException(
+                    "TIN có mặt đứng do trùng XY khác Z. Phương pháp ô lưới 2,5D " +
+                    "chưa hỗ trợ tính đúng miền nhiều Z tại một tọa độ. " +
+                    "Hãy tính theo hệ mặt cắt sau khi kiểm tra và CẬP NHẬT MẶT CẮT.");
             if (options == null || options.Boundary == null || options.Boundary.Count < 3)
                 throw new ArgumentException("Cần đường bao khép kín có ít nhất ba đỉnh.", nameof(options));
             if (!Finite(options.SizeX) || !Finite(options.SizeY) ||
