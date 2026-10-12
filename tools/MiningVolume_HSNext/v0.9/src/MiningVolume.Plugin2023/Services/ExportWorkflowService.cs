@@ -46,15 +46,21 @@ namespace MiningVolume2023.Services
         // Do not falsely affiliate users selecting "outside TKV" with the group.
         public static void ApplyOrganizationHeader(SpreadsheetReport report, ProjectState state)
         {
-            if (report == null) throw new ArgumentNullException(nameof(report));
             if (state == null) throw new ArgumentNullException(nameof(state));
-            string unit = (state.MiningUnitName ?? string.Empty).Trim();
-            if (string.Equals(state.MiningUnitGroup, MiningUnitCatalog.OutsideTkv,
+            ApplyOrganizationHeader(report, state.MiningUnitGroup, state.MiningUnitName);
+        }
+
+        public static void ApplyOrganizationHeader(SpreadsheetReport report,
+            string unitGroup, string unitName)
+        {
+            if (report == null) throw new ArgumentNullException(nameof(report));
+            string unit = (unitName ?? string.Empty).Trim();
+            if (string.Equals(unitGroup, MiningUnitCatalog.OutsideTkv,
                     StringComparison.Ordinal) && unit.Length == 0)
                 throw new InvalidOperationException(
                     "Đã chọn 'Đơn vị khác (ngoài TKV)'. Hãy nhập tên đơn vị trước khi xuất Excel.");
             if (unit.Length == 0) return;
-            bool outside = string.Equals(state.MiningUnitGroup, MiningUnitCatalog.OutsideTkv,
+            bool outside = string.Equals(unitGroup, MiningUnitCatalog.OutsideTkv,
                 StringComparison.Ordinal);
             string prefix = outside ? unit : TkvParentHeading + "\n" + unit;
             foreach (var sheet in report.Sheets)
@@ -62,8 +68,8 @@ namespace MiningVolume2023.Services
                 if (sheet == null || string.IsNullOrWhiteSpace(sheet.Title)) continue;
                 if (string.IsNullOrWhiteSpace(sheet.OrganizationBaseTitle))
                     sheet.OrganizationBaseTitle = sheet.Title;
-                // The selected unit may change between exports of the SAME
-                // report; replace instead of appending an old heading.
+                // Each workbook receives a fixed organization snapshot at
+                // REPORT-BUILD time, before any asynchronous file output.
                 sheet.Title = prefix + "\n" + sheet.OrganizationBaseTitle;
             }
         }
@@ -72,7 +78,8 @@ namespace MiningVolume2023.Services
         {
             // Applies to section volumes, grid volumes and seam/mineral reports,
             // including their formula-linked detail/summary worksheets.
-            ApplyOrganizationHeader(report, ProjectState.Current);
+            // Never consult mutable ProjectState.Current on the Excel I/O thread:
+            // an AutoCAD DWG switch could silently relabel an approved report.
             var target=Path.GetFullPath(filePath);
             var directory=Path.GetDirectoryName(target);
             Directory.CreateDirectory(directory);
@@ -95,6 +102,8 @@ namespace MiningVolume2023.Services
                 string.IsNullOrWhiteSpace(state.MiningUnitName))
                 throw new InvalidOperationException(
                     "Đã chọn 'Đơn vị khác (ngoài TKV)'. Hãy nhập tên đơn vị trước khi xuất báo cáo Excel.");
+            string frozenGroup = state.MiningUnitGroup;
+            string frozenUnit = state.MiningUnitName;
             var now = DateTime.Now;
             var report = new SpreadsheetReport
             {
@@ -103,7 +112,7 @@ namespace MiningVolume2023.Services
                 CreatedAt = now
             };
 
-            report.Sheets.Add(BuildInfoSheet(state, options, now));
+            report.Sheets.Add(BuildInfoSheet(state, options, now, frozenGroup, frozenUnit));
             if (options.IncludeSourceXyz) report.Sheets.Add(BuildSourceXyzSheet(state));
             if (options.IncludeSectionData) report.Sheets.Add(BuildSectionDataSheet(state));
             if (options.IncludeSectionAreas) report.Sheets.Add(BuildSectionParameterSheet(state));
@@ -111,21 +120,23 @@ namespace MiningVolume2023.Services
                 report.Sheets.Add(BuildBandIntervalSheet(state.VolumeResult));
             if (options.IncludeIntervals) report.Sheets.Add(BuildIntervalSheet(state.VolumeResult));
             if (options.IncludeLevels) report.Sheets.Add(BuildLevelSheet(state.VolumeResult));
-            if (options.IncludeSummary) report.Sheets.Add(BuildSummarySheet(state, options));
+            if (options.IncludeSummary) report.Sheets.Add(BuildSummarySheet(state, options, frozenGroup, frozenUnit));
             if (options.IncludeWarnings) report.Sheets.Add(BuildWarningSheet(state));
+            ApplyOrganizationHeader(report, frozenGroup, frozenUnit);
             return report;
         }
 
-        private static ReportSheet BuildInfoSheet(ProjectState st, ExportOptions opt, DateTime now)
+        private static ReportSheet BuildInfoSheet(ProjectState st, ExportOptions opt,
+            DateTime now, string unitGroup, string unitName)
         {
             var s = NewSheet("Thông tin", "THÔNG TIN BÁO CÁO IMSAT VOLUME", new[] { "Nội dung", "Giá trị" }, 45, 45);
             s.Landscape = false;
             s.AutoFilter = false;
             s.Notes.Add("Báo cáo được xuất tự động từ IMSAT VOLUME.");
-            if (st.MiningUnitGroup != MiningUnitCatalog.OutsideTkv)
+            if (unitGroup != MiningUnitCatalog.OutsideTkv)
                 AddKV(s, "Đơn vị cấp trên", TkvParentHeading);
-            AddKV(s, "Đơn vị tính toán", EmptyAsNotSet(st.MiningUnitName));
-            AddKV(s, "Loại đơn vị", st.MiningUnitGroup);
+            AddKV(s, "Đơn vị tính toán", EmptyAsNotSet(unitName));
+            AddKV(s, "Loại đơn vị", unitGroup);
             AddKV(s, "Kỳ tính khối lượng", st.VolumePeriodLabel);
             AddKV(s, "Thời điểm tính khối lượng", FormatCalculationTime(st.VolumeCalculatedUtc));
             AddKV(s, "Thời gian thực tính khối lượng, giây", FormatDuration(st.VolumeCalculationSeconds));
@@ -315,7 +326,8 @@ namespace MiningVolume2023.Services
             return s;
         }
 
-        private static ReportSheet BuildSummarySheet(ProjectState st, ExportOptions opt)
+        private static ReportSheet BuildSummarySheet(ProjectState st, ExportOptions opt,
+            string unitGroup, string unitName)
         {
             var r = st.VolumeResult;
             double levelCut = r.Levels.Sum(x => x.CutVolume);
@@ -345,13 +357,13 @@ namespace MiningVolume2023.Services
             // Append the project metadata and sign-off block after the fixed
             // calculation rows. Do not put extra Notes above the table.
             s.Rows.Add(new[] { ReportCell.Text(""), ReportCell.Text(""), ReportCell.Text("") });
-            if (st.MiningUnitGroup != MiningUnitCatalog.OutsideTkv)
+            if (unitGroup != MiningUnitCatalog.OutsideTkv)
                 s.Rows.Add(new[] { ReportCell.Text("Đơn vị cấp trên", true),
                     ReportCell.Text(""), ReportCell.Text(TkvParentHeading) });
             s.Rows.Add(new[] { ReportCell.Text("Đơn vị tính toán", true), ReportCell.Text(""),
-                ReportCell.Text(EmptyAsNotSet(st.MiningUnitName)) });
+                ReportCell.Text(EmptyAsNotSet(unitName)) });
             s.Rows.Add(new[] { ReportCell.Text("Loại đơn vị", true), ReportCell.Text(""),
-                ReportCell.Text(st.MiningUnitGroup) });
+                ReportCell.Text(unitGroup) });
             s.Rows.Add(new[] { ReportCell.Text("Kỳ tính khối lượng", true), ReportCell.Text(""),
                 ReportCell.Text(st.VolumePeriodLabel) });
             s.Rows.Add(new[] { ReportCell.Text("Thời điểm tính", true), ReportCell.Text(""),
