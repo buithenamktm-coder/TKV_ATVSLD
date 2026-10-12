@@ -24,6 +24,11 @@ namespace MiningVolume.Core.Volumes
             if (endProfiles == null) throw new ArgumentNullException(nameof(endProfiles));
             if (existing == null) throw new ArgumentNullException(nameof(existing));
             if (design == null) throw new ArgumentNullException(nameof(design));
+            if ((existing.RequiresSectionReview || design.RequiresSectionReview) &&
+                endProfiles.Any(p => p != null && p.HasData && !p.IsUserEdited))
+                throw new InvalidOperationException(
+                    "Mô hình chứa nhiều cao độ tại một XY. Phải kiểm tra/chỉnh hệ mặt cắt và bấm " +
+                    "CẬP NHẬT MẶT CẮT trước khi sử dụng khối lượng chính thức.");
             options = options ?? new VolumeCalculationOptions();
             var bands = BuildBands(options.FromLevel, options.ToLevel, options.LevelStep, options.Tolerance);
             if (bands.Count == 0) throw new InvalidOperationException("Không tạo được dải cao độ tính khối lượng.");
