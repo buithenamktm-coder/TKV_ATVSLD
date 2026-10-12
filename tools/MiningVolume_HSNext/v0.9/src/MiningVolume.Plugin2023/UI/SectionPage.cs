@@ -602,7 +602,10 @@ namespace MiningVolume2023.UI
                 SectionProfile p = st.SectionProfiles.FirstOrDefault(x => x.Line.Name == line.Name);
                 _grid.Rows.Add(line.Name, line.Offset.ToString("0.###"), line.TotalLength.ToString("0.###"),
                     p == null ? "-" : p.CutArea.ToString("0.00"), p == null ? "-" : p.FillArea.ToString("0.00"),
-                    p == null ? "Chưa tính" : p.HasData ? "OK" : "Thiếu dữ liệu TIN");
+                    p == null ? "Chưa tính" :
+                    !p.HasData ? "Thiếu dữ liệu TIN" :
+                    p.Warnings.Any(w => w.StartsWith("ĐIỂM TRÙNG XY:", StringComparison.OrdinalIgnoreCase))
+                        ? "CẦN KIỂM TRA MC" : "OK");
             }
         }
 
