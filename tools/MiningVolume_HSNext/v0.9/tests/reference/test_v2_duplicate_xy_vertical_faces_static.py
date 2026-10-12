@@ -78,3 +78,23 @@ def test_post_tin_warning_is_counted_not_manual_confirmation():
     assert "Đề nghị kiểm tra hệ thống điểm và đường đồng mức" in success
     assert "Không cần loại từng điểm thủ công." in success
     assert "MessageBoxButtons.OK" in success
+
+def test_generated_breakline_crossing_is_no_longer_blocked_by_missing_source_vertices():
+    preparer = read("MiningVolume.Core/Surface/SurfaceInputPreparer.cs")
+    assert "g.Sources.Count(x => !x.Generated && x.VertexIndex >= 0) >= 2" not in preparer
+    assert "result.VerticalConflictGroups.AddRange(groups);" in preparer
+    assert "foreach (var group in result.VerticalConflictGroups)" in preparer
+    assert "result.Sites.Add(new Vec3(group.Position.X, group.Position.Y, z));" in preparer
+    assert "RelaxConflictedBreaklines(result, options, cancellationToken);" in preparer
+    assert "result.RelaxedBreaklineConstraints += removed;" in preparer
+
+
+def test_local_relaxation_is_diagnosed_not_source_deleted():
+    code = read("MiningVolume.Core/Surface/SurfaceInputPreparer.cs")
+    helper = code.split("private static void RelaxConflictedBreaklines(",1)[1].split(
+        "public PreparedSurfaceInput PrepareRaw(",1)[0]
+    assert "result.Breaklines.Clear();" in helper
+    assert "result.Breaklines.AddRange(safe);" in helper
+    assert "result.RelaxedBreaklineConstraints += removed;" in helper
+    assert "CAD gốc và mọi Z vẫn giữ nguyên" in helper
+    assert "RemoveEntityFromModel" not in helper
