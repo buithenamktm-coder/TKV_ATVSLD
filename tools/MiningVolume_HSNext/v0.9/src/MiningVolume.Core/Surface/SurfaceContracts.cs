@@ -48,6 +48,9 @@ namespace MiningVolume.Core.Surface
         // Groups retain every original elevation/provenance; CDT receives one
         // planar XY site and generates separate zero-plan-area 3D faces.
         public List<ConflictGroup> VerticalConflictGroups { get; } = new List<ConflictGroup>();
+        // Number of constraints relaxed in the 2.5D support, not objects
+        // deleted from AutoCAD. Forces a reviewed section before quantities.
+        public int RelaxedBreaklineConstraints { get; set; }
         public List<Vec3> Sites { get; } = new List<Vec3>();
         public List<Segment3> Breaklines { get; } = new List<Segment3>();
         public List<ValidationIssue> Issues { get; } = new List<ValidationIssue>();
@@ -96,7 +99,7 @@ namespace MiningVolume.Core.Surface
     {
         public TinSurface(string name, IReadOnlyList<Triangle3> triangles, IReadOnlyList<ValidationIssue> issues,
             IReadOnlyList<Triangle3> verticalFaces = null, IReadOnlyList<ConflictGroup> verticalConflicts = null,
-            int sameXYZDuplicates = 0)
+            int sameXYZDuplicates = 0, int relaxedBreaklineConstraints = 0)
         {
             Name = name;
             Triangles = triangles;
@@ -104,6 +107,7 @@ namespace MiningVolume.Core.Surface
             VerticalFaces = verticalFaces ?? Array.Empty<Triangle3>();
             VerticalConflicts = verticalConflicts ?? Array.Empty<ConflictGroup>();
             SameXYZDuplicateVertices = sameXYZDuplicates;
+            RelaxedBreaklineConstraints = relaxedBreaklineConstraints;
         }
         public string Name { get; }
         public IReadOnlyList<Triangle3> Triangles { get; }
@@ -111,7 +115,8 @@ namespace MiningVolume.Core.Surface
         public IReadOnlyList<Triangle3> VerticalFaces { get; }
         public IReadOnlyList<ConflictGroup> VerticalConflicts { get; }
         public int SameXYZDuplicateVertices { get; }
-        public bool RequiresSectionReview => VerticalConflicts.Count > 0;
+        public int RelaxedBreaklineConstraints { get; }
+        public bool RequiresSectionReview => VerticalConflicts.Count > 0 || RelaxedBreaklineConstraints > 0;
         public IReadOnlyList<ValidationIssue> Issues { get; }
     }
 
