@@ -36,23 +36,19 @@ namespace MiningVolume.Core.Surface
             {
                 if (options.PreserveDuplicateXYVerticalFaces)
                 {
+                    // Survey vertices AND breakline intersections/overlaps
+                    // can produce incompatible Z at one XY. Both must be
+                    // retained as real 3D vertical-face provenance: the old
+                    // >=2 original-vertices gate stranded large contour files.
                     var groups = result.ConflictReport.Groups
-                        .Where(g => g.DeltaZ > options.ZConflictTolerance &&
-                            g.Sources.Count(x => !x.Generated && x.VertexIndex >= 0) >= 2)
-                        .ToList();
-                    // An unrelated crossing of incompatible breaklines is not
-                    // resolved by constructing a face at duplicate survey XY.
-                    if (groups.Count != result.ConflictReport.Groups.Count)
-                    {
-                        result.Issues.AddRange(result.ConflictReport.ToException().Issues);
-                        return result;
-                    }
+                        .Where(g => g.DeltaZ > options.ZConflictTolerance).ToList();
                     result.VerticalConflictGroups.AddRange(groups);
                     result.Issues.Add(new ValidationIssue(ValidationSeverity.Warning,
                         "VERTICAL_XY_SOURCE_REVIEW",
-                        $"Có {groups.Count:n0} vị trí X,Y chứa nhiều cao độ. " +
-                        "Đã giữ đầy đủ dữ liệu điểm gốc và sẽ dựng các mặt đứng 3D; " +
-                        "đề nghị kiểm tra hệ thống điểm, đường đồng mức và hiệu chỉnh/xác nhận mặt cắt trước khi tính khối lượng."));
+                        $"Có {groups.Count:n0} nhóm X,Y nhiều cao độ, " +
+                        $"{result.ConflictReport.SourceRecordCount:n0} bản ghi nguồn. " +
+                        "Không loại điểm thủ công; tự dựng mặt đứng 3D và " +
+                        "đề nghị kiểm tra điểm, đồng mức cùng mặt cắt trước khi chốt khối lượng."));
                 }
                 else
                 {
@@ -85,7 +81,65 @@ namespace MiningVolume.Core.Surface
                 }
             }
 
+            if (options.PreserveDuplicateXYVerticalFaces &&
+                result.VerticalConflictGroups.Count > 0)
+            {
+                // Include *generated* intersection/overlap elevations as sites.
+                // A breakline crossing has no original vertex at that XY.
+                foreach (var group in result.VerticalConflictGroups)
+                    foreach (var z in group.Sources.Select(source => source.Z).Distinct())
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+                        result.Sites.Add(new Vec3(group.Position.X, group.Position.Y, z));
+                    }
+
+                // Native CDT requires a planar, non-crossing PSLG. Relax only
+                // constraints touching contradictory-Z coordinates, retaining
+                // unaffected contour segments. Original CAD entities remain
+                // unchanged and every Z is still carried in vertical faces.
+                RelaxConflictedBreaklines(result, options, cancellationToken);
+            }
             return NormalizePreparedInput(result, options, progress, cancellationToken);
+        }
+
+        private static void RelaxConflictedBreaklines(
+            PreparedSurfaceInput result, SurfaceBuildOptions options,
+            CancellationToken cancellationToken)
+        {
+            if (result.Breaklines.Count == 0 || result.VerticalConflictGroups.Count == 0) return;
+            var points = result.VerticalConflictGroups.Select(g =>
+                new Vec3(g.Position.X, g.Position.Y, 0)).ToList();
+            var index = new PointGridIndex(points, options.XyTolerance, cancellationToken);
+            int removed = 0;
+            var safe = new List<Segment3>(result.Breaklines.Count);
+            foreach (var segment in result.Breaklines)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                bool incompatible = false;
+                foreach (int id in index.Query(
+                    segment.A.X, segment.A.Y, segment.B.X, segment.B.Y,
+                    options.XyTolerance))
+                {
+                    if (Geometry2D.PointOnSegment(
+                        points[id].XY, segment.A.XY, segment.B.XY,
+                        options.XyTolerance))
+                    {
+                        incompatible = true;
+                        break;
+                    }
+                }
+                if (incompatible) removed++;
+                else safe.Add(segment);
+            }
+            if (removed == 0) return;
+            result.Breaklines.Clear();
+            result.Breaklines.AddRange(safe);
+            result.RelaxedBreaklineConstraints += removed;
+            result.Issues.Add(new ValidationIssue(ValidationSeverity.Warning,
+                "RELAXED_CONFLICTING_CONTOUR_CONSTRAINTS",
+                $"Đã nới {removed:n0} đoạn ràng buộc đồng mức cắt/chồng ở Z mâu thuẫn " +
+                "chỉ trong lưới hỗ trợ 2,5D; CAD gốc và mọi Z vẫn giữ nguyên. " +
+                "TIN này cần kiểm tra/chỉnh mặt cắt trước khi dùng khối lượng."));
         }
 
         /// <summary>
