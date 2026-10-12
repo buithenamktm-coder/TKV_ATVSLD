@@ -525,6 +525,12 @@ namespace MiningVolume.Core.Surface
             var unique = new List<Vec3>();
             var grid = new Dictionary<string, List<int>>();
             int verticalPairs = 0;
+            // Raw/tiled sources have no ConflictScanner entity provenance.
+            // Still retain EVERY elevation in a synthetic vertical group
+            // instead of silently collapsing high-Z measurements.
+            var rawGroups = options.PreserveDuplicateXYVerticalFaces &&
+                result.VerticalConflictGroups.Count == 0
+                ? new Dictionary<int, ConflictGroup>() : null;
 
             foreach (var p in result.Sites)
             {
@@ -577,6 +583,25 @@ namespace MiningVolume.Core.Surface
                         else
                         {
                             verticalPairs++;
+                            if (rawGroups != null)
+                            {
+                                if (!rawGroups.TryGetValue(match, out var group))
+                                {
+                                    group = new ConflictGroup {
+                                        Id = "RAW-XY-" + (rawGroups.Count + 1).ToString("000"),
+                                        Position = old.XY
+                                    };
+                                    group.Sources.Add(new ConflictSource {
+                                        Z = old.Z, Generated = true, VertexIndex = -1,
+                                        Origin = "Dữ liệu tọa độ nguồn thô trước khi chuẩn hóa"
+                                    });
+                                    rawGroups.Add(match, group);
+                                }
+                                group.Sources.Add(new ConflictSource {
+                                    Z = p.Z, Generated = true, VertexIndex = -1,
+                                    Origin = "Dữ liệu tọa độ nguồn thô trước khi chuẩn hóa"
+                                });
+                            }
                             // One CDT node is mathematically unavoidable; select
                             // the minimum Z consistently for the 2.5D support.
                             // Every other source Z is retained by the separate
@@ -595,8 +620,10 @@ namespace MiningVolume.Core.Surface
                         cancellationToken.ThrowIfCancellationRequested();
                         node.Point = FindCanonicalNode(node.Point, unique, grid, options.XyTolerance);
                     }
+            if (rawGroups != null && rawGroups.Count > 0)
+                result.VerticalConflictGroups.AddRange(rawGroups.Values);
             // One summary warning rather than millions of per-point records.
-            if (verticalPairs > 0 && result.VerticalConflictGroups.Count == 0)
+            if (verticalPairs > 0 && result.ConflictReport == null)
                 result.Issues.Add(new ValidationIssue(ValidationSeverity.Warning,
                     "VERTICAL_XY_REVIEW", "Có đỉnh trùng XY khác Z trong dữ liệu nội suy; kiểm tra mặt cắt sau khi dựng TIN."));
             result.Sites.Clear();
