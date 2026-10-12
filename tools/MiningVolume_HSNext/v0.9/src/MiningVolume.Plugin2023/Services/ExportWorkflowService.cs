@@ -55,6 +55,14 @@ namespace MiningVolume2023.Services
 
         public static SpreadsheetReport BuildReport(ProjectState state, ExportOptions options)
         {
+            if (state == null) throw new ArgumentNullException(nameof(state));
+            if (options == null) throw new ArgumentNullException(nameof(options));
+            // Both fields come from the Project selection and must be preserved
+            // verbatim in Excel, including a user-entered non-TKV organization.
+            if (string.Equals(state.MiningUnitGroup, MiningUnitCatalog.OutsideTkv, StringComparison.Ordinal) &&
+                string.IsNullOrWhiteSpace(state.MiningUnitName))
+                throw new InvalidOperationException(
+                    "Đã chọn 'Đơn vị khác (ngoài TKV)'. Hãy nhập tên đơn vị trước khi xuất báo cáo Excel.");
             var now = DateTime.Now;
             var report = new SpreadsheetReport
             {
