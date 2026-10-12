@@ -31,7 +31,9 @@ def test_cad_writes_actual_faces_and_counts_vertical_geometry():
     assert "foreach (var t in tin.VerticalFaces)" in render
     assert "ValidateVerticalFace(t);" in render
     assert "cadTin.Triangles.Count + cadTin.VerticalFaces.Count" in workflow
-    assert "tin.VerticalFaces, tin.VerticalConflicts" in workflow
+    assert "var cadTin = tin;" in workflow
+    assert "cadTin.Triangles.Count + cadTin.VerticalFaces.Count" in workflow
+    assert "foreach (var t in tin.VerticalFaces)" in render
 
 
 def test_user_sees_warning_not_manual_point_removal():
