@@ -67,6 +67,21 @@ internal static class CoreRegression
     static void RunTests()
     {
         var tests=new Dictionary<string,Action> {
+            ["same_xyz_duplicates_are_counted_but_do_not_block_tin"] = ()=>{
+                var options=new SurfaceBuildOptions{PreserveDuplicateXYVerticalFaces=true};
+                var model=Model(Entity("a",SourceEntityType.Point,P(0,0,5)),
+                    Entity("duplicate",SourceEntityType.Point,P(0,0,5)),
+                    Entity("b",SourceEntityType.Point,P(10,0,5)),
+                    Entity("c",SourceEntityType.Point,P(0,10,5)));
+                var input=new SurfaceInputPreparer().Prepare(model,options);
+                Check(!input.HasErrors && input.ConflictReport.SameXYZDuplicates==1,
+                    "Same XYZ repeat should be counted without requiring manual deletion");
+                var tin=Build(input,options);
+                Check(tin.SameXYZDuplicateVertices==1 && !tin.RequiresSectionReview,
+                    "Duplicate XYZ count was lost in TIN or wrongly marked as different-Z face");
+                Check(tin.VerticalFaces.Count==0,
+                    "Same XYZ repeat should not create spurious vertical face");
+            },
             ["vertical_xy_auto_tin_preserves_both_original_z_and_renders_3d_faces"] = ()=>{
                 var low=Entity("low",SourceEntityType.Point,P(5,5,10));
                 var high=Entity("high",SourceEntityType.Point,P(5,5,20));
