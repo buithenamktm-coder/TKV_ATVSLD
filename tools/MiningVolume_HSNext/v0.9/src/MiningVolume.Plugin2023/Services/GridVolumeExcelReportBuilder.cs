@@ -47,8 +47,10 @@ namespace MiningVolume2023.Services
             s.ColumnWidths[1] = 45;
             s.Notes.Add("Khối lượng hình học chính thức phải được tính lại trong AutoCAD sau thay đổi TIN/ranh lưới.");
             var state = ProjectState.Current;
-            Row(s,"Đơn vị khai thác", string.IsNullOrWhiteSpace(state.MiningUnitName) ? "Chưa thiết lập" : state.MiningUnitName);
-            Row(s,"Nhóm khai thác", state.MiningUnitGroup);
+            if (state.MiningUnitGroup != MiningUnitCatalog.OutsideTkv)
+                Row(s, "Đơn vị cấp trên", ExportWorkflowService.TkvParentHeading);
+            Row(s,"Đơn vị tính toán", string.IsNullOrWhiteSpace(state.MiningUnitName) ? "Chưa thiết lập" : state.MiningUnitName);
+            Row(s,"Loại đơn vị", state.MiningUnitGroup);
             Row(s,"Kỳ tính khối lượng", state.VolumePeriodLabel);
             Row(s,"Thời điểm tính lưới", state.GridCalculatedUtc.HasValue
                 ? state.GridCalculatedUtc.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss")
@@ -175,7 +177,10 @@ namespace MiningVolume2023.Services
             // Keep all formula row numbers intact by appending after totals.
             var state = ProjectState.Current;
             s.Rows.Add(new ReportCell[]{ReportCell.Text(""), ReportCell.Text(""), ReportCell.Text("")});
-            s.Rows.Add(new ReportCell[]{ReportCell.Text("Đơn vị khai thác",true),
+            if (state.MiningUnitGroup != MiningUnitCatalog.OutsideTkv)
+                s.Rows.Add(new ReportCell[]{ReportCell.Text("Đơn vị cấp trên",true),
+                    ReportCell.Text(""),ReportCell.Text(ExportWorkflowService.TkvParentHeading)});
+            s.Rows.Add(new ReportCell[]{ReportCell.Text("Đơn vị tính toán",true),
                 ReportCell.Text(""),ReportCell.Text(state.MiningUnitName ?? "")});
             s.Rows.Add(new ReportCell[]{ReportCell.Text("Kỳ tính khối lượng",true),
                 ReportCell.Text(""),ReportCell.Text(state.VolumePeriodLabel)});
