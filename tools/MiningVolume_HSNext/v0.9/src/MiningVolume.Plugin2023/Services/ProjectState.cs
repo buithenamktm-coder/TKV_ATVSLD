@@ -49,7 +49,7 @@ namespace MiningVolume2023.Services
             "Công ty Cổ phần Đất hiếm Lai Châu - Vimico",
             "Công ty Cổ phần Khoáng sản và Luyện kim Cao Bằng - Vimico",
             "Công ty Cổ phần Kim loại màu Thái Nguyên - Vimico",
-            "Công ty Cổ phần Cromit Cổ Định Thanh Hóa - Vinacomin",
+            "Công ty Cổ phần Cromit Cổ Định Thanh Hoá - TKV",
             "Công ty Cổ phần Sắt Thạch Khê - Vinacomin"
         });
 
