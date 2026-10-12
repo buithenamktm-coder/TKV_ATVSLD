@@ -17,7 +17,12 @@ for($i=0;$i -lt $names.Count;$i++) {
  $b.Location=New-Object Drawing.Point((12+($i%2)*260),(12+[Math]::Floor($i/2)*64))
  $form.Controls.Add($b);$buttons+=$b
 }
-$apply.Invoke($null,@($form)) | Out-Null
+# PowerShell may wrap New-Object output in PSObject. Reflection expects
+# the underlying WinForms Control inside a real object[] argument vector.
+$nativeForm=[System.Windows.Forms.Control]$form.PSObject.BaseObject
+$invokeArgs=[object[]]::new(1)
+$invokeArgs[0]=$nativeForm
+$apply.Invoke($null,$invokeArgs) | Out-Null
 $form.CreateControl()
 function Luminance($c) {
  $v=@($c.R,$c.G,$c.B) | ForEach-Object { $x=$_/255.0; if($x -le 0.04045){$x/12.92}else{[Math]::Pow(($x+0.055)/1.055,2.4)} }
