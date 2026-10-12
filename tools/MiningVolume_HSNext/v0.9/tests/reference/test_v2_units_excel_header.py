@@ -45,3 +45,19 @@ def test_organization_above_excel_title_without_shifting_formula_rows():
     assert '"=C5-C6"' in report
     assert 'const int firstDataRow = 4' in report
     assert "new[] { ReportCell.Text(\"Đơn vị tính toán\"" in report
+
+
+def test_export_rejects_company_or_period_changes_before_writing_results():
+    page = source("src/MiningVolume.Plugin2023/UI/ExportPage.cs")
+    assert "string selectedUnitGroup = st.MiningUnitGroup;" in page
+    assert "string selectedUnitName = st.MiningUnitName;" in page
+    assert "string selectedPeriod = st.VolumePeriodLabel;" in page
+    assert "state.MiningUnitGroup, selectedUnitGroup" in page
+    assert "state.MiningUnitName, selectedUnitName" in page
+    assert "state.VolumePeriodLabel, selectedPeriod" in page
+    assert "selectedUnitGroup, selectedUnitName, selectedPeriod);" in page
+    report = source("src/MiningVolume.Plugin2023/Services/ExportWorkflowService.cs")
+    writer = report.split("public static void WriteXlsx(", 1)[1].split(
+        "public static SpreadsheetReport BuildReport(", 1
+    )[0]
+    assert "ProjectState.Current" not in writer
