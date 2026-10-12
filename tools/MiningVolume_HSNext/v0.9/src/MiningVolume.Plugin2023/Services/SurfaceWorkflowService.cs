@@ -39,7 +39,12 @@ namespace MiningVolume2023.Services
         public int VerticalFaceCount => Tin?.VerticalFaces?.Count ?? 0;
         public int DuplicateXYGroupCount => Tin?.VerticalConflicts?.Count ?? 0;
         public int SameXYZDuplicateVertices => Tin?.SameXYZDuplicateVertices ?? 0;
-        public int DuplicateXYSourceVertices => Tin?.VerticalConflicts?.Sum(g => g.Sources.Count(x => !x.Generated && x.VertexIndex >= 0)) ?? 0;
+        public int DuplicateXYSourceVertices => Tin?.VerticalConflicts?.Sum(g =>
+        {
+            int originalCount = g.Sources.Count(x => !x.Generated && x.VertexIndex >= 0);
+            // Synthetic raw-coordinate groups lack CAD handles/vertex indices.
+            return originalCount > 0 ? originalCount : g.Sources.Count;
+        }) ?? 0;
         public long CoreMilliseconds => PrepareMilliseconds + TriangulationMilliseconds;
         public bool IsLargeDataset { get; set; }
         public int TileCount { get; set; }
