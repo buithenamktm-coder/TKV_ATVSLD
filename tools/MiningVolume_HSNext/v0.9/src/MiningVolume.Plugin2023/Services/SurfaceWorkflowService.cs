@@ -364,7 +364,9 @@ namespace MiningVolume2023.Services
                 BreaklineCount = prepared.Breaklines.Count,
                 WarningCount = prepared.Issues.Count(x => x.Severity == ValidationSeverity.Warning),
                 MinZ = prepared.Sites.Min(p => p.Z),
-                MaxZ = prepared.Sites.Max(p => p.Z),
+                MaxZ = Math.Max(prepared.Sites.Max(p => p.Z),
+                    prepared.VerticalConflictGroups.Count == 0 ? double.NegativeInfinity :
+                    prepared.VerticalConflictGroups.Max(g => g.Sources.Max(v => v.Z))),
                 SourceModifiedUtc = sourceModified,
                 SourceRevision = sourceRevision,
                 PrepareMilliseconds = prepareWatch.ElapsedMilliseconds,
