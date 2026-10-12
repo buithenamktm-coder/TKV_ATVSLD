@@ -154,6 +154,38 @@ internal static class CoreRegression
                 Check(low.Vertices[0].Position.Z==10&&high.Vertices[0].Position.Z==20,
                     "Contour source elevations were modified");
             },
+            ["hsm0_1297_generated_breakline_conflicts_build_in_one_pass"] = ()=>{
+                const int count=1297;
+                var items=new List<SourceEntity>{
+                    Entity("corner0",SourceEntityType.Point,P(0,0,1)),
+                    Entity("corner1",SourceEntityType.Point,P(count*3+3,0,1)),
+                    Entity("corner2",SourceEntityType.Point,P(count*3+3,10,1)),
+                    Entity("corner3",SourceEntityType.Point,P(0,10,1))
+                };
+                for(int i=0;i<count;i++){
+                    double x=2+i*3;
+                    items.Add(Entity("h"+i,SourceEntityType.Contour,
+                        P(x-.4,5,10),P(x+.4,5,10)));
+                    items.Add(Entity("v"+i,SourceEntityType.Contour,
+                        P(x,4.6,20),P(x,5.4,20)));
+                }
+                var model=Model(items.ToArray());
+                var options=new SurfaceBuildOptions{PreserveDuplicateXYVerticalFaces=true};
+                var input=new SurfaceInputPreparer().Prepare(model,options);
+                Check(!input.HasErrors,"Synthetic 1297-generated-crossing contour model still blocks TIN");
+                Check(input.VerticalConflictGroups.Count==count,
+                    "Generated crossing group count mismatch in 1297-event geometry");
+                Check(input.RelaxedBreaklineConstraints==2*count,
+                    "Auto normalization should relax only the 2594 contradictory contour segments");
+                var tin=Build(input,options);
+                Check(tin.Triangles.Count>0 && tin.VerticalFaces.Count>=count &&
+                    tin.RelaxedBreaklineConstraints==2*count && tin.RequiresSectionReview,
+                    "TIN build failed to retain 1297 vertical conflict locations");
+                Check(model.Entities.Count==4+2*count &&
+                    model.Entities[4].Vertices[0].Position.Z==10 &&
+                    model.Entities[5].Vertices[0].Position.Z==20,
+                    "Synthetic conflict processing deleted or edited source CAD objects");
+            },
             ["hsm0_generated_crossing_different_z_builds_without_manual_deletion"] = ()=>{
                 var a=Entity("crossA",SourceEntityType.Contour,P(0,5,10),P(10,5,10));
                 var b=Entity("crossB",SourceEntityType.Contour,P(5,0,20),P(5,10,20));
