@@ -446,8 +446,9 @@ namespace MiningVolume2023.Services
                 if (!ReferenceEquals(state.Get(build.Role).Source, build.SourceModel) ||
                     build.SourceModel.Revision != build.SourceRevision)
                     throw new InvalidOperationException("Nguồn TIN đã đổi; không ghi kết quả cũ.");
-            var ht = CadSurface(state.Existing, existing.Tin, existing.IsLargeDataset ? existing.PreviewTriangles : null);
-            var tk = CadSurface(state.Design, design.Tin, design.IsLargeDataset ? design.PreviewTriangles : null);
+            // The CAD layer is authoritative geometry, never a sampled preview.
+            var ht = existing.Tin;
+            var tk = design.Tin;
             progress?.Invoke("Đang ghi TIN hiện trạng xuống AutoCAD, tiếp đến thiết kế; Esc để hủy cả thao tác...");
             int[] written;
             using (doc.LockDocument())
@@ -455,9 +456,9 @@ namespace MiningVolume2023.Services
                     state.Design.TinLayer, tk);
             // Both CAD layers committed together. Only now transfer ownership of stores.
             AdoptTin(state.Existing, existing.Tin, existing.SourceRevision, existing.SourceModifiedUtc,
-                written[0], !ReferenceEquals(ht, existing.Tin));
+                written[0], false);
             AdoptTin(state.Design, design.Tin, design.SourceRevision, design.SourceModifiedUtc,
-                written[1], !ReferenceEquals(tk, design.Tin));
+                written[1], false);
             state.SectionProfiles.Clear();
             state.VolumeResult = null;
             state.VolumeCalculatedUtc = null;
@@ -478,7 +479,7 @@ namespace MiningVolume2023.Services
                 build.SourceModel,
                 build.SourceRevision,
                 build.SourceModifiedUtc,
-                build.IsLargeDataset ? build.PreviewTriangles : null);
+                null);
         }
 
         public static void DrawTin(ModelRole role, TinSurface tin)
@@ -510,8 +511,10 @@ namespace MiningVolume2023.Services
             var doc = Application.DocumentManager.MdiActiveDocument ??
                       throw new InvalidOperationException("Không có bản vẽ AutoCAD đang hoạt động.");
 
-            var cadTin = CadSurface(session, tin, previewTriangles);
-            bool cadPreview = !ReferenceEquals(cadTin, tin);
+            // All original support triangles and the vertical faces are written to DWG.
+            // Never replace the official surface with a stride-sampled subset.
+            var cadTin = tin;
+            bool cadPreview = false;
 
             int written;
             using (doc.LockDocument())
@@ -539,16 +542,6 @@ namespace MiningVolume2023.Services
             state.NotifyChanged();
 
             try { doc.Editor.Regen(); } catch { }
-        }
-
-        private static TinSurface CadSurface(ModelSession session, TinSurface tin,
-            IReadOnlyList<MiningVolume.Core.Geometry.Triangle3> previewTriangles)
-        {
-            return previewTriangles != null && previewTriangles.Count > 0 && previewTriangles.Count < tin.Triangles.Count
-                ? new TinSurface(session.Name + " - CAD preview", previewTriangles,
-                    Array.Empty<ValidationIssue>(), tin.VerticalFaces, tin.VerticalConflicts,
-                    tin.SameXYZDuplicateVertices, tin.RelaxedBreaklineConstraints)
-                : tin;
         }
 
         private static void AdoptTin(ModelSession session, TinSurface tin, long sourceRevision,
@@ -669,40 +662,15 @@ namespace MiningVolume2023.Services
             if (exists && count == expectedCadFaces)
                 return;
 
-            // If the output layer was deleted/edited manually, rebuild its CAD
-            // representation from the verified in-memory TIN before computation.
-            IReadOnlyList<MiningVolume.Core.Geometry.Triangle3> preview = null;
-            if (session.TinCadIsPreview && session.Tin.Triangles is ITiledTriangleSource tiled)
-                preview = BuildCadPreview(tiled, 200000);
-
+            // Rebuild the COMPLETE verified mesh. A spatially sampled subset
+            // cannot be used as a replacement for a damaged/missing official layer.
             DrawTinInternal(
                 role,
                 session.Tin,
                 session.Source,
                 session.TinBuiltFromSourceRevision.Value,
                 session.TinBuiltFromSourceUtc ?? session.Source.LastModifiedUtc,
-                preview);
-        }
-
-        private static IReadOnlyList<MiningVolume.Core.Geometry.Triangle3> BuildCadPreview(
-            ITiledTriangleSource tiled,
-            int maxFaces)
-        {
-            var result = new List<MiningVolume.Core.Geometry.Triangle3>(
-                Math.Min(maxFaces, tiled.Count));
-            int tileCount = Math.Max(1, tiled.Tiles.Count);
-            int perTile = Math.Max(1, maxFaces / tileCount);
-
-            foreach (var tile in tiled.Tiles)
-            {
-                var tris = tiled.ReadTile(tile.Index);
-                if (tris.Count == 0) continue;
-                int step = Math.Max(1, (int)Math.Ceiling(tris.Count / (double)perTile));
-                for (int i = 0; i < tris.Count && result.Count < maxFaces; i += step)
-                    result.Add(tris[i]);
-                if (result.Count >= maxFaces) break;
-            }
-            return result;
+                null);
         }
 
         public static string TinStatusText(ModelRole role)
