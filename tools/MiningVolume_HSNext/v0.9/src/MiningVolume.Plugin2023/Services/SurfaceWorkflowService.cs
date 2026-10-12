@@ -36,6 +36,9 @@ namespace MiningVolume2023.Services
         public long TriangulationMilliseconds { get; set; }
         internal SurfaceModel SourceModel { get; set; }
         public int TriangleCount => Tin?.Triangles?.Count ?? 0;
+        public int VerticalFaceCount => Tin?.VerticalFaces?.Count ?? 0;
+        public int DuplicateXYGroupCount => Tin?.VerticalConflicts?.Count ?? 0;
+        public int DuplicateXYSourceVertices => Tin?.VerticalConflicts?.Sum(g => g.Sources.Count(x => !x.Generated && x.VertexIndex >= 0)) ?? 0;
         public long CoreMilliseconds => PrepareMilliseconds + TriangulationMilliseconds;
         public bool IsLargeDataset { get; set; }
         public int TileCount { get; set; }
@@ -44,6 +47,7 @@ namespace MiningVolume2023.Services
         public string Summary =>
             $"{SiteCount:n0} điểm TIN • {BreaklineCount:n0} đoạn breakline • {TriangleCount:n0} tam giác" +
             (IsLargeDataset ? $" • TIN dữ liệu lớn {TileCount:n0} ô" : string.Empty) +
+            (DuplicateXYGroupCount > 0 ? $" • {DuplicateXYGroupCount:n0} vị trí XY trùng / {DuplicateXYSourceVertices:n0} đỉnh nguồn • {VerticalFaceCount:n0} mặt đứng" : "") +
             $" • Z: {MinZ:0.###} → {MaxZ:0.###}" +
             $" • dựng {CoreMilliseconds / 1000.0:0.00}s" +
             (WarningCount > 0 ? $" • {WarningCount:n0} cảnh báo" : string.Empty);
@@ -238,6 +242,10 @@ namespace MiningVolume2023.Services
                 XyTolerance = 1e-6,
                 ZConflictTolerance = 1e-4,
                 MinimumTriangleArea = 1e-10,
+                // User-confirmed HSMo-like workflow: do not stop on duplicate
+                // survey points with different Z; retain extra 3D faces and
+                // require editable section acceptance before official volumes.
+                PreserveDuplicateXYVerticalFaces = true,
                 DuplicateXYConflictPolicy = duplicateXYPolicy,
                 ClipBoundary = clipBoundary
             };
@@ -469,7 +477,8 @@ namespace MiningVolume2023.Services
             bool cadPreview = previewTriangles != null && previewTriangles.Count > 0 &&
                               previewTriangles.Count < tin.Triangles.Count;
             var cadTin = cadPreview
-                ? new TinSurface(session.Name + " - CAD preview", previewTriangles, Array.Empty<ValidationIssue>())
+                ? new TinSurface(session.Name + " - CAD preview", previewTriangles,
+                    Array.Empty<ValidationIssue>(), tin.VerticalFaces, tin.VerticalConflicts)
                 : tin;
 
             int written;
@@ -483,7 +492,7 @@ namespace MiningVolume2023.Services
                 TinCadRenderer.SetVisible(doc.Database, session.TinLayer, true);
             }
 
-            int expectedCadFaces = cadTin.Triangles.Count;
+            int expectedCadFaces = cadTin.Triangles.Count + cadTin.VerticalFaces.Count;
             if (written != expectedCadFaces)
                 throw new InvalidOperationException(
                     $"Ghi TIN {session.Name} xuống AutoCAD không đầy đủ: cần {expectedCadFaces:n0} mặt CAD, " +
@@ -605,7 +614,7 @@ namespace MiningVolume2023.Services
 
             int expectedCadFaces = session.TinCadFaceCount > 0
                 ? session.TinCadFaceCount
-                : session.Tin.Triangles.Count;
+                : session.Tin.Triangles.Count + session.Tin.VerticalFaces.Count;
             if (exists && count == expectedCadFaces)
                 return;
 
