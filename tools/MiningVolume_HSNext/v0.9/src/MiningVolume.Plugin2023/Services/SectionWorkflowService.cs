@@ -145,7 +145,12 @@ namespace MiningVolume2023.Services
             const int batchSize = 20;
             int total = drawingProfiles.Count;
             using (doc.LockDocument())
+            using (var allSections = doc.Database.TransactionManager.StartTransaction())
             {
+                // The CAD renderer uses nested transactions per batch. Commit
+                // the OUTER transaction only after the final batch succeeds:
+                // an exception/cancel must leave the previous section drawing
+                // intact rather than erasing it and drawing only 20 profiles.
                 for (int start = 0; start < total; start += batchSize)
                 {
                     int count = Math.Min(batchSize, total - start);
@@ -162,6 +167,7 @@ namespace MiningVolume2023.Services
                         layoutGap);
                     progress?.Invoke(start + count, total);
                 }
+                allSections.Commit();
             }
         }
 
