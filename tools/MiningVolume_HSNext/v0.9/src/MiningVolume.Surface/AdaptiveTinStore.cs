@@ -19,13 +19,14 @@ namespace MiningVolume.Surface
 
         public static FileBackedTiledTriangleList Create(IReadOnlyList<Vec3> sites,
             int[] indices, SurfaceBuildOptions options, Action<string> progress,
-            CancellationToken token, out int small)
+            CancellationToken token, out int small, out int degenerate)
         {
             int triangles = indices.Length / 3, count = 0;
             var recordList = new List<Record>(triangles);
             var clipped = new List<Triangle3>();
             var clipper = options.ClipBoundary == null ? null : new TinPolygonClipper(options.ClipBoundary, token);
             small = 0;
+            degenerate = 0;
             Triangle3 Triangle(int i) => i < 0 ? clipped[-i-1] : new Triangle3(sites[indices[3*i]],
                 sites[indices[3*i+1]], sites[indices[3*i+2]]);
             for (int i = 0; i < triangles; i++)
@@ -33,7 +34,13 @@ namespace MiningVolume.Surface
                 token.ThrowIfCancellationRequested();
                 var t = Triangle(i);
                 if (!(t.Area2D > 0) || double.IsInfinity(t.Area2D))
-                    throw new InvalidOperationException("Lưới có tam giác suy biến; không xuất kết quả thiếu dữ liệu.");
+                {
+                    // Zero-area XY faces cannot represent a surface. Ignore only the face,
+                    // never remove source vertices or constrained breakline segments.
+                    // The caller reports the count; a fully invalid mesh still fails below.
+                    degenerate++;
+                    continue;
+                }
                 if (t.Area2D <= options.MinimumTriangleArea) small++;
                 if (clipper == null) {
                     var c=t.Centroid2D; recordList.Add(new Record{Index=i,X=c.X,Y=c.Y});
