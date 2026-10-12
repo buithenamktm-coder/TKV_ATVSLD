@@ -793,7 +793,7 @@ internal static class CoreRegression
                     bool Hull(Vec3 a,Vec3 b)=>(a.X==0&&b.X==0)||(a.X==100&&b.X==100)||(a.Y==0&&b.Y==0)||(a.Y==100&&b.Y==100);
                     Check(edges.Values.All(e=>e.count==2||(e.count==1&&Hull(e.a,e.b))),"Unpaired interior or nonmanifold edge");
                     Check(Math.Abs(area-10000)<1e-6,"Storage seam changed area");
-                    Check(r.PreviewTriangles.Count<=200000,"Unbounded preview");
+                    Check(r.PreviewTriangles.Count==0,"Official TIN must not build a stride-sampled CAD mesh");
                     var prepared=Prepare(points);Coverage(prepared,r.Surface);
                 } finally {(r.Surface.Triangles as IDisposable)?.Dispose();}
             },
