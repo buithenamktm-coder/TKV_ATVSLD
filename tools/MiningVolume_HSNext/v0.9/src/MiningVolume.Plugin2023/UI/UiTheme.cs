@@ -29,6 +29,15 @@ namespace MiningVolume2023.UI
         public static readonly Color ButtonBorder = Color.FromArgb(82, 103, 124);
         public static readonly Color ButtonSecondary = Color.FromArgb(223, 232, 241);
         public static readonly Color ButtonText = Color.FromArgb(24, 43, 61);
+        // Liquid Glass-inspired visual system. Opaque, composited-once surfaces
+        // deliberately replace expensive live desktop blur inside AutoCAD.
+        // Dark foreground/solid command fills maintain technical readability.
+        public static readonly Color GlassSurface = Color.FromArgb(244, 249, 254);
+        public static readonly Color GlassTop = Color.FromArgb(250, 253, 255);
+        public static readonly Color GlassBottom = Color.FromArgb(225, 239, 250);
+        public static readonly Color GlassEdge = Color.FromArgb(161, 190, 216);
+        public static readonly Color GlassHighlight = Color.FromArgb(115, 255, 255, 255);
+
 
         public static void ApplyPage(Control root)
         {
@@ -92,10 +101,10 @@ namespace MiningVolume2023.UI
 
         private static void StyleGroup(GroupBox group)
         {
-            group.BackColor = Surface;
+            group.BackColor = GlassSurface;
             group.ForeColor = TextStrong;
             group.Font = new Font("Arial", 9F, FontStyle.Bold);
-            group.Padding = new Padding(10, 8, 10, 10);
+            group.Padding = new Padding(12, 10, 12, 12);
         }
 
         private static void StyleButton(Button button)
@@ -233,6 +242,49 @@ namespace MiningVolume2023.UI
             grid.DefaultCellStyle.SelectionForeColor = TextStrong;
             grid.AlternatingRowsDefaultCellStyle.BackColor = Color.FromArgb(248, 248, 250);
             grid.RowHeadersVisible = false;
+        }
+    }
+
+    /// <summary>
+    /// Lightweight, non-blurring Liquid Glass-style panel for static palette
+    /// chrome only. The native controls, DWG viewport and TIN rendering remain
+    /// untouched; this paints once on resize/exposure rather than per CAD frame.
+    /// </summary>
+    internal sealed class GlassPanel : Panel
+    {
+        public GlassPanel()
+        {
+            SetStyle(ControlStyles.OptimizedDoubleBuffer |
+                     ControlStyles.AllPaintingInWmPaint |
+                     ControlStyles.UserPaint |
+                     ControlStyles.ResizeRedraw, true);
+            BackColor = UiTheme.GlassTop;
+        }
+
+        protected override void OnPaintBackground(PaintEventArgs e)
+        {
+            var rect = ClientRectangle;
+            if (rect.Width <= 0 || rect.Height <= 0) return;
+            using (var fill = new LinearGradientBrush(
+                rect, UiTheme.GlassTop, UiTheme.GlassBottom,
+                LinearGradientMode.Vertical))
+                e.Graphics.FillRectangle(fill, rect);
+            // Frosted highlight and a precise separator evoke a glass surface
+            // without Windows DWM transparency or per-frame blur operations.
+            int shineHeight = Math.Max(1, Math.Min(14, rect.Height / 4));
+            using (var shine = new LinearGradientBrush(
+                new Rectangle(0, 0, rect.Width, shineHeight),
+                UiTheme.GlassHighlight, Color.FromArgb(0, 255, 255, 255),
+                LinearGradientMode.Vertical))
+                e.Graphics.FillRectangle(shine, 0, 0, rect.Width, shineHeight);
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            base.OnPaint(e);
+            if (Width < 2 || Height < 2) return;
+            using (var pen = new Pen(UiTheme.GlassEdge))
+                e.Graphics.DrawLine(pen, 0, Height - 1, Width, Height - 1);
         }
     }
 }
