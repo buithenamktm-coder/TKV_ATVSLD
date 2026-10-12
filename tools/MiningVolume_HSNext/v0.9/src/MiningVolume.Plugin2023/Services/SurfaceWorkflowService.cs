@@ -634,6 +634,9 @@ namespace MiningVolume2023.Services
 
             state.SectionProfiles.Clear();
             state.VolumeResult = null;
+            // A grid report references the old TIN surfaces and must not
+            // remain cached after any HT/TK source or model edit.
+            GridWorkflowService.Invalidate();
             if (notify) state.NotifyChanged();
         }
 
