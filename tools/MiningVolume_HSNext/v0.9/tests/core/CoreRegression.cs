@@ -98,6 +98,32 @@ internal static class CoreRegression
                 Check(low.Vertices[0].Position.Z==10&&high.Vertices[0].Position.Z==20,
                     "Source CAD data changed or discarded");
             },
+            ["vertical_xy_contours_and_section_warning_without_point_cleanup"] = ()=>{
+                var low=Entity("contourL",SourceEntityType.Contour,P(5,5,10),P(10,5,10));
+                var high=Entity("contourH",SourceEntityType.Contour,P(5,5,20),P(5,10,20));
+                var model=Model(
+                    Entity("a",SourceEntityType.Point,P(0,0)),
+                    Entity("b",SourceEntityType.Point,P(10,0)),
+                    Entity("c",SourceEntityType.Point,P(10,10)),
+                    Entity("d",SourceEntityType.Point,P(0,10)), low, high);
+                var opt=new SurfaceBuildOptions{PreserveDuplicateXYVerticalFaces=true};
+                var input=new SurfaceInputPreparer().Prepare(model,opt);
+                Check(!input.HasErrors,"Doubled contour start forced manual point removal");
+                Check(input.Breaklines.Count>=2,"TIN ignored valid contour constraints");
+                var tin=Build(input,opt);
+                Check(tin.VerticalFaces.Count>0 && tin.VerticalConflicts.Count==1,
+                    "Contour duplicate Z not represented by vertical CAD faces");
+                var flat=new SurfaceInputPreparer().PrepareRaw(
+                    new[]{P(0,0,0),P(10,0,0),P(10,10,0),P(0,10,0)},null,new SurfaceBuildOptions());
+                var design=Build(flat);
+                var line=new SectionLine(1,"MC-01",5,new Vec2(1,0),new Vec2(0,1),
+                    new[]{new SectionSpan(0,10)});
+                var section=new TinSectionSampler().BuildProfile(line,tin,design);
+                Check(section.HasData&&section.Warnings.Any(w=>w.Contains("ĐIỂM TRÙNG XY:")),
+                    "Section crossing double-Z position has no review warning");
+                Check(low.Vertices[0].Position.Z==10&&high.Vertices[0].Position.Z==20,
+                    "Contour source elevations were modified");
+            },
             ["mean_z_preview_all_entities_and_original_unchanged"] = ()=>{
                 var contour=Entity("contour",SourceEntityType.Contour,P(0,0,0),P(10,0,0));
                 var poly=Entity("p3",SourceEntityType.Polyline3d,P(0,0,94.862),P(10,10,30));
