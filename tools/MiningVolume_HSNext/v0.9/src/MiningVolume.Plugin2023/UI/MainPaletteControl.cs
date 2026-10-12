@@ -42,10 +42,10 @@ namespace MiningVolume2023.UI
                 if (_compactNavigation.SelectedIndex >= 0)
                     ShowPage((AppPage)_compactNavigation.SelectedIndex);
             };
-            _compactHeader = new Panel
+            _compactHeader = new GlassPanel
             {
                 Dock = DockStyle.Top, Height = 46, Visible = false,
-                BackColor = UiTheme.Sidebar, Padding = new Padding(8, 6, 8, 6)
+                BackColor = UiTheme.GlassSurface, Padding = new Padding(10, 6, 10, 6)
             };
             _compactHeader.Controls.Add(_compactNavigation);
 
@@ -126,11 +126,11 @@ namespace MiningVolume2023.UI
 
         private static Panel BuildHeader()
         {
-            var header = new Panel
+            var header = new GlassPanel
             {
                 Dock = DockStyle.Top,
                 Height = 66,
-                BackColor = UiTheme.Surface
+                BackColor = UiTheme.GlassSurface
             };
 
             int textLeft = 14;
@@ -189,11 +189,11 @@ namespace MiningVolume2023.UI
 
         private static Panel BuildSidebar(out FlowLayoutPanel nav)
         {
-            var sidebar = new Panel
+            var sidebar = new GlassPanel
             {
                 Dock = DockStyle.Left,
                 Width = 152,
-                BackColor = UiTheme.Sidebar
+                BackColor = UiTheme.GlassSurface
             };
 
             var sectionTitle = new Label
@@ -214,7 +214,7 @@ namespace MiningVolume2023.UI
                 Padding = new Padding(10, 9, 6, 6),
                 Font = new Font("Arial", 7.75F),
                 ForeColor = UiTheme.Muted,
-                BackColor = UiTheme.Sidebar
+                BackColor = UiTheme.GlassSurface
             };
 
             nav = new FlowLayoutPanel
@@ -223,7 +223,7 @@ namespace MiningVolume2023.UI
                 FlowDirection = FlowDirection.TopDown,
                 WrapContents = false,
                 Padding = new Padding(7, 6, 7, 6),
-                BackColor = UiTheme.Sidebar
+                BackColor = UiTheme.GlassSurface
             };
 
             sidebar.Controls.Add(nav);
@@ -245,7 +245,7 @@ namespace MiningVolume2023.UI
                 Padding = new Padding(8, 0, 0, 0),
                 Font = new Font("Arial", 9F),
                 ForeColor = UiTheme.Text,
-                BackColor = UiTheme.Sidebar,
+                BackColor = UiTheme.GlassSurface,
                 Cursor = Cursors.Hand
             };
             b.FlatAppearance.BorderSize = 0;
@@ -274,7 +274,7 @@ namespace MiningVolume2023.UI
             foreach (var kv in _buttons)
             {
                 bool active = kv.Key == page;
-                kv.Value.BackColor = active ? UiTheme.Accent : UiTheme.Sidebar;
+                kv.Value.BackColor = active ? UiTheme.Accent : UiTheme.GlassSurface;
                 kv.Value.ForeColor = active ? Color.White : UiTheme.Text;
                 kv.Value.Font = new Font("Arial", 9F, active ? FontStyle.Bold : FontStyle.Regular);
             }
