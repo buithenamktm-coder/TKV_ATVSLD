@@ -45,6 +45,9 @@ namespace MiningVolume.Core.Surface
     public sealed class PreparedSurfaceInput
     {
         public ConflictReport ConflictReport { get; set; }
+        // Groups retain every original elevation/provenance; CDT receives one
+        // planar XY site and generates separate zero-plan-area 3D faces.
+        public List<ConflictGroup> VerticalConflictGroups { get; } = new List<ConflictGroup>();
         public List<Vec3> Sites { get; } = new List<Vec3>();
         public List<Segment3> Breaklines { get; } = new List<Segment3>();
         public List<ValidationIssue> Issues { get; } = new List<ValidationIssue>();
@@ -91,14 +94,21 @@ namespace MiningVolume.Core.Surface
 
     public sealed class TinSurface
     {
-        public TinSurface(string name, IReadOnlyList<Triangle3> triangles, IReadOnlyList<ValidationIssue> issues)
+        public TinSurface(string name, IReadOnlyList<Triangle3> triangles, IReadOnlyList<ValidationIssue> issues,
+            IReadOnlyList<Triangle3> verticalFaces = null, IReadOnlyList<ConflictGroup> verticalConflicts = null)
         {
             Name = name;
             Triangles = triangles;
             Issues = issues;
+            VerticalFaces = verticalFaces ?? Array.Empty<Triangle3>();
+            VerticalConflicts = verticalConflicts ?? Array.Empty<ConflictGroup>();
         }
         public string Name { get; }
         public IReadOnlyList<Triangle3> Triangles { get; }
+        // Never pass vertical faces to a single-Z-at-XY elevation sampler.
+        public IReadOnlyList<Triangle3> VerticalFaces { get; }
+        public IReadOnlyList<ConflictGroup> VerticalConflicts { get; }
+        public bool RequiresSectionReview => VerticalConflicts.Count > 0;
         public IReadOnlyList<ValidationIssue> Issues { get; }
     }
 
@@ -107,6 +117,9 @@ namespace MiningVolume.Core.Surface
         public double XyTolerance { get; set; } = 1e-6;
         public double ZConflictTolerance { get; set; } = 1e-4;
         public double MinimumTriangleArea { get; set; } = 1e-10;
+        // Opt-in workflow only: keeps all original Z in a separate 3D curtain;
+        // ordinary 2.5D / strict unit callers remain fail-closed by default.
+        public bool PreserveDuplicateXYVerticalFaces { get; set; }
         public bool LegacyElevationPolicyIgnored { get; private set; }
         public DuplicateXYConflictPolicy DuplicateXYConflictPolicy
         {
