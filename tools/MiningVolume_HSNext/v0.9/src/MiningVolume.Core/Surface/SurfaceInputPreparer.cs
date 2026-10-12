@@ -34,8 +34,31 @@ namespace MiningVolume.Core.Surface
             result.ConflictReport = new ConflictScanner().Scan(model, options, progress, cancellationToken);
             if (result.ConflictReport.HasBlockingConflicts)
             {
-                result.Issues.AddRange(result.ConflictReport.ToException().Issues);
-                return result;
+                if (options.PreserveDuplicateXYVerticalFaces)
+                {
+                    var groups = result.ConflictReport.Groups
+                        .Where(g => g.DeltaZ > options.ZConflictTolerance &&
+                            g.Sources.Count(x => !x.Generated && x.VertexIndex >= 0) >= 2)
+                        .ToList();
+                    // An unrelated crossing of incompatible breaklines is not
+                    // resolved by constructing a face at duplicate survey XY.
+                    if (groups.Count != result.ConflictReport.Groups.Count)
+                    {
+                        result.Issues.AddRange(result.ConflictReport.ToException().Issues);
+                        return result;
+                    }
+                    result.VerticalConflictGroups.AddRange(groups);
+                    result.Issues.Add(new ValidationIssue(ValidationSeverity.Warning,
+                        "VERTICAL_XY_SOURCE_REVIEW",
+                        $"Có {groups.Count:n0} vị trí X,Y chứa nhiều cao độ. " +
+                        "Đã giữ đầy đủ dữ liệu điểm gốc và sẽ dựng các mặt đứng 3D; " +
+                        "đề nghị kiểm tra hệ thống điểm, đường đồng mức và hiệu chỉnh/xác nhận mặt cắt trước khi tính khối lượng."));
+                }
+                else
+                {
+                    result.Issues.AddRange(result.ConflictReport.ToException().Issues);
+                    return result;
+                }
             }
             if (options.LegacyElevationPolicyIgnored)
                 result.Issues.Add(new ValidationIssue(ValidationSeverity.Warning,"LEGACY_Z_POLICY_REQUIRES_REVIEW",
@@ -501,6 +524,7 @@ namespace MiningVolume.Core.Surface
                     }
             var unique = new List<Vec3>();
             var grid = new Dictionary<string, List<int>>();
+            int verticalPairs = 0;
 
             foreach (var p in result.Sites)
             {
@@ -544,13 +568,22 @@ namespace MiningVolume.Core.Surface
                     var old = unique[match];
                     if (Math.Abs(old.Z - p.Z) > options.ZConflictTolerance)
                     {
-
+                        if (!options.PreserveDuplicateXYVerticalFaces)
                             result.Issues.Add(new ValidationIssue(
                                 ValidationSeverity.Error,
                                 "DUPLICATE_XY_CONFLICT_Z",
                                 $"Hai điểm trùng XY nhưng khác Z: ({p.X:0.###}, {p.Y:0.###}) " +
                                 $"có Z={old.Z:0.###} và Z={p.Z:0.###}."));
-
+                        else
+                        {
+                            verticalPairs++;
+                            // One CDT node is mathematically unavoidable; select
+                            // the minimum Z consistently for the 2.5D support.
+                            // Every other source Z is retained by the separate
+                            // 3D vertical faces + source conflict metadata.
+                            // Never average elevations or mutate the CAD source.
+                            if (p.Z < old.Z) unique[match] = new Vec3(old.X, old.Y, p.Z);
+                        }
                     }
                 }
             }
@@ -562,6 +595,10 @@ namespace MiningVolume.Core.Surface
                         cancellationToken.ThrowIfCancellationRequested();
                         node.Point = FindCanonicalNode(node.Point, unique, grid, options.XyTolerance);
                     }
+            // One summary warning rather than millions of per-point records.
+            if (verticalPairs > 0 && result.VerticalConflictGroups.Count == 0)
+                result.Issues.Add(new ValidationIssue(ValidationSeverity.Warning,
+                    "VERTICAL_XY_REVIEW", "Có đỉnh trùng XY khác Z trong dữ liệu nội suy; kiểm tra mặt cắt sau khi dựng TIN."));
             result.Sites.Clear();
             result.Sites.AddRange(unique);
         }
