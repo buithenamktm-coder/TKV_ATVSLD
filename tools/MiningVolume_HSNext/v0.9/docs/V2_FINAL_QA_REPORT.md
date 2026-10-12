@@ -179,3 +179,33 @@ Cả hai workflow ở source SHA `983e3e27` đã đủ bằng chứng để đó
 | AutoCAD 2023 tương tác, T01–T22, data SQ, Excel Desktop, license RSA thật | Chưa có bằng chứng host/nguồn được quyết định | **NOT TESTED / BLOCKED** |
 
 **Trạng thái bàn giao:** QA CANDIDATE, chưa đạt hard release gates. Cần một đợt nghiệm thu trên Windows AutoCAD 2023 thật trước khi kết luận V2.0 chính thức. Không sửa nhánh `miningvolume-v1.0`.
+
+---
+
+## Phụ lục D — xác thực CAD grip khi xuất và nhận diện SAVEAS (12/10/2026)
+
+**Mốc mã nguồn PASS:** `32c0cfedbbd177eb0c97ccac91f71845dac27ff4`. Hai lượt [CI Push 38187451763](https://github.com/buithenamktm-coder/TKV_ATVSLD/actions/runs/38187451763), [CI PR 38187454588](https://github.com/buithenamktm-coder/TKV_ATVSLD/actions/runs/38187454588) cùng source SHA **SUCCESS**.
+
+### Phát hiện và sửa lỗi trực tiếp
+
+1. **Lưới ô vuông / dữ liệu biên:** `GridWorkflowService.EnsureBoundaryCurrent` đối chiếu tọa độ XY tất cả đỉnh CAD hiện tại với polygon lúc tính (dung sai 1e-7 m). Vẽ CAD/Excel phải đọc lại polygon thật và hủy quyền sử dụng báo cáo cũ nếu bị Grip, **kể cả handle không đổi**; kiểm thử lõi xác nhận invalidation sau dịch một đỉnh.
+2. **Mặt cắt / số liệu xuất:** `EditableSectionCadService.EnsureProfilesMatch` đọc metadata và hình học HT/TK mới nhất, so với bộ đã chốt; `ExportPage` kiểm trước và sau giai đoạn dựng báo cáo, trước CAD TABLE. Nếu người dùng sửa Grip nhưng chưa cập nhật F/V, không ghi Excel sai; bản vẽ/TIN/source revision/VolumeResult đổi cũng chặn.
+3. **So sánh hình CAD sau phép biến đổi tọa độ:** `EditedSectionProfileBuilder.SameGeometry` dùng dung sai tuyệt đối 1e-6 m để tránh coi sai số double của phép tịnh tiến/phóng đại thành sửa tay, nhưng vẫn phát hiện dịch Grip 0,001 m.
+4. **Save As / nhiều DWG:** AutoCAD có thể giữ cùng `Database.FingerprintGuid` khi Save As thành file mới. `EntryPoint` dùng thêm tham chiếu `Document` của phiên mở để phân biệt A/B dù GUID trùng, ẩn Palette cũ và nạp Project thích hợp. Trước đây chỉ so GUID.
+5. Cập nhật `tests/core/FinalAuditRegression.cs`, `tests/reference/test_v2_async_result_safety.py` và `tests/reference/test_cad_volume_export_static.py`; test cũ chuyển sang kiểm hàm guard tập trung thay vì kỳ vọng kiểm tra inline cũ. Checklist `V2_AUTOCAD_ACCEPTANCE.md` bổ sung đối chứng thực Save As cùng GUID, sửa polygon/mặt cắt sau tính và Excel.
+
+### Bằng chứng CI trên code SHA 32c0cfed
+
+| Kiểm tra | Kết quả |
+|---|---|
+| Python reference | **238/238 PASS** |
+| C# CoreRegression / native CDT / XLSX production | **76/76 PASS** |
+| Windows Go Installer | **4/4 PASS** |
+| .NET AutoCAD 2023 Plugin / license issuer self-test / Setup QA | **PASS** |
+| 2 luồng CI Windows (Push, PR) | **SUCCESS** |
+| Artifact Setup QA V2 | `IMSAT-MiningVolume-V2.0-QA-CANDIDATE-NOT-RELEASE`, artifact ID `11719703622` từ run `38187451763` |
+| SHA-256 của EXE Setup V2 QA | `dac67dda9e398ff42f379e3491fdd8f7e215323fa7316fe625e9ef8cb4766dac` |
+| Host AutoCAD 2023, Excel Desktop, cài/gỡ trên máy thật | **NOT TESTED** |
+| Nguồn SQ còn ΔZ >3 m, khóa công khai RSA chưa provision | **BLOCKED** |
+
+**Kết luận:** mã nguồn và Setup QA xây dựng thành công. Release V2.0 chính thức vẫn **BLOCKED** theo `V2_RELEASE_GATES.md`; không có bằng chứng Windows/AutoCAD tương tác, cũng không tự quyết định sửa Z khảo sát hoặc tự tạo khóa kích hoạt giả.
