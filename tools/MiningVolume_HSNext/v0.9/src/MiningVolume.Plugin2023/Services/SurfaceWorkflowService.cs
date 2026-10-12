@@ -39,6 +39,7 @@ namespace MiningVolume2023.Services
         public int VerticalFaceCount => Tin?.VerticalFaces?.Count ?? 0;
         public int DuplicateXYGroupCount => Tin?.VerticalConflicts?.Count ?? 0;
         public int SameXYZDuplicateVertices => Tin?.SameXYZDuplicateVertices ?? 0;
+        public int RelaxedBreaklineConstraints => Tin?.RelaxedBreaklineConstraints ?? 0;
         public int DuplicateXYSourceVertices => Tin?.VerticalConflicts?.Sum(g =>
         {
             int originalCount = g.Sources.Count(x => !x.Generated && x.VertexIndex >= 0);
@@ -55,6 +56,7 @@ namespace MiningVolume2023.Services
             (IsLargeDataset ? $" • TIN dữ liệu lớn {TileCount:n0} ô" : string.Empty) +
             (DuplicateXYGroupCount > 0 ? $" • {DuplicateXYGroupCount:n0} vị trí XY khác Z / {DuplicateXYSourceVertices:n0} đỉnh nguồn • {VerticalFaceCount:n0} mặt đứng" : "") +
             (SameXYZDuplicateVertices > 0 ? $" • {SameXYZDuplicateVertices:n0} đỉnh trùng cả XYZ" : "") +
+            (RelaxedBreaklineConstraints > 0 ? $" • {RelaxedBreaklineConstraints:n0} ràng buộc đồng mức xung đột đã nới trên lưới hỗ trợ (nguồn giữ nguyên)" : "") +
             $" • Z: {MinZ:0.###} → {MaxZ:0.###}" +
             $" • dựng {CoreMilliseconds / 1000.0:0.00}s" +
             (WarningCount > 0 ? $" • {WarningCount:n0} cảnh báo" : string.Empty);
@@ -488,7 +490,7 @@ namespace MiningVolume2023.Services
             var cadTin = cadPreview
                 ? new TinSurface(session.Name + " - CAD preview", previewTriangles,
                     Array.Empty<ValidationIssue>(), tin.VerticalFaces, tin.VerticalConflicts,
-                    tin.SameXYZDuplicateVertices)
+                    tin.SameXYZDuplicateVertices, tin.RelaxedBreaklineConstraints)
                 : tin;
 
             int written;
