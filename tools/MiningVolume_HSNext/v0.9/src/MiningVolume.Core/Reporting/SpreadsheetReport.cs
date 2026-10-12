@@ -391,6 +391,19 @@ namespace MiningVolume.Core.Reporting
                     bool blank = dataRow == null || dataRow.All(c => c == null ||
                         string.IsNullOrWhiteSpace(Convert.ToString(c.Value)));
                     int rowHeight = signatureStarted ? (signatureTitle ? 30 : blank ? 38 : 26) : 20;
+                    // Wrapped text needs explicit height; fixed 20 pt clipped metadata/contact.
+                    if (!signatureStarted && dataRow != null)
+                        for (int c = 0; c < dataRow.Count; c++)
+                        {
+                            var cell = dataRow[c];
+                            if (cell?.Value is string text && cell.Kind == ReportCellKind.Text)
+                            {
+                                double width = c < sheet.ColumnWidths.Count ? sheet.ColumnWidths[c] : 15.0;
+                                int capacity = Math.Max(1, (int)(Math.Max(6, Math.Min(45, width)) * 0.85));
+                                int lines = text.Split('\n').Sum(line => Math.Max(1, (line.Length + capacity - 1) / capacity));
+                                rowHeight = Math.Max(rowHeight, Math.Min(409, lines * 16 + 4));
+                            }
+                        }
                     WriteRowStart(x, row, rowHeight);
                     if (dataRow != null) for (int c = 0; c < dataRow.Count; c++) WriteCell(x, c + 1, row, dataRow[c] ?? ReportCell.Text(string.Empty), StyleFor(dataRow[c]));
                     x.WriteEndElement(); row++;

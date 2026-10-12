@@ -23,7 +23,6 @@ namespace MiningVolume2023.Services
             "Công ty Cổ phần Than Cao Sơn - TKV",
             "Công ty Cổ phần Than Đèo Nai - Cọc Sáu - TKV",
             "Công ty Cổ phần Than Hà Tu - Vinacomin",
-            "Công ty Cổ phần Than Tây Nam Đá Mài - Vinacomin",
             "Công ty Than Na Dương - VVMI",
             "Công ty Than Khánh Hòa - VVMI",
             "Công ty Than Núi Hồng - VVMI",
@@ -33,7 +32,7 @@ namespace MiningVolume2023.Services
         {
             "Chi nhánh Mỏ tuyển đồng Sin Quyền, Lào Cai - Vimico",
             "Công ty Cổ phần Đồng Tả Phời - Vinacomin",
-            "Chi nhánh TKV - Công ty Nhôm Lâm Đồng - TKV",
+            "Công ty TNHH MTV Nhôm Lâm Đồng - TKV",
             "Công ty Nhôm Đắk Nông - TKV"
         };
         public static IReadOnlyList<string> ForCategory(string group) =>

@@ -38,3 +38,11 @@ Automated regressions: **88 C# PASS / 0 FAIL**, **249 Python static/reference PA
 - Signing/private issuer key not supplied; release activation **BLOCKED**. No private key generated or packaged.
 - CI on final pushed SHA and QA Setup/security/hash evidence must be checked before handoff. No official-release claim.
 - Security workflow checks nonempty Setup, records Authenticode and attempts an enabled Defender custom scan. If no scan engine is available it records NOT TESTED, never PASS; any reported threat blocks distribution. Do not disable protection.
+
+## Additional direct reproduction and independent checks
+
+Instrumented repeat of the real HT mesh: **14 positive triangles** would be rejected by the old CAD cutoff; minimum retained XY area **1.2126530248707246e-15 m²**. Shared new renderer validation accepted all 1,681,755 support faces. Projected area sum **3,622,143.635797113 m²**. End-to-end instrumented repeat: 129.072329184 s, peak child RSS 1,729,040 KiB. This directly explains the reported count and failure; it is not an AutoCAD 3DFACE execution claim.
+
+P0 commit `c13f3218ededfb2a311b42c2e6e51037a5bf183b`: Windows CI run [38212838355](https://github.com/buithenamktm-coder/TKV_ATVSLD/actions/runs/38212838355) PASS: 88 C#, 249 Python, 5 Go installer tests, AutoCAD API build and QA Setup. Microsoft Defender custom scan PASS; Authenticode **NotSigned**. Its EXE SHA-256 is `ea490267cbd3e9305bc89eb45679361f3f80812defedb529437028060b5b9473`. This is the P0 milestone, not automatically the later final package hash.
+
+After P1 report/catalog changes: **89 C# / 249 Python PASS** locally; four production clip cases independently compared to GEOS, largest area/Z residual `7.105427357601002e-15`. Three production workbooks independently recalculated with Artifact Tool: sections 1,549.071198499986 m³ (sum of bands agrees), grid 1,000.0000000000002 m³, three mineral bodies 120 m³ / 144 tonnes. Formula error search found zero entries. Logo/title overlap and clipped metadata corrected and PNG previews reviewed. Excel Desktop remains NOT TESTED. Machine-readable non-private evidence: `docs/qa/20261012-final/`.

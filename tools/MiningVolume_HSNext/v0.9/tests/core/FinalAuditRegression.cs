@@ -31,6 +31,10 @@ internal static class FinalAuditRegression
         new SectionSystem(new Vec2(1,0),new Vec2(0,1),Boundary,p.Select(x=>x.Line).ToArray(),Array.Empty<string>()),p,Plane(5),Plane(0),
         new VolumeCalculationOptions{FromLevel=0,ToLevel=10,LevelStep=5});
     public static void Add(IDictionary<string,Action> tests) {
+        tests["rf11_catalog_retains_current_legal_names"] = () => {
+            Check(!MiningUnitCatalog.CoalUnits.Any(x=>x.Contains("Tây Nam Đá Mài")), "Merged company still listed independently");
+            Check(MiningUnitCatalog.MineralUnits.Contains("Công ty TNHH MTV Nhôm Lâm Đồng - TKV"), "Incorrect legal form");
+        };
         tests["rf03_full_grip_plus_one_area_and_volume"]=()=>{
             var a=Profile(1,5);var b=Profile(2,5);var old=Calculate(a,b);
             var ea=Edit(a,6,6);var eb=Edit(b,6,6);var now=Calculate(ea,eb);
@@ -189,6 +193,11 @@ internal static class FinalAuditRegression
     }
     static void VerifyWorkbook(string file){
         using(var zip=ZipFile.OpenRead(file)){
+            foreach(var drawing in zip.Entries.Where(x=>x.FullName.StartsWith("xl/drawings/drawingMV")&&x.FullName.EndsWith(".xml")))
+                using(var stream=drawing.Open()) {
+                    var xml=XDocument.Load(stream);
+                    Check(xml.Descendants().Where(x=>x.Name.LocalName=="colOff").All(x=>int.Parse(x.Value)>0),"Logo overlaps centered report title");
+                }
             Check(zip.GetEntry("xl/media/imsat_logo.png")!=null,"IMSAT logo missing: "+file);
             string Read(string name){using(var r=new StreamReader(zip.GetEntry(name).Open()))return r.ReadToEnd();}
             var sheets=zip.Entries.Where(x=>x.FullName.StartsWith("xl/worksheets/sheet")&&x.FullName.EndsWith(".xml")).Select(x=>Read(x.FullName)).ToArray();

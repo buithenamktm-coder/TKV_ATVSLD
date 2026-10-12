@@ -49,7 +49,12 @@ namespace MiningVolume2023.Services
                     int anchorCol = Math.Max(0, colCount - 1);
                     AddDrawingReferenceToWorksheet(zip, target.Index);
                     WriteWorksheetRelationships(zip, target.Index);
-                    WriteDrawing(zip, target.Index, anchorCol);
+                    // Keep the 32 px logo at the far right, outside the centered title text.
+                    double width = anchorCol < target.Sheet.ColumnWidths.Count
+                        ? target.Sheet.ColumnWidths[anchorCol] : 15.0;
+                    double pixels = Math.Max(6, Math.Min(45, width)) * 7 + 5;
+                    int offsetEmu = (int)Math.Max(0, pixels - 40) * 9525;
+                    WriteDrawing(zip, target.Index, anchorCol, offsetEmu);
                     WriteDrawingRelationships(zip, target.Index);
                 }
             }
@@ -116,7 +121,7 @@ namespace MiningVolume2023.Services
             SaveXml(zip, path, doc);
         }
 
-        private static void WriteDrawing(ZipArchive zip, int sheetIndex, int col)
+        private static void WriteDrawing(ZipArchive zip, int sheetIndex, int col, int offsetEmu)
         {
             string path = "xl/drawings/drawingMV" + sheetIndex + ".xml";
             var settings = new XmlWriterSettings { Encoding = new UTF8Encoding(false), Indent = false, OmitXmlDeclaration = false };
@@ -132,7 +137,7 @@ namespace MiningVolume2023.Services
                     x.WriteStartElement("xdr", "oneCellAnchor", DrawingNs);
                     x.WriteStartElement("xdr", "from", DrawingNs);
                     x.WriteElementString("xdr", "col", DrawingNs, col.ToString());
-                    x.WriteElementString("xdr", "colOff", DrawingNs, "0");
+                    x.WriteElementString("xdr", "colOff", DrawingNs, offsetEmu.ToString(System.Globalization.CultureInfo.InvariantCulture));
                     x.WriteElementString("xdr", "row", DrawingNs, "0");
                     x.WriteElementString("xdr", "rowOff", DrawingNs, "0");
                     x.WriteEndElement();

@@ -87,6 +87,8 @@ namespace MiningVolume2023.Services
                         ",A"+row+","+prefix+"$L$"+DataStart+":$L$"+last+")")
                 });
             }
+            totals.ColumnWidths[0]=36;
+            totals.ColumnWidths[1]=40;
             totals.HasSignatures=true;
             var state=ProjectState.Current;
             void Metadata(string label,string value)=>totals.Rows.Add(new[]{ReportCell.Text(label),ReportCell.Text(value)});

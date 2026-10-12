@@ -1,3 +1,14 @@
+# Trạng thái mới nhất — QA TIN/Excel 12/10/2026
+
+**QA CANDIDATE — NOT OFFICIAL RELEASE.** Báo cáo hiện hành: [V2_FINAL_TRACEABILITY_20261012.md](V2_FINAL_TRACEABILITY_20261012.md); nguyên nhân và bằng chứng P0: [P0_TIN_RENDER_AUDIT_20261012.md](P0_TIN_RENDER_AUDIT_20261012.md); [hướng dẫn cài/gỡ/kiểm DLL](V2_QA_INSTALL_VERIFY_20261012.md).
+
+Lỗi renderer từ chối tam giác dương nhỏ đã sửa ở `c13f321`; SQ HT đúng **1.681.755** và TK **1.672.875** support faces qua native/core/shared renderer validation. HT có **14** face dương dưới ngưỡng cũ, không bị loại. Windows CI c13 run38212838355 PASS (88 C#,249 Python,5 Go). Sau sửa Excel/danh mục: local **89 C# +249 Python PASS**, clip GEOS4/4 và3 workbook recalc độc lập PASS. CI/checksum final HEAD được đóng trong `FINAL_BUILD_EVIDENCE.json` của gói tải, không tái sử dụng hash lịch sử.
+
+**G1:** bằng chứng build/test/Setup ở mốc c13 có thật; final HEAD phải CI lại. **G2/G3:** lõi và fixture SQ PASS, AutoCAD/DWG/HSMo NOT TESTED. **G4:** toàn luồng CAD/Excel Desktop/UI NOT TESTED. **G5:** Windows GUI install/uninstall NOT TESTED, khóa RSA sản xuất BLOCKED, Setup unsigned. **G6:** hồ sơ QA có, chưa biên bản nghiệm thu ký xác nhận. Không được công bố hoàn thành toàn bộ V2.0.
+
+---
+## Hồ sơ lịch sử dưới đây — số test, SHA, hash và trạng thái chỉ đúng tại mốc ghi rõ, không phải kết quả final HEAD
+
 # Checklist nghiệm thu tương tác AutoCAD 2023 — CHƯA CHẠY
 
 Dùng Windows x64 + AutoCAD 2023 có bản quyền, phiên tương tác. Sao chép DWG/DXF mỏ sang thư mục thử riêng, giữ nguyên bản gốc. Ghi CPU/RAM, DPI, bản Windows/CAD, commit và SHA256 Setup từ artifact.

@@ -25,3 +25,7 @@ Windows Go tests added for bundle validation, rollback of registration/files wit
 ## Still open — no release claim
 
 RF-06 legacy edited sections need a safe migration and stronger source-context identity; drawing identity alone does not prove source revision. RF-10 actual docking/DPI remains NOT TESTED. RF-11 catalogue authoritative review pending. RF-09 actual issuer PUBLIC key not provisioned; activation acceptance BLOCKED. Excel Desktop recalc/print NOT TESTED. Windows interactive install/upgrade/uninstall and AutoCAD T01–T22 host flows NOT TESTED. CI must be rerun on the final pushed SHA. This document records implementation evidence, not closure of all RF findings or release gates.
+
+## Tiếp tục P0 → P1 → P2 → P3, 12/10/2026
+
+P0 commit c13f321: robust orientation/shared render gate, bảo toàn face dương, guard loại zero-area, progress/Esc, MVBUILDINFO/hash manifest, installer validation và Defender CI. Windows run38212838355 PASS; fixture SQ HT/TK kiểm đầy đủ. P1: đối chứng MC/grid/quặng/Excel thật; sửa logo chồng tiêu đề, chiều cao dòng wrap, metadata; cập nhật danh mục TKV có nguồn. Local89 C#/249 Python PASS; GEOS4/4. P2/P3: final CI và gói Setup/checksum/scan được kiểm theo SOURCE_SHA trong hồ sơ artifact. Ma trận14RF/22T phân tách automation/host; AutoCAD/Excel Desktop/Windows GUI NOT TESTED, production license BLOCKED. Không phát hành chính thức.
