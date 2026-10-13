@@ -87,4 +87,51 @@ if($gradientDelta -lt 9) {
 $glassImage.Save((Join-Path $out 'UI_GLASS_CHROME.png'),[Drawing.Imaging.ImageFormat]::Png)
 $glassImage.Dispose();$glassForm.Close();$glassForm.Dispose()
 @{style='Liquid Glass-inspired, WinForms opaque chrome';glass_gradient_delta=$gradientDelta;source_sha=$env:SOURCE_SHA;autocad_runtime='NOT TESTED'} | ConvertTo-Json -Depth 3 | Set-Content -Encoding UTF8 (Join-Path $out 'UI_GLASS_CHROME.json')
+# Real WinForms event test: changing only the section-station spacing must
+# invalidate the old accepted geometry; plot-only Z ticks remain independent.
+$sectionType=$assembly.GetType('MiningVolume2023.UI.SectionPage',$true)
+$stateType=$assembly.GetType('MiningVolume2023.Services.ProjectState',$true)
+$state=$stateType.GetProperty('Current',[Reflection.BindingFlags]'Public,Static').GetValue($null,$null)
+$section=[Windows.Forms.Control][Activator]::CreateInstance($sectionType)
+$sectionForm=New-Object Windows.Forms.Form
+$sectionForm.ClientSize=New-Object Drawing.Size(590,620)
+$section.Dock=[Windows.Forms.DockStyle]::Fill
+$sectionForm.Controls.Add($section)
+$sectionForm.StartPosition=[Windows.Forms.FormStartPosition]::Manual
+$sectionForm.Location=New-Object Drawing.Point(-1800,-1800)
+$sectionForm.ShowInTaskbar=$false
+$sectionForm.Show()
+[Windows.Forms.Application]::DoEvents()
+$flags=[Reflection.BindingFlags]'NonPublic,Instance'
+$spacing=[Windows.Forms.NumericUpDown]$sectionType.GetField('_spacing',$flags).GetValue($section)
+$zMarks=[Windows.Forms.NumericUpDown]$sectionType.GetField('_axisStep',$flags).GetValue($section)
+$mode=[Windows.Forms.ComboBox]$sectionType.GetField('_parameterMode',$flags).GetValue($section)
+$status=[Windows.Forms.Label]$sectionType.GetField('_status',$flags).GetValue($section)
+$spacing.Value=[decimal]10
+if([Math]::Abs([double]$state.SectionSpacing - 10.0) -gt 1e-9) {
+  throw "WinForms spacing change did not update the active Project state."
+}
+if($status.Text -notlike '*XEM TRƯỚC TUYẾN*') {
+  throw "Changing station spacing did not warn that existing sections must be regenerated."
+}
+$zMarks.Value=[decimal]15
+if([Math]::Abs([double]$state.SectionAxisElevationInterval - 15.0) -gt 1e-9 -or
+   [Math]::Abs([double]$state.SectionSpacing - 10.0) -gt 1e-9) {
+  throw "CAD Z-axis tick spacing modified the calculation station spacing."
+}
+$mode.SelectedItem='TT34/2018/TT-BCT'
+if([Math]::Abs([double]$state.SectionSpacing - 20.0) -gt 1e-9 -or
+   [Math]::Abs([double]$state.SectionAxisElevationInterval - 20.0) -gt 1e-9) {
+  throw "TT34 1:1000 preset failed to restore 20m station / 20m elevation ticks."
+}
+if([Math]::Abs([double]$state.HorizontalScale - 1000.0) -gt 1e-9 -or
+   [Math]::Abs([double]$state.VerticalScale - 1000.0) -gt 1e-9) {
+  throw "Section page allowed an old unequal CAD scale."
+}
+$sectionForm.Close();$sectionForm.Dispose()
+@{scope='Real WinForms SectionPage event; no AutoCAD host';change_station='20 to 10m invalidates old geometry';
+  z_axis_ticks='15m without station change';tt34_preset='20m';section_axes='1000/1000';status='PASS';
+  source_sha=$env:SOURCE_SHA;autocad_runtime='NOT TESTED'} |
+  ConvertTo-Json -Depth 4 | Set-Content -Encoding UTF8 (Join-Path $out 'UI_SECTION_PARAMETERS.json')
+Write-Host 'PASS: section parameter change, Z axis, TT34 preset and fixed 1:1000 scales (WinForms)'
 Write-Host 'PASS: actual Windows WinForms buttons, text contrast >=4.5; AutoCAD runtime NOT TESTED'
