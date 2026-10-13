@@ -251,9 +251,33 @@ namespace MiningVolume.Core.Surface
                 long hiI=Math.Min(endI-1,(long)Math.Floor(Math.Max(p.X,q.X)+1e-8));
                 long loJ=Math.Max(startJ,(long)Math.Floor(Math.Min(p.Y,q.Y)-1e-8));
                 long hiJ=Math.Min(endJ-1,(long)Math.Floor(Math.Max(p.Y,q.Y)+1e-8));
-                for(long i=loI;i<=hiI;i++)for(long j=loJ;j<=hiJ;j++)
-                    if(SegmentHitsRect(p,q,i-1e-8,j-1e-8,i+1+1e-8,j+1+1e-8))
-                        affected.Add((checked((int)i),checked((int)j)));
+                // Rasterize by grid COLUMN, then only the rows crossed in
+                // that column. Previous rectangle scan was O(width*height)
+                // per diagonal curtain and froze 5,000+ cell grid work.
+                // Intersect exact padded cell rectangles before marking.
+                for(long i=loI;i<=hiI;i++)
+                {
+                    double dt=q.X-p.X, t0=0, t1=1;
+                    if(Math.Abs(dt)<=1e-15)
+                    {
+                        if(p.X<i-1e-8 || p.X>i+1+1e-8) continue;
+                    }
+                    else
+                    {
+                        double tx0=(i-1e-8-p.X)/dt;
+                        double tx1=(i+1+1e-8-p.X)/dt;
+                        if(tx0>tx1){double swap=tx0;tx0=tx1;tx1=swap;}
+                        t0=Math.Max(0,tx0);t1=Math.Min(1,tx1);
+                        if(t0>t1)continue;
+                    }
+                    double ya=p.Y+(q.Y-p.Y)*t0;
+                    double yb=p.Y+(q.Y-p.Y)*t1;
+                    long firstJ=Math.Max(loJ,(long)Math.Floor(Math.Min(ya,yb)-1e-8));
+                    long lastJ=Math.Min(hiJ,(long)Math.Floor(Math.Max(ya,yb)+1e-8));
+                    for(long j=firstJ;j<=lastJ;j++)
+                        if(SegmentHitsRect(p,q,i-1e-8,j-1e-8,i+1+1e-8,j+1+1e-8))
+                            affected.Add((checked((int)i),checked((int)j)));
+                }
             }
             return affected;
         }
