@@ -969,6 +969,24 @@ namespace MiningVolume.Core.Surface
         {
             private readonly Dictionary<long, List<int>> _cells = new Dictionary<long, List<int>>();
             private readonly List<List<long>> _segmentCells = new List<List<long>>();
+            // Cell sharing is only a coarse test: dense contours in one cell may
+            // be far apart. Keep padded endpoint bounds to reject only disjoint
+            // boxes before the expensive intersection/overlap predicates.
+            private readonly SegmentBounds[] _bounds;
+            private readonly struct SegmentBounds
+            {
+                public readonly double MinX, MinY, MaxX, MaxY;
+                public SegmentBounds(Segment3 s, double pad)
+                {
+                    MinX = Math.Min(s.A.X, s.B.X) - pad;
+                    MinY = Math.Min(s.A.Y, s.B.Y) - pad;
+                    MaxX = Math.Max(s.A.X, s.B.X) + pad;
+                    MaxY = Math.Max(s.A.Y, s.B.Y) + pad;
+                }
+                public bool Intersects(SegmentBounds b) =>
+                    MinX <= b.MaxX && MaxX >= b.MinX &&
+                    MinY <= b.MaxY && MaxY >= b.MinY;
+            }
             private readonly int[] _visited;
             private int _visitToken;
             private readonly CancellationToken _cancellationToken;
@@ -986,15 +1004,20 @@ namespace MiningVolume.Core.Surface
                 double span = Math.Max(maxX - _minX, maxY - _minY);
                 _cell = Math.Max(tol * 100.0,
                     span / Math.Max(8.0, Math.Sqrt(Math.Max(1, segments.Count))));
+                _bounds = new SegmentBounds[segments.Count];
                 _visited = new int[Math.Max(1, segments.Count)];
                 for (int i = 0; i < segments.Count; i++)
                 {
-                    _cancellationToken.ThrowIfCancellationRequested(); cancellationToken.ThrowIfCancellationRequested(); IndexSegment(i, segments[i], tol); }
+                    cancellationToken.ThrowIfCancellationRequested();
+                    _bounds[i] = new SegmentBounds(segments[i], tol);
+                    IndexSegment(i, segments[i], tol);
+                }
             }
 
             public IEnumerable<int> Query(int segmentIndex)
             {
                 int token = NextVisitToken();
+                var bounds = _bounds[segmentIndex];
                 foreach (var key in _segmentCells[segmentIndex])
                 {
                     _cancellationToken.ThrowIfCancellationRequested();
@@ -1005,7 +1028,7 @@ namespace MiningVolume.Core.Surface
                         _cancellationToken.ThrowIfCancellationRequested();
                         if (_visited[id] == token) continue;
                         _visited[id] = token;
-                        yield return id;
+                        if (bounds.Intersects(_bounds[id])) yield return id;
                     }
                 }
             }

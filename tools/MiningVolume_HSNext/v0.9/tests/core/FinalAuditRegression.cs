@@ -31,6 +31,34 @@ internal static class FinalAuditRegression
         new SectionSystem(new Vec2(1,0),new Vec2(0,1),Boundary,p.Select(x=>x.Line).ToArray(),Array.Empty<string>()),p,Plane(5),Plane(0),
         new VolumeCalculationOptions{FromLevel=0,ToLevel=10,LevelStep=5});
     public static void Add(IDictionary<string,Action> tests) {
+        tests["tin_segment_index_preserves_padded_candidates_at_mine_coordinates"] = () => {
+            const double tol=1e-6;
+            var random=new Random(613);
+            var lines=new List<Segment3>();
+            for(int i=0;i<400;i++) {
+                double x=500000+random.NextDouble()*20,y=2300000+random.NextDouble()*20;
+                lines.Add(new Segment3(new Vec3(x,y,0),new Vec3(x+random.NextDouble()*4,y+random.NextDouble()*4,0),i.ToString()));
+            }
+            // Crossings, overlaps, near-tolerance parallels, zero-length and long diagonals.
+            foreach(double offset in new[]{0d,tol*.5,tol*1.5,tol*3})
+                lines.Add(new Segment3(new Vec3(500000,2300000+offset,0),new Vec3(500020,2300000+offset,1),"edge"));
+            lines.Add(new Segment3(new Vec3(500010,2300000,0),new Vec3(500010,2300020,1),"cross"));
+            lines.Add(new Segment3(new Vec3(500010,2300010,0),new Vec3(500010,2300010,1),"point"));
+            var index=new SurfaceInputPreparer.SegmentGridIndex(lines,tol,default(System.Threading.CancellationToken));
+            for(int i=0;i<lines.Count;i++) {
+                var hits=index.Query(i).ToArray();
+                Check(hits.Length==hits.Distinct().Count(),"Repeated candidate");
+                var actual=new HashSet<int>(hits);var a=lines[i];
+                for(int j=0;j<lines.Count;j++) {
+                    var b=lines[j];
+                    bool expected=Math.Min(a.A.X,a.B.X)-tol<=Math.Max(b.A.X,b.B.X)+tol &&
+                        Math.Max(a.A.X,a.B.X)+tol>=Math.Min(b.A.X,b.B.X)-tol &&
+                        Math.Min(a.A.Y,a.B.Y)-tol<=Math.Max(b.A.Y,b.B.Y)+tol &&
+                        Math.Max(a.A.Y,a.B.Y)+tol>=Math.Min(b.A.Y,b.B.Y)-tol;
+                    Check(actual.Contains(j)==expected,"Padded candidate lost or disjoint candidate retained");
+                }
+            }
+        };
         tests["multicad_grid_stress_10000_50000_100000_cells_analytic_volume"] = () => {
             foreach(int count in new[]{10000,50000,100000}) {
                 const int columns=100;
