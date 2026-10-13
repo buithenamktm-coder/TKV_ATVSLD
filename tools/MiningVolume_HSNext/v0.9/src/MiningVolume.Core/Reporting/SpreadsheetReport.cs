@@ -65,6 +65,9 @@ namespace MiningVolume.Core.Reporting
     {
         public string Title { get; set; } = "MiningVolume 2023";
         public string Creator { get; set; } = "MiningVolume 2023";
+        // A report is immutable for asynchronous export: logo policy is
+        // captured when the report is built, not read from live ProjectState.
+        public bool IncludeImsatLogo { get; set; } = true;
         public DateTime CreatedAt { get; set; } = DateTime.Now;
         public List<ReportSheet> Sheets { get; } = new List<ReportSheet>();
     }
