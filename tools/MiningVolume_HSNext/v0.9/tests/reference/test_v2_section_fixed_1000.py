@@ -73,3 +73,30 @@ def test_fixed_1000_scale_and_user_parameters_are_in_report_metadata():
         assert '"1:1.000 / 1:1.000"' in content
         assert '"Bước chia trục Z, m"' in content
         assert "SectionAxisElevationInterval" in content
+
+
+def test_changing_station_spacing_invalidates_old_section_geometry_and_volume():
+    ui = read("src/MiningVolume.Plugin2023/UI/SectionPage.cs")
+    part = ui.split("private void GeneralParameterChanged(", 1)[1].split(
+        "private void SaveParameters(", 1
+    )[0]
+    assert "Math.Abs(st.SectionSpacing - newSpacing) > 1e-9" in part
+    assert "if (geometryChanged)" in part
+    for statement in [
+        "st.SectionSystem = null;",
+        "st.SectionProfiles.Clear();",
+        "st.VolumeResult = null;",
+        'Bấm XEM TRƯỚC TUYẾN',
+        "if (geometryChanged) st.NotifyChanged();",
+    ]:
+        assert statement in part
+    assert part.index("st.SectionSystem = null;") < part.index("st.SectionSpacing = newSpacing;")
+    # Display-only parameters (Z ticks / CAD layout gap) must not
+    # reset the official volume or the sampled section system.
+    assert "st.SectionAxisElevationInterval = (double)_axisStep.Value;" in part
+    assert "st.SectionLayoutGap = (double)_layoutGap.Value;" in part
+    assert "if (geometryChanged)" in part
+    other = ui.split("private void VolumeParameterChanged(", 1)[1].split(
+        "private void ParameterModeChanged(", 1
+    )[0]
+    assert "st.VolumeResult = null;" in other
