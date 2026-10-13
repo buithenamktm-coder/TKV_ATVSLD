@@ -155,9 +155,9 @@ namespace MiningVolume2023.Services
                 {
                     ReportCell.Text(c.v.CellCode),
                     ReportCell.Formula3(pre+"E"+n),
-                    ReportCell.Formula3(pre+"H"+n),
-                    ReportCell.Formula3(pre+"I"+n),
-                    ReportCell.Formula3("C"+n+"-D"+n)
+                    c.v.IsVerticalConflict ? ReportCell.Text("") : ReportCell.Formula3(pre+"H"+n),
+                    c.v.IsVerticalConflict ? ReportCell.Text("") : ReportCell.Formula3(pre+"I"+n),
+                    c.v.IsVerticalConflict ? ReportCell.Text("") : ReportCell.Formula3("C"+n+"-D"+n)
                 });
             }
             return s;
@@ -220,9 +220,10 @@ namespace MiningVolume2023.Services
                 {
                     ReportCell.Text(c.CellCode),ReportCell.Text("TIN overlay exact"),
                     ReportCell.Formula3(prefix+"F"+row),
-                    ReportCell.Formula3(prefix+"H"+row),
-                    ReportCell.Formula3(prefix+"I"+row),
-                    ReportCell.Text(c.Volume.IsComplete?"Đã phủ":"Chưa đủ hai TIN")
+                    c.IsVerticalConflict ? ReportCell.Text("") : ReportCell.Formula3(prefix+"H"+row),
+                    c.IsVerticalConflict ? ReportCell.Text("") : ReportCell.Formula3(prefix+"I"+row),
+                    ReportCell.Text(c.IsVerticalConflict ? "NHIỀU Z - CHƯA XÁC NHẬN" :
+                        c.Volume.IsComplete ? "Đã phủ" : "Chưa đủ hai TIN")
                 });
             }
             return s;
