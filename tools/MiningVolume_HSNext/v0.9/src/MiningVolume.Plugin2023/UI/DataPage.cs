@@ -380,7 +380,11 @@ namespace MiningVolume2023.UI
                 RefreshLayers();
                 RefreshTinRegionStatus();
                 RefreshBuildButtons();
-                _status.Text = $"Vỉa 4 đã nạp • Hiện trạng: {loaded[0].Summary} • Thiết kế: {loaded[1].Summary}. Phạm vi: LO_TINHKL.";
+                _status.Text = loaded[0].ReusedExistingTin && loaded[1].ReusedExistingTin
+                    ? "Vỉa 4 không thay đổi: GIỮ NGUYÊN TIN hiện trạng, thiết kế và kết quả " +
+                      "khối lượng đã duyệt. Có thể chuyển ngay sang LƯỚI Ô VUÔNG để tính."
+                    : $"Vỉa 4 đã nạp • Hiện trạng: {loaded[0].Summary} • Thiết kế: {loaded[1].Summary}. " +
+                      "Chỉ các TIN có dữ liệu thay đổi mới cần dựng lại.";
             }
             catch (Exception ex) { _status.Text = "Không nạp được mẫu Vỉa 4: " + ex.Message; }
             finally { _via4Preset.Enabled = true; }
