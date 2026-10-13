@@ -1,0 +1,90 @@
+name: IMSAT ROAD AutoCAD 2023 Preview
+on:
+  push:
+    branches: [imsat-road-v1.0]
+    paths:
+      - "tools/IMSAT_ROAD/**"
+      - ".github/workflows/imsat-road-autocad2023-preview.yml"
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23.x"
+      - name: Build and test Road Core (.NET Framework 4.8)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          dotnet restore tools/IMSAT_ROAD/tests/IMSAT.Road.Smoke/IMSAT.Road.Smoke.csproj
+          if ($LASTEXITCODE -ne 0) { throw 'Core restore failed' }
+          dotnet run --project tools/IMSAT_ROAD/tests/IMSAT.Road.Smoke/IMSAT.Road.Smoke.csproj -c Release --no-restore
+          if ($LASTEXITCODE -ne 0) { throw 'Core smoke failed' }
+      - name: Restore and compile AutoCAD 2023 add-in
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $p = 'tools/IMSAT_ROAD/src/IMSAT.Road.Plugin2023/IMSAT.Road.Plugin2023.csproj'
+          dotnet restore $p -p:UseAutoCADNuGet=true
+          if ($LASTEXITCODE -ne 0) { throw 'AutoCAD NuGet restore failed' }
+          dotnet build $p -c Release --no-restore -p:UseAutoCADNuGet=true
+          if ($LASTEXITCODE -ne 0) { throw 'AutoCAD add-in compile failed' }
+      - name: Assemble and validate AutoCAD autoloader bundle
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $root='tools/IMSAT_ROAD'
+          $src="$root/src/IMSAT.Road.Plugin2023/bin/Release/net48"
+          $bundle="$root/bundle/IMSATROAD2023.bundle"
+          $target="$bundle/Contents/Windows"
+          New-Item -Type Directory $target -Force | Out-Null
+          foreach($dll in @('IMSAT.Road.Plugin2023.dll','IMSAT.Road.Core.dll','IMSAT.Road.TerrainBridge.dll','MiningVolume.Core.dll')) {
+            $from=Join-Path $src $dll
+            if(!(Test-Path $from)){throw "Missing built DLL: $from"}
+            Copy-Item $from $target -Force
+            if((Get-Item (Join-Path $target $dll)).Length -lt 1024){throw "DLL too small: $dll"}
+          }
+          $assetSrc='tools/MiningVolume_HSNext/v0.9/src/MiningVolume.Plugin2023/Assets/imsat_logo_64.png'
+          New-Item -ItemType Directory "$target/Assets" -Force | Out-Null
+          Copy-Item $assetSrc "$target/Assets/imsat_logo_64.png" -Force
+          $banned=@('AcMgd.dll','AcDbMgd.dll','AcCoreMgd.dll','AcWindows.dll','AdWindows.dll')
+          foreach($name in $banned) {if(Test-Path (Join-Path $target $name)){throw "Bundled Autodesk DLL: $name"}}
+          $config=Get-Content "$bundle/PackageContents.xml" -Raw
+          if($config -notmatch 'SeriesMin="R24.2"' -or $config -notmatch 'SeriesMax="R24.2"') {
+            throw 'Bundle must target only AutoCAD 2023'
+          }
+          Write-Host '[PASS] Road AutoCAD 2023 bundle static validation.'
+      - name: Build precompiled Windows Setup.exe
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $root='tools/IMSAT_ROAD'
+          $output="$root/release"
+          New-Item -ItemType Directory $output -Force | Out-Null
+          $payload="$root/installer/payload.zip"
+          if(Test-Path $payload){Remove-Item $payload -Force}
+          Push-Location $root
+          Compress-Archive -Path 'bundle' -DestinationPath 'installer/payload.zip' -CompressionLevel Optimal
+          Pop-Location
+          Push-Location "$root/installer"
+          go build -trimpath -ldflags="-s -w -H=windowsgui" -o "../release/IMSAT_ROAD_Setup_AutoCAD2023_Preview.exe" main.go
+          if($LASTEXITCODE -ne 0){throw 'Windows setup build failed'}
+          Pop-Location
+          if((Get-Item "$output/IMSAT_ROAD_Setup_AutoCAD2023_Preview.exe").Length -lt 10240){
+            throw 'Windows Setup missing or abnormally small'
+          }
+          Copy-Item "$root/docs/README_TEST.md" "$output/README_TEST.md" -Force
+          Get-FileHash "$output/IMSAT_ROAD_Setup_AutoCAD2023_Preview.exe" -Algorithm SHA256 |
+            Format-List | Out-File -Encoding UTF8 "$output/SHA256.txt"
+          Write-Host '[PASS] Setup binary prebuilt. Runtime AutoCAD not verified by CI.'
+      - name: Upload installable preview artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: IMSAT_ROAD_AutoCAD2023_PREVIEW
+          path: tools/IMSAT_ROAD/release/*
+          if-no-files-found: error
