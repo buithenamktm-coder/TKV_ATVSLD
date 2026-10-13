@@ -142,13 +142,14 @@ namespace MiningVolume2023.UI
             var primary = new TableLayoutPanel
             {
                 Dock = DockStyle.Fill,
-                ColumnCount = 2,
+                ColumnCount = 3,
                 RowCount = 1,
-                Padding = new Padding(8, 4, 8, 4),
+                Padding = new Padding(9, 5, 9, 5),
                 Margin = Padding.Empty
             };
-            primary.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
-            primary.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+            primary.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.333F));
+            primary.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.333F));
+            primary.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.334F));
             var preview = Button("Xem trước tuyến", Preview);
             preview.Dock = DockStyle.Fill;
             preview.AutoSize = false;
@@ -158,8 +159,13 @@ namespace MiningVolume2023.UI
             draw.Dock = DockStyle.Fill;
             draw.AutoSize = false;
             draw.Font = new Font("Arial", 9F, FontStyle.Bold);
+            var quick = Button("Vẽ mặt cắt nhanh", DrawQuickSections);
+            quick.Name = "btnQuickSections";
+            quick.Dock = DockStyle.Fill;
+            quick.AutoSize = false;
             primary.Controls.Add(preview, 0, 0);
             primary.Controls.Add(draw, 1, 0);
+            primary.Controls.Add(quick, 2, 0);
             root.Controls.Add(primary, 0, 2);
 
             var tools = new FlowLayoutPanel
@@ -514,6 +520,90 @@ namespace MiningVolume2023.UI
             }
         }
 
+
+        /// <summary>
+        /// Independent plan-picked quick sections. The existing parallel
+        /// section system, approved profile corrections and volume results
+        /// are NEVER modified by this workflow.
+        /// </summary>
+        private async void DrawQuickSections(object sender, EventArgs e)
+        {
+            if (!LicenseUiGuard.Check()) return;
+            var button = sender as Button;
+            var st = ProjectState.Current;
+            var doc = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument;
+            try
+            {
+                if (doc == null)
+                    throw new InvalidOperationException("Không có bản vẽ AutoCAD đang hoạt động.");
+                SurfaceWorkflowService.EnsureBothTinsReady(synchronizeCadLayers: false);
+                var selected = SelectionService.PickQuickSectionRoutes();
+                if (selected == null || selected.Count == 0) return;
+                var insertion = SelectionService.PickInsertionPoint(
+                    "Chọn điểm chèn các mặt cắt nhanh (không ảnh hưởng mặt cắt tính khối lượng): ");
+                if (!insertion.HasValue) return;
+
+                var ht = st.Existing.Tin;
+                var tk = st.Design.Tin;
+                long hRevision = st.Existing.Source.Revision;
+                long tRevision = st.Design.Source.Revision;
+                long regionRevision = st.TinRegionRevision;
+                double hScale = st.HorizontalScale, vScale = st.VerticalScale;
+                double axisStep = st.SectionAxisElevationInterval;
+                double layoutGap = st.SectionLayoutGap;
+                if (button != null) button.Enabled = false;
+                UseWaitCursor = true;
+                _status.Text = "Đang tra TIN theo " + selected.Count +
+                    " tuyến mặt cắt nhanh độc lập...";
+                var watch = Stopwatch.StartNew();
+                var profiles = await Task.Run(() =>
+                {
+                    var sampler = new TinSectionSampler();
+                    var builder = new QuickSectionProfileBuilder();
+                    return selected.Select((route, i) =>
+                        builder.Build(i + 1, "MCN-" + (i+1).ToString("00") +
+                            " (" + route.SourceHandle + ")", route.Vertices,
+                            ht, tk, sampler)).ToArray();
+                });
+                if (!ReferenceEquals(doc,
+                        Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument) ||
+                    !ReferenceEquals(ht, st.Existing.Tin) ||
+                    !ReferenceEquals(tk, st.Design.Tin) ||
+                    !st.Existing.IsTinCurrent || !st.Design.IsTinCurrent ||
+                    st.Existing.Source.Revision != hRevision ||
+                    st.Design.Source.Revision != tRevision ||
+                    st.TinRegionRevision != regionRevision ||
+                    st.HorizontalScale != hScale || st.VerticalScale != vScale ||
+                    st.SectionAxisElevationInterval != axisStep)
+                    throw new InvalidOperationException(
+                        "Bản vẽ hoặc TIN đã thay đổi khi lấy mặt cắt nhanh. " +
+                        "Chưa ghi kết quả CAD; hãy chọn lại tuyến.");
+                var valid = profiles.Where(p => p.HasData).ToArray();
+                if (valid.Length == 0)
+                    throw new InvalidOperationException(
+                        "Các tuyến đã chọn không có đoạn giao đủ dữ liệu của hai TIN.");
+                using (doc.LockDocument())
+                    SectionCadRenderer.DrawQuickProfiles(doc.Database, valid,
+                        insertion.Value, hScale, vScale, axisStep, layoutGap);
+                watch.Stop();
+                _status.Text = "Đã vẽ " + valid.Length + "/" + selected.Count +
+                    " mặt cắt nhanh từ TIN trong " +
+                    watch.Elapsed.TotalSeconds.ToString("0.0") +
+                    " giây (layer MV_MC_NHANH_*). Hệ mặt cắt tính khối lượng " +
+                    "và kết quả đã duyệt không đổi.";
+            }
+            catch (Exception ex)
+            {
+                _status.Text = "Chưa vẽ được mặt cắt nhanh: " + ex.Message;
+                MessageBox.Show(ex.Message, "Vẽ mặt cắt nhanh",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+            finally
+            {
+                UseWaitCursor = false;
+                if (button != null && !button.IsDisposed) button.Enabled = true;
+            }
+        }
 
         private async void UpdateEditedProfiles(object sender, EventArgs e)
         {
