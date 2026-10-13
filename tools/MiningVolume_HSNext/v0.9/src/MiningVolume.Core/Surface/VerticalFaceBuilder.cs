@@ -74,6 +74,26 @@ namespace MiningVolume.Core.Surface
             return output;
         }
 
+        // Native AutoCAD Face accepts all triangle vertex permutations.
+        // Polygon clipping deliberately produces (AB) and (BC) upright edges.
+        public static bool IsValidCadFace(Triangle3 face)
+        {
+            bool Finite(Vec3 p) =>
+                !double.IsNaN(p.X) && !double.IsInfinity(p.X) &&
+                !double.IsNaN(p.Y) && !double.IsInfinity(p.Y) &&
+                !double.IsNaN(p.Z) && !double.IsInfinity(p.Z);
+            if (!Finite(face.A) || !Finite(face.B) || !Finite(face.C))
+                return false;
+            bool VerticalPair(Vec3 x, Vec3 y, Vec3 other) =>
+                x.XY.DistanceTo(y.XY) <= 1e-6 &&
+                Math.Abs(x.Z - y.Z) > 1e-8 &&
+                x.XY.DistanceTo(other.XY) > 1e-8;
+            return HasThreeDimensionalArea(face.A, face.B, face.C) &&
+                   (VerticalPair(face.A, face.B, face.C) ||
+                    VerticalPair(face.B, face.C, face.A) ||
+                    VerticalPair(face.C, face.A, face.B));
+        }
+
         private static bool HasThreeDimensionalArea(Vec3 a, Vec3 b, Vec3 c)
         {
             double ux = b.X - a.X, uy = b.Y - a.Y, uz = b.Z - a.Z;
