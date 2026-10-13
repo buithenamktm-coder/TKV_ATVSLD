@@ -94,6 +94,9 @@ namespace MiningVolume.Core.Grid
             result.CalculationArea = Math.Max(0, result.CalculationArea);
             if (result.CalculationArea <= Eps) return result;
 
+            ValidateSingleSheet(existing,cell,"hiện trạng");
+            ValidateSingleSheet(design,cell,"thiết kế");
+
             foreach (var tn in existing)
             {
                 if (tn.Area2D <= Eps || !Overlaps(cell, tn)) continue;
@@ -177,6 +180,58 @@ namespace MiningVolume.Core.Grid
                     coverage -= Area(Clip(intersection, exclusion));
             }
             return Math.Max(0, coverage);
+        }
+
+        /// <summary>
+        /// Unlike a vertical 3DFACE (zero XY area), two planar TIN triangles
+        /// occupying a positive common XY area represent multiple surface
+        /// heights and cannot be integrated as one accepted 2.5D surface.
+        /// Only candidate triangles and their intersection WITHIN this grid
+        /// cell are inspected. Sorting bounding boxes avoids full pairwise
+        /// clipping for dense TINs; edge-sharing CDT neighbors have zero area.
+        /// </summary>
+        private sealed class PlanarBox
+        {
+            public Triangle3 Triangle;
+            public double MinX,MaxX,MinY,MaxY;
+        }
+
+        private static void ValidateSingleSheet(IReadOnlyList<Triangle3> candidates,
+            IReadOnlyList<Vec2> cell,string source)
+        {
+            if(candidates == null || candidates.Count < 2)return;
+            var boxes=new List<PlanarBox>();
+            foreach(var tri in candidates)
+            {
+                if(tri.Area2D<=Eps || !Overlaps(cell,tri))continue;
+                boxes.Add(new PlanarBox {
+                    Triangle=tri,
+                    MinX=Math.Min(tri.A.X,Math.Min(tri.B.X,tri.C.X)),
+                    MaxX=Math.Max(tri.A.X,Math.Max(tri.B.X,tri.C.X)),
+                    MinY=Math.Min(tri.A.Y,Math.Min(tri.B.Y,tri.C.Y)),
+                    MaxY=Math.Max(tri.A.Y,Math.Max(tri.B.Y,tri.C.Y))
+                });
+            }
+            boxes.Sort((a,b)=>a.MinX.CompareTo(b.MinX));
+            for(int i=0;i<boxes.Count;i++)
+            {
+                var a=boxes[i];
+                for(int j=i+1;j<boxes.Count;j++)
+                {
+                    var b=boxes[j];
+                    if(b.MinX >= a.MaxX - Eps)break;
+                    if(a.MaxY <= b.MinY+Eps || b.MaxY <= a.MinY+Eps)continue;
+                    var first=Clip(cell,Triangle(a.Triangle));
+                    if(Area(first)<=Eps)continue;
+                    double intersection=Area(Clip(first,Triangle(b.Triangle)));
+                    double tol=Math.Max(1e-9,
+                        Math.Min(a.Triangle.Area2D,b.Triangle.Area2D)*1e-9);
+                    if(intersection>tol)
+                        throw new InvalidOperationException(
+                            "TIN "+source+" có hai tam giác phẳng chồng lên cùng diện tích XY " +
+                            "(hai lớp cao độ); không thể tính khối lượng lưới 2,5D chính xác.");
+                }
+            }
         }
 
         private static void Accumulate(List<Vec2> poly, Triangle3 tn, Triangle3 tk,
