@@ -115,6 +115,18 @@ namespace MiningVolume2023.UI
                 return;
             }
 
+            if (!st.VolumeResult.IsComplete)
+            {
+                MessageBox.Show(
+                    "Còn " + st.VolumeResult.ExcludedIntervals.ToString("n0") +
+                    " khoảng mặt cắt chưa có khối lượng xác nhận (mặt đứng nhiều Z hoặc thiếu dữ liệu). " +
+                    "Bảng hiện tại mới gồm các khoảng hợp lệ; không được xuất như tổng khối lượng chính thức. " +
+                    "Hãy rà soát/chỉnh mặt cắt tại các khoảng được cảnh báo rồi tính lại.",
+                    "Khối lượng chưa đủ điều kiện xuất",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
             // Prompt CAD only if the user explicitly requests CAD output.
             Autodesk.AutoCAD.Geometry.Point3d? cadInsertion = null;
             var doc = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument;
@@ -262,12 +274,17 @@ namespace MiningVolume2023.UI
             var st = ProjectState.Current;
             _developer.Text = ExportOptions.FixedDeveloperName;
             _contact.Text = ExportOptions.FixedDeveloperContact;
-            bool ready = st.VolumeResult != null && st.SectionProfiles.Count > 0;
+            bool ready = st.VolumeResult != null && st.VolumeResult.IsComplete &&
+                st.SectionProfiles.Count > 0;
             _export.Enabled = ready;
             if (ready)
                 _status.Text = $"Sẵn sàng xuất: {st.SectionProfiles.Count:n0} mặt cắt; {st.VolumeResult.Intervals.Count:n0} khoảng; {st.VolumeResult.Levels.Count:n0} tầng/mức.";
             else
-                _status.Text = "Cần thành lập mặt cắt và tính khối lượng trước khi xuất.";
+                _status.Text = st.VolumeResult != null && !st.VolumeResult.IsComplete
+                    ? "Chưa thể xuất tổng chính thức: còn " +
+                      st.VolumeResult.ExcludedIntervals.ToString("n0") +
+                      " khoảng chưa xác nhận. Kiểm tra và Cập nhật mặt cắt."
+                    : "Cần thành lập mặt cắt và tính khối lượng trước khi xuất.";
         }
 
         private static CheckBox AddCheck(Control parent, string text)
