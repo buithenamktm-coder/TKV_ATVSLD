@@ -5,7 +5,7 @@
     <LangVersion>latest</LangVersion>
     <Nullable>disable</Nullable>
     <AssemblyName>MiningVolume.Cad2023</AssemblyName>
-    <AssemblyName Condition="'$(IMSATCadIsModern)' == 'true'">IMSATVolume.Cad.$(IMSATCadFlavor)</AssemblyName>
+    <AssemblyName Condition="'$(IMSATCadFlavor)' != 'ACAD2023_NET48'">IMSATVolume.Cad.$(IMSATCadFlavor)</AssemblyName>
     <RootNamespace>MiningVolume.Cad2023</RootNamespace>
     <UseAutoCADNuGet Condition="'$(UseAutoCADNuGet)'==''">false</UseAutoCADNuGet>
   </PropertyGroup>
