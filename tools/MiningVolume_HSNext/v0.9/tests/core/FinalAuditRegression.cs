@@ -230,12 +230,12 @@ internal static class FinalAuditRegression
                 var info=ExportWorkflowService.BuildReport(st,new ExportOptions())
                     .Sheets.Single(x=>x.Name=="Thông tin");
                 var actual=info.Rows.Single(row=>
-                    row.Length>=2&&Equals(row[0].Value,
+                    row.Count>=2&&Equals(row[0].Value,
                         "Khoảng cách tuyến lớn nhất thực tế, m"));
                 Check(Equals(actual[1].Value,"40"),
                     "Actual manual section gap not disclosed: expected 40 m");
                 var configured=info.Rows.Single(row=>
-                    row.Length>=2&&Equals(row[0].Value,"Bước tuyến thiết lập, m"));
+                    row.Count>=2&&Equals(row[0].Value,"Bước tuyến thiết lập, m"));
                 Check(Equals(configured[1].Value,"20"),
                     "Original requested station spacing should remain separately visible");
             } finally {
