@@ -28,7 +28,7 @@ def test_view3d_never_triggers_1_6m_cad_face_rescan_or_orbit_automatically():
     page = read("src/MiningVolume.Plugin2023/UI/ModelPage.cs")
     assert "Tin3DViewService.IsActive" in page
     assert "Tin3DViewService.Stop()" in page
-    assert '"TRỞ VỀ 2D"' in page
+    assert '"Trở về 2D"' in page
 
 
 def test_section_direction_is_perpendicular_to_two_selected_cad_points():
