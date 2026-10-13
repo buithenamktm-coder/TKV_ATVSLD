@@ -137,9 +137,13 @@ namespace MiningVolume2023.Services
                     if (topZ <= baseZ) topZ = baseZ + levelStep;
                     double height = (topZ - baseZ) * vExag;
                     double x0 = baseX, y0 = currentY;
+                    double rightAxisX = x0 + width;
 
-                    AddLine(ms, tr, new Point3d(x0, y0, 0), new Point3d(x0 + width, y0, 0), axLayer);
+                    AddLine(ms, tr, new Point3d(x0, y0, 0), new Point3d(rightAxisX, y0, 0), axLayer);
                     AddLine(ms, tr, new Point3d(x0, y0, 0), new Point3d(x0, y0 + height, 0), axLayer);
+                    // Opposite elevation axis: same origin, height and linear Z transform.
+                    AddLine(ms, tr, new Point3d(rightAxisX, y0, 0),
+                        new Point3d(rightAxisX, y0 + height, 0), axLayer);
                     var sectionTitle = AddText(ms, tr, styleId, txLayer,
                         new Point3d(x0, y0 + height + 8, 0), p.Line.Name, 3.0, 0);
                     // Saved with native CAD text to associate editable seam polygons
@@ -167,12 +171,26 @@ namespace MiningVolume2023.Services
                     }
                     for (double z = baseZ; z <= topZ + 1e-9; z += levelStep)
                     {
+                        // Both sides share the same z and yy. Never independently
+                        // round/interpolate the opposite scale.
                         double yy = y0 + (z - baseZ) * vExag;
-                        AddLine(ms, tr, new Point3d(x0 - 1.5, yy, 0), new Point3d(x0 + 1.5, yy, 0), axLayer);
-                        AddText(ms, tr, styleId, txLayer, new Point3d(x0 - 12.0, yy - 1.5, 0), z.ToString("0.##"), 3.0, 0);
+                        string elevation = z.ToString("0.##");
+                        AddLine(ms, tr, new Point3d(x0 - 1.5, yy, 0),
+                            new Point3d(x0 + 1.5, yy, 0), axLayer);
+                        AddLine(ms, tr, new Point3d(rightAxisX - 1.5, yy, 0),
+                            new Point3d(rightAxisX + 1.5, yy, 0), axLayer);
+                        AddText(ms, tr, styleId, txLayer, new Point3d(x0 - 12.0, yy - 1.5, 0),
+                            elevation, 3.0, 0);
+                        AddText(ms, tr, styleId, txLayer, new Point3d(rightAxisX + 4.0, yy - 1.5, 0),
+                            elevation, 3.0, 0);
                     }
-                    AddText(ms, tr, styleId, txLayer, new Point3d(x0 + width + 4, y0 - 1.5, 0), "X (m)", 3.0, 0);
-                    AddText(ms, tr, styleId, txLayer, new Point3d(x0 - 2, y0 + height + 3, 0), "Z (m)", 3.0, Math.PI / 2);
+                    AddText(ms, tr, styleId, txLayer,
+                        new Point3d(x0 + width / 2 - 4, y0 - 12, 0), "X (m)", 3.0, 0);
+                    AddText(ms, tr, styleId, txLayer, new Point3d(x0 - 2, y0 + height + 3, 0),
+                        "Z (m)", 3.0, Math.PI / 2);
+                    AddText(ms, tr, styleId, txLayer,
+                        new Point3d(rightAxisX + 2, y0 + height + 3, 0),
+                        "Z (m)", 3.0, Math.PI / 2);
                     AddText(ms, tr, styleId, txLayer, new Point3d(x0 + width * 0.55, y0 + height + 8, 0),
                         $"TL ngang 1/{horizontalScale:0}   TL đứng 1/{verticalScale:0}", 3.0, 0);
 
