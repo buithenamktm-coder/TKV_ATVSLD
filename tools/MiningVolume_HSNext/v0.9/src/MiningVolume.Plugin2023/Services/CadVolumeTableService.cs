@@ -45,6 +45,7 @@ namespace MiningVolume2023.Services
                 Set(summary, 4, "Chênh lệch đào − đắp, m³", F(result.NetVolume));
                 Set(summary, 5, "Số khoảng mặt cắt", result.Intervals.Count.ToString());
                 Set(summary, 6, "Phát triển", "Bùi Thế Nam · 0967280686");
+                StyleSimpleTable(summary, arial, 7, 2);
                 Append(model, tr, summary);
                 y -= RowHeight * 7 + TableGap;
 
@@ -98,6 +99,7 @@ namespace MiningVolume2023.Services
                     Set(levels, i + 1, (i + 1).ToString(), level.Band.Name,
                         F(level.Band.LowerZ), F(level.Band.UpperZ), F(level.CutVolume), F(level.FillVolume));
                 }
+                StyleSimpleTable(levels, arial, result.Levels.Count + 1, 6);
                 Append(model, tr, levels);
                 tr.Commit();
             }
@@ -113,6 +115,18 @@ namespace MiningVolume2023.Services
             ObjectId id = table.Add(record);
             tr.AddNewlyCreatedDBObject(record, true);
             return id;
+        }
+
+        private static void StyleSimpleTable(Autodesk.AutoCAD.DatabaseServices.Table table,
+            ObjectId arial, int rows, int columns)
+        {
+            for (int row = 0; row < rows; row++)
+                for (int col = 0; col < columns; col++)
+                {
+                    table.Cells[row, col].TextStyleId = arial;
+                    table.Cells[row, col].TextHeight = 2.6;
+                    table.Cells[row, col].Alignment = CellAlignment.MiddleCenter;
+                }
         }
 
         private static void StyleTable(Autodesk.AutoCAD.DatabaseServices.Table table,
