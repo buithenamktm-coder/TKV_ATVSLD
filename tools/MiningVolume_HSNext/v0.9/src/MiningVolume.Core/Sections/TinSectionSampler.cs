@@ -29,7 +29,7 @@ namespace MiningVolume.Core.Sections
             var designIndex = IndexFor(design);
             return AnnotateVerticalConflicts(
                 BuildProfileIndexed(line, existingIndex, designIndex, tol),
-                existing.VerticalConflicts, design.VerticalConflicts, tol);
+                existing, design, tol);
         }
 
         public IReadOnlyList<SectionProfile> BuildProfiles(
@@ -65,7 +65,7 @@ namespace MiningVolume.Core.Sections
             {
                 result[i] = AnnotateVerticalConflicts(
                     BuildProfileIndexed(lines[i], existingIndex, designIndex, tol),
-                    existing.VerticalConflicts, design.VerticalConflicts, tol);
+                    existing, design, tol);
                 int done = Interlocked.Increment(ref completed);
                 progress?.Invoke(done, lines.Count, lines[i].Name);
             });
@@ -80,37 +80,21 @@ namespace MiningVolume.Core.Sections
         }
 
         private static SectionProfile AnnotateVerticalConflicts(SectionProfile profile,
-            IReadOnlyList<ConflictGroup> existing, IReadOnlyList<ConflictGroup> design, double tol)
+            TinSurface existing, TinSurface design, double tol)
         {
-            if ((existing == null || existing.Count == 0) &&
-                (design == null || design.Count == 0)) return profile;
-            var line = profile.Line;
-            int intersections = 0;
-            void Scan(IReadOnlyList<ConflictGroup> conflicts)
-            {
-                if (conflicts == null) return;
-                foreach (var g in conflicts)
-                {
-                    // A vertical XY edge can have several Z at the same
-                    // station. Report exact crossing lines; the 2.5D support
-                    // alone cannot choose the correct branch automatically.
-                    double side = g.Position.X * line.Normal.X +
-                                  g.Position.Y * line.Normal.Y - line.Offset;
-                    if (Math.Abs(side) > Math.Max(tol * 100, 1e-5)) continue;
-                    double along = g.Position.X * line.Direction.X +
-                                   g.Position.Y * line.Direction.Y;
-                    if (line.Spans.Any(x => along >= x.StartT - tol &&
-                                            along <= x.EndT + tol))
-                        intersections++;
-                }
-            }
-            Scan(existing); Scan(design);
+            if (!existing.RequiresSectionReview && !design.RequiresSectionReview)
+                return profile;
+            // Remote double-Z points must not force review of unrelated
+            // sections. Only projected 3D curtains crossing a route matter.
+            if (!VerticalConflictFootprint.TouchesSection(
+                profile.Line, existing, design, tol))
+                return profile;
             var warnings = profile.Warnings.ToList();
-            warnings.Add("ĐIỂM TRÙNG XY: TIN có mặt đứng 3D; cần kiểm tra hệ mặt cắt và bấm CẬP NHẬT MẶT CẮT trước khi tính.");
-            if (intersections > 0)
-                warnings.Add($"ĐIỂM TRÙNG XY: tuyến {line.Name} đi qua {intersections:n0} vị trí có nhiều Z; kiểm tra đường mặt cắt.");
-            return new SectionProfile(line, profile.Segments, profile.CutArea, profile.FillArea,
-                warnings, profile.IsUserEdited);
+            warnings.Add("MẶT ĐỨNG NHIỀU Z: tuyến " + profile.Line.Name +
+                " giao vùng nhiều cao độ tại cùng XY. Kiểm tra hình học CAD và " +
+                "bấm Cập nhật mặt cắt nếu cần; dữ liệu Z gốc được giữ nguyên.");
+            return new SectionProfile(profile.Line, profile.Segments,
+                profile.CutArea, profile.FillArea, warnings, profile.IsUserEdited);
         }
 
         private SectionProfile BuildProfileIndexed(
