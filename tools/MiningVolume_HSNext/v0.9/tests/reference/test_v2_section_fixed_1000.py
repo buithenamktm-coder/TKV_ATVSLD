@@ -36,7 +36,7 @@ def test_user_can_change_other_section_calculation_and_plot_parameters():
     assert "Add(top, 7, \"Đến mức\", _toLevel" in ui
     assert "_spacing = Num(20, 0.1M, 10000)" in ui
     assert "_axisStep = Num(20, 0.1M, 1000)" in ui
-    assert "(_spacing.Value > 20 || _axisStep.Value != 20)" in ui
+    assert "(_spacing.Value > 20 || _axisStep.Value != 20 ||" in ui
     assert "public double SectionAxisElevationInterval { get; set; } = 20.0;" in state
     assert "public double LevelStep { get; set; } = 5.0;" in state
     assert "HorizontalScale / VerticalScale" not in ui
