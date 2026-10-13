@@ -38,6 +38,6 @@ def test_ui_and_commands_choose_tin_and_allow_return_to_2d():
     assert 'Button("VIEW TIN 3D"' in model
     assert "Tin3DViewService.Start(CurrentRole)" in model
     assert "Tin3DViewService.Stop()" in model
-    assert '"TRỞ VỀ 2D"' in model
+    assert '"Trở về 2D"' in model
     assert 'CommandMethod("MV_VIEW3D_HT"' in entry
     assert 'CommandMethod("MV_VIEW3D_TK"' in entry
