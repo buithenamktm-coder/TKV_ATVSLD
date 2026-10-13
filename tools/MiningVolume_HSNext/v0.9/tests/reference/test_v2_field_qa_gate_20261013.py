@@ -142,6 +142,8 @@ def test_field_qa_cad_level_table_has_six_visible_headers_below_native_title():
     assert '"Cao độ trên (m)", "Khối lượng đào (m³)", "Khối lượng đắp (m³)"' in cad
     assert "Set(levels, i + levelHeaderRows" in cad
     assert "Tổng theo các tầng" in cad
+    assert "if (row == 0 && col > 0) continue;" in cad
+    assert "if (columns == 6 && row == rows - 1 && col >= 1 && col <= 3)" in cad
     assert "Set(levels, 0, \"STT\"" not in cad
 
 
