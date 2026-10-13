@@ -15,6 +15,8 @@ namespace MiningVolume2023.UI
         private readonly Label _boundary;
         private readonly Label _direction;
         private readonly NumericUpDown _spacing;
+        private readonly ComboBox _parameterMode;
+        private readonly NumericUpDown _axisStep;
         private readonly NumericUpDown _layoutGap;
         private readonly NumericUpDown _levelStep;
         private readonly NumericUpDown _fromLevel;
@@ -27,9 +29,9 @@ namespace MiningVolume2023.UI
         private bool _compactParameters;
         private readonly TableLayoutPanel _rootLayout;
         private readonly TableLayoutPanel _parameterLayout;
-        private readonly Control[] _parameterLabels = new Control[9];
-        private readonly Control[] _parameterValues = new Control[9];
-        private readonly Control[] _parameterActions = new Control[9];
+        private readonly Control[] _parameterLabels = new Control[11];
+        private readonly Control[] _parameterValues = new Control[11];
+        private readonly Control[] _parameterActions = new Control[11];
 
         public SectionPage()
         {
@@ -50,7 +52,7 @@ namespace MiningVolume2023.UI
             };
             root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 32F));   // title
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 290F));  // parameters
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 360F));  // parameters
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 42F));   // primary actions
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 74F));   // edit tools + CAD profile update
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 28F));   // status
@@ -70,7 +72,7 @@ namespace MiningVolume2023.UI
             {
                 Dock = DockStyle.Fill,
                 ColumnCount = 3,
-                RowCount = 9,
+                RowCount = 11,
                 Padding = new Padding(4, 2, 4, 2),
                 Margin = Padding.Empty,
                 BackColor = Color.White
@@ -78,8 +80,8 @@ namespace MiningVolume2023.UI
             top.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150F));
             top.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
             top.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 118F));
-            for (int i = 0; i < 9; i++)
-                top.RowStyles.Add(new RowStyle(SizeType.Percent, 100F / 9F));
+            for (int i = 0; i < 11; i++)
+                top.RowStyles.Add(new RowStyle(SizeType.Percent, 100F / 11F));
 
             _boundary = new Label
             {
@@ -96,23 +98,38 @@ namespace MiningVolume2023.UI
                 TextAlign = ContentAlignment.MiddleLeft
             };
             _spacing = Num(20, 0.1M, 10000);
+            _parameterMode = new ComboBox {
+                Dock = DockStyle.Fill,
+                DropDownStyle = ComboBoxStyle.DropDownList
+            };
+            _parameterMode.Items.AddRange(new object[] {
+                "TT34/2018/TT-BCT", "Tùy chỉnh"
+            });
+            _axisStep = Num(20, 0.1M, 1000);
             _layoutGap = Num(90, 30, 10000);
             _levelStep = Num(5, 0.1M, 1000);
             _fromLevel = Num(0, -10000, 10000);
             _toLevel = Num(0, -10000, 10000);
             _hScale = Num(1000, 1, 100000);
-            _vScale = Num(500, 1, 100000);
+            _vScale = Num(1000, 1000, 1000);
+            _hScale.Minimum = 1000;
+            _hScale.Maximum = 1000;
+            _hScale.Value = 1000;
+            _hScale.Enabled = false;
+            _vScale.Enabled = false;
 
             Add(top, 0, "Đường bao", _boundary, Button("Chọn trên CAD", PickBoundary));
             Add(top, 1, "Hướng mặt cắt", _direction, Button("Chọn 2 điểm", PickDirection));
-            Add(top, 2, "Khoảng cách mặt cắt, m", _spacing, new Panel());
-            Add(top, 3, "Mức chia tầng, m", _levelStep, new Panel());
-            Add(top, 4, "Tính từ mức", _fromLevel, new Panel());
-            Add(top, 5, "Đến mức", _toLevel, new Panel());
-            Add(top, 6, "Tỷ lệ ngang 1/", _hScale, new Panel());
-            Add(top, 7, "Tỷ lệ đứng 1/", _vScale, new Panel());
-            Add(top, 8, "Giãn cách khi xuất CAD", _layoutGap, new Panel());
-            for (int i = 0; i < 9; i++)
+            Add(top, 2, "Thông số theo", _parameterMode, new Panel());
+            Add(top, 3, "Khoảng cách mặt cắt, m", _spacing, new Panel());
+            Add(top, 4, "Bước chia trục Z, m", _axisStep, new Panel());
+            Add(top, 5, "Mức chia tầng tính KL, m", _levelStep, new Panel());
+            Add(top, 6, "Tính từ mức", _fromLevel, new Panel());
+            Add(top, 7, "Đến mức", _toLevel, new Panel());
+            Add(top, 8, "Tỷ lệ ngang 1/ (cố định)", _hScale, new Panel());
+            Add(top, 9, "Tỷ lệ đứng 1/ (cố định)", _vScale, new Panel());
+            Add(top, 10, "Giãn cách khi xuất CAD", _layoutGap, new Panel());
+            for (int i = 0; i < 11; i++)
             {
                 _parameterLabels[i] = top.GetControlFromPosition(0, i);
                 _parameterValues[i] = top.GetControlFromPosition(1, i);
@@ -195,7 +212,9 @@ namespace MiningVolume2023.UI
             _levelStep.ValueChanged += VolumeParameterChanged;
             _fromLevel.ValueChanged += VolumeParameterChanged;
             _toLevel.ValueChanged += VolumeParameterChanged;
+            _parameterMode.SelectedIndexChanged += ParameterModeChanged;
             _spacing.ValueChanged += GeneralParameterChanged;
+            _axisStep.ValueChanged += GeneralParameterChanged;
             _layoutGap.ValueChanged += GeneralParameterChanged;
             _hScale.ValueChanged += GeneralParameterChanged;
             _vScale.ValueChanged += GeneralParameterChanged;
@@ -216,12 +235,12 @@ namespace MiningVolume2023.UI
                 _parameterLayout.RowStyles.Clear();
                 _parameterLayout.ColumnStyles.Clear();
                 _parameterLayout.ColumnCount = compact ? 2 : 3;
-                _parameterLayout.RowCount = compact ? 11 : 9;
+                _parameterLayout.RowCount = compact ? 13 : 11;
                 if (compact)
                 {
                     _parameterLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 134F));
                     _parameterLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-                    for (int k = 0; k < 11; k++)
+                    for (int k = 0; k < 13; k++)
                         _parameterLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36F));
                 }
                 else
@@ -229,10 +248,10 @@ namespace MiningVolume2023.UI
                     _parameterLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150F));
                     _parameterLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
                     _parameterLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 118F));
-                    for (int k = 0; k < 9; k++)
-                        _parameterLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F / 9F));
+                    for (int k = 0; k < 11; k++)
+                        _parameterLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F / 11F));
                 }
-                for (int i = 0; i < 9; i++)
+                for (int i = 0; i < 11; i++)
                 {
                     int row = compact ? i < 2 ? 2 * i : i + 2 : i;
                     _parameterLayout.Controls.Add(_parameterLabels[i], 0, row);
@@ -254,7 +273,7 @@ namespace MiningVolume2023.UI
                         _parameterLayout.Controls.Add(_parameterActions[i], 2, row);
                     }
                 }
-                _rootLayout.RowStyles[1].Height = compact ? 400F : 290F;
+                _rootLayout.RowStyles[1].Height = compact ? 472F : 360F;
             }
             finally { _parameterLayout.ResumeLayout(true); }
         }
@@ -435,9 +454,9 @@ namespace MiningVolume2023.UI
                 _status.Refresh();
                 SectionWorkflowService.DrawProfiles(
                     ins.Value,
-                    (double)_hScale.Value,
-                    (double)_vScale.Value,
-                    (double)_levelStep.Value,
+                    1000.0,
+                    1000.0,
+                    (double)_axisStep.Value,
                     (done, total) =>
                     {
                         _status.Text = $"Đang vẽ mặt cắt {done:n0}/{total:n0} xuống AutoCAD...";
@@ -549,26 +568,57 @@ namespace MiningVolume2023.UI
             st.NotifyChanged();
         }
 
+        private void ParameterModeChanged(object sender, EventArgs e)
+        {
+            if (_syncing) return;
+            if (string.Equals(_parameterMode.SelectedItem as string,
+                "TT34/2018/TT-BCT", StringComparison.Ordinal))
+            {
+                _syncing = true;
+                try
+                {
+                    _spacing.Value = 20; // 1:1000 map -> maximum section spacing 20m
+                    _axisStep.Value = 20; // fixed display grid interval per TT34
+                }
+                finally { _syncing = false; }
+            }
+            GeneralParameterChanged(sender, e);
+        }
+
         private void GeneralParameterChanged(object sender, EventArgs e)
         {
             if (_syncing) return;
             var st = ProjectState.Current;
+            if (string.Equals(_parameterMode.SelectedItem as string,
+                "TT34/2018/TT-BCT", StringComparison.Ordinal) &&
+                (_spacing.Value > 20 || _axisStep.Value != 20))
+            {
+                _syncing = true;
+                try { _parameterMode.SelectedItem = "Tùy chỉnh"; }
+                finally { _syncing = false; }
+            }
             st.SectionSpacing = (double)_spacing.Value;
+            st.SectionAxisElevationInterval = (double)_axisStep.Value;
+            st.SectionMapScale = 1000;
+            st.SectionParameterMode = _parameterMode.SelectedItem as string ?? "Tùy chỉnh";
             st.SectionLayoutGap = (double)_layoutGap.Value;
-            st.HorizontalScale = (double)_hScale.Value;
-            st.VerticalScale = (double)_vScale.Value;
+            st.HorizontalScale = 1000;
+            st.VerticalScale = 1000;
         }
 
         private void SaveParameters()
         {
             var st = ProjectState.Current;
             st.SectionSpacing = (double)_spacing.Value;
+            st.SectionAxisElevationInterval = (double)_axisStep.Value;
+            st.SectionParameterMode = _parameterMode.SelectedItem as string ?? "Tùy chỉnh";
+            st.SectionMapScale = 1000;
             st.SectionLayoutGap = (double)_layoutGap.Value;
             st.LevelStep = (double)_levelStep.Value;
             st.FromLevel = (double)_fromLevel.Value;
             st.ToLevel = (double)_toLevel.Value;
-            st.HorizontalScale = (double)_hScale.Value;
-            st.VerticalScale = (double)_vScale.Value;
+            st.HorizontalScale = 1000;
+            st.VerticalScale = 1000;
         }
 
         private void RestoreState()
@@ -577,13 +627,16 @@ namespace MiningVolume2023.UI
             var st = ProjectState.Current;
             _boundary.Text = string.IsNullOrWhiteSpace(st.BoundaryHandle) ? "Chưa chọn" : "Handle: " + st.BoundaryHandle;
             if (st.SectionDirection.HasValue) _direction.Text = DirectionText(st.SectionDirection.Value);
+            _parameterMode.SelectedItem = st.SectionParameterMode == "TT34/2018/TT-BCT"
+                ? "TT34/2018/TT-BCT" : "Tùy chỉnh";
             _spacing.Value = Clamp(_spacing, st.SectionSpacing);
+            _axisStep.Value = Clamp(_axisStep, st.SectionAxisElevationInterval);
             _layoutGap.Value = Clamp(_layoutGap, st.SectionLayoutGap);
             _levelStep.Value = Clamp(_levelStep, st.LevelStep);
             _fromLevel.Value = Clamp(_fromLevel, st.FromLevel);
             _toLevel.Value = Clamp(_toLevel, st.ToLevel);
-            _hScale.Value = Clamp(_hScale, st.HorizontalScale);
-            _vScale.Value = Clamp(_vScale, st.VerticalScale);
+            _hScale.Value = 1000;
+            _vScale.Value = 1000;
             _syncing = false;
             RefreshGrid();
         }
