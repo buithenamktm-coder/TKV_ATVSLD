@@ -239,7 +239,7 @@ namespace MiningVolume2023.Services
             // their original numeric values rather than silently applying TT34.
             state.SectionParameterMode = snap.SectionParameterMode == "TT34/2018/TT-BCT"
                 ? snap.SectionParameterMode : "Tùy chỉnh";
-            state.SectionMapScale = snap.SectionMapScale == 500 ? 500 : 1000;
+            state.SectionMapScale = 1000;
             state.SectionAxisElevationInterval =
                 PositiveOr(snap.SectionAxisElevationInterval, snap.SectionParameterMode == null ? PositiveOr(snap.LevelStep, 5) : 20);
             state.SectionLayoutGap = Math.Max(30.0, PositiveOr(snap.SectionLayoutGap, 90));
@@ -250,8 +250,16 @@ namespace MiningVolume2023.Services
             state.LevelStep = PositiveOr(snap.LevelStep, 5);
             state.FromLevel = snap.FromLevel;
             state.ToLevel = snap.ToLevel;
-            state.HorizontalScale = PositiveOr(snap.HorizontalScale, 1000);
-            state.VerticalScale = PositiveOr(snap.VerticalScale, 1000);
+            // V2 decision: horizontal and vertical section scales are BOTH 1:1000.
+            // Existing CAD entities are not silently redrawn during restore.
+            // Warn before users reuse old drawings laid out at another scale.
+            if ((snap.HorizontalScale > 0 && Math.Abs(snap.HorizontalScale - 1000.0) > 1e-9) ||
+                (snap.VerticalScale > 0 && Math.Abs(snap.VerticalScale - 1000.0) > 1e-9))
+                warnings.Add("Project cũ dùng tỷ lệ mặt cắt khác 1:1.000. " +
+                    "Thông số V2.0 đã chốt 1:1.000 cho cả hai trục; cần vẽ lại " +
+                    "các mặt cắt CAD cũ trước khi nghiệm thu.");
+            state.HorizontalScale = 1000.0;
+            state.VerticalScale = 1000.0;
             state.DeveloperName = "Bùi Thế Nam";
             state.DeveloperContact = "ĐT/Zalo: 0967280686";
             state.MiningUnitGroup = MiningUnitCatalog.IsKnownGroup(snap.MiningUnitGroup)
