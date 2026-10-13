@@ -12,6 +12,50 @@ import (
     "testing"
 )
 
+func TestCADReleaseAndRuntimeClassification(t *testing.T) {
+    cases:=[]struct{major,minor,clr,year int;flavor string}{
+        {20,0,0,2015,"ACAD2015_NET45"},{20,1,0,2016,"ACAD2016_NET45"},
+        {21,0,0,2017,"ACAD2017_NET46"},{22,0,0,2018,"ACAD2018_NET46"},
+        {23,0,0,2019,"ACAD2019_NET47"},{23,1,0,2020,"ACAD2020_NET47"},
+        {24,0,0,2021,"ACAD2021_NET48"},{24,1,0,2022,"ACAD2022_NET48"},
+        {24,2,0,2023,"ACAD2023_NET48"},{24,3,0,2024,"ACAD2024_NET48"},
+        {25,0,8,2025,"ACAD2025_NET8"},{25,0,10,2025,"ACAD2025_NET10"},
+        {25,1,8,2026,"ACAD2026_NET8"},{25,1,10,2026,"ACAD2026_NET10"},
+    }
+    for _,c:=range cases {
+        h,e:=classifyCAD(c.major,c.minor,c.clr)
+        if e!=nil || h.Year!=c.year || h.Flavor!=c.flavor || h.HostAcceptance!="NOT_TESTED" {t.Fatalf("Wrong host classification: %+v %v",h,e)}
+    }
+    for _,c:=range [][3]int{{18,2,0},{19,0,0},{19,1,0},{25,0,0},{25,1,9},{26,0,10},{24,9,0}} {
+        if _,e:=classifyCAD(c[0],c[1],c[2]);e==nil {t.Fatalf("Unknown or unimplemented host accepted: %v",c)}
+    }
+}
+
+func TestRuntimeConfigFailsClosedOnUnknownOrConflictingMajor(t *testing.T) {
+    for _,data:=range []string{
+        `{}`,`{"runtimeOptions":{"framework":{"name":"Other.App","version":"8.0.0"}}}`,
+        `{"runtimeOptions":{"framework":{"name":"Microsoft.NETCore.App","version":"9.0.0"}}}`,
+        `{"runtimeOptions":{"framework":{"name":"Microsoft.NETCore.App","version":"8.0.0garbage"}}}`,
+        `{"runtimeOptions":{"rollForward":"LatestMajor","framework":{"name":"Microsoft.NETCore.App","version":"8.0.0"}}}`,
+        `{"runtimeOptions":{"frameworks":[{"name":"Microsoft.NETCore.App","version":"8.0.0"},{"name":"Microsoft.WindowsDesktop.App","version":"10.0.0"}]}}`,
+    } {if _,e:=runtimeFromConfig([]byte(data));e==nil {t.Fatalf("Ambiguous runtime accepted: %s",data)}}
+    for _,c:=range []struct{json string;major int}{
+        {`{"runtimeOptions":{"framework":{"name":"Microsoft.NETCore.App","version":"8.0.31"}}}`,8},
+        {`{"runtimeOptions":{"frameworks":[{"name":"Microsoft.NETCore.App","version":"10.0.0"},{"name":"Microsoft.WindowsDesktop.App","version":"10.0.0"}]}}`,10},
+    } {if m,e:=runtimeFromConfig([]byte(c.json));e!=nil||m!=c.major {t.Fatal(m,e)}}
+}
+
+func TestWindowsExecutableVersionAndInvalidHostDetection(t *testing.T) {
+    file:=filepath.Join(os.Getenv("SystemRoot"),"System32","kernel32.dll")
+    ms,_,e:=executableVersion(file)
+    if e!=nil || ms==0 {t.Fatalf("Cannot read actual Windows version resource: %v",e)}
+    dir:=t.TempDir()
+    os.WriteFile(filepath.Join(dir,"acad.exe"),[]byte("not a PE executable"),0644)
+    os.WriteFile(filepath.Join(dir,"AcMgd.dll"),[]byte("not an SDK"),0644)
+    h:=inspectCADDirectory(dir)
+    if h.Error=="" || h.Flavor!="" {t.Fatal("Folder name alone was treated as an installed CAD host")}
+}
+
 func TestBundleVersionAndForeignDLL(t *testing.T) {
     root:=t.TempDir(); dir:=filepath.Join(root,"Contents","Windows");os.MkdirAll(dir,0755)
     for _,f:=range []string{"MiningVolume2023.dll","MiningVolume.Core.dll","MiningVolume.Surface.dll","MiningVolume.Cdt.Native.dll","MiningVolume.Cad2023.dll","LICENSE-CDT.txt","NOTICE.txt"} {os.WriteFile(filepath.Join(dir,f),[]byte("fixture"),0644)}

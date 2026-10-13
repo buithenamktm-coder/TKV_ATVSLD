@@ -48,8 +48,8 @@
     <IMSATCadHostYear Condition="'$(IMSATCadFlavor)' == 'ACAD2026_NET8' Or '$(IMSATCadFlavor)' == 'ACAD2026_NET10'">2026</IMSATCadHostYear>
     <IMSATCadHostDir Condition="'$(IMSATCadHostDir)' == ''">C:\Program Files\Autodesk\AutoCAD $(IMSATCadHostYear)</IMSATCadHostDir>
     <IMSATCadIsModern Condition="'$(IMSATCadFramework)' == 'net8.0-windows' Or '$(IMSATCadFramework)' == 'net10.0-windows'">true</IMSATCadIsModern>
-    <UseWindowsForms Condition="'$(IMSATCadIsModern)' == 'true'">true</UseWindowsForms>
-    <UseWPF Condition="'$(IMSATCadIsModern)' == 'true'">true</UseWPF>
+    <UseWindowsForms Condition="'$(IMSATCadIsModern)' == 'true' And '$(MSBuildProjectName)' == 'MiningVolume.Plugin2023'">true</UseWindowsForms>
+    <UseWPF Condition="'$(IMSATCadIsModern)' == 'true' And '$(MSBuildProjectName)' == 'MiningVolume.Plugin2023'">true</UseWPF>
   </PropertyGroup>
   <!-- Fail at project evaluation, NOT after creating an inaccurately labeled DLL. -->
   <Target Name="IMSATValidateCadFlavor" BeforeTargets="PrepareForBuild">

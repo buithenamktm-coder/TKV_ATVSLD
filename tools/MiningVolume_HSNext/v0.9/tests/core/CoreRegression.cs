@@ -1031,5 +1031,34 @@ internal static class CoreRegression
                 triangles=tin.Triangles.Select(t=>new[]{t.A,t.B,t.C}.Select(p=>new[]{p.X,p.Y,p.Z}))}));
         }
     }
-    static void Main(string[] args){if(args.Length==0)RunTests();else if(args[0]=="--vertical-fixture")Fixture(args[1],args[2],int.Parse(args[3]),DuplicateXYConflictPolicy.Stop,true);else if(args[0]=="--report-fixtures")FinalAuditRegression.Fixtures(args[1]);else if(args[0]=="--clip-oracle")ClipOracle();else if(args[0]=="--review-fixture")ReviewFixture(args[1],args[2],int.Parse(args[3]));else Fixture(args[0],args.Length>1?args[1]:"-",args.Length>2?int.Parse(args[2]):120,args.Length>3?(DuplicateXYConflictPolicy)Enum.Parse(typeof(DuplicateXYConflictPolicy),args[3]):DuplicateXYConflictPolicy.Stop);}
+    static void GridFixture(string path)
+    {
+        using(var doc=JsonDocument.Parse(File.ReadAllText(path))) {
+            var root=doc.RootElement;
+            Func<JsonElement,Vec2[]> ring=e=>e.EnumerateArray().Select(p=>new Vec2(p[0].GetDouble(),p[1].GetDouble())).ToArray();
+            Func<JsonElement,Triangle3[]> faces=e=>e.EnumerateArray().Select(t=>{
+                var p=t.EnumerateArray().Select(v=>new Vec3(v[0].GetDouble(),v[1].GetDouble(),v[2].GetDouble())).ToArray();
+                return new Triangle3(p[0],p[1],p[2]);
+            }).ToArray();
+            var ht=faces(root.GetProperty("existing"));var tk=faces(root.GetProperty("design"));
+            foreach(var r in root.GetProperty("regions").EnumerateArray()) {
+                var prepared=ExactGridCellCalculator.PrepareBoundary(ring(r.GetProperty("polygon")));
+                foreach(var c in root.GetProperty("cells").EnumerateArray()) {
+                    var cell=ring(c.GetProperty("polygon"));
+                    double minX=cell.Min(p=>p.X),maxX=cell.Max(p=>p.X),minY=cell.Min(p=>p.Y),maxY=cell.Max(p=>p.Y);
+                    Func<Triangle3,bool> touches=t=>Math.Max(t.A.X,Math.Max(t.B.X,t.C.X))>=minX&&Math.Min(t.A.X,Math.Min(t.B.X,t.C.X))<=maxX&&
+                        Math.Max(t.A.Y,Math.Max(t.B.Y,t.C.Y))>=minY&&Math.Min(t.A.Y,Math.Min(t.B.Y,t.C.Y))<=maxY;
+                    string region=r.GetProperty("id").GetString(),id=c.GetProperty("id").GetString();
+                    try {
+                        var v=ExactGridCellCalculator.CalculatePrepared(ht.Where(touches).ToArray(),tk.Where(touches).ToArray(),cell,prepared);
+                        Console.WriteLine(JsonSerializer.Serialize(new{gridFixture=true,region,id,status="CALCULATED",cut=v.CutVolume,fill=v.FillVolume,
+                            area=v.CalculationArea,covered=v.CoveredArea,noData=v.NoDataArea,complete=v.IsComplete}));
+                    } catch(Exception e) {
+                        Console.WriteLine(JsonSerializer.Serialize(new{gridFixture=true,region,id,status="REJECTED",error=e.Message}));
+                    }
+                }
+            }
+        }
+    }
+    static void Main(string[] args){if(args.Length==0)RunTests();else if(args[0]=="--grid-fixture")GridFixture(args[1]);else if(args[0]=="--vertical-fixture")Fixture(args[1],args[2],int.Parse(args[3]),DuplicateXYConflictPolicy.Stop,true);else if(args[0]=="--report-fixtures")FinalAuditRegression.Fixtures(args[1]);else if(args[0]=="--clip-oracle")ClipOracle();else if(args[0]=="--review-fixture")ReviewFixture(args[1],args[2],int.Parse(args[3]));else Fixture(args[0],args.Length>1?args[1]:"-",args.Length>2?int.Parse(args[2]):120,args.Length>3?(DuplicateXYConflictPolicy)Enum.Parse(typeof(DuplicateXYConflictPolicy),args[3]):DuplicateXYConflictPolicy.Stop);}
 }

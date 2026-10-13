@@ -7,6 +7,8 @@ import (
     "bytes"
     "embed"
     "encoding/xml"
+    "encoding/json"
+    "debug/pe"
     "crypto/sha256"
     "encoding/hex"
     "fmt"
@@ -15,6 +17,7 @@ import (
     "os/exec"
     "path/filepath"
     "runtime"
+    "regexp"
     "strings"
     "syscall"
     "time"
@@ -351,16 +354,154 @@ func createStartMenuShortcut(cadDir, iconExe string) error {
 }
 
 func findAutoCAD2023() (string,error) {
-    candidates := []string{}
-    if pf:=os.Getenv("ProgramFiles"); pf!="" { candidates=append(candidates,filepath.Join(pf,"Autodesk","AutoCAD 2023")) }
-    candidates=append(candidates,`C:\Program Files\Autodesk\AutoCAD 2023`)
-    for _,p:=range candidates { if exists(filepath.Join(p,"acad.exe")) && exists(filepath.Join(p,"AcMgd.dll")) { return p,nil } }
-    out,_:=exec.Command("reg","query",`HKLM\SOFTWARE\Autodesk\AutoCAD\R24.2`,"/s","/v","AcadLocation").CombinedOutput()
-    for _,line:=range strings.Split(string(out),"\n") {
-        if !strings.Contains(line,"AcadLocation") { continue }
-        parts:=strings.Fields(line); if len(parts)>=3 { p:=strings.Join(parts[2:]," "); if exists(filepath.Join(p,"acad.exe")){return p,nil} }
+    hosts:=detectAutoCADHosts()
+    report,_:=json.MarshalIndent(hosts,"","  ")
+    writePersistentLog("autocad_inventory",string(report))
+    if strings.HasPrefix(version,"2.") {
+        lines:=[]string{"AutoCAD phát hiện trên máy (kiểm tra EXE x64 và API):"}
+        for _,host:=range hosts {
+            status:=host.Error
+            if status=="" {status="Có flavor biên dịch; chưa nghiệm thu host"}
+            if host.Year==2023 && host.Error=="" {status="Đúng đích R24.2 của bộ cài QA hiện tại"}
+            lines=append(lines,fmt.Sprintf("%d %s %s: %s\n%s",host.Year,host.Series,host.Runtime,status,host.Directory))
+        }
+        lines=append(lines,"Bộ cài hiện tại chỉ chứa module AutoCAD 2023. Không cài module cho đời khác.")
+        msg(strings.Join(lines,"\n\n"),0x40)
     }
-    return "",fmt.Errorf("Không tìm thấy AutoCAD 2023 64-bit trên máy.")
+    for _,host:=range hosts {
+        // The current payload is still R24.2 only. Detection of another
+        // release never authorizes relabeling or loading this DLL there.
+        if host.Year==2023 && host.Flavor=="ACAD2023_NET48" && host.Error=="" {return host.Directory,nil}
+    }
+    return "",fmt.Errorf("Không tìm thấy AutoCAD 2023 full x64 có phiên bản EXE R24.2 hợp lệ. "+
+        "Đã ghi danh sách các bản CAD phát hiện được vào log autocad_inventory. "+
+        "Bộ cài này không tự chuyển DLL 2023 sang đời CAD khác.")
+}
+
+type cadHost struct {
+    Directory string `json:"directory"`
+    Year int `json:"year"`
+    Series string `json:"series"`
+    Runtime string `json:"runtime"`
+    Flavor string `json:"flavor"`
+    FileVersion string `json:"file_version"`
+    Error string `json:"error,omitempty"`
+    HostAcceptance string `json:"host_acceptance"`
+}
+
+// Runtime is read from the installed host, never guessed from its folder name.
+// In particular R25.0/R25.1 do not distinguish .NET 8 from .NET 10 updates.
+func classifyCAD(major,minor,runtimeMajor int) (cadHost,error) {
+    releases:=[]struct{year,major,minor int;runtime,suffix string}{
+        {2012,18,2,"net35",""},{2013,19,0,"net40",""},{2014,19,1,"net40",""},
+        {2015,20,0,"net45","NET45"},{2016,20,1,"net45","NET45"},
+        {2017,21,0,"net46","NET46"},{2018,22,0,"net46","NET46"},
+        {2019,23,0,"net47","NET47"},{2020,23,1,"net47","NET47"},
+        {2021,24,0,"net48","NET48"},{2022,24,1,"net48","NET48"},
+        {2023,24,2,"net48","NET48"},{2024,24,3,"net48","NET48"},
+        {2025,25,0,"",""},{2026,25,1,"",""},
+    }
+    for _,r:=range releases {
+        if major!=r.major || minor!=r.minor {continue}
+        h:=cadHost{Year:r.year,Series:fmt.Sprintf("R%d.%d",major,minor),Runtime:r.runtime,HostAcceptance:"NOT_TESTED"}
+        if r.year>=2025 {
+            if runtimeMajor!=8 && runtimeMajor!=10 {return h,fmt.Errorf("Không xác định chắc chắn CLR 8/10 của host; không chọn DLL.")}
+            h.Runtime=fmt.Sprintf("net%d.0-windows",runtimeMajor)
+            h.Flavor=fmt.Sprintf("ACAD%d_NET%d",r.year,runtimeMajor)
+        } else if r.suffix!="" {h.Flavor=fmt.Sprintf("ACAD%d_%s",r.year,r.suffix)}
+        if h.Flavor=="" {return h,fmt.Errorf("Chưa có adapter tương thích AutoCAD %d; không dùng DLL hiện đại thay thế.",r.year)}
+        return h,nil
+    }
+    return cadHost{HostAcceptance:"NOT_TESTED"},fmt.Errorf("Release AutoCAD chưa được nhận diện: R%d.%d",major,minor)
+}
+
+func runtimeFromConfig(data []byte) (int,error) {
+    type framework struct {Name string `json:"name"`;Version string `json:"version"`;RollForward string `json:"rollForward"`}
+    var config struct {Options struct {Framework framework `json:"framework"`;Frameworks []framework `json:"frameworks"`;RollForward string `json:"rollForward"`} `json:"runtimeOptions"`}
+    if err:=json.Unmarshal(data,&config);err!=nil{return 0,err}
+    if strings.Contains(strings.ToLower(config.Options.RollForward),"major") {return 0,fmt.Errorf("Host cho phép chuyển CLR major; cần xác minh runtime đang nạp")}
+    refs:=append(config.Options.Frameworks,config.Options.Framework)
+    found:=0
+    for _,f:=range refs {
+        if f.Name!="Microsoft.NETCore.App" && f.Name!="Microsoft.WindowsDesktop.App" {continue}
+        if !regexp.MustCompile(`^(8|10)\.[0-9]+\.[0-9]+$`).MatchString(f.Version) || strings.Contains(strings.ToLower(f.RollForward),"major") {
+            return 0,fmt.Errorf("Không xác định cố định CLR từ runtime config")
+        }
+        var major,minor,patch int
+        n,err:=fmt.Sscanf(f.Version,"%d.%d.%d",&major,&minor,&patch)
+        if err!=nil || n!=3 || (major!=8 && major!=10) {return 0,fmt.Errorf("Runtime version không được hỗ trợ: %s",f.Version)}
+        if found!=0 && found!=major {return 0,fmt.Errorf("Runtime config chứa CLR không đồng nhất")}
+        found=major
+    }
+    if found==0{return 0,fmt.Errorf("Không có framework CLR được xác nhận trong runtime config")}
+    return found,nil
+}
+
+func executableVersion(file string) (uint32,uint32,error) {
+    dll:=syscall.NewLazyDLL("version.dll")
+    ptr,err:=syscall.UTF16PtrFromString(file);if err!=nil{return 0,0,err}
+    size,_,_:=dll.NewProc("GetFileVersionInfoSizeW").Call(uintptr(unsafe.Pointer(ptr)),0)
+    if size==0 || size>16*1024*1024{return 0,0,fmt.Errorf("Không đọc được version EXE")}
+    data:=make([]byte,int(size))
+    ok,_,_:=dll.NewProc("GetFileVersionInfoW").Call(uintptr(unsafe.Pointer(ptr)),0,size,uintptr(unsafe.Pointer(&data[0])))
+    if ok==0{return 0,0,fmt.Errorf("Version EXE không hợp lệ")}
+    root,_:=syscall.UTF16PtrFromString(`\`);var value uintptr;var length uint32
+    ok,_,_ =dll.NewProc("VerQueryValueW").Call(uintptr(unsafe.Pointer(&data[0])),uintptr(unsafe.Pointer(root)),uintptr(unsafe.Pointer(&value)),uintptr(unsafe.Pointer(&length)))
+    if ok==0 || value==0 || length<52{return 0,0,fmt.Errorf("Thiếu VS_FIXEDFILEINFO")}
+    info:=(*[13]uint32)(unsafe.Pointer(value))
+    if info[0]!=0xFEEF04BD{return 0,0,fmt.Errorf("Sai chữ ký version EXE")}
+    ms,ls:=info[2],info[3];runtime.KeepAlive(data)
+    return ms,ls,nil
+}
+
+func inspectCADDirectory(dir string) cadHost {
+    h:=cadHost{Directory:dir,HostAcceptance:"NOT_TESTED"}
+    file:=filepath.Join(dir,"acad.exe")
+    image,err:=pe.Open(file)
+    if err!=nil {h.Error="Không đọc được PE acad.exe";return h}
+    machine:=image.Machine;image.Close()
+    if machine!=pe.IMAGE_FILE_MACHINE_AMD64 {h.Error="Chỉ hỗ trợ AutoCAD full x64";return h}
+    if !exists(filepath.Join(dir,"AcMgd.dll")){h.Error="Thiếu API managed của AutoCAD full";return h}
+    ms,ls,err:=executableVersion(file)
+    if err!=nil{h.Error=err.Error();return h}
+    major,minor:=int(ms>>16),int(ms&0xffff);runtimeMajor:=0
+    if major==25 {
+        // Only host-specific config filenames are accepted. An unrelated
+        // plug-in runtimeconfig in this directory is not host evidence.
+        for _,name:=range []string{"acad.runtimeconfig.json","acad.exe.runtimeconfig.json"} {
+            if data,e:=os.ReadFile(filepath.Join(dir,name));e==nil {
+                detected,e:=runtimeFromConfig(data)
+                if e!=nil || (runtimeMajor!=0 && runtimeMajor!=detected) {h.Error="Runtime config không nhất quán; không chọn DLL";return h}
+                runtimeMajor=detected
+            }
+        }
+    }
+    h,err=classifyCAD(major,minor,runtimeMajor);h.Directory=dir
+    h.FileVersion=fmt.Sprintf("%d.%d.%d.%d",major,minor,ls>>16,ls&0xffff)
+    if err!=nil{h.Error=err.Error()}
+    return h
+}
+
+func detectAutoCADHosts() []cadHost {
+    candidates:=[]string{}
+    for _,base:=range []string{os.Getenv("ProgramFiles"),`C:\Program Files`} {
+        if base==""{continue}
+        for year:=2012;year<=2026;year++ {candidates=append(candidates,filepath.Join(base,"Autodesk",fmt.Sprintf("AutoCAD %d",year)))}
+    }
+    // Explicit 64-bit registry view; do not mistake a WOW6432Node product
+    // or AutoCAD LT registry hive for a managed x64 host.
+    output,_:=exec.Command("reg","query",`HKLM\SOFTWARE\Autodesk\AutoCAD`,"/s","/v","AcadLocation","/reg:64").Output()
+    for _,line:=range strings.Split(string(output),"\n") {
+        at:=strings.Index(line,"REG_SZ")
+        if at>=0 && strings.Contains(line[:at],"AcadLocation") {candidates=append(candidates,strings.TrimSpace(line[at+len("REG_SZ"):]))}
+    }
+    hosts:=[]cadHost{};seen:=map[string]bool{}
+    for _,dir:=range candidates {
+        dir=filepath.Clean(dir);key:=strings.ToLower(dir)
+        if seen[key] || !exists(filepath.Join(dir,"acad.exe")){continue};seen[key]=true
+        hosts=append(hosts,inspectCADDirectory(dir))
+    }
+    return hosts
 }
 
 func extractPayload(dst string) error {

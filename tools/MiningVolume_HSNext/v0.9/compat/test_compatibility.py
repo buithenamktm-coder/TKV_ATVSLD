@@ -2,12 +2,37 @@
 import unittest
 from pathlib import Path
 import xml.etree.ElementTree as ET
+import importlib.util
 
 ROOT = Path(__file__).resolve().parents[1]
 PROPS = ROOT / "compat" / "IMSAT.CadCompatibility.props"
 
 
 class CompatibilityBuildContracts(unittest.TestCase):
+    def test_missing_or_green_ci_never_becomes_host_acceptance(self):
+        spec=importlib.util.spec_from_file_location('qa_data', ROOT/'compat/make_qa_data.py')
+        module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+        report=module.build(ROOT,{'source_sha':'a'*40,'run_id':1,'jobs':[
+            {'name':'build','status':'completed','conclusion':'success','id':2}]})
+        rows=report['matrix']
+        self.assertEqual({r['year'] for r in rows},set(range(2012,2027)))
+        self.assertEqual(len(rows),17)
+        self.assertEqual(next(r for r in rows if r['year']==2023)['compile'],'COMPILE_PASS')
+        self.assertTrue(all(r['host']=='NOT_TESTED' and r['functional']=='BLOCKED' for r in rows))
+        self.assertTrue(all(r['compile']=='NOT_TESTED' for r in rows if r['year']<2015))
+
+    def test_desktop_ui_framework_is_not_inherited_by_math_core(self):
+        root = ET.parse(PROPS).getroot()
+        for tag in ('UseWindowsForms', 'UseWPF'):
+            props = list(root.iter(tag))
+            self.assertEqual(len(props), 1)
+            self.assertIn("'$(MSBuildProjectName)' == 'MiningVolume.Plugin2023'", props[0].get('Condition'))
+        for file in (ROOT / 'src/MiningVolume.Core').rglob('*.cs'):
+            if any(x.startswith(('obj', 'bin')) for x in file.parts): continue
+            text=file.read_text('utf-8-sig')
+            self.assertNotIn('using Autodesk.', text)
+            self.assertNotIn('using System.Windows', text)
+
     def test_net45_sources_do_not_use_net46_empty_array_api(self):
         for file in (ROOT / 'src').rglob('*.cs'):
             if any(x.startswith(('obj', 'bin')) for x in file.parts):
