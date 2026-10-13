@@ -97,6 +97,11 @@ namespace MiningVolume.Core.Grid
                 ni * nj > options.MaxCells)
                 throw new InvalidOperationException("Số ô lưới vượt giới hạn thiết lập; hãy tăng kích thước ô hoặc thu nhỏ đường bao.");
 
+            // No cell-specific dependence in polygon triangulation. Reusing
+            // this immutable clip context removes thousands of redundant
+            // O(vertices^2) ear-clipping passes for large mine boundaries.
+            var clipBoundary = ExactGridCellCalculator.PrepareBoundary(
+                options.Boundary, options.Holes);
             var unsafeCells = VerticalConflictFootprint.AffectedGridCells(
                 existing, design, options.Origin, options.SizeX, options.SizeY,
                 cos, sin, startI, endI, startJ, endJ);
@@ -136,7 +141,7 @@ namespace MiningVolume.Core.Grid
                             tn = Array.Empty<Triangle3>();
                             tk = Array.Empty<Triangle3>();
                         }
-                        var volume = ExactGridCellCalculator.Calculate(tn, tk, cell, options.Boundary, options.Holes);
+                        var volume = ExactGridCellCalculator.CalculatePrepared(tn, tk, cell, clipBoundary);
                         if (volume.CalculationArea > 1e-9)
                             cells.Add(new GridVolumeCell
                             {
