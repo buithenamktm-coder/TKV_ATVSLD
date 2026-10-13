@@ -62,3 +62,14 @@ def test_elevation_axis_step_is_independent_from_earthwork_level_step():
     assert "(double)_levelStep.Value" not in section
     assert "st.LevelStep = (double)_levelStep.Value;" in ui
     assert "st.SectionAxisElevationInterval = (double)_axisStep.Value;" in ui
+
+
+def test_fixed_1000_scale_and_user_parameters_are_in_report_metadata():
+    volume = read("src/MiningVolume.Plugin2023/Services/ExportWorkflowService.cs")
+    grid = read("src/MiningVolume.Plugin2023/Services/GridVolumeExcelReportBuilder.cs")
+    mineral = read("src/MiningVolume.Plugin2023/Services/MineralVolumeExcelReportBuilder.cs")
+    for content in [volume, grid, mineral]:
+        assert '"Tỷ lệ mặt cắt (ngang / đứng)"' in content
+        assert '"1:1.000 / 1:1.000"' in content
+        assert '"Bước chia trục Z, m"' in content
+        assert "SectionAxisElevationInterval" in content
