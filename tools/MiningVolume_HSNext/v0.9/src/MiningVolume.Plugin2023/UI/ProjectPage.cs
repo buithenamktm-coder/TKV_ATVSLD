@@ -81,14 +81,14 @@ namespace MiningVolume2023.UI
             _periodNumber.ValueChanged += PeriodChanged;
             _periodYear.ValueChanged += PeriodChanged;
 
-            var buttons = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 52,
+            var buttons = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 62,
                 FlowDirection = FlowDirection.LeftToRight, WrapContents = true,
-                Padding = new Padding(4, 7, 4, 4) };
+                Padding = new Padding(9, 9, 9, 7) };
             // Three toolbar actions stack vertically in a 360px docked Palette.
-            SizeChanged += (sender, args) => buttons.Height = ClientSize.Width < 650 ? 115 : 52;
-            _save = Btn("LƯU PROJECT VÀO DWG", SaveProject); _save.Width = 175;
-            _load = Btn("NẠP LẠI PROJECT", LoadProject); _load.Width = 145;
-            _delete = Btn("XÓA PROJECT ĐÃ LƯU", DeleteProject); _delete.Width = 165;
+            SizeChanged += (sender, args) => buttons.Height = ClientSize.Width < 650 ? 140 : 62;
+            _save = Btn("LƯU PROJECT VÀO DWG", SaveProject); _save.Width = 190;
+            _load = Btn("NẠP LẠI PROJECT", LoadProject); _load.Width = 165;
+            _delete = Btn("XÓA PROJECT ĐÃ LƯU", DeleteProject); _delete.Width = 190;
             buttons.Controls.Add(_save); buttons.Controls.Add(_load); buttons.Controls.Add(_delete);
             Controls.Add(buttons); buttons.BringToFront();
 
