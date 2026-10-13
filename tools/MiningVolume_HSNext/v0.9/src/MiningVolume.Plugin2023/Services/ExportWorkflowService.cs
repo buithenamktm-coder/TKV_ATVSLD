@@ -93,9 +93,12 @@ namespace MiningVolume2023.Services
                 if (report.IncludeImsatLogo)
                 {
                     try { XlsxBrandingInjector.Apply(staging, report); }
-                    catch (Exception ex) when (ex is IOException ||
-                        ex is InvalidDataException || ex is System.Xml.XmlException ||
-                        ex is UnauthorizedAccessException)
+                    catch (Exception ex) when (!(ex is OutOfMemoryException) &&
+                        !(ex is StackOverflowException) &&
+                        !(ex is System.Threading.ThreadAbortException))
+                    // Logo is only a decorative workbook enhancement. Missing
+                    // image assets, unreadable zip metadata or a malformed logo
+                    // must never turn valid volume results into an export error.
                     {
                         Trace.TraceWarning("IMSAT logo could not be injected; " +
                             "continuing with full Excel workbook: " + ex.Message);
