@@ -400,6 +400,39 @@ internal static class FinalAuditRegression
             } catch(InvalidOperationException) { failed=true; }
             Check(failed,"A partly sampled section was erroneously certified as a full-volume result");
         };
+        tests["rf22_grid_missing_tin_diagnostics_are_specific_and_do_not_claim_zero"]=()=>{
+            var ht=Plane(5);
+            var tk=Plane(0);
+            var shifted= new TinSurface("design-far",
+                tk.Triangles.Select(triangle=>new Triangle3(
+                    new Vec3(triangle.A.X+100,triangle.A.Y+100,triangle.A.Z),
+                    new Vec3(triangle.B.X+100,triangle.B.Y+100,triangle.B.Z),
+                    new Vec3(triangle.C.X+100,triangle.C.Y+100,triangle.C.Z))).ToArray(),
+                Array.Empty<ValidationIssue>());
+            var opts=new GridVolumeOptions{Boundary=Boundary,SizeX=5,SizeY=5};
+            var report=new GridVolumeCalculator().Calculate(ht,shifted,opts);
+            Check(report.Cells.Count>0 && !report.IsComplete &&
+                report.MissingDesignCells==report.Cells.Count &&
+                report.MissingExistingCells==0,
+                "Missing design-TIN cells were not identified separately from existing TIN");
+            Check(report.Cells.All(c=>c.Volume.CoveredArea==0 &&
+                c.ExistingCoveredArea>=c.Volume.CalculationArea-1e-7 &&
+                c.DesignCoveredArea==0 &&
+                c.CoverageStatus=="Thiếu phủ TIN thiết kế"),
+                "Missing design-TIN volume falsely reported as an authoritative zero");
+            var reversed=new GridVolumeCalculator().Calculate(shifted,ht,opts);
+            Check(reversed.MissingExistingCells==reversed.Cells.Count &&
+                reversed.MissingDesignCells==0 &&
+                reversed.Cells.All(c=>c.CoverageStatus=="Thiếu phủ TIN hiện trạng"),
+                "Missing existing-TIN cells were misclassified");
+            var reportXlsx=GridVolumeExcelReportBuilder.Build(report,opts);
+            var detail=reportXlsx.Sheets.First(x=>x.Name=="CHI TIẾT Ô LƯỚI");
+            Check(detail.Rows.Count>0 &&
+                detail.Rows.All(row=>row[7].Value.ToString()=="" &&
+                    row[8].Value.ToString()=="" &&
+                    row[9].Value.ToString()==""),
+                "Unmeasured cell got fake 0.00 m³ in Excel");
+        };
         tests["rf15_grid_rejects_stale_boundary_and_cell_settings"]=()=>{
             var st=ProjectState.Current;
             st.Reset();
