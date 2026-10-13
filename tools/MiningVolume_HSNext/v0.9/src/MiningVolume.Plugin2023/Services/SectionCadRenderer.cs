@@ -200,7 +200,13 @@ namespace MiningVolume2023.Services
                     // segment. On large TINs that can mean hundreds of thousands of
                     // DBObjects for 200+ sections. Group each contiguous profile run
                     // into one Polyline per surface instead.
-                    AddProfilePolylines(ms, tr, p, x0, y0, baseZ, vExag, exLayer, deLayer);
+                    // S is the *global* along-direction projected map coordinate.
+                    // Convert it into local station X by subtracting MinT. Passing
+                    // x0 would send surveyed XY with values in the millions far
+                    // beyond the local section frame. Stamp the shifted X origin
+                    // so the existing CAD Grip-edit reader reconstructs original S.
+                    AddProfilePolylines(ms, tr, p, x0 - p.Line.MinT,
+                        y0, baseZ, vExag, exLayer, deLayer);
 
                     currentY -= height + layoutGap;
                 }
@@ -271,7 +277,9 @@ namespace MiningVolume2023.Services
                         AddText(ms,tr,style,label,new Point3d(right+4,yy-1.5,0),
                             elevation,3.0,0);
                     }
-                    AddProfilePolylines(ms,tr,profile,x0,y0,baseZ,
+                    // Quick sections also use absolute survey S. Render in
+                    // the local frame of this profile's axes.
+                    AddProfilePolylines(ms,tr,profile,x0-profile.Line.MinT,y0,baseZ,
                         exaggeration,ht,tk, tagForEditing: false);
                     AddText(ms,tr,style,label,new Point3d(x0+width/2-4,y0-11,0),
                         "L (m)",3.0,0);
