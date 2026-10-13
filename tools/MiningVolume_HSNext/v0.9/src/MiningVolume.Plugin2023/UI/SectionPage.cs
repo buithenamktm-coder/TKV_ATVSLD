@@ -52,9 +52,9 @@ namespace MiningVolume2023.UI
             };
             root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 38F));   // title
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 316F));  // parameters
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 440F));  // scrollable parameters
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 58F));   // spaced primary actions
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 92F));   // edit tools + CAD profile update
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 110F));   // edit tools + CAD profile update
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 30F));   // status
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));   // grid
             Controls.Add(root);
@@ -84,7 +84,7 @@ namespace MiningVolume2023.UI
             top.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
             top.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 126F));
             for (int i = 0; i < 11; i++)
-                top.RowStyles.Add(new RowStyle(SizeType.Percent, 100F / 11F));
+                top.RowStyles.Add(new RowStyle(SizeType.Absolute, i < 2 ? 48F : 35F));
 
             _boundary = new Label
             {
@@ -241,9 +241,9 @@ namespace MiningVolume2023.UI
             // Reserve usable space for the table of section results even on
             // 620px Windows palettes; the parameter panel scrolls internally.
             int visibleHeight = Math.Max(500, ClientSize.Height);
-            int reserved = 38 + 58 + 92 + 30 + Math.Max(105, visibleHeight / 5);
+            int reserved = 38 + 58 + 110 + 30 + Math.Max(105, visibleHeight / 5);
             float maxParameters = Math.Max(210, visibleHeight - reserved);
-            float preferred = _compactParameters ? 320F : 316F;
+            float preferred = 440F;
             _rootLayout.RowStyles[1].Height = Math.Min(preferred, maxParameters);
         }
 
@@ -266,7 +266,7 @@ namespace MiningVolume2023.UI
                     _parameterLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 174F));
                     _parameterLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
                     for (int k = 0; k < 13; k++)
-                        _parameterLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 38F));
+                        _parameterLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, k < 4 ? 48F : 35F));
                 }
                 else
                 {
@@ -274,7 +274,7 @@ namespace MiningVolume2023.UI
                     _parameterLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
                     _parameterLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 126F));
                     for (int k = 0; k < 11; k++)
-                        _parameterLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F / 11F));
+                        _parameterLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, k < 2 ? 48F : 35F));
                 }
                 for (int i = 0; i < 11; i++)
                 {
@@ -298,7 +298,7 @@ namespace MiningVolume2023.UI
                         _parameterLayout.Controls.Add(_parameterActions[i], 2, row);
                     }
                 }
-                _rootLayout.RowStyles[1].Height = compact ? 320F : 316F;
+                // Height is bounded by available palette space below.
             }
             finally { _parameterLayout.ResumeLayout(true); }
         }
