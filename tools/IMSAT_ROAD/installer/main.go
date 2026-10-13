@@ -24,6 +24,10 @@ var payload []byte
 const bundleName = "IMSATROAD2023.bundle"
 
 func main() {
+    if len(os.Args)>1 && os.Args[1]=="--verify" {
+        if err:=run();err!=nil { os.Exit(1) }
+        return
+    }
     if err := run(); err != nil {
         message("IMSAT ROAD - CÀI ĐẶT THẤT BẠI\n\n"+err.Error(), 0x10)
         os.Exit(1)
@@ -31,6 +35,21 @@ func main() {
 }
 
 func run() error {
+    if len(os.Args)>1 && os.Args[1]=="--verify" {
+        if len(payload)<2048 { return errors.New("Embedded payload is missing") }
+        temp,err:=os.MkdirTemp("","imsat-road-verify-")
+        if err!=nil{return err}
+        defer os.RemoveAll(temp)
+        if err:=unpack(temp);err!=nil{return err}
+        base:=filepath.Join(temp,"bundle",bundleName)
+        for _,name:=range []string{"PackageContents.xml", "Contents/Windows/IMSAT.Road.Plugin2023.dll",
+            "Contents/Windows/IMSAT.Road.Core.dll", "Contents/Windows/IMSAT.Road.TerrainBridge.dll",
+            "Contents/Windows/MiningVolume.Core.dll"} {
+            info,e:=os.Stat(filepath.Join(base,filepath.FromSlash(name)))
+            if e!=nil||info.IsDir()||info.Size()<200{return fmt.Errorf("Missing payload component: %s",name)}
+        }
+        return nil
+    }
     appData := os.Getenv("APPDATA")
     if appData == "" { return errors.New("Không tìm thấy thư mục APPDATA của Windows.") }
     target := filepath.Join(appData,"Autodesk","ApplicationPlugins",bundleName)

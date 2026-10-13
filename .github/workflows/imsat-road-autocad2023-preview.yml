@@ -78,6 +78,9 @@ jobs:
           if((Get-Item "$output/IMSAT_ROAD_Setup_AutoCAD2023_Preview.exe").Length -lt 10240){
             throw 'Windows Setup missing or abnormally small'
           }
+          $exe=Resolve-Path "$output/IMSAT_ROAD_Setup_AutoCAD2023_Preview.exe"
+          $verify=Start-Process -FilePath $exe -ArgumentList "--verify" -PassThru -Wait
+          if($verify.ExitCode -ne 0){throw "Windows setup payload verify failed: $($verify.ExitCode)"}
           Copy-Item "$root/docs/README_TEST.md" "$output/README_TEST.md" -Force
           Get-FileHash "$output/IMSAT_ROAD_Setup_AutoCAD2023_Preview.exe" -Algorithm SHA256 |
             Format-List | Out-File -Encoding UTF8 "$output/SHA256.txt"
