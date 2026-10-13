@@ -491,7 +491,15 @@ namespace MiningVolume2023.UI
             if (_busy) return;
             try
             {
-                Tin3DViewService.Start(CurrentRole);
+                if (Tin3DViewService.IsActive)
+                    Tin3DViewService.Stop();
+                else
+                    Tin3DViewService.Start(CurrentRole);
+                _view3D.Text = Tin3DViewService.IsActive
+                    ? "TRỞ VỀ 2D" : "VIEW TIN 3D";
+                _info.Text = Tin3DViewService.IsActive
+                    ? "Đang xem TIN 3D khung dây, không tự chạy 3DORBIT. Bấm TRỞ VỀ 2D để khôi phục."
+                    : "Đã khôi phục góc nhìn trước khi xem TIN 3D.";
             }
             catch (Exception ex)
             {
@@ -514,7 +522,8 @@ namespace MiningVolume2023.UI
             _toggleTin.Enabled = !busy && CurrentSession.Tin != null;
             _meanZBuild.Enabled = !busy && CurrentSession.Source != null && CurrentSession.Source.Entities.Count > 0;
             _meanZCancel.Enabled = busy && (_meanZCts != null || _buildCts != null);
-            _view3D.Enabled = !busy && CurrentSession.IsTinCurrent;
+            _view3D.Enabled = !busy && (Tin3DViewService.IsActive || CurrentSession.IsTinCurrent);
+            _view3D.Text = Tin3DViewService.IsActive ? "TRỞ VỀ 2D" : "VIEW TIN 3D";
             _model.Enabled = !busy;
             _grid.Enabled = !busy;
             _progress.Visible = busy;
