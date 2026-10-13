@@ -283,10 +283,11 @@ internal static class FinalAuditRegression
             var sectionSystem=new SectionSystem(new Vec2(1,0),new Vec2(0,1),
                 Boundary,profiles.Select(p=>p.Line).ToArray(),Array.Empty<string>());
             var volumeOptions=new VolumeCalculationOptions{FromLevel=0,ToLevel=10,LevelStep=5};
-            bool rejected=false;
-            try{new SectionVolumeCalculator().Calculate(sectionSystem,profiles,vertical,design,volumeOptions);}
-            catch(InvalidOperationException){rejected=true;}
-            Check(rejected,"Unreviewed multi-Z section was accepted into final earthwork volume");
+            var calculated=new SectionVolumeCalculator().Calculate(
+                sectionSystem,profiles,vertical,design,volumeOptions);
+            Check(calculated.IsComplete && calculated.TotalCutVolume>0 &&
+                calculated.ExcludedIntervals==0,
+                "Valid profile crossing zero-XY-area vertical wall was incorrectly rejected");
             var localGrid=new GridVolumeCalculator().Calculate(vertical,design,
                 new GridVolumeOptions{Boundary=Boundary,SizeX=5,SizeY=5});
             Check(localGrid.AmbiguousCells==0 && localGrid.IsComplete,
@@ -373,16 +374,33 @@ internal static class FinalAuditRegression
                 new SectionProfile(line,
                     new[]{new SectionProfileSegment(0,10,line.PointAt(0),
                         line.PointAt(10),5,5,0,0)},50,0,Array.Empty<string>());
+            var validSections=new SectionVolumeCalculator().Calculate(
+                new SectionSystem(new Vec2(1,0),new Vec2(0,1),
+                    Boundary,new[]{nearA,nearB},Array.Empty<string>()),
+                new[]{Flat(nearA),Flat(nearB)},vertical,Plane(0),
+                new VolumeCalculationOptions{FromLevel=0,ToLevel=10,LevelStep=5});
+            Check(validSections.IsComplete && validSections.TotalCutVolume>0,
+                "Zero-area vertical face wrongly excluded a valid section strip");
+        };
+        tests["rf27_offrange_elevation_bands_never_fake_zero_volume"]=()=>{
+            var a=Profile(1,5);var b=Profile(2,5);
+            var system=new SectionSystem(new Vec2(1,0),new Vec2(0,1),
+                Boundary,new[]{a.Line,b.Line},Array.Empty<string>());
             bool rejected=false;
-            try {
-                new SectionVolumeCalculator().Calculate(
-                    new SectionSystem(new Vec2(1,0),new Vec2(0,1),
-                        Boundary,new[]{nearA,nearB},Array.Empty<string>()),
-                    new[]{Flat(nearA),Flat(nearB)},vertical,Plane(0),
-                    new VolumeCalculationOptions{FromLevel=0,ToLevel=10,LevelStep=5});
-            } catch(InvalidOperationException) { rejected=true; }
+            try{
+                new SectionVolumeCalculator().Calculate(system,new[]{a,b},
+                    Plane(5),Plane(0),new VolumeCalculationOptions{
+                        FromLevel=300,ToLevel=400,LevelStep=5});
+            }catch(InvalidOperationException ex){
+                rejected=ex.Message.Contains("không chứa cao độ TIN") &&
+                    ex.Message.Contains("Đề nghị tính từ");
+            }
             Check(rejected,
-                "A strip with ambiguous support geometry was incorrectly certified because it did not touch the curtain");
+                "Off-elevation band produced zero volume instead of a clear measured-Z error");
+            var result=new SectionVolumeCalculator().Calculate(
+                system,new[]{a,b},Plane(5),Plane(0),
+                new VolumeCalculationOptions{FromLevel=0,ToLevel=10,LevelStep=5});
+            Check(result.TotalCutVolume>0,"Valid corrected level bands lost quantities");
         };
         tests["rf21_missing_elevation_in_one_section_must_not_certify_partial_volume"]=()=>{
             var a=Profile(1,5);var b=Profile(2,5);
