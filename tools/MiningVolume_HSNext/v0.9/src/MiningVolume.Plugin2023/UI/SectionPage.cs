@@ -52,7 +52,7 @@ namespace MiningVolume2023.UI
             };
             root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 32F));   // title
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 360F));  // parameters
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 340F));  // parameters
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 42F));   // primary actions
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 74F));   // edit tools + CAD profile update
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 28F));   // status
@@ -75,6 +75,7 @@ namespace MiningVolume2023.UI
                 RowCount = 11,
                 Padding = new Padding(4, 2, 4, 2),
                 Margin = Padding.Empty,
+                AutoScroll = true, // compact 13-row parameters stay reachable in a 620px palette
                 BackColor = Color.White
             };
             top.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150F));
@@ -273,7 +274,7 @@ namespace MiningVolume2023.UI
                         _parameterLayout.Controls.Add(_parameterActions[i], 2, row);
                     }
                 }
-                _rootLayout.RowStyles[1].Height = compact ? 472F : 360F;
+                _rootLayout.RowStyles[1].Height = compact ? 365F : 340F;
             }
             finally { _parameterLayout.ResumeLayout(true); }
         }
@@ -298,7 +299,7 @@ namespace MiningVolume2023.UI
             return n;
         }
         private static Button Button(string t, EventHandler h) { var b = new Button { Text = t, AutoSize = true, Height = 28, Margin = new Padding(2) }; b.Click += h; return b; }
-        private static void Add(TableLayoutPanel p, int r, string label, Control c, Control b) { p.Controls.Add(new Label { Text = label, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 0, r); p.Controls.Add(c, 1, r); p.Controls.Add(b, 2, r); }
+        private static void Add(TableLayoutPanel p, int r, string label, Control c, Control b) { p.Controls.Add(new Label { Text = label, Dock = DockStyle.Fill, AutoEllipsis = true, TextAlign = ContentAlignment.MiddleLeft }, 0, r); p.Controls.Add(c, 1, r); p.Controls.Add(b, 2, r); }
 
         private void PickBoundary(object s, EventArgs e)
         {
