@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using MiningVolume.Core.Geometry;
 using MiningVolume.Core.Sections;
+using MiningVolume.Core.Sections;
 using MiningVolume2023.Services;
 
 namespace MiningVolume2023.UI
@@ -120,7 +121,7 @@ namespace MiningVolume2023.UI
             _vScale.Enabled = false;
 
             Add(top, 0, "Đường bao", _boundary, Button("Chọn trên CAD", PickBoundary));
-            Add(top, 1, "Hướng mặt cắt", _direction, Button("Chọn 2 điểm", PickDirection));
+            Add(top, 1, "Hướng MC (vuông góc)", _direction, Button("Chọn 2 điểm", PickDirection));
             Add(top, 2, "Thông số theo", _parameterMode, new Panel());
             Add(top, 3, "Khoảng cách mặt cắt, m", _spacing, new Panel());
             Add(top, 4, "Bước chia trục Z, m", _axisStep, new Panel());
@@ -317,11 +318,14 @@ namespace MiningVolume2023.UI
         {
             var r = SelectionService.PickDirection();
             if (r == null) return;
-            ProjectState.Current.SectionDirection = r.Vector;
+            // The two CAD points indicate the REFERENCE baseline, not the
+            // direction along a section. Sections cross it at 90 degrees.
+            var sectionDirection = SectionSystemBuilder.PerpendicularToSelectedDirection(r.Vector);
+            ProjectState.Current.SectionDirection = sectionDirection;
             ProjectState.Current.SectionSystem = null;
             ProjectState.Current.SectionProfiles.Clear();
             ProjectState.Current.VolumeResult = null;
-            _direction.Text = DirectionText(r.Vector);
+            _direction.Text = DirectionText(sectionDirection) + " (vuông góc đường chọn)";
             ProjectState.Current.NotifyChanged();
         }
 
