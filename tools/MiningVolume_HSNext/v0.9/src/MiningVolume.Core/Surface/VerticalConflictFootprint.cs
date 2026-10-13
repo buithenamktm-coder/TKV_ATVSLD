@@ -47,6 +47,8 @@ namespace MiningVolume.Core.Surface
             private readonly Dictionary<(long,long), List<Vec2>> _sites =
                 new Dictionary<(long,long), List<Vec2>>();
             private readonly double _epsilon;
+            private readonly HashSet<(long,long)> _neighborCells =
+                new HashSet<(long,long)>();
             public bool IsEmpty => _sites.Count == 0;
 
             public ConflictRootIndex(TinSurface existing, TinSurface design,
@@ -61,6 +63,12 @@ namespace MiningVolume.Core.Surface
                     if (!_sites.TryGetValue(key, out var list))
                         _sites.Add(key, list = new List<Vec2>());
                     list.Add(root);
+                    // Usually less than 0.1% of terrain vertices are near a
+                    // multi-Z root; one lookup eliminates 9 unnecessary probes.
+                    for(long dx=-1;dx<=1;dx++)
+                        for(long dy=-1;dy<=1;dy++)
+                            _neighborCells.Add((
+                                checked(key.Item1+dx),checked(key.Item2+dy)));
                 }
             }
 
@@ -76,6 +84,7 @@ namespace MiningVolume.Core.Surface
             {
                 if (IsEmpty) return false;
                 var cell = Key(p);
+                if (!_neighborCells.Contains(cell)) return false;
                 for (long dx=-1;dx<=1;dx++)
                     for (long dy=-1;dy<=1;dy++)
                     {
