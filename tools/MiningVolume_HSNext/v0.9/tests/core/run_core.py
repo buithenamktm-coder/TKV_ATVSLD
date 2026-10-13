@@ -26,6 +26,10 @@ def main():
         (tmp/'Assets').mkdir()
         shutil.copyfile(project/'src/MiningVolume.Plugin2023/Assets/imsat_logo_64.png',tmp/'Assets/imsat_logo_64.png')
         lines=['-nologo','-target:exe','-out:"'+str(assembly)+'"']
+        # Match the actual AutoCAD plugin: the logo is EMBEDDED as an
+        # assembly resource, not a required file under acad.exe/Assets.
+        logo=project/'src/MiningVolume.Plugin2023/Assets/imsat_logo_64.png'
+        lines.append('-resource:"'+str(logo)+'",MiningVolume2023.Assets.imsat_logo_64.png')
         lines+=['-r:"'+str(p)+'"' for p in (refs[-1]/'ref/net8.0').glob('*.dll')]
         lines+=['"'+str(p)+'"' for p in sources+[project/'src/MiningVolume.Plugin2023/Services/ProjectSnapshot.cs',pathlib.Path(__file__).with_name('CoreRegression.cs').resolve(),pathlib.Path(__file__).with_name('FinalAuditRegression.cs').resolve()]]
         rsp=tmp/'compile.rsp';rsp.write_text('\n'.join(lines),encoding='utf8')
