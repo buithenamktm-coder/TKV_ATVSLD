@@ -67,15 +67,6 @@ namespace MiningVolume2023.UI
             Controls.Add(box);
             box.BringToFront();
 
-            Controls.Add(new Label
-            {
-                Text = "Excel: Arial 12 • bảng đóng khung • công thức liên kết thật • logo IMSAT ở sheet báo cáo chính.",
-                Dock = DockStyle.Top,
-                Height = 42,
-                ForeColor = Color.DimGray,
-                Padding = new Padding(4, 6, 4, 4)
-            });
-
             var targets = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 35, WrapContents = false, Padding = new Padding(7, 4, 4, 0) };
             _toCad = new CheckBox { Text = "Xuất bảng lên CAD", AutoSize = true, Checked = false, Margin = new Padding(4, 4, 20, 4) };
             _toExcel = new CheckBox { Text = "Xuất file Excel", AutoSize = true, Checked = true, Margin = new Padding(4, 4, 20, 4) };
