@@ -245,13 +245,20 @@ namespace MiningVolume2023.Services
         public double GridSizeY { get; set; } = 20.0;
         public double GridRotationDegrees { get; set; }
         public double SectionSpacing { get; set; } = 20.0;
+        // Mặt cắt than lộ thiên: TT 34/2018/TT-BCT, Điều 10 và Điều 12.
+        // Users can select Custom and change every parameter; never silently
+        // represent a noncompliant configuration as legally approved.
+        public string SectionParameterMode { get; set; } = "TT34/2018/TT-BCT";
+        public int SectionMapScale { get; set; } = 1000;
+        // Grid-line elevation spacing on the drawn section (not bench band size).
+        public double SectionAxisElevationInterval { get; set; } = 20.0;
         // Khoảng trống xuất hình CAD, không ảnh hưởng chiều dài tính khối lượng.
         public double SectionLayoutGap { get; set; } = 90.0;
         public double LevelStep { get; set; } = 5.0;
         public double FromLevel { get; set; }
         public double ToLevel { get; set; }
         public double HorizontalScale { get; set; } = 1000.0;
-        public double VerticalScale { get; set; } = 500.0;
+        public double VerticalScale { get; set; } = 1000.0;
         public string DeveloperName { get; set; } = "Bùi Thế Nam";
         public string DeveloperContact { get; set; } = "ĐT/Zalo: 0967280686";
         public string MiningUnitGroup { get; set; } = MiningUnitCatalog.Coal;
@@ -300,12 +307,15 @@ namespace MiningVolume2023.Services
             GridSizeY = 20.0;
             GridRotationDegrees = 0;
             SectionSpacing = 20.0;
+            SectionParameterMode = "TT34/2018/TT-BCT";
+            SectionMapScale = 1000;
+            SectionAxisElevationInterval = 20.0;
             SectionLayoutGap = 90.0;
             LevelStep = 5.0;
             FromLevel = 0;
             ToLevel = 0;
             HorizontalScale = 1000.0;
-            VerticalScale = 500.0;
+            VerticalScale = 1000.0;
             DeveloperName = "Bùi Thế Nam";
             DeveloperContact = "ĐT/Zalo: 0967280686";
             LastProjectSavedUtc = null;
