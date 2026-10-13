@@ -2,14 +2,7 @@ name: IMSAT VOLUME - AutoCAD 2015-2026 compatibility compile (NOT RELEASE)
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - miningvolume-v2-chatgpt-p0-continuation
-    paths:
-      - 'tools/MiningVolume_HSNext/v0.9/compat/**'
-      - 'tools/MiningVolume_HSNext/v0.9/src/**/*.csproj'
-      - 'tools/MiningVolume_HSNext/v0.9/src/**/*.cs'
-      - '.github/workflows/imsat-cad-2025-2026-compat-ci.yml'
+  workflow_call:
 
 jobs:
   compatibility:

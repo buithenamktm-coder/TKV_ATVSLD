@@ -12,6 +12,8 @@ on:
       - '.github/workflows/build-miningvolume-autocad2023.yml'
 
 jobs:
+  compatibility:
+    uses: ./.github/workflows/imsat-cad-2025-2026-compat-ci.yml
   build:
     runs-on: windows-2022
     permissions:

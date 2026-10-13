@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using MiningVolume.Core.Geometry;
 
 namespace MiningVolume.Core.Grid
@@ -73,8 +74,10 @@ namespace MiningVolume.Core.Grid
             IReadOnlyList<Triangle3> existing,
             IReadOnlyList<Triangle3> design,
             IReadOnlyList<Vec2> cellPolygon,
-            PreparedBoundary boundary)
+            PreparedBoundary boundary,
+            CancellationToken cancellationToken = default(CancellationToken))
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (existing == null) throw new ArgumentNullException(nameof(existing));
             if (design == null) throw new ArgumentNullException(nameof(design));
             if (boundary == null) throw new ArgumentNullException(nameof(boundary));
@@ -94,16 +97,18 @@ namespace MiningVolume.Core.Grid
             result.CalculationArea = Math.Max(0, result.CalculationArea);
             if (result.CalculationArea <= Eps) return result;
 
-            ValidateSingleSheet(existing,cell,boundary,"hiện trạng");
-            ValidateSingleSheet(design,cell,boundary,"thiết kế");
+            ValidateSingleSheet(existing,cell,boundary,"hiện trạng",cancellationToken);
+            ValidateSingleSheet(design,cell,boundary,"thiết kế",cancellationToken);
 
             foreach (var tn in existing)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 if (tn.Area2D <= Eps || !Overlaps(cell, tn)) continue;
                 var inExisting = Clip(cell, Triangle(tn));
                 if (Area(inExisting) <= Eps) continue;
                 foreach (var tk in design)
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     if (tk.Area2D <= Eps || !Overlaps(inExisting, tk)) continue;
                     var intersection = Clip(inExisting, Triangle(tk));
                     if (Area(intersection) <= Eps) continue;
@@ -197,12 +202,14 @@ namespace MiningVolume.Core.Grid
         }
 
         private static void ValidateSingleSheet(IReadOnlyList<Triangle3> candidates,
-            IReadOnlyList<Vec2> cell,PreparedBoundary boundary,string source)
+            IReadOnlyList<Vec2> cell,PreparedBoundary boundary,string source,
+            CancellationToken cancellationToken)
         {
             if(candidates == null || candidates.Count < 2)return;
             var boxes=new List<PlanarBox>();
             foreach(var tri in candidates)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 if(tri.Area2D<=Eps || !Overlaps(cell,tri))continue;
                 boxes.Add(new PlanarBox {
                     Triangle=tri,
@@ -218,6 +225,7 @@ namespace MiningVolume.Core.Grid
                 var a=boxes[i];
                 for(int j=i+1;j<boxes.Count;j++)
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     var b=boxes[j];
                     if(b.MinX >= a.MaxX - Eps)break;
                     if(a.MaxY <= b.MinY+Eps || b.MaxY <= a.MinY+Eps)continue;

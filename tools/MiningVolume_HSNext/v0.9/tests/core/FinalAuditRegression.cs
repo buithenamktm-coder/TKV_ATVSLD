@@ -31,6 +31,46 @@ internal static class FinalAuditRegression
         new SectionSystem(new Vec2(1,0),new Vec2(0,1),Boundary,p.Select(x=>x.Line).ToArray(),Array.Empty<string>()),p,Plane(5),Plane(0),
         new VolumeCalculationOptions{FromLevel=0,ToLevel=10,LevelStep=5});
     public static void Add(IDictionary<string,Action> tests) {
+        tests["multicad_grid_stress_10000_50000_100000_cells_analytic_volume"] = () => {
+            foreach(int count in new[]{10000,50000,100000}) {
+                const int columns=100;
+                int rows=count/columns;
+                var ring=new[]{new Vec2(0,0),new Vec2(columns,0),new Vec2(columns,rows),new Vec2(0,rows)};
+                Func<double,TinSurface> surface=z=>new TinSurface("stress",new[]{
+                    new Triangle3(new Vec3(0,0,z),new Vec3(columns,0,z),new Vec3(columns,rows,z)),
+                    new Triangle3(new Vec3(0,0,z),new Vec3(columns,rows,z),new Vec3(0,rows,z))},Array.Empty<ValidationIssue>());
+                int notified=0;
+                var watch=System.Diagnostics.Stopwatch.StartNew();
+                var report=new GridVolumeCalculator().Calculate(surface(5),surface(2),
+                    new GridVolumeOptions{Boundary=ring,SizeX=1,SizeY=1,MaxCells=count},
+                    (done,total)=>{Check(done>=notified&&total==count,"Invalid progress");notified=done;});
+                Check(report.Cells.Count==count&&notified==count&&report.IsComplete,"Large grid incomplete");
+                Check(Math.Abs(report.TotalCutVolume-3d*count)<1e-6,"Analytic stress cut differs");
+                Near(report.TotalFillVolume,0);
+                Console.WriteLine("{\"benchmark\":\"grid_cells\",\"cells\":"+count+",\"ms\":"+watch.ElapsedMilliseconds+"}");
+            }
+        };
+        tests["multicad_grid_cancel_before_index_and_between_cells"] = () => {
+            var ht=Plane(5);var tk=Plane(0);
+            foreach(bool before in new[]{true,false}) {
+                using(var cts=new System.Threading.CancellationTokenSource()) {
+                    if(before)cts.Cancel();
+                    bool cancelled=false;
+                    try {new GridVolumeCalculator().Calculate(ht,tk,
+                        new GridVolumeOptions{Boundary=Boundary,SizeX=.1,SizeY=.1},
+                        (done,total)=>cts.Cancel(),cts.Token);}
+                    catch(OperationCanceledException){cancelled=true;}
+                    Check(cancelled,"Grid returned a completed report after cancellation");
+                }
+            }
+            using(var cts=new System.Threading.CancellationTokenSource()) {
+                cts.Cancel(); bool cancelled=false;
+                try {ExactGridCellCalculator.CalculatePrepared(ht.Triangles,tk.Triangles,Boundary,
+                    ExactGridCellCalculator.PrepareBoundary(Boundary),cts.Token);}
+                catch(OperationCanceledException){cancelled=true;}
+                Check(cancelled,"Dense-cell overlay ignores cancellation");
+            }
+        };
         tests["multicad_grid_overlap_outside_selected_boundary_does_not_block"] = () => {
             var cell = new[]{new Vec2(0,0),new Vec2(10,0),new Vec2(10,10),new Vec2(0,10)};
             var region = new[]{new Vec2(0,0),new Vec2(2,0),new Vec2(2,2),new Vec2(0,2)};
@@ -42,6 +82,10 @@ internal static class FinalAuditRegression
                 new Vec3(t.B.X,t.B.Y,0),new Vec3(t.C.X,t.C.Y,0))).ToArray();
             var result=ExactGridCellCalculator.Calculate(baseFaces.Concat(new[]{extra}).ToArray(),design,cell,region);
             Near(result.CalculationArea,4); Near(result.CoveredArea,4); Near(result.CutVolume,20);
+            var hole=new[]{new Vec2(7,7),new Vec2(9,7),new Vec2(9,9),new Vec2(7,9)};
+            var holed=ExactGridCellCalculator.Calculate(baseFaces.Concat(new[]{extra}).ToArray(),design,cell,
+                cell,new IReadOnlyList<Vec2>[]{hole});
+            Near(holed.CalculationArea,96); Near(holed.CoveredArea,96); Near(holed.CutVolume,480);
         };
         tests["multicad_grid_subnanometre_sign_change_keeps_cut_and_fill"] = () => {
             var cell=new[]{new Vec2(0,0),new Vec2(100,0),new Vec2(100,100),new Vec2(0,100)};
