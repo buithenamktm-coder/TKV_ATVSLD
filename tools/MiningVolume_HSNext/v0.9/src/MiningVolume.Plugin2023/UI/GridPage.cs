@@ -339,16 +339,29 @@ namespace MiningVolume2023.UI
                     throw new InvalidOperationException("Không có bản vẽ AutoCAD.");
                 GridWorkflowService.EnsureBoundaryCurrent(
                     BoundaryGeometryService.ReadBoundary(ProjectState.Current.GridBoundaryHandle));
+                var grid = GridWorkflowService.Report;
+                _draw.Enabled=false;
+                UseWaitCursor=true;
+                _status.Text="Đang vẽ "+grid.Cells.Count.ToString("n0")+" ô lưới lên CAD...";
+                _status.Refresh();
                 using(doc.LockDocument())
                 {
                     if(!ReferenceEquals(doc,Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument))
                         throw new InvalidOperationException("Đã chuyển DWG trước khi vẽ lưới.");
-                    GridCadRenderer.Draw(doc.Database,GridWorkflowService.Report,_labels.Checked);
+                    GridCadRenderer.Draw(doc.Database,grid,_labels.Checked,
+                        (done,total) =>
+                        {
+                            _status.Text="Đang vẽ lưới CAD: "+done.ToString("n0")+
+                                "/"+total.ToString("n0")+" ô...";
+                            _status.Refresh(); // repaint only; never pump nested CAD events
+                        });
                 }
                 doc.Editor.Regen();
-                _status.Text="Đã vẽ hệ lưới trên layer riêng; các lưới lần xuất trước được giữ nguyên.";
+                _status.Text="Đã vẽ "+grid.Cells.Count.ToString("n0")+
+                    " ô lưới CAD trên layer riêng; giữ nguyên lưới trước.";
             }
             catch(Exception ex){Error(ex,"Vẽ lưới CAD");}
+            finally { UseWaitCursor=false; _draw.Enabled=GridWorkflowService.Report!=null; }
         }
 
         private async Task ExportExcelAsync()
