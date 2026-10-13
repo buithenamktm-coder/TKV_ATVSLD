@@ -12,7 +12,7 @@ namespace MiningVolume2023.UI
     public sealed class VolumePage : UserControl
     {
         private readonly Label _scope;
-        private readonly Label _formula;
+        private readonly ProfessionalFormulaPanel _formula;
         private readonly Label _totals;
         private readonly Label _status;
         private readonly DataGridView _detail;
@@ -24,9 +24,13 @@ namespace MiningVolume2023.UI
             Font = new Font("Arial", 9F); BackColor = Color.White;
             Controls.Add(new Label { Text = "TÍNH KHỐI LƯỢNG", Dock = DockStyle.Top, Height = 32, Font = new Font("Arial", 11F, FontStyle.Bold) });
 
-            var info = new TableLayoutPanel { Dock = DockStyle.Top, Height = 84, ColumnCount = 2, RowCount = 3, Padding = new Padding(5) };
+            var info = new TableLayoutPanel { Dock = DockStyle.Top, Height = 202, ColumnCount = 2, RowCount = 3,
+                Padding = new Padding(10, 7, 10, 10), Margin = new Padding(0, 4, 0, 10) };
+            info.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
+            info.RowStyles.Add(new RowStyle(SizeType.Absolute, 126));
+            info.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
             info.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 145)); info.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            _scope = InfoLabel(); _formula = InfoLabel(); _totals = InfoLabel(true);
+            _scope = InfoLabel(); _formula = new ProfessionalFormulaPanel(); _totals = InfoLabel(true);
             AddInfo(info, 0, "Phạm vi tính", _scope);
             AddInfo(info, 1, "Công thức", _formula);
             AddInfo(info, 2, "Tổng khối", _totals);
@@ -43,7 +47,9 @@ namespace MiningVolume2023.UI
             bottom.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             bottom.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 245));
             _status = new Label { Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, ForeColor = Color.DimGray, Padding = new Padding(2, 0, 0, 0), Text = "Chưa tính khối lượng." };
-            _calculate = new Button { Text = "TÍNH / CẬP NHẬT KHỐI LƯỢNG", Dock = DockStyle.Top, Height = 34, Font = new Font("Arial", 9F, FontStyle.Bold) };
+            _calculate = new Button { Text = "Tính / cập nhật khối lượng", Dock = DockStyle.Top,
+                Height = 40, Margin = new Padding(8, 5, 8, 5),
+                Font = new Font("Arial", 9.5F, FontStyle.Bold) };
             _calculate.Click += CalculateClicked;
             bottom.Controls.Add(_status, 0, 0); bottom.Controls.Add(_calculate, 1, 0);
             Controls.Add(bottom); bottom.BringToFront();
@@ -124,7 +130,7 @@ namespace MiningVolume2023.UI
         {
             var st = ProjectState.Current;
             _scope.Text = $"{FmtLevel(st.FromLevel)} → {FmtLevel(st.ToLevel)}; bước tầng {st.LevelStep:0.###} m";
-            _formula.Text = "Tự chọn theo F1-F2: 1 đầu = 0 → hình chóp; chênh ≤ 40% → TB hai đầu; chênh > 40% → hình chóp cụt";
+            // The live formula panel typesets exact stacked fractions/case labels.
             if (st.VolumeResult == null)
             {
                 _totals.Text = "Chưa có kết quả";
