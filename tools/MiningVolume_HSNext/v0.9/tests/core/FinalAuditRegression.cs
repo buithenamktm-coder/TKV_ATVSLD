@@ -324,6 +324,47 @@ internal static class FinalAuditRegression
             Check(volumes.IsComplete && volumes.ExcludedIntervals==0 &&
                 volumes.TotalCutVolume>0,"Remote double-Z blocked valid section volume");
         };
+        tests["rf19_prepared_boundary_matches_exact_cell_and_supports_over_5000"]=()=>{
+            var tn=Plane(5);var tk=Plane(0);
+            var cell=new Vec2[]{new Vec2(2,3),new Vec2(7,3),
+                new Vec2(7,8),new Vec2(2,8)};
+            var direct=ExactGridCellCalculator.Calculate(
+                tn.Triangles,tk.Triangles,cell,Boundary);
+            var clip=ExactGridCellCalculator.PrepareBoundary(Boundary);
+            var reused=ExactGridCellCalculator.CalculatePrepared(
+                tn.Triangles,tk.Triangles,cell,clip);
+            Near(direct.CalculationArea,reused.CalculationArea);
+            Near(direct.CoveredArea,reused.CoveredArea);
+            Near(direct.CutVolume,reused.CutVolume);
+            Near(direct.FillVolume,reused.FillVolume);
+            var grid=new GridVolumeCalculator().Calculate(tn,tk,
+                new GridVolumeOptions{Boundary=Boundary,SizeX=0.2,SizeY=0.19});
+            Check(grid.Cells.Count>5000&&grid.IsComplete,
+                "More-than-5,000-cell calculation failed with one pretriangulated boundary");
+            Near(grid.TotalCutVolume,1000);
+        };
+        tests["rf20_double_z_isolates_incident_support_triangles_not_only_curtain"]=()=>{
+            var conflict=new ConflictGroup{Position=new Vec2(0,0)};
+            conflict.Sources.Add(new ConflictSource{Z=5,VertexIndex=0});
+            conflict.Sources.Add(new ConflictSource{Z=9,VertexIndex=1});
+            var baseTin=Plane(5);
+            var vertical=new TinSurface("multiZ",baseTin.Triangles,
+                Array.Empty<ValidationIssue>(),
+                new[]{new Triangle3(new Vec3(0,0,5),new Vec3(0,0,9),
+                    new Vec3(.2,0,5))},new[]{conflict});
+            var roots=new VerticalConflictFootprint.ConflictRootIndex(vertical,Plane(0));
+            Check(roots.Contains(new Vec2(0,0))&&roots.AnyIncident(baseTin.Triangles),
+                "Collapsed multi-Z root not indexed in support triangles");
+            Check(!roots.Contains(new Vec2(5,5)),
+                "Conflict-root index falsely matches a remote point");
+            var grid=new GridVolumeCalculator().Calculate(vertical,Plane(0),
+                new GridVolumeOptions{Boundary=Boundary,SizeX=2,SizeY=2});
+            Check(grid.AmbiguousCells>1 && !grid.IsComplete,
+                "Incident support triangle cells were not quarantined beyond the short vertical curtain");
+            Check(grid.Cells.Where(c=>c.IsVerticalConflict).All(c=>
+                c.Volume.CutVolume==0 && !c.Volume.IsComplete),
+                "Unverified incident support triangle received authoritative volume");
+        };
         tests["rf15_grid_rejects_stale_boundary_and_cell_settings"]=()=>{
             var st=ProjectState.Current;
             st.Reset();
