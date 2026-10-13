@@ -46,6 +46,14 @@ namespace MiningVolume.Core.Volumes
                     warnings.Add(line.Name + ": chưa có mặt cắt hợp lệ, không dùng để tính khối lượng.");
                     continue;
                 }
+                if (!p.IsUserEdited && p.Warnings.Any(message =>
+                    message.Contains("thiếu giao TIN") ||
+                    message.Contains("bỏ qua một đoạn không xác định đủ cao độ TIN")))
+                {
+                    warnings.Add(line.Name +
+                        ": thiếu dữ liệu cao độ trên một phần tuyến; diện tích mặt cắt chưa đầy đủ.");
+                    continue;
+                }
                 // The support TIN may contain remote double-Z points; only a
                 // route actually touching a preserved vertical curtain needs
                 // inspection. Approved/edited CAD geometry is authoritative.
