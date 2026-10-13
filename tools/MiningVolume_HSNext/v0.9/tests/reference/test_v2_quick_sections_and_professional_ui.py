@@ -41,6 +41,11 @@ def test_quick_section_selects_selected_routes_not_parallel_volume_stations():
     assert "EraseOnLayers" not in out
     assert "VolumeWorkflowService" not in out
     assert "AddProfilePolylines" in out
+    assert "exaggeration,ht,tk, tagForEditing: false" in out
+    assert "if (tagForEditing)" in cad
+    assert "StampSection(a, section" in cad
+    # Dedicated QUICK layers cannot be interpreted as official Grip sections.
+    assert "StampSection(" not in out
 
 
 def test_professional_math_fractions_are_visible_without_making_word_equation_claims():
