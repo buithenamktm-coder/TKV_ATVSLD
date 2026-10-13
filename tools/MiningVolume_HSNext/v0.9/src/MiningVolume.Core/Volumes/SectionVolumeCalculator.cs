@@ -24,11 +24,6 @@ namespace MiningVolume.Core.Volumes
             if (endProfiles == null) throw new ArgumentNullException(nameof(endProfiles));
             if (existing == null) throw new ArgumentNullException(nameof(existing));
             if (design == null) throw new ArgumentNullException(nameof(design));
-            if ((existing.RequiresSectionReview || design.RequiresSectionReview) &&
-                endProfiles.Any(p => p != null && p.HasData && !p.IsUserEdited))
-                throw new InvalidOperationException(
-                    "Mô hình chứa nhiều cao độ tại một XY. Phải kiểm tra/chỉnh hệ mặt cắt và bấm " +
-                    "CẬP NHẬT MẶT CẮT trước khi sử dụng khối lượng chính thức.");
             options = options ?? new VolumeCalculationOptions();
             var bands = BuildBands(options.FromLevel, options.ToLevel, options.LevelStep, options.Tolerance);
             if (bands.Count == 0) throw new InvalidOperationException("Không tạo được dải cao độ tính khối lượng.");
@@ -48,11 +43,21 @@ namespace MiningVolume.Core.Volumes
                     warnings.Add(line.Name + ": chưa có mặt cắt hợp lệ, không dùng để tính khối lượng.");
                     continue;
                 }
+                // The support TIN may contain remote double-Z points; only a
+                // route actually touching a preserved vertical curtain needs
+                // inspection. Approved/edited CAD geometry is authoritative.
+                if (!p.IsUserEdited && VerticalConflictFootprint.TouchesSection(
+                    line, existing, design, options.Tolerance))
+                {
+                    warnings.Add(line.Name + ": tuyến gặp mặt đứng 3D nhiều Z; hãy kiểm tra và Cập nhật mặt cắt. Diện tích tuyến chưa xác nhận.");
+                    continue;
+                }
                 var ba = areaCalc.Calculate(p, bands, options.Tolerance);
                 sectionAreas.Add(ba); areaByName[line.Name] = ba;
             }
 
             var intervalRows = new List<SectionIntervalVolume>();
+            int skippedIntervals = 0;
             var levelCut = new double[bands.Count];
             var levelFill = new double[bands.Count];
             var builder = new SectionSystemBuilder();
@@ -69,6 +74,15 @@ namespace MiningVolume.Core.Volumes
                     !areaByName.TryGetValue(b.Name, out SectionBandAreas ab))
                 {
                     warnings.Add($"{a.Name}-{b.Name}: thiếu dữ liệu mặt cắt đầu/cuối; không tính khoảng này.");
+                    skippedIntervals++;
+                    continue;
+                }
+
+                if (!(pa.IsUserEdited && pb.IsUserEdited) &&
+                    VerticalConflictFootprint.TouchesStrip(a, b, existing, design, options.Tolerance))
+                {
+                    warnings.Add($"{a.Name}-{b.Name}: mặt đứng 3D giao vùng giữa hai tuyến; khối lượng khoảng này chưa được xác nhận, không cộng vào tổng.");
+                    skippedIntervals++;
                     continue;
                 }
 
@@ -146,7 +160,12 @@ namespace MiningVolume.Core.Volumes
                 Math.Abs(detailFill - levelFillTotal) > Math.Max(1e-6, Math.Abs(detailFill) * 1e-9))
                 warnings.Add("Cảnh báo kiểm soát: tổng chi tiết và tổng theo tầng có sai khác vượt dung sai số học.");
 
-            return new VolumeResult(bands, intervalRows, levels, sectionAreas, warnings);
+            if (skippedIntervals > 0)
+                warnings.Add($"CHƯA ĐẦY ĐỦ: {skippedIntervals:n0} khoảng chưa có khối lượng xác nhận. Tổng hiện có chỉ gồm các khoảng đã tính hợp lệ.");
+            if (intervalRows.Count == 0)
+                throw new InvalidOperationException("Không có khoảng mặt cắt đủ điều kiện tính. Các tuyến trong phạm vi này đi qua vùng mặt đứng nhiều Z hoặc chưa đủ dữ liệu; không thể thay số chưa xác nhận bằng 0.");
+            return new VolumeResult(bands, intervalRows, levels, sectionAreas, warnings,
+                skippedIntervals);
         }
 
         public static IReadOnlyList<LevelBand> BuildBands(double fromLevel, double toLevel, double step, double tol = 1e-9)
