@@ -83,7 +83,7 @@ namespace MiningVolume2023.Services
         {
             var s=Sheet("CAO ĐỘ NÚT LƯỚI","CAO ĐỘ CÁC NÚT LƯỚI",
                 "STT","Mã nút","I","J","X","Y","Ztn","Ztk","ΔZ","Trạng thái");
-            s.Notes.Add("ΔZ=Ztn−Ztk; nút thiếu cao độ để trống, không điền số 0.");
+            s.Notes.Add("ΔZ=Ztn−Ztk; nút thiếu cao độ để trống, không điền số 0. Với vùng nhiều Z, cao độ mẫu không phải nghiệm thu bề mặt.");
             var nodes=new SortedDictionary<(int,int), (double x,double y,double? tn,double? tk)>(
                 Comparer<(int,int)>.Create((a,b)=>a.Item1!=b.Item1?a.Item1.CompareTo(b.Item1):a.Item2.CompareTo(b.Item2)));
             foreach(var c in grid.Cells)
@@ -146,7 +146,7 @@ namespace MiningVolume2023.Services
         {
             var s=Sheet("BẢNG LƯỚI TỔNG HỢP","BẢNG LƯỚI TỔNG HỢP LIÊN KẾT",
                 "Mã ô","Diện tích (m²)","V đào (m³)","V đắp (m³)","V thuần (m³)");
-            s.Notes.Add("Dữ liệu lấy qua công thức liên kết với CHI TIẾT Ô LƯỚI.");
+            s.Notes.Add("Dữ liệu liên kết với CHI TIẾT Ô LƯỚI; ô có trạng thái chưa xác nhận giữ trống khối lượng.");
             foreach(var c in grid.Cells.Select((v,i)=>new{v,i}))
             {
                 int n=FirstDataRow+c.i;
@@ -183,8 +183,12 @@ namespace MiningVolume2023.Services
                 ReportCell.Formula3("SUM("+from+"I"+FirstDataRow+":I"+end+")"),ReportCell.Text("m³")});
             s.Rows.Add(new ReportCell[]{ReportCell.Text("Chênh lệch đào – đắp"),
                 ReportCell.Formula3("B4-B5"),ReportCell.Text("m³")});
-            s.Rows.Add(new ReportCell[]{ReportCell.Text("Diện tích thiếu TIN"),
+            s.Rows.Add(new ReportCell[]{ReportCell.Text("Diện tích chưa xác nhận (thiếu TIN/nhiều Z)"),
                 ReportCell.Formula3("SUM("+from+"G"+FirstDataRow+":G"+end+")"),ReportCell.Text("m²")});
+            s.Rows.Add(new ReportCell[]{ReportCell.Text("Tình trạng nghiệm thu"),
+                ReportCell.Text(grid.IsComplete ? "ĐỦ DỮ LIỆU ĐỂ RÀ SOÁT" :
+                    "CHƯA ĐẦY ĐỦ – TỔNG CHỈ LÀ PHẦN CÓ DỮ LIỆU"),
+                ReportCell.Text("")});
             // Sign-off area belongs to the same volume-summary worksheet.
             // Keep all formula row numbers intact by appending after totals.
             var state = ProjectState.Current;
