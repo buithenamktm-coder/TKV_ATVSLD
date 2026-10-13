@@ -6,6 +6,10 @@
   -->
   <PropertyGroup>
     <IMSATCadFlavor Condition="'$(IMSATCadFlavor)' == ''">ACAD2023_NET48</IMSATCadFlavor>
+    <IMSATCadFramework Condition="'$(IMSATCadFlavor)' == 'ACAD2015_NET45'">net45</IMSATCadFramework>
+    <IMSATCadFramework Condition="'$(IMSATCadFlavor)' == 'ACAD2016_NET45'">net45</IMSATCadFramework>
+    <IMSATCadFramework Condition="'$(IMSATCadFlavor)' == 'ACAD2017_NET46'">net46</IMSATCadFramework>
+    <IMSATCadFramework Condition="'$(IMSATCadFlavor)' == 'ACAD2018_NET46'">net46</IMSATCadFramework>
     <IMSATCadFramework Condition="'$(IMSATCadFlavor)' == 'ACAD2019_NET47'">net47</IMSATCadFramework>
     <IMSATCadFramework Condition="'$(IMSATCadFlavor)' == 'ACAD2020_NET47'">net47</IMSATCadFramework>
     <IMSATCadFramework Condition="'$(IMSATCadFlavor)' == 'ACAD2021_NET48'">net48</IMSATCadFramework>
@@ -16,6 +20,10 @@
     <IMSATCadFramework Condition="'$(IMSATCadFlavor)' == 'ACAD2025_NET10'">net10.0-windows</IMSATCadFramework>
     <IMSATCadFramework Condition="'$(IMSATCadFlavor)' == 'ACAD2026_NET8'">net8.0-windows</IMSATCadFramework>
     <IMSATCadFramework Condition="'$(IMSATCadFlavor)' == 'ACAD2026_NET10'">net10.0-windows</IMSATCadFramework>
+    <IMSATCadPackageVersion Condition="'$(IMSATCadFlavor)' == 'ACAD2015_NET45'">20.0.1</IMSATCadPackageVersion>
+    <IMSATCadPackageVersion Condition="'$(IMSATCadFlavor)' == 'ACAD2016_NET45'">20.1.0</IMSATCadPackageVersion>
+    <IMSATCadPackageVersion Condition="'$(IMSATCadFlavor)' == 'ACAD2017_NET46'">21.0.0</IMSATCadPackageVersion>
+    <IMSATCadPackageVersion Condition="'$(IMSATCadFlavor)' == 'ACAD2018_NET46'">22.0.0</IMSATCadPackageVersion>
     <IMSATCadPackageVersion Condition="'$(IMSATCadFlavor)' == 'ACAD2019_NET47'">23.0.0</IMSATCadPackageVersion>
     <IMSATCadPackageVersion Condition="'$(IMSATCadFlavor)' == 'ACAD2020_NET47'">23.1.0</IMSATCadPackageVersion>
     <IMSATCadPackageVersion Condition="'$(IMSATCadFlavor)' == 'ACAD2021_NET48'">24.0.0</IMSATCadPackageVersion>
@@ -26,6 +34,10 @@
     <IMSATCadPackageVersion Condition="'$(IMSATCadFlavor)' == 'ACAD2025_NET10'">25.0.2</IMSATCadPackageVersion>
     <IMSATCadPackageVersion Condition="'$(IMSATCadFlavor)' == 'ACAD2026_NET8'">25.1.0</IMSATCadPackageVersion>
     <IMSATCadPackageVersion Condition="'$(IMSATCadFlavor)' == 'ACAD2026_NET10'">25.1.1</IMSATCadPackageVersion>
+    <IMSATCadHostYear Condition="'$(IMSATCadFlavor)' == 'ACAD2015_NET45'">2015</IMSATCadHostYear>
+    <IMSATCadHostYear Condition="'$(IMSATCadFlavor)' == 'ACAD2016_NET45'">2016</IMSATCadHostYear>
+    <IMSATCadHostYear Condition="'$(IMSATCadFlavor)' == 'ACAD2017_NET46'">2017</IMSATCadHostYear>
+    <IMSATCadHostYear Condition="'$(IMSATCadFlavor)' == 'ACAD2018_NET46'">2018</IMSATCadHostYear>
     <IMSATCadHostYear Condition="'$(IMSATCadFlavor)' == 'ACAD2019_NET47'">2019</IMSATCadHostYear>
     <IMSATCadHostYear Condition="'$(IMSATCadFlavor)' == 'ACAD2020_NET47'">2020</IMSATCadHostYear>
     <IMSATCadHostYear Condition="'$(IMSATCadFlavor)' == 'ACAD2021_NET48'">2021</IMSATCadHostYear>
