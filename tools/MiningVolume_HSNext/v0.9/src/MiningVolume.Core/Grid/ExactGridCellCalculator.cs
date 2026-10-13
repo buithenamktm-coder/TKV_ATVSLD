@@ -128,6 +128,38 @@ namespace MiningVolume.Core.Grid
             return result;
         }
 
+        /// <summary>
+        /// Diagnose individual surface coverage only for cells with an
+        /// incomplete two-TIN overlap. This does not estimate cut/fill and does
+        /// not modify the accepted signed-volume integration algorithm.
+        /// A triangle's area is clipped by the SAME prepared outer boundary
+        /// and holes as used for two-TIN volume calculation.
+        /// </summary>
+        public static double MeasureSurfaceCoveragePrepared(
+            IReadOnlyList<Triangle3> surface,
+            IReadOnlyList<Vec2> cellPolygon,
+            PreparedBoundary boundary)
+        {
+            if (surface == null) throw new ArgumentNullException(nameof(surface));
+            if (boundary == null) throw new ArgumentNullException(nameof(boundary));
+            var cell = Normalize(cellPolygon);
+            if (cell.Count < 3 || !Convex(cell))
+                throw new ArgumentException("Ô lưới chẩn đoán phải có diện tích dương.", nameof(cellPolygon));
+            var outer = boundary.Outer ?? new List<List<Vec2>> { cell };
+            double coverage = 0;
+            foreach (var triangle in surface)
+            {
+                if (triangle.Area2D <= Eps || !Overlaps(cell, triangle)) continue;
+                var intersection = Clip(cell, Triangle(triangle));
+                if (Area(intersection) <= Eps) continue;
+                foreach (var piece in outer)
+                    coverage += Area(Clip(intersection, piece));
+                foreach (var exclusion in boundary.Exclusions)
+                    coverage -= Area(Clip(intersection, exclusion));
+            }
+            return Math.Max(0, coverage);
+        }
+
         private static void Accumulate(List<Vec2> poly, Triangle3 tn, Triangle3 tk,
             ref double area, ref double cut, ref double fill)
         {
