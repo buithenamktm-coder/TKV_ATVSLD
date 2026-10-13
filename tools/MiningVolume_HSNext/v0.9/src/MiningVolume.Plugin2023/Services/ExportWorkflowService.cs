@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Diagnostics;
 using MiningVolume.Core.Model;
 using MiningVolume.Core.Reporting;
 using MiningVolume.Core.Sections;
@@ -62,6 +63,7 @@ namespace MiningVolume2023.Services
             if (unit.Length == 0) return;
             bool outside = string.Equals(unitGroup, MiningUnitCatalog.OutsideTkv,
                 StringComparison.Ordinal);
+            report.IncludeImsatLogo = !outside;
             string prefix = outside ? unit : TkvParentHeading + "\n" + unit;
             foreach (var sheet in report.Sheets)
             {
@@ -86,7 +88,22 @@ namespace MiningVolume2023.Services
             var staging=Path.Combine(directory,"."+Path.GetFileName(target)+"."+Guid.NewGuid().ToString("N")+".tmp");
             try {
                 SimpleXlsxWriter.Write(staging, report);
-                XlsxBrandingInjector.Apply(staging, report);
+                // Failure to add a decorative logo must never discard a
+                // complete workbook (including all linked Excel formulas).
+                if (report.IncludeImsatLogo)
+                {
+                    try { XlsxBrandingInjector.Apply(staging, report); }
+                    catch (Exception ex) when (ex is IOException ||
+                        ex is InvalidDataException || ex is System.Xml.XmlException ||
+                        ex is UnauthorizedAccessException)
+                    {
+                        Trace.TraceWarning("IMSAT logo could not be injected; " +
+                            "continuing with full Excel workbook: " + ex.Message);
+                        // A partial ZIP edit may have occurred: regenerate
+                        // pristine XLSX, preserving all source formulas.
+                        SimpleXlsxWriter.Write(staging, report);
+                    }
+                }
                 if(File.Exists(target))File.Replace(staging,target,null);
                 else File.Move(staging,target);
             } finally {if(File.Exists(staging))File.Delete(staging);}
