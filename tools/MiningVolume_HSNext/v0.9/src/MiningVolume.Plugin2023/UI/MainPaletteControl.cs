@@ -167,6 +167,7 @@ namespace MiningVolume2023.UI
                 AutoSize = true,
                 Font = new Font("Arial", 15F, FontStyle.Bold),
                 ForeColor = UiTheme.ChromeText,
+                BackColor = Color.Transparent,
                 Location = new Point(textLeft, 12)
             });
             header.Controls.Add(new Label
@@ -175,6 +176,7 @@ namespace MiningVolume2023.UI
                 AutoSize = true,
                 Font = new Font("Arial", 9F),
                 ForeColor = UiTheme.ChromeMuted,
+                BackColor = Color.Transparent,
                 Location = new Point(textLeft + 1, 43)
             });
 
