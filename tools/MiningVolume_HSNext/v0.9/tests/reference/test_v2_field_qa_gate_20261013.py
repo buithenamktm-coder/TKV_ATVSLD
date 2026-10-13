@@ -112,8 +112,6 @@ def test_axis_tick_density_is_guarded_before_creating_cad_geometry():
     assert "EnsureElevationTickBudget(baseZ, topZ, levelStep, p.Line.Name);" in renderer.split(
         "for (int pi = startIndex;", 1)[1].split(
         "AddLine(ms, tr", 1)[0]
-    )
     assert "EnsureElevationTickBudget(baseZ, topZ, elevationStep, profile.Line.Name);" in renderer.split(
         "public static void DrawQuickProfiles(", 1)[1].split(
         "AddLine(ms,tr,new Point3d", 1)[0]
-    )
