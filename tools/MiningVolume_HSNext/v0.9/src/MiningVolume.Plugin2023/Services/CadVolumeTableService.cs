@@ -90,16 +90,36 @@ namespace MiningVolume2023.Services
                 Append(model, tr, interval);
                 y -= RowHeight * (totalRow + 1) + TableGap;
 
-                var levels = NewTable(database, layer, result.Levels.Count + 1, 6, new Point3d(x, y, 0), 30);
-                Set(levels, 0, "STT", "Tầng/mức", "Cao độ dưới", "Cao độ trên", "V đào (m³)", "V đắp (m³)");
+                // Native AutoCAD TABLE style may auto-merge the very first
+                // row as its TITLE. Placing six column names in row 0 therefore
+                // rendered ONLY "STT" across the whole table in field QA.
+                // Reserve title row 0 explicitly and put all six headings in
+                // the actual header row 1, before any numerical data.
+                const int levelHeaderRows = 2;
+                int levelsTotalRow = result.Levels.Count + levelHeaderRows;
+                var levels = NewTable(database, layer, levelsTotalRow + 1, 6,
+                    new Point3d(x, y, 0), 43);
+                levels.MergeCells(CellRange.Create(levels, 0, 0, 0, 5));
+                levels.Cells[0, 0].TextString = "BẢNG KHỐI LƯỢNG ĐÀO ĐẮP THEO TẦNG";
+                Set(levels, 1, "Thứ tự", "Tầng/mức", "Cao độ dưới (m)",
+                    "Cao độ trên (m)", "Khối lượng đào (m³)", "Khối lượng đắp (m³)");
+                double cutLevels = 0, fillLevels = 0;
                 for (int i = 0; i < result.Levels.Count; i++)
                 {
                     var level = result.Levels[i];
                     Validate(level.CutVolume, level.FillVolume, level.Band.LowerZ, level.Band.UpperZ);
-                    Set(levels, i + 1, (i + 1).ToString(), level.Band.Name,
-                        F(level.Band.LowerZ), F(level.Band.UpperZ), F(level.CutVolume), F(level.FillVolume));
+                    Set(levels, i + levelHeaderRows, (i + 1).ToString(), level.Band.Name,
+                        F(level.Band.LowerZ), F(level.Band.UpperZ),
+                        F(level.CutVolume), F(level.FillVolume));
+                    cutLevels += level.CutVolume;
+                    fillLevels += level.FillVolume;
                 }
-                StyleSimpleTable(levels, arial, result.Levels.Count + 1, 6);
+                levels.MergeCells(CellRange.Create(levels, levelsTotalRow, 0,
+                    levelsTotalRow, 3));
+                levels.Cells[levelsTotalRow, 0].TextString = "Tổng theo các tầng";
+                levels.Cells[levelsTotalRow, 4].TextString = F(cutLevels);
+                levels.Cells[levelsTotalRow, 5].TextString = F(fillLevels);
+                StyleSimpleTable(levels, arial, levelsTotalRow + 1, 6);
                 Append(model, tr, levels);
                 tr.Commit();
             }
