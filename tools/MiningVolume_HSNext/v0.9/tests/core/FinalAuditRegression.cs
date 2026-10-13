@@ -216,6 +216,33 @@ internal static class FinalAuditRegression
                 st.MiningUnitName=previousName;
             }
         };
+        tests["v2_report_discloses_actual_gap_after_manual_station_edits"]=()=>{
+            var st=State();
+            var before=st.SectionSystem;
+            double priorSpacing=st.SectionSpacing;
+            try {
+                var boundary=new[]{new Vec2(0,0),new Vec2(10,0),
+                    new Vec2(10,60),new Vec2(0,60)};
+                var lines=new[]{Profile(1,10).Line,Profile(3,10).Line};
+                st.SectionSystem=new SectionSystem(new Vec2(1,0),
+                    new Vec2(0,1),boundary,lines,Array.Empty<string>());
+                st.SectionSpacing=20.0;
+                var info=ExportWorkflowService.BuildReport(st,new ExportOptions())
+                    .Sheets.Single(x=>x.Name=="Thông tin");
+                var actual=info.Rows.Single(row=>
+                    row.Length>=2&&Equals(row[0].Value,
+                        "Khoảng cách tuyến lớn nhất thực tế, m"));
+                Check(Equals(actual[1].Value,"40"),
+                    "Actual manual section gap not disclosed: expected 40 m");
+                var configured=info.Rows.Single(row=>
+                    row.Length>=2&&Equals(row[0].Value,"Bước tuyến thiết lập, m"));
+                Check(Equals(configured[1].Value,"20"),
+                    "Original requested station spacing should remain separately visible");
+            } finally {
+                st.SectionSystem=before;
+                st.SectionSpacing=priorSpacing;
+            }
+        };
         tests["rf03_full_grip_plus_one_area_and_volume"]=()=>{
             var a=Profile(1,5);var b=Profile(2,5);var old=Calculate(a,b);
             var ea=Edit(a,6,6);var eb=Edit(b,6,6);var now=Calculate(ea,eb);
