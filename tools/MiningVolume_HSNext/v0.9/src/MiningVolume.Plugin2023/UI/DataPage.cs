@@ -80,8 +80,8 @@ namespace MiningVolume2023.UI
             };
             source.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 76));
             source.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            source.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 107));
-            source.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 140));
+            source.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 132));
+            source.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 168));
             source.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
             source.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
             source.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
@@ -271,7 +271,9 @@ namespace MiningVolume2023.UI
 
         private void ApplyResponsiveSourceLayout(int width)
         {
-            bool compact = width < 560;
+            // Keep action labels in full, single-line buttons even when the
+            // palette is wide enough for the source layer combo alone.
+            bool compact = width < 820;
             if (_compactSourceLayout == compact) return;
             _compactSourceLayout = compact;
             _sourceTable.SuspendLayout();
@@ -284,11 +286,11 @@ namespace MiningVolume2023.UI
                 _sourceTable.RowCount = compact ? 5 : 3;
                 if (compact)
                 {
-                    _sourceBox.Height = 233;
+                    _sourceBox.Height = 278;
                     _sourceTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 47));
                     _sourceTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 53));
                     for (int k=0;k<5;k++)
-                        _sourceTable.RowStyles.Add(new RowStyle(SizeType.Absolute, 39));
+                        _sourceTable.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
                     _sourceTable.Controls.Add(_sourceLabels[0],0,0);
                     _sourceTable.Controls.Add(_existingLayer,1,0);
                     _sourceTable.Controls.Add(_sourceLoad[0],0,1);
@@ -305,8 +307,8 @@ namespace MiningVolume2023.UI
                     _sourceBox.Height = 148;
                     _sourceTable.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 76));
                     _sourceTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-                    _sourceTable.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 92));
-                    _sourceTable.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 112));
+                    _sourceTable.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 132));
+                    _sourceTable.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 168));
                     _sourceTable.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
                     _sourceTable.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
                     _sourceTable.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
