@@ -51,3 +51,22 @@ def test_selecting_same_clip_or_clearing_absent_clip_never_stales_a_tin():
     assert "if (!hadRegion && string.IsNullOrWhiteSpace(state.TinRegionHandle))" in clear
     assert "if (hadRegion) state.MarkTinRegionChanged();" in clear
     assert "Chưa giới hạn vùng TIN; hai mô hình hiện có được giữ nguyên." in clear
+
+
+def test_reapplying_identical_via4_preset_keeps_tin_region_revision_and_old_volumes():
+    workflow=read("src/MiningVolume.Plugin2023/Services/SurfaceWorkflowService.cs")
+    via4=workflow.split("public static SurfaceLoadResult[] LoadVia4Preset(",1)[1].split(
+        "public static SurfaceLoadResult LoadLayer(",1
+    )[0]
+    assert "bool sameTinRegion = state.HasTinRegion" in via4
+    assert "Geometry2D.AlmostSame(state.TinRegionPolygon[i], polygon[i], 1e-7)" in via4
+    assert "if (!sameTinRegion)" in via4
+    assert "state.MarkTinRegionChanged();" in via4
+    assert via4.index("state.MarkTinRegionChanged();") < via4.index(
+        "CommitLoadedSource(ModelRole.Existing,"
+    )
+    assert "result.All(x => x.ReusedExistingTin)" in via4
+    assert "return result; // Completely unchanged preset" in via4
+    assert via4.index("return result; // Completely unchanged preset") < via4.index(
+        "GridWorkflowService.Invalidate();"
+    )
