@@ -753,6 +753,61 @@ internal static class CoreRegression
                 try{Check(Signature(tin)==Signature(r.Surface),"In-memory and stored clip differ");}
                 finally{(r.Surface.Triangles as IDisposable)?.Dispose();}
             },
+            ["clipped_upright_3d_face_never_crosses_selected_tin_region"] = ()=>{
+                var ring=new[]{new Vec2(0,0),new Vec2(8,0),new Vec2(8,10),new Vec2(0,10)};
+                var face=new Triangle3(P(-2,5,10),P(-2,5,20),P(10,5,12));
+                var parts=VerticalFaceBuilder.ClipToBoundary(new[]{face},ring);
+                Check(parts.Count>=2,
+                    "Cutting an upright 3D face must retain its nonzero-area interior portions");
+                foreach(var t in parts)
+                    foreach(var v in new[]{t.A,t.B,t.C})
+                        Check(SurfaceRegionClipper.ContainsInclusive(v.XY,ring,1e-7),
+                            "Upright 3D TIN extended outside CAD region");
+                Check(parts.SelectMany(t=>new[]{t.A,t.B,t.C}).Any(v=>
+                    Math.Abs(v.X)<1e-7&&Math.Abs(v.Z-(10+2.0/6.0))<1e-7),
+                    "Clipped 3D face lost interpolated lower Z on selected edge");
+                Check(parts.SelectMany(t=>new[]{t.A,t.B,t.C}).Any(v=>
+                    Math.Abs(v.X)<1e-7&&Math.Abs(v.Z-(20-8.0/6.0))<1e-7),
+                    "Clipped 3D face lost interpolated upper Z on selected edge");
+                var inside=new Triangle3(P(1,1,0),P(2,1,0),P(1,2,0));
+                TinRegionIntegrityVerifier.Verify(
+                    new TinSurface("clipped",new[]{inside},Array.Empty<ValidationIssue>(),parts),
+                    ring);
+                bool rejected=false;
+                try { TinRegionIntegrityVerifier.Verify(
+                    new TinSurface("outside",new[]{new Triangle3(P(-1,0),P(2,1),P(1,2))},
+                        Array.Empty<ValidationIssue>()),ring); }
+                catch(InvalidOperationException){rejected=true;}
+                Check(rejected,"Outside flat support triangle silently accepted");
+                rejected=false;
+                try { TinRegionIntegrityVerifier.Verify(
+                    new TinSurface("outside vertical",new[]{inside},
+                        Array.Empty<ValidationIssue>(),new[]{face}),ring); }
+                catch(InvalidOperationException){rejected=true;}
+                Check(rejected,"Outside upright 3D face silently accepted");
+            },
+            ["cropped_xy_duplicate_tin_is_inside_polygon_in_memory_and_filebacked"] = ()=>{
+                var ring=new[]{new Vec2(0,0),new Vec2(8,0),new Vec2(8,10),new Vec2(0,10)};
+                var options=new SurfaceBuildOptions{
+                    ClipBoundary=ring,PreserveDuplicateXYVerticalFaces=true};
+                var survey=new[]{P(0,0,0),P(10,0,0),P(10,10,0),
+                    P(0,10,0),P(5,5,10),P(5,5,20)};
+                var source=Model(Entity("survey",SourceEntityType.Point,survey));
+                var prepared=new SurfaceInputPreparer().Prepare(source,options);
+                Check(!prepared.HasErrors,"Duplicate XY clip preparation blocked");
+                var normal=Build(prepared,options);
+                Check(normal.VerticalFaces.Count>0,"Clipped XY duplicate lost all 3D faces");
+                TinRegionIntegrityVerifier.Verify(normal,ring);
+                var stored=new TiledConformingTinBuilder().Build("clip-3d",source,options);
+                try {
+                    Check(stored.Surface.VerticalFaces.Count>0,"File-backed clip lost upright 3D faces");
+                    TinRegionIntegrityVerifier.Verify(stored.Surface,ring);
+                    Check(Math.Abs(normal.Triangles.Sum(x=>x.Area2D)-
+                        stored.Surface.Triangles.Sum(x=>x.Area2D))<1e-6,
+                        "Disk-backed and in-memory boundary-clipped support differ");
+                }
+                finally{(stored.Surface.Triangles as IDisposable)?.Dispose();}
+            },
             ["clip_self_intersection_rejected"] = ()=>{
                 bool rejected=false;try{new TinPolygonClipper(new[]{new Vec2(0,0),new Vec2(10,10),new Vec2(0,10),new Vec2(10,0)});}
                 catch(ArgumentException){rejected=true;}Check(rejected,"Invalid polygon accepted");
