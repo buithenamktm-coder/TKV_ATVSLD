@@ -1,0 +1,34 @@
+<Project>
+  <!--
+    Source- and API-accurate build flavor. NEVER load a 2023 net48 DLL in
+    AutoCAD 2025/2026. Unsupported generations are deliberately rejected.
+    This file is imported by all four existing IMSAT projects, not a new app.
+  -->
+  <PropertyGroup>
+    <IMSATCadFlavor Condition="'$(IMSATCadFlavor)' == ''">ACAD2023_NET48</IMSATCadFlavor>
+    <IMSATCadFramework Condition="'$(IMSATCadFlavor)' == 'ACAD2023_NET48'">net48</IMSATCadFramework>
+    <IMSATCadFramework Condition="'$(IMSATCadFlavor)' == 'ACAD2025_NET8'">net8.0-windows</IMSATCadFramework>
+    <IMSATCadFramework Condition="'$(IMSATCadFlavor)' == 'ACAD2025_NET10'">net10.0-windows</IMSATCadFramework>
+    <IMSATCadFramework Condition="'$(IMSATCadFlavor)' == 'ACAD2026_NET8'">net8.0-windows</IMSATCadFramework>
+    <IMSATCadFramework Condition="'$(IMSATCadFlavor)' == 'ACAD2026_NET10'">net10.0-windows</IMSATCadFramework>
+    <IMSATCadPackageVersion Condition="'$(IMSATCadFlavor)' == 'ACAD2023_NET48'">24.2.0</IMSATCadPackageVersion>
+    <IMSATCadPackageVersion Condition="'$(IMSATCadFlavor)' == 'ACAD2025_NET8'">25.0.1</IMSATCadPackageVersion>
+    <IMSATCadPackageVersion Condition="'$(IMSATCadFlavor)' == 'ACAD2025_NET10'">25.0.2</IMSATCadPackageVersion>
+    <IMSATCadPackageVersion Condition="'$(IMSATCadFlavor)' == 'ACAD2026_NET8'">25.1.0</IMSATCadPackageVersion>
+    <IMSATCadPackageVersion Condition="'$(IMSATCadFlavor)' == 'ACAD2026_NET10'">25.1.1</IMSATCadPackageVersion>
+    <IMSATCadHostYear Condition="'$(IMSATCadFlavor)' == 'ACAD2023_NET48'">2023</IMSATCadHostYear>
+    <IMSATCadHostYear Condition="'$(IMSATCadFlavor)' == 'ACAD2025_NET8' Or '$(IMSATCadFlavor)' == 'ACAD2025_NET10'">2025</IMSATCadHostYear>
+    <IMSATCadHostYear Condition="'$(IMSATCadFlavor)' == 'ACAD2026_NET8' Or '$(IMSATCadFlavor)' == 'ACAD2026_NET10'">2026</IMSATCadHostYear>
+    <IMSATCadHostDir Condition="'$(IMSATCadHostDir)' == ''">C:\Program Files\Autodesk\AutoCAD $(IMSATCadHostYear)</IMSATCadHostDir>
+    <IMSATCadIsModern Condition="'$(IMSATCadFramework)' != 'net48'">true</IMSATCadIsModern>
+    <UseWindowsForms Condition="'$(IMSATCadIsModern)' == 'true'">true</UseWindowsForms>
+    <UseWPF Condition="'$(IMSATCadIsModern)' == 'true'">true</UseWPF>
+  </PropertyGroup>
+  <!-- Fail at project evaluation, NOT after creating an inaccurately labeled DLL. -->
+  <Target Name="IMSATValidateCadFlavor" BeforeTargets="PrepareForBuild">
+    <Error Condition="'$(IMSATCadFramework)' == ''"
+           Text="IMSAT: unsupported CAD flavor '$(IMSATCadFlavor)'. Legacy 2012-2020 requires dedicated compatible build; NEVER relabel a net48 2023 binary." />
+    <Error Condition="'$(UseAutoCADNuGet)' != 'true' And !Exists('$(IMSATCadHostDir)\AcMgd.dll') And '$(MSBuildProjectName)' == 'MiningVolume.Plugin2023'"
+           Text="IMSAT: AutoCAD host SDK not found at $(IMSATCadHostDir); use -p:UseAutoCADNuGet=true for compile-only, or install the exact host SDK." />
+  </Target>
+</Project>
