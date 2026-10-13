@@ -19,6 +19,9 @@ namespace MiningVolume2023.Services
         public int Entities { get; set; }
         public int Vertices { get; set; }
         public string OutputTinLayer { get; set; }
+        // Unchanged CAD source: retain the original TIN object, approved
+        // sections and volume results rather than forcing reconstruction.
+        public bool ReusedExistingTin { get; set; }
         public string Summary => $"{Entities:n0} đối tượng • {Vertices:n0} đỉnh";
     }
 
@@ -223,6 +226,34 @@ namespace MiningVolume2023.Services
             model.Touch();
 
             var session = ProjectState.Current.Get(role);
+            // "Nạp layer" is often pressed again before switching from sections
+            // to grid quantities. Reopening the same source must not destroy a
+            // previously accepted million-triangle mesh.
+            //
+            // This is NOT a cheap handle-only comparison: hash every ORIGINAL
+            // surveyed X/Y/Z, type, layer, closure and vertex order. A CAD edit
+            // or a different selection still invalidates/rebuilds normally.
+            if (clearPreviousCadTin && session.IsTinCurrent &&
+                session.SourceMode == sourceMode &&
+                (sourceMode != SourceSelectionMode.Layer ||
+                    string.Equals(session.Layer, layer, StringComparison.OrdinalIgnoreCase)) &&
+                session.AllowedTypes.SetEquals(allowedTypes ?? Enumerable.Empty<SourceEntityType>()) &&
+                session.Source.Entities.Count == entities.Count &&
+                string.Equals(SourceFingerprint.ComputeModel(session.Source),
+                    SourceFingerprint.ComputeModel(model), StringComparison.Ordinal))
+            {
+                // The clip may have changed directly with CAD GRIPs while the
+                // in-memory source remained identical. Never reuse an old TIN
+                // with a changed calculation polygon.
+                EnsureTinRegionMatchesCad();
+                return new SurfaceLoadResult
+                {
+                    Entities = entities.Count,
+                    Vertices = entities.Sum(e => e.Vertices.Count),
+                    OutputTinLayer = session.TinLayer,
+                    ReusedExistingTin = true
+                };
+            }
             // Fail before mutating the source if AutoCAD refuses to clear the
             // previous TIN layer. Preserve the last accepted session on error.
             // DWG restore must not erase the persisted CAD TIN before a
