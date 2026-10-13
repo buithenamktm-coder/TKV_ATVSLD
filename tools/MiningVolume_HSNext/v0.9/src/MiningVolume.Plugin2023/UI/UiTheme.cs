@@ -12,27 +12,33 @@ namespace MiningVolume2023.UI
     /// </summary>
     internal static class UiTheme
     {
-        public static readonly Color Canvas = Color.FromArgb(248, 250, 253);
+        public static readonly Color Canvas = Color.FromArgb(239, 245, 251);
         public static readonly Color Surface = Color.White;
-        public static readonly Color Sidebar = Color.FromArgb(239, 245, 251);
-        public static readonly Color SidebarHover = Color.FromArgb(221, 236, 250);
-        public static readonly Color Accent = Color.FromArgb(23, 105, 181);
-        public static readonly Color AccentDark = Color.FromArgb(15, 82, 148);
-        public static readonly Color TextStrong = Color.FromArgb(28, 28, 30);
-        public static readonly Color Text = Color.FromArgb(45, 58, 73);
-        public static readonly Color Muted = Color.FromArgb(82, 99, 117);
-        public static readonly Color Border = Color.FromArgb(183, 204, 225);
-        public static readonly Color Soft = Color.FromArgb(229, 239, 248);
+        public static readonly Color Sidebar = Color.FromArgb(28, 49, 76);
+        public static readonly Color SidebarHover = Color.FromArgb(45, 78, 111);
+        public static readonly Color Accent = Color.FromArgb(17, 96, 180);
+        public static readonly Color AccentDark = Color.FromArgb(11, 71, 142);
+        public static readonly Color TextStrong = Color.FromArgb(20, 36, 56);
+        public static readonly Color Text = Color.FromArgb(30, 49, 71);
+        public static readonly Color Muted = Color.FromArgb(70, 87, 105);
+        public static readonly Color Border = Color.FromArgb(158, 187, 216);
+        public static readonly Color Soft = Color.FromArgb(224, 237, 249);
         public static readonly Color Danger = Color.FromArgb(157, 31, 43);
         // CAD-tool buttons: clear outline against light panels, dark labels,
         // blue only for primary commands. Preserve the agreed vertical layout.
-        public static readonly Color ButtonBorder = Color.FromArgb(82, 103, 124);
-        public static readonly Color ButtonSecondary = Color.FromArgb(223, 232, 241);
+        public static readonly Color ButtonBorder = Color.FromArgb(93, 122, 152);
+        public static readonly Color ButtonSecondary = Color.FromArgb(212, 230, 248);
         public static readonly Color ButtonText = Color.FromArgb(24, 43, 61);
         // Liquid Glass-inspired visual system. Opaque, composited-once surfaces
         // deliberately replace expensive live desktop blur inside AutoCAD.
         // Dark foreground/solid command fills maintain technical readability.
         public static readonly Color GlassSurface = Color.FromArgb(244, 249, 254);
+        // High-contrast Liquid Glass chrome for AutoCAD dark model-space themes.
+        public static readonly Color ChromeTop = Color.FromArgb(43, 73, 109);
+        public static readonly Color ChromeBottom = Color.FromArgb(22, 40, 65);
+        public static readonly Color ChromeText = Color.FromArgb(245, 250, 255);
+        public static readonly Color ChromeMuted = Color.FromArgb(203, 223, 242);
+        public static readonly Color ChromeEdge = Color.FromArgb(85, 122, 158);
         public static readonly Color GlassTop = Color.FromArgb(250, 253, 255);
         public static readonly Color GlassBottom = Color.FromArgb(225, 239, 250);
         public static readonly Color GlassEdge = Color.FromArgb(161, 190, 216);
@@ -44,7 +50,7 @@ namespace MiningVolume2023.UI
             if (root == null) return;
             root.BackColor = Canvas;
             root.ForeColor = Text;
-            root.Font = new Font("Arial", 9F);
+            root.Font = new Font("Arial", 9.5F);
             ApplyChildren(root);
         }
 
@@ -83,7 +89,7 @@ namespace MiningVolume2023.UI
             if (!label.AutoSize) label.AutoEllipsis = true;
             if (label.Font.Bold && label.Font.Size >= 10.5F)
             {
-                label.Font = new Font("Arial", 11.5F, FontStyle.Bold);
+                label.Font = new Font("Arial", 12F, FontStyle.Bold);
                 label.ForeColor = TextStrong;
             }
             else if (label.ForeColor == Color.DimGray || label.ForeColor == SystemColors.GrayText)
@@ -101,9 +107,9 @@ namespace MiningVolume2023.UI
 
         private static void StyleGroup(GroupBox group)
         {
-            group.BackColor = GlassSurface;
+            group.BackColor = Color.FromArgb(247, 251, 255);
             group.ForeColor = TextStrong;
-            group.Font = new Font("Arial", 9F, FontStyle.Bold);
+            group.Font = new Font("Arial", 9.5F, FontStyle.Bold);
             group.Padding = new Padding(12, 10, 12, 12);
         }
 
@@ -112,11 +118,12 @@ namespace MiningVolume2023.UI
             button.FlatStyle = FlatStyle.Flat;
             button.FlatAppearance.BorderSize = 1;
             button.FlatAppearance.BorderColor = ButtonBorder;
-            button.Font = new Font("Arial", 9F, FontStyle.Bold);
+            button.Font = new Font("Arial", 9.5F, FontStyle.Bold);
             button.UseVisualStyleBackColor = false;
             button.Cursor = Cursors.Hand;
-            if (button.MinimumSize.Height < 34)
-                button.MinimumSize = new Size(button.MinimumSize.Width, 34);
+            if (button.MinimumSize.Height < 36)
+                button.MinimumSize = new Size(button.MinimumSize.Width, 36);
+            button.Padding = new Padding(5, 2, 5, 2);
             button.UseCompatibleTextRendering = true;
             ApplyRoundedButtonMask(button);
 
@@ -131,7 +138,7 @@ namespace MiningVolume2023.UI
             }
             else if (text.StartsWith("XÓA") || text.StartsWith("LOẠI ") || text.StartsWith("HỦY"))
             {
-                button.BackColor = Color.FromArgb(255, 246, 246);
+                button.BackColor = Color.FromArgb(255, 235, 237);
                 button.ForeColor = Danger;
                 button.FlatAppearance.BorderColor = Danger;
                 button.FlatAppearance.MouseOverBackColor = Color.FromArgb(253, 234, 235);
@@ -144,8 +151,8 @@ namespace MiningVolume2023.UI
                 button.BackColor = ButtonSecondary;
                 button.ForeColor = ButtonText;
                 button.FlatAppearance.BorderColor = ButtonBorder;
-                button.FlatAppearance.MouseOverBackColor = Color.FromArgb(203, 220, 236);
-                button.FlatAppearance.MouseDownBackColor = Color.FromArgb(184, 205, 225);
+                button.FlatAppearance.MouseOverBackColor = Color.FromArgb(190, 218, 245);
+                button.FlatAppearance.MouseDownBackColor = Color.FromArgb(168, 202, 237);
             }
         }
 
@@ -196,7 +203,7 @@ namespace MiningVolume2023.UI
 
         private static void StyleTextBox(TextBox box)
         {
-            box.Font = new Font("Arial", 9F);
+            box.Font = new Font("Arial", 9.5F);
             box.ForeColor = TextStrong;
             box.BackColor = box.ReadOnly ? Soft : Surface;
             box.BorderStyle = BorderStyle.FixedSingle;
@@ -204,21 +211,21 @@ namespace MiningVolume2023.UI
 
         private static void StyleInput(Control input)
         {
-            input.Font = new Font("Arial", 9F);
+            input.Font = new Font("Arial", 9.5F);
             input.ForeColor = TextStrong;
             input.BackColor = Surface;
         }
 
         private static void StyleList(Control list)
         {
-            list.Font = new Font("Arial", 9F);
+            list.Font = new Font("Arial", 9.5F);
             list.ForeColor = TextStrong;
             list.BackColor = Surface;
         }
 
         private static void StyleCheck(CheckBox check)
         {
-            check.Font = new Font("Arial", 9F);
+            check.Font = new Font("Arial", 9.5F);
             check.ForeColor = Text;
             check.BackColor = Color.Transparent;
         }
@@ -231,16 +238,18 @@ namespace MiningVolume2023.UI
             grid.GridColor = Border;
             grid.CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal;
             grid.ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.Single;
-            grid.ColumnHeadersDefaultCellStyle.BackColor = Soft;
-            grid.ColumnHeadersDefaultCellStyle.ForeColor = TextStrong;
-            grid.ColumnHeadersDefaultCellStyle.Font = new Font("Arial", 9F, FontStyle.Bold);
-            grid.ColumnHeadersDefaultCellStyle.SelectionBackColor = Soft;
-            grid.ColumnHeadersDefaultCellStyle.SelectionForeColor = TextStrong;
+            grid.ColumnHeadersDefaultCellStyle.BackColor = AccentDark;
+            grid.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
+            grid.ColumnHeadersDefaultCellStyle.Font = new Font("Arial", 9.5F, FontStyle.Bold);
+            grid.ColumnHeadersDefaultCellStyle.SelectionBackColor = AccentDark;
+            grid.ColumnHeadersDefaultCellStyle.SelectionForeColor = Color.White;
             grid.DefaultCellStyle.BackColor = Surface;
             grid.DefaultCellStyle.ForeColor = Text;
-            grid.DefaultCellStyle.SelectionBackColor = Color.FromArgb(220, 235, 255);
-            grid.DefaultCellStyle.SelectionForeColor = TextStrong;
-            grid.AlternatingRowsDefaultCellStyle.BackColor = Color.FromArgb(248, 248, 250);
+            grid.DefaultCellStyle.SelectionBackColor = Color.FromArgb(31, 105, 183);
+            grid.DefaultCellStyle.SelectionForeColor = Color.White;
+            grid.AlternatingRowsDefaultCellStyle.BackColor = Color.FromArgb(244, 249, 254);
+            grid.ColumnHeadersHeight = Math.Max(grid.ColumnHeadersHeight, 34);
+            grid.RowTemplate.Height = Math.Max(grid.RowTemplate.Height, 27);
             grid.RowHeadersVisible = false;
         }
     }
@@ -252,13 +261,18 @@ namespace MiningVolume2023.UI
     /// </summary>
     internal sealed class GlassPanel : Panel
     {
-        public GlassPanel()
+        private readonly bool _dark;
+
+        public GlassPanel() : this(false) { }
+
+        public GlassPanel(bool dark)
         {
+            _dark = dark;
             SetStyle(ControlStyles.OptimizedDoubleBuffer |
                      ControlStyles.AllPaintingInWmPaint |
                      ControlStyles.UserPaint |
                      ControlStyles.ResizeRedraw, true);
-            BackColor = UiTheme.GlassTop;
+            BackColor = dark ? UiTheme.ChromeBottom : UiTheme.GlassTop;
         }
 
         protected override void OnPaintBackground(PaintEventArgs e)
@@ -266,7 +280,8 @@ namespace MiningVolume2023.UI
             var rect = ClientRectangle;
             if (rect.Width <= 0 || rect.Height <= 0) return;
             using (var fill = new LinearGradientBrush(
-                rect, UiTheme.GlassTop, UiTheme.GlassBottom,
+                rect, _dark ? UiTheme.ChromeTop : UiTheme.GlassTop,
+                _dark ? UiTheme.ChromeBottom : UiTheme.GlassBottom,
                 LinearGradientMode.Vertical))
                 e.Graphics.FillRectangle(fill, rect);
             // Frosted highlight and a precise separator evoke a glass surface
@@ -274,7 +289,8 @@ namespace MiningVolume2023.UI
             int shineHeight = Math.Max(1, Math.Min(14, rect.Height / 4));
             using (var shine = new LinearGradientBrush(
                 new Rectangle(0, 0, rect.Width, shineHeight),
-                UiTheme.GlassHighlight, Color.FromArgb(0, 255, 255, 255),
+                _dark ? Color.FromArgb(53, 255, 255, 255) : UiTheme.GlassHighlight,
+                Color.FromArgb(0, 255, 255, 255),
                 LinearGradientMode.Vertical))
                 e.Graphics.FillRectangle(shine, 0, 0, rect.Width, shineHeight);
         }
@@ -283,7 +299,7 @@ namespace MiningVolume2023.UI
         {
             base.OnPaint(e);
             if (Width < 2 || Height < 2) return;
-            using (var pen = new Pen(UiTheme.GlassEdge))
+            using (var pen = new Pen(_dark ? UiTheme.ChromeEdge : UiTheme.GlassEdge))
                 e.Graphics.DrawLine(pen, 0, Height - 1, Width, Height - 1);
         }
     }
