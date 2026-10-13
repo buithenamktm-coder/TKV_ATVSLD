@@ -68,7 +68,7 @@ def test_ui_fix_header_gap_compact_data_types_and_button_case():
     assert 'const string title = "IMSAT VOLUME";' in chrome
     assert "kv.Value.FlatAppearance.BorderSize = 0;" in chrome
     assert "HorizontalScrollbar = false" in data
-    assert "ColumnWidth = 192" in data
+    assert "ColumnWidth = 148" in data
     assert "button.Text = SentenceCaseButton(button.Text);" in theme
     assert "button.FlatAppearance.BorderSize = 0;" in theme
     assert "Math.Max(5, button.Margin.Left)" in theme
