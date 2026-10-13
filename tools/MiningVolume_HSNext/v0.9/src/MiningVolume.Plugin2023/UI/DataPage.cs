@@ -604,7 +604,9 @@ namespace MiningVolume2023.UI
                 ProjectState.Current.ActiveRole = role;
                 _status.Text =
                     $"Đã nạp {session.Name} bằng chọn trực tiếp: {result.Summary}. " +
-                    $"Nguồn có thể nằm trên nhiều layer. Đã chuẩn bị layer TIN: {result.OutputTinLayer}.";
+                    (result.ReusedExistingTin
+                        ? "TIN đã dựng được giữ nguyên; không cần tạo lại để tính lưới ô vuông."
+                        : $"Nguồn có thể nằm trên nhiều layer. Đã chuẩn bị layer TIN: {result.OutputTinLayer}.");
                 RefreshBuildButtons();
             }
             catch (Exception ex)
@@ -638,7 +640,9 @@ namespace MiningVolume2023.UI
                 ProjectState.Current.ActiveRole = role;
                 _status.Text =
                     $"Đã nạp {ProjectState.Current.Get(role).Name}: {r.Summary}. " +
-                    $"Đã chuẩn bị layer TIN: {r.OutputTinLayer}.";
+                    (r.ReusedExistingTin
+                        ? "Dữ liệu không đổi → GIỮ NGUYÊN TIN đã dựng, dùng chung cho Mặt cắt/Lưới ô vuông."
+                        : $"Đã chuẩn bị layer TIN: {r.OutputTinLayer}.");
                 RefreshBuildButtons();
             }
             catch (Exception ex)
