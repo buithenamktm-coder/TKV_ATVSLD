@@ -77,7 +77,7 @@ namespace IMSAT.Road.Plugin2023
         {
             var document = AcApp.DocumentManager.MdiActiveDocument;
             if (document == null) { AcApp.ShowAlertDialog("Hay mo mot ban ve DWG."); return; }
-            if (_palette != null && _palette.Visible) _palette.Visible = false;
+            // Keep the docked palette visible; CAD prompts run in command context.
             // Dispatch through AutoCAD command context; do not hold a document lock from the palette.
             document.SendStringToExecute("\x03\x03_" + command + " ", true, false, false);
         }

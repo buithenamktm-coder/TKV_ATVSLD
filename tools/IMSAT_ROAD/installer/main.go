@@ -93,6 +93,8 @@ func unpack(dir string) error {
     if err!=nil{return err}
     root:=filepath.Clean(dir)+string(os.PathSeparator)
     for _,f:=range zr.File {
+        // Compress-Archive can emit explicit root directory entries.
+        if f.FileInfo().IsDir() && (f.Name=="bundle/" || f.Name=="bundle/"+bundleName+"/") { continue }
         normalized:=filepath.Clean(filepath.FromSlash(f.Name))
         if !strings.HasPrefix(f.Name,"bundle/"+bundleName+"/") ||
             strings.Contains(f.Name,"\\") || filepath.IsAbs(normalized) || normalized==".." ||
