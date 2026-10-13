@@ -84,7 +84,7 @@ namespace MiningVolume2023.Services
             var s=Sheet("CAO ĐỘ NÚT LƯỚI","CAO ĐỘ CÁC NÚT LƯỚI",
                 "STT","Mã nút","I","J","X","Y","Ztn","Ztk","ΔZ","Trạng thái");
             s.Notes.Add("ΔZ=Ztn−Ztk; nút thiếu cao độ để trống, không điền số 0. Với vùng nhiều Z, cao độ mẫu không phải nghiệm thu bề mặt.");
-            var nodes=new SortedDictionary<(int,int), (double x,double y,double? tn,double? tk)>(
+            var nodes=new SortedDictionary<(int,int), (double x,double y,double? tn,double? tk,bool uncertain)>(
                 Comparer<(int,int)>.Create((a,b)=>a.Item1!=b.Item1?a.Item1.CompareTo(b.Item1):a.Item2.CompareTo(b.Item2)));
             foreach(var c in grid.Cells)
             {
@@ -93,24 +93,32 @@ namespace MiningVolume2023.Services
                     int x=c.I+(k==1||k==2?1:0), y=c.J+(k>=2?1:0);
                     var key=(x,y);
                     double? tn=c.ExistingNodeHeights?[k], tk=c.DesignNodeHeights?[k];
-                    if(!nodes.ContainsKey(key) || (!nodes[key].tn.HasValue && tn.HasValue))
-                        nodes[key]=(c.Corners[k].X,c.Corners[k].Y,tn,tk);
+                    if(!nodes.ContainsKey(key))
+                        nodes[key]=(c.Corners[k].X,c.Corners[k].Y,tn,tk,c.IsVerticalConflict);
+                    else
+                    {
+                        var previous=nodes[key];
+                        nodes[key]=(previous.x,previous.y,
+                            previous.tn ?? tn,previous.tk ?? tk,
+                            previous.uncertain || c.IsVerticalConflict);
+                    }
                 }
             }
             int row=FirstDataRow, i=0;
             foreach(var item in nodes)
             {
                 var p=item.Value;
-                bool valid=p.tn.HasValue && p.tk.HasValue;
+                bool valid=!p.uncertain && p.tn.HasValue && p.tk.HasValue;
                 s.Rows.Add(new ReportCell[]
                 {
                     ReportCell.Int(++i),ReportCell.Text("N-"+item.Key.Item1+"-"+item.Key.Item2),
                     ReportCell.Int(item.Key.Item1),ReportCell.Int(item.Key.Item2),
                     ReportCell.N3(p.x),ReportCell.N3(p.y),
-                    p.tn.HasValue?ReportCell.N3(p.tn.Value):ReportCell.Text(""),
-                    p.tk.HasValue?ReportCell.N3(p.tk.Value):ReportCell.Text(""),
+                    valid?ReportCell.N3(p.tn.Value):ReportCell.Text(""),
+                    valid?ReportCell.N3(p.tk.Value):ReportCell.Text(""),
                     valid?ReportCell.Formula3("G"+row+"-H"+row):ReportCell.Text(""),
-                    ReportCell.Text(valid?"Đủ":"THIẾU Z")
+                    ReportCell.Text(p.uncertain?"NHIỀU Z - CHƯA XÁC NHẬN":
+                        valid?"Đủ":"THIẾU Z")
                 });
                 row++;
             }
