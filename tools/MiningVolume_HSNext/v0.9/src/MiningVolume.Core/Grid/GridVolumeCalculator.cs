@@ -28,6 +28,8 @@ namespace MiningVolume.Core.Grid
         public IReadOnlyList<double?> ExistingNodeHeights { get; internal set; }
         public IReadOnlyList<double?> DesignNodeHeights { get; internal set; }
         public GridCellVolume Volume { get; internal set; }
+        // A zero-volume grid cell with this flag is NOT certified zero.
+        public bool IsVerticalConflict { get; internal set; }
     }
 
     public sealed class GridVolumeReport
@@ -36,7 +38,9 @@ namespace MiningVolume.Core.Grid
         public double TotalCutVolume => Cells.Sum(x => x.Volume.CutVolume);
         public double TotalFillVolume => Cells.Sum(x => x.Volume.FillVolume);
         public double TotalNoDataArea => Cells.Sum(x => x.Volume.NoDataArea);
-        public bool IsComplete => Cells.All(x => x.Volume.IsComplete);
+        public bool IsComplete => Cells.All(x => x.Volume.IsComplete) && AmbiguousCells == 0;
+        public int AmbiguousCells => Cells.Count(x => x.IsVerticalConflict);
+        public double AmbiguousArea => Cells.Where(x => x.IsVerticalConflict).Sum(x => x.Volume.CalculationArea);
         public string Method => "TIN overlay – exact signed integration";
     }
 
@@ -57,14 +61,9 @@ namespace MiningVolume.Core.Grid
                 throw new ArgumentException("TIN hiện trạng chưa hợp lệ.", nameof(existing));
             if (design == null || design.Triangles == null || design.Triangles.Count == 0)
                 throw new ArgumentException("TIN thiết kế chưa hợp lệ.", nameof(design));
-            // Exact grid integration assumes one elevation per planar XY.
-            // Vertical-face regions cannot be certified by that numerical
-            // method. Users can still use edited section-based volumes.
-            if (existing.RequiresSectionReview || design.RequiresSectionReview)
-                throw new InvalidOperationException(
-                    "TIN có mặt đứng do trùng XY khác Z. Phương pháp ô lưới 2,5D " +
-                    "chưa hỗ trợ tính đúng miền nhiều Z tại một tọa độ. " +
-                    "Hãy tính theo hệ mặt cắt sau khi kiểm tra và CẬP NHẬT MẶT CẮT.");
+            // Do not globally reject an otherwise valid grid because of a
+            // remote double-Z point. Instead mark cells touched by the real
+            // vertical curtain as unverified; never silently choose a Z.
             if (options == null || options.Boundary == null || options.Boundary.Count < 3)
                 throw new ArgumentException("Cần đường bao khép kín có ít nhất ba đỉnh.", nameof(options));
             if (!Finite(options.SizeX) || !Finite(options.SizeY) ||
@@ -98,6 +97,9 @@ namespace MiningVolume.Core.Grid
                 ni * nj > options.MaxCells)
                 throw new InvalidOperationException("Số ô lưới vượt giới hạn thiết lập; hãy tăng kích thước ô hoặc thu nhỏ đường bao.");
 
+            var unsafeCells = VerticalConflictFootprint.AffectedGridCells(
+                existing, design, options.Origin, options.SizeX, options.SizeY,
+                cos, sin, startI, endI, startJ, endJ);
             using (var existingIndex = new TriangleGridIndex(existing.Triangles, options, cos, sin))
             using (var designIndex = new TriangleGridIndex(design.Triangles, options, cos, sin))
             {
@@ -115,8 +117,11 @@ namespace MiningVolume.Core.Grid
                             World(u0 + options.SizeX, v0 + options.SizeY, options.Origin, cos, sin),
                             World(u0, v0 + options.SizeY, options.Origin, cos, sin)
                         };
-                        var tn = existingIndex.Candidates((int)i, (int)j, cell);
-                        var tk = designIndex.Candidates((int)i, (int)j, cell);
+                        bool ambiguous = unsafeCells.Contains((checked((int)i),checked((int)j)));
+                        // Affected cells still carry the accurate clipped XY
+                        // calculation area but NO invented cut/fill quantities.
+                        var tn = ambiguous ? Array.Empty<Triangle3>() : existingIndex.Candidates((int)i, (int)j, cell);
+                        var tk = ambiguous ? Array.Empty<Triangle3>() : designIndex.Candidates((int)i, (int)j, cell);
                         var volume = ExactGridCellCalculator.Calculate(tn, tk, cell, options.Boundary, options.Holes);
                         if (volume.CalculationArea > 1e-9)
                             cells.Add(new GridVolumeCell
@@ -125,7 +130,8 @@ namespace MiningVolume.Core.Grid
                                 Corners = cell,
                                 ExistingNodeHeights = cell.Select(p => SampleZ(tn, p)).ToArray(),
                                 DesignNodeHeights = cell.Select(p => SampleZ(tk, p)).ToArray(),
-                                Volume = volume
+                                Volume = volume,
+                                IsVerticalConflict = ambiguous
                             });
                         processed++;
                         if (processed == total || processed % 100 == 0) progress?.Invoke(processed, total);
