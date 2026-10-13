@@ -113,9 +113,14 @@ namespace MiningVolume.Surface
                 if (mv_cdt_copy(mesh, indices, indices.Length) != 0)
                     throw new InvalidOperationException("Không đọc được kết quả lưới ràng buộc.");
                 TinTriangleQuality.VerifyZeroAreaRemoval(input.Sites, indices, edges, cancellationToken);
-                var verticalFaces = VerticalFaceBuilder.Build(
+                var originalVerticalFaces = VerticalFaceBuilder.Build(
                     input.Sites, indices, input.VerticalConflictGroups,
                     options.XyTolerance, options.ZConflictTolerance, cancellationToken);
+                var verticalFaces = options.ClipBoundary == null
+                    ? originalVerticalFaces
+                    : VerticalFaceBuilder.ClipToBoundary(
+                        originalVerticalFaces, options.ClipBoundary,
+                        options.XyTolerance, cancellationToken);
                 if (fileBacked)
                 {
                     int retainedSmall, skippedDegenerate;
