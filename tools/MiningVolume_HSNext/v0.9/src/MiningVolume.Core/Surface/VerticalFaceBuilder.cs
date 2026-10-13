@@ -15,6 +15,75 @@ namespace MiningVolume.Core.Surface
     /// </summary>
     public static class VerticalFaceBuilder
     {
+        /// <summary>
+        /// Clip the 3D upright triangles to the SAME polygon used for the 2.5D
+        /// support mesh. These triangles have zero projected XY area, so the
+        /// ordinary planar triangle clipper would silently discard them.
+        /// Instead clip the root-to-neighbor XY segment, interpolate BOTH
+        /// sloping Z edges and split each remaining trapezoid into triangles.
+        /// No Z measurement is averaged, and faces never extend past the
+        /// selected CAD border.
+        /// </summary>
+        public static IReadOnlyList<Triangle3> ClipToBoundary(
+            IReadOnlyList<Triangle3> faces, IReadOnlyList<Vec2> boundary,
+            double tolerance = 1e-7, CancellationToken token = default(CancellationToken))
+        {
+            if (faces == null) throw new ArgumentNullException(nameof(faces));
+            if (boundary == null || boundary.Count < 3)
+                throw new ArgumentException("Vùng tạo TIN phải có tối thiểu 3 đỉnh.", nameof(boundary));
+            if (faces.Count == 0) return faces;
+            var output = new List<Triangle3>(faces.Count);
+            foreach (var face in faces)
+            {
+                token.ThrowIfCancellationRequested();
+                var a = face.A;
+                var b = face.B;
+                var c = face.C;
+                // VerticalFaceBuilder always places the duplicated XY root at
+                // A and B. Reject unknown geometry instead of clipping wrongly.
+                if (a.XY.DistanceTo(b.XY) > tolerance)
+                    throw new InvalidOperationException(
+                        "Mặt đứng không có cạnh AB cùng XY; không thể cắt vùng an toàn.");
+                double dx = c.X - a.X, dy = c.Y - a.Y;
+                double lengthSq = dx * dx + dy * dy;
+                if (lengthSq <= tolerance * tolerance)
+                    throw new InvalidOperationException(
+                        "Mặt đứng suy biến trong XY; không thể cắt theo đường bao.");
+
+                var horizontal = new Segment3(a, c, "VERTICAL_TIN_FACE");
+                foreach (var kept in SurfaceRegionClipper.ClipSegment(
+                    horizontal, boundary, tolerance))
+                {
+                    double t0 = Math.Max(0, Math.Min(1,
+                        ((kept.A.X - a.X) * dx + (kept.A.Y - a.Y) * dy) / lengthSq));
+                    double t1 = Math.Max(0, Math.Min(1,
+                        ((kept.B.X - a.X) * dx + (kept.B.Y - a.Y) * dy) / lengthSq));
+                    if (t1 - t0 <= 1e-12) continue;
+                    Vec3 Low(double t) => new Vec3(
+                        a.X + t * dx, a.Y + t * dy, a.Z + t * (c.Z - a.Z));
+                    Vec3 High(double t) => new Vec3(
+                        a.X + t * dx, a.Y + t * dy, b.Z + t * (c.Z - b.Z));
+                    var lo0 = Low(t0); var hi0 = High(t0);
+                    var lo1 = Low(t1); var hi1 = High(t1);
+                    if (HasThreeDimensionalArea(lo0, hi0, lo1))
+                        output.Add(new Triangle3(lo0, hi0, lo1));
+                    if (HasThreeDimensionalArea(hi0, hi1, lo1))
+                        output.Add(new Triangle3(hi0, hi1, lo1));
+                }
+            }
+            return output;
+        }
+
+        private static bool HasThreeDimensionalArea(Vec3 a, Vec3 b, Vec3 c)
+        {
+            double ux = b.X - a.X, uy = b.Y - a.Y, uz = b.Z - a.Z;
+            double vx = c.X - a.X, vy = c.Y - a.Y, vz = c.Z - a.Z;
+            double x = uy * vz - uz * vy;
+            double y = uz * vx - ux * vz;
+            double z = ux * vy - uy * vx;
+            return x * x + y * y + z * z > 1e-24;
+        }
+
         private readonly struct Cell : IEquatable<Cell>
         {
             public readonly long X, Y;
