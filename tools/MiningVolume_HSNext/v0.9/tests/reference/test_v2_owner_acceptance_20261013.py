@@ -61,7 +61,11 @@ def test_ui_fix_header_gap_compact_data_types_and_button_case():
     data = source("MiningVolume.Plugin2023/UI/DataPage.cs")
     theme = source("MiningVolume.Plugin2023/UI/UiTheme.cs")
     mineral = source("MiningVolume.Plugin2023/UI/MineralPage.cs")
-    assert chrome.count("BackColor = Color.Transparent") >= 2
+    # Header title/subtitle are owner-painted: WinForms transparent labels
+    # previously left solid rectangles inside AutoCAD's palette host.
+    assert 'header.Paint += (sender, args)' in chrome
+    assert 'args.Graphics.DrawString(title, big, white, left, 12)' in chrome
+    assert 'const string title = "IMSAT VOLUME";' in chrome
     assert "kv.Value.FlatAppearance.BorderSize = 0;" in chrome
     assert "HorizontalScrollbar = false" in data
     assert "ColumnWidth = 192" in data
@@ -71,7 +75,7 @@ def test_ui_fix_header_gap_compact_data_types_and_button_case():
     assert "Height = 212" in mineral
     assert "AutoScroll = true" in mineral
     sections = source("MiningVolume.Plugin2023/UI/SectionPage.cs")
-    assert "top.RowStyles.Add(new RowStyle(SizeType.Absolute, i < 2 ? 48F : 35F))" in sections
+    assert "top.RowStyles.Add(new RowStyle(SizeType.Absolute, i < 2 ? 54F : 35F))" in sections
     assert "_parameterLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, k < 4 ? 48F : 35F))" in sections
     assert "float preferred = 440F;" in sections
     assert "Bản quyền IMSAT VOLUME" in source("MiningVolume.Plugin2023/UI/LicensePage.cs")
