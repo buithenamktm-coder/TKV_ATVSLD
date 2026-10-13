@@ -6,7 +6,6 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using MiningVolume.Core.Geometry;
 using MiningVolume.Core.Sections;
-using MiningVolume.Core.Sections;
 using MiningVolume2023.Services;
 
 namespace MiningVolume2023.UI
@@ -115,10 +114,8 @@ namespace MiningVolume2023.UI
             _fromLevel = Num(0, -10000, 10000);
             _toLevel = Num(0, -10000, 10000);
             _hScale = Num(1000, 1, 100000);
-            _vScale = Num(1000, 1000, 1000);
-            _hScale.Minimum = 1000;
-            _hScale.Maximum = 1000;
-            _hScale.Value = 1000;
+            _vScale = Num(1000, 1, 100000);
+            // TT34 starts 1:1000/1:1000; Custom enables independent editing.
             _hScale.Enabled = false;
             _vScale.Enabled = false;
 
@@ -130,8 +127,8 @@ namespace MiningVolume2023.UI
             Add(top, 5, "Mức chia tầng tính KL, m", _levelStep, new Panel());
             Add(top, 6, "Tính từ mức", _fromLevel, new Panel());
             Add(top, 7, "Đến mức", _toLevel, new Panel());
-            Add(top, 8, "Tỷ lệ ngang 1/ (cố định)", _hScale, new Panel());
-            Add(top, 9, "Tỷ lệ đứng 1/ (cố định)", _vScale, new Panel());
+            Add(top, 8, "Tỷ lệ ngang 1/", _hScale, new Panel());
+            Add(top, 9, "Tỷ lệ đứng 1/", _vScale, new Panel());
             Add(top, 10, "Giãn cách khi xuất CAD", _layoutGap, new Panel());
             for (int i = 0; i < 11; i++)
             {
@@ -152,11 +149,11 @@ namespace MiningVolume2023.UI
             };
             primary.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
             primary.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
-            var preview = Button("XEM TRƯỚC TUYẾN", Preview);
+            var preview = Button("Xem trước tuyến", Preview);
             preview.Dock = DockStyle.Fill;
             preview.AutoSize = false;
             preview.Font = new Font("Arial", 9F, FontStyle.Bold);
-            var draw = Button("XUẤT / VẼ MẶT CẮT", BuildProfiles);
+            var draw = Button("Xuất / Vẽ mặt cắt", BuildProfiles);
             draw.Name = "btnDrawSections";
             draw.Dock = DockStyle.Fill;
             draw.AutoSize = false;
@@ -178,7 +175,7 @@ namespace MiningVolume2023.UI
             tools.Controls.Add(Button("Dịch tuyến", MoveLine));
             tools.Controls.Add(Button("Xóa tuyến", DeleteLine));
             tools.Controls.Add(Button("Xóa preview", (s, e) => SectionWorkflowService.ClearPreview()));
-            var updateEdited = Button("CẬP NHẬT MẶT CẮT", UpdateEditedProfiles);
+            var updateEdited = Button("Cập nhật mặt cắt", UpdateEditedProfiles);
             updateEdited.Name = "btnUpdateEditedSections";
             updateEdited.Font = new Font("Arial", 9F, FontStyle.Bold);
             updateEdited.MinimumSize = new Size(175, 36);
@@ -481,8 +478,8 @@ namespace MiningVolume2023.UI
                 _status.Refresh();
                 SectionWorkflowService.DrawProfiles(
                     ins.Value,
-                    1000.0,
-                    1000.0,
+                    (double)_hScale.Value,
+                    (double)_vScale.Value,
                     (double)_axisStep.Value,
                     (done, total) =>
                     {
@@ -595,6 +592,14 @@ namespace MiningVolume2023.UI
             st.NotifyChanged();
         }
 
+        private void UpdateScaleAvailability()
+        {
+            bool custom = string.Equals(_parameterMode.SelectedItem as string,
+                "Tùy chỉnh", StringComparison.Ordinal);
+            _hScale.Enabled = custom;
+            _vScale.Enabled = custom;
+        }
+
         private void ParameterModeChanged(object sender, EventArgs e)
         {
             if (_syncing) return;
@@ -604,11 +609,14 @@ namespace MiningVolume2023.UI
                 _syncing = true;
                 try
                 {
-                    _spacing.Value = 20; // 1:1000 map -> maximum section spacing 20m
-                    _axisStep.Value = 20; // fixed display grid interval per TT34
+                    _spacing.Value = 20;
+                    _axisStep.Value = 20;
+                    _hScale.Value = 1000;
+                    _vScale.Value = 1000;
                 }
                 finally { _syncing = false; }
             }
+            UpdateScaleAvailability();
             GeneralParameterChanged(sender, e);
         }
 
@@ -618,7 +626,8 @@ namespace MiningVolume2023.UI
             var st = ProjectState.Current;
             if (string.Equals(_parameterMode.SelectedItem as string,
                 "TT34/2018/TT-BCT", StringComparison.Ordinal) &&
-                (_spacing.Value > 20 || _axisStep.Value != 20))
+                (_spacing.Value > 20 || _axisStep.Value != 20 ||
+                 _hScale.Value != 1000 || _vScale.Value != 1000))
             {
                 _syncing = true;
                 try { _parameterMode.SelectedItem = "Tùy chỉnh"; }
@@ -643,8 +652,8 @@ namespace MiningVolume2023.UI
             st.SectionMapScale = 1000;
             st.SectionParameterMode = _parameterMode.SelectedItem as string ?? "Tùy chỉnh";
             st.SectionLayoutGap = (double)_layoutGap.Value;
-            st.HorizontalScale = 1000;
-            st.VerticalScale = 1000;
+            st.HorizontalScale = (double)_hScale.Value;
+            st.VerticalScale = (double)_vScale.Value;
             if (geometryChanged) st.NotifyChanged();
         }
 
@@ -659,8 +668,8 @@ namespace MiningVolume2023.UI
             st.LevelStep = (double)_levelStep.Value;
             st.FromLevel = (double)_fromLevel.Value;
             st.ToLevel = (double)_toLevel.Value;
-            st.HorizontalScale = 1000;
-            st.VerticalScale = 1000;
+            st.HorizontalScale = (double)_hScale.Value;
+            st.VerticalScale = (double)_vScale.Value;
         }
 
         private void RestoreState()
@@ -677,8 +686,9 @@ namespace MiningVolume2023.UI
             _levelStep.Value = Clamp(_levelStep, st.LevelStep);
             _fromLevel.Value = Clamp(_fromLevel, st.FromLevel);
             _toLevel.Value = Clamp(_toLevel, st.ToLevel);
-            _hScale.Value = 1000;
-            _vScale.Value = 1000;
+            _hScale.Value = Clamp(_hScale, st.HorizontalScale);
+            _vScale.Value = Clamp(_vScale, st.VerticalScale);
+            UpdateScaleAvailability();
             _syncing = false;
             RefreshGrid();
         }
