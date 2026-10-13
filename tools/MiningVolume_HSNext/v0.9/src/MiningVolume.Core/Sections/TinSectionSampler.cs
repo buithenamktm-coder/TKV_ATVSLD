@@ -125,7 +125,12 @@ namespace MiningVolume.Core.Sections
                     double dummy;
                     if (!existing.TryElevation(pm, tol * 20, out dummy) ||
                         !design.TryElevation(pm, tol * 20, out dummy))
+                    {
+                        warnings.Add(line.Name +
+                            ": có đoạn thiếu giao TIN hiện trạng/thiết kế; " +
+                            "không được coi phần mặt cắt còn lại là đã tính đủ.");
                         continue;
+                    }
 
                     Vec2 p0 = line.PointAt(t0), p1 = line.PointAt(t1);
                     double eh0, eh1, dh0, dh1;
