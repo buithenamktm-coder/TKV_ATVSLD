@@ -2,7 +2,8 @@
 # This script deliberately DOES NOT create a generally installable EXE.
 # The existing 2023 production QA installer remains unchanged.
 param(
-    [ValidateSet('ACAD2023_NET48','ACAD2025_NET8','ACAD2025_NET10',
+    [ValidateSet('ACAD2021_NET48','ACAD2022_NET48','ACAD2023_NET48',
+                 'ACAD2024_NET48','ACAD2025_NET8','ACAD2025_NET10',
                  'ACAD2026_NET8','ACAD2026_NET10')]
     [string]$Flavor = 'ACAD2023_NET48',
     [switch]$NuGetReferences,
