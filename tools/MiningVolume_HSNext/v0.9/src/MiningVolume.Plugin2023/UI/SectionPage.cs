@@ -574,7 +574,8 @@ namespace MiningVolume2023.UI
                     st.Design.Source.Revision != tRevision ||
                     st.TinRegionRevision != regionRevision ||
                     st.HorizontalScale != hScale || st.VerticalScale != vScale ||
-                    st.SectionAxisElevationInterval != axisStep)
+                    st.SectionAxisElevationInterval != axisStep ||
+                    st.SectionLayoutGap != layoutGap)
                     throw new InvalidOperationException(
                         "Bản vẽ hoặc TIN đã thay đổi khi lấy mặt cắt nhanh. " +
                         "Chưa ghi kết quả CAD; hãy chọn lại tuyến.");
