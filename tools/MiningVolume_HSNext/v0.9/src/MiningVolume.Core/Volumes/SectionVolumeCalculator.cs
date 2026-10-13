@@ -28,6 +28,9 @@ namespace MiningVolume.Core.Volumes
             var bands = BuildBands(options.FromLevel, options.ToLevel, options.LevelStep, options.Tolerance);
             if (bands.Count == 0) throw new InvalidOperationException("Không tạo được dải cao độ tính khối lượng.");
 
+            // One-time scan: candidate 2.5D support triangles incident to
+            // an XY with multiple source Z are not authoritative.
+            var incidentSupport = VerticalConflictFootprint.IncidentSupport(existing, design);
             var warnings = new List<string>();
             var profileByName = endProfiles.Where(p => p != null).GroupBy(p => p.Line.Name)
                 .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
@@ -46,10 +49,13 @@ namespace MiningVolume.Core.Volumes
                 // The support TIN may contain remote double-Z points; only a
                 // route actually touching a preserved vertical curtain needs
                 // inspection. Approved/edited CAD geometry is authoritative.
-                if (!p.IsUserEdited && VerticalConflictFootprint.TouchesSection(
-                    line, existing, design, options.Tolerance))
+                if (!p.IsUserEdited &&
+                    (VerticalConflictFootprint.TouchesSection(
+                        line, existing, design, options.Tolerance) ||
+                     VerticalConflictFootprint.TouchesSupportSection(
+                        line, incidentSupport, options.Tolerance)))
                 {
-                    warnings.Add(line.Name + ": tuyến gặp mặt đứng 3D nhiều Z; hãy kiểm tra và Cập nhật mặt cắt. Diện tích tuyến chưa xác nhận.");
+                    warnings.Add(line.Name + ": tuyến gặp mặt đứng hoặc tam giác hỗ trợ gần đỉnh nhiều Z; cần kiểm tra/Cập nhật mặt cắt trước khi xác nhận diện tích.");
                     continue;
                 }
                 var ba = areaCalc.Calculate(p, bands, options.Tolerance);
@@ -79,9 +85,11 @@ namespace MiningVolume.Core.Volumes
                 }
 
                 if (!(pa.IsUserEdited && pb.IsUserEdited) &&
-                    VerticalConflictFootprint.TouchesStrip(a, b, existing, design, options.Tolerance))
+                    (VerticalConflictFootprint.TouchesStrip(a, b, existing, design, options.Tolerance) ||
+                     VerticalConflictFootprint.TouchesSupportStrip(
+                         a, b, incidentSupport, options.Tolerance)))
                 {
-                    warnings.Add($"{a.Name}-{b.Name}: mặt đứng 3D giao vùng giữa hai tuyến; khối lượng khoảng này chưa được xác nhận, không cộng vào tổng.");
+                    warnings.Add($"{a.Name}-{b.Name}: mặt đứng hoặc tam giác TIN hỗ trợ chứa đỉnh nhiều Z ảnh hưởng vùng giữa hai tuyến; khối lượng chưa xác nhận, không cộng vào tổng.");
                     skippedIntervals++;
                     continue;
                 }
