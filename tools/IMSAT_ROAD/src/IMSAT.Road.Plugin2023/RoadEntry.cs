@@ -49,7 +49,7 @@ namespace IMSAT.Road.Plugin2023
                 AcApp.DocumentManager.MdiActiveDocument.Editor.WriteMessage(
                     "\nIMSAT ROAD: san sang. Mo Ribbon IMSAT ROAD hoac go IRROAD.");
             }
-            catch (Exception)
+            catch (System.Exception)
             {
                 // Workspace/ribbon/menu may not be ready until next Idle.
                 // IRROAD always opens the palette even without a Ribbon.
