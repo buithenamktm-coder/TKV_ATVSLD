@@ -68,7 +68,7 @@ namespace MiningVolume2023.UI
             {
                 Text = "Nguồn dữ liệu",
                 Width = 520,
-                Height = 148,
+                Height = 173,
                 Margin = new Padding(0, 0, 0, 8)
             };
             var source = _sourceTable = new TableLayoutPanel
@@ -80,11 +80,11 @@ namespace MiningVolume2023.UI
             };
             source.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 76));
             source.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            source.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 92));
-            source.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 112));
-            source.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
-            source.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
-            source.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
+            source.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 107));
+            source.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 140));
+            source.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
+            source.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
+            source.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
 
             _existingLayer = new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList, Margin = new Padding(3, 5, 6, 5) };
             _designLayer = new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList, Margin = new Padding(3, 5, 6, 5) };
@@ -195,7 +195,7 @@ namespace MiningVolume2023.UI
             var actions = new TableLayoutPanel
             {
                 Width = 520,
-                Height = 88,
+                Height = 104,
                 ColumnCount = 2,
                 RowCount = 2,
                 Margin = new Padding(0),
@@ -208,15 +208,15 @@ namespace MiningVolume2023.UI
 
             var refresh = Btn("Làm mới layer", (s, e) => RefreshLayers());
             refresh.Dock = DockStyle.Fill;
-            refresh.Margin = new Padding(0, 0, 6, 0);
+            refresh.Margin = new Padding(5, 5, 7, 5);
             actions.Controls.Add(refresh, 0, 1);
 
             _buildExisting = Btn("TẠO TIN HIỆN TRẠNG", async (s,e) => await BuildSingleTinAsync(ModelRole.Existing));
             _buildDesign = Btn("TẠO TIN THIẾT KẾ", async (s,e) => await BuildSingleTinAsync(ModelRole.Design));
             _buildExisting.Dock = DockStyle.Fill;
             _buildDesign.Dock = DockStyle.Fill;
-            _buildExisting.Margin = new Padding(0,0,3,4);
-            _buildDesign.Margin = new Padding(3,0,0,4);
+            _buildExisting.Margin = new Padding(5,5,7,5);
+            _buildDesign.Margin = new Padding(7,5,5,5);
             actions.Controls.Add(_buildExisting,0,0);
             actions.Controls.Add(_buildDesign,1,0);
             _cancelBuild = Btn("Hủy", (s, e) =>
@@ -226,7 +226,7 @@ namespace MiningVolume2023.UI
                 _buildCts.Cancel();
             });
             _cancelBuild.Dock = DockStyle.Fill;
-            _cancelBuild.Margin = new Padding(6, 0, 0, 0);
+            _cancelBuild.Margin = new Padding(7, 5, 5, 5);
             _cancelBuild.Enabled = false;
             actions.Controls.Add(_cancelBuild, 1, 1);
 
