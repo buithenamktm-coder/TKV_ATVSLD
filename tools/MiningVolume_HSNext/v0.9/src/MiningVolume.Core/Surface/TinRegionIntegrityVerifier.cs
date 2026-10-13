@@ -57,7 +57,7 @@ namespace MiningVolume.Core.Surface
                     return;
                 throw new InvalidOperationException(
                     $"TIN chứa {type} số {number:n0} nằm ngoài vùng chọn " +
-                    $"(X={p.X:0.###}; Y={p.Y:0.###}). Đã chặn ghi mô hình sai phạm vi xuống CAD.");
+                    $"(X={p.X:R}; Y={p.Y:R}). Đã chặn ghi mô hình sai phạm vi xuống CAD.");
             }
         }
     }

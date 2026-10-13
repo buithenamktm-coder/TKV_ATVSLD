@@ -31,6 +31,20 @@ internal static class FinalAuditRegression
         new SectionSystem(new Vec2(1,0),new Vec2(0,1),Boundary,p.Select(x=>x.Line).ToArray(),Array.Empty<string>()),p,Plane(5),Plane(0),
         new VolumeCalculationOptions{FromLevel=0,ToLevel=10,LevelStep=5});
     public static void Add(IDictionary<string,Action> tests) {
+        tests["tin_region_corner_tolerance_uses_distance_not_segment_length"] = () => {
+            const double x=470000,y=2400000,tol=1e-5;
+            var ring=new[]{new Vec2(x,y),new Vec2(x+1000,y),new Vec2(x+1000,y+1000),new Vec2(x,y+1000)};
+            // A clipped mine-coordinate vertex may round a few ULPs outside
+            // both incident edges. It is still much closer than the XY tolerance.
+            var near=new Vec2(x-1e-9,y-1e-9);
+            Check(SurfaceRegionClipper.ContainsInclusive(near,ring,tol),"Sub-tolerance corner rejected");
+            Check(!SurfaceRegionClipper.ContainsInclusive(new Vec2(x-2*tol,y-2*tol),ring,tol),"Outside corner accepted");
+            Check(SurfaceRegionClipper.ContainsInclusive(near,ring.Reverse().ToArray(),tol),"Ring direction changes tolerance");
+            Check(!SurfaceRegionClipper.ContainsInclusive(new Vec2(x-.9*tol,y-.9*tol),ring,tol),
+                "Endpoint tolerance became a square instead of a distance");
+            Check(!SurfaceRegionClipper.ContainsInclusive(new Vec2(x+500,y-2*tol),ring,tol),
+                "Perpendicular distance tolerance was widened");
+        };
         tests["tin_segment_index_preserves_padded_candidates_at_mine_coordinates"] = () => {
             const double tol=1e-6;
             var random=new Random(613);

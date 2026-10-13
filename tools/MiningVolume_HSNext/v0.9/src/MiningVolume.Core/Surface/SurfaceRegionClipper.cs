@@ -131,6 +131,12 @@ namespace MiningVolume.Core.Surface
             {
                 var a = polygon[i];
                 var b = polygon[(i + 1) % polygon.Count];
+                // Boundary containment includes a distance-tolerance disk at
+                // each vertex. PointOnSegment's dot-product endpoint test alone
+                // shrinks that disk on long edges and can reject a clipped
+                // mine-coordinate vertex rounded one ULP past a corner.
+                // Keep this boundary policy separate from breakline noding.
+                if (p.DistanceTo(a) <= tolerance) return true;
                 if (Geometry2D.PointOnSegment(p, a, b, tolerance))
                     return true;
             }
