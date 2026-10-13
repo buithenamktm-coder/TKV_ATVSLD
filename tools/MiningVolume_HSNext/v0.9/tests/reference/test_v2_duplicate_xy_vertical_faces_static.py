@@ -49,10 +49,17 @@ def test_unreviewed_3d_vertical_faces_cannot_be_used_for_final_volume():
     workflow = read("MiningVolume.Plugin2023/Services/VolumeWorkflowService.cs")
     sampler = read("MiningVolume.Core/Sections/TinSectionSampler.cs")
     page = read("MiningVolume.Plugin2023/UI/SectionPage.cs")
-    assert "(existing.RequiresSectionReview || design.RequiresSectionReview)" in workflow
-    assert "p.HasData && !p.IsUserEdited" in workflow
+    core = read("MiningVolume.Core/Volumes/SectionVolumeCalculator.cs")
+    projection = read("MiningVolume.Core/Surface/VerticalConflictFootprint.cs")
+    export = read("MiningVolume.Plugin2023/UI/ExportPage.cs")
+    assert "VerticalConflictFootprint.TouchesSection(" in core
+    assert "VerticalConflictFootprint.TouchesStrip(" in core
+    assert "p.HasData" in core and "!p.IsUserEdited" in core
     assert "AnnotateVerticalConflicts(" in sampler
-    assert "ĐIỂM TRÙNG XY:" in sampler
+    assert "MẶT ĐỨNG NHIỀU Z:" in sampler
+    assert "TouchesSection(SectionLine line" in projection
+    assert "TouchesStrip(SectionLine first, SectionLine second" in projection
+    assert "ExcludedIntervals" in export
     assert "CẦN KIỂM TRA MC" in page
 
 def test_standard_tin_creation_never_launches_manual_point_deletion():
