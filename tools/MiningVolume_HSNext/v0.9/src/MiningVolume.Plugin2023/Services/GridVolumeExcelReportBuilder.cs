@@ -73,6 +73,8 @@ namespace MiningVolume2023.Services
             Row(s,"Kích thước Y (m)",opt.SizeY.ToString("0.###"));
             Row(s,"Góc xoay (độ)",opt.RotationDegrees.ToString("0.###"));
             Row(s,"Số ô tính",grid.Cells.Count.ToString());
+            Row(s,"Số ô nhiều Z chưa xác nhận",grid.AmbiguousCells.ToString());
+            Row(s,"Diện tích nhiều Z chưa xác nhận (m²)",grid.AmbiguousArea.ToString("0.###"));
             Row(s,"Độ đầy đủ dữ liệu",grid.IsComplete?"Đủ hai TIN":"THIẾU DỮ LIỆU – CHƯA ĐƯỢC NGHIỆM THU");
             return s;
         }
@@ -167,7 +169,9 @@ namespace MiningVolume2023.Services
             s.ColumnWidths[2] = 34;
             s.AutoFilter = false;
             s.HasSignatures = true;
-            s.Notes.Add("Không phát hành kết quả chính thức khi còn diện tích thiếu dữ liệu.");
+            s.Notes.Add(grid.IsComplete
+                ? "Các ô có đầy đủ TIN hiện trạng và thiết kế."
+                : "CHƯA ĐẦY ĐỦ: chỉ là tổng phần hợp lệ; ô nhiều Z/thiếu TIN chưa xác nhận, không phải thể tích bằng 0.");
             int end=FirstDataRow+grid.Cells.Count-1;
             string from="'CHI TIẾT Ô LƯỚI'!";
             s.Rows.Add(new ReportCell[]{ReportCell.Text("Tổng thể tích đào"),
