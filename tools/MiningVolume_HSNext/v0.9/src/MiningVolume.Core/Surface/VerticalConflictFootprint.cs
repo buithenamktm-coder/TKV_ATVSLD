@@ -94,6 +94,43 @@ namespace MiningVolume.Core.Surface
         }
 
         /// <summary>
+        /// A section interval spans a two-dimensional strip. If a vertical
+        /// curtain touches that strip, its interpolated volume is not yet
+        /// certified even if neither end section passes through the root.
+        /// A reviewed/edited system can still explicitly accept the profile.
+        /// </summary>
+        public static bool TouchesStrip(SectionLine first, SectionLine second,
+            TinSurface existing, TinSurface design, double tolerance=1e-7)
+        {
+            if(first==null||second==null)return false;
+            double minN=Math.Min(first.Offset,second.Offset)-Math.Max(tolerance,1e-7);
+            double maxN=Math.Max(first.Offset,second.Offset)+Math.Max(tolerance,1e-7);
+            double minT=double.PositiveInfinity,maxT=double.NegativeInfinity;
+            foreach(var line in new[]{first,second})
+                foreach(var span in line.Spans)
+                {
+                    minT=Math.Min(minT,span.StartT);
+                    maxT=Math.Max(maxT,span.EndT);
+                }
+            if(!Finite(minT)||!Finite(maxT))return false;
+            // The builder uses parallel section lines sharing Direction/Normal.
+            Vec2 Project(Vec2 point) =>
+                new Vec2(Dot(point,first.Normal),Dot(point,first.Direction));
+            foreach(var root in Roots(existing,design))
+            {
+                var p=Project(root);
+                if(p.X>=minN&&p.X<=maxN&&p.Y>=minT&&p.Y<=maxT)return true;
+            }
+            foreach(var face in Faces(existing,design))
+            {
+                if(!Projection(face,out Vec2 a,out Vec2 c))continue;
+                if(SegmentHitsRect(Project(a),Project(c),minN,minT,maxN,maxT))
+                    return true;
+            }
+            return false;
+        }
+
+        /// <summary>
         /// In a rotated grid, rasterize true projected curtain segments into
         /// affected cells. This is bounded by the requested grid dimensions.
         /// Mark a whole cell as needing review, rather than fabricate a number.
