@@ -67,6 +67,27 @@ internal static class CoreRegression
     static void RunTests()
     {
         var tests=new Dictionary<string,Action> {
+            ["clipped_upright_vertical_faces_all_valid_ABC_permutations"] = ()=>{
+                var ring=new[]{new Vec2(0,0),new Vec2(8,0),new Vec2(8,10),new Vec2(0,10)};
+                var source=new Triangle3(P(-2,5,10),P(-2,5,20),P(10,5,12));
+                var clipped=VerticalFaceBuilder.ClipToBoundary(new[]{source},ring);
+                Check(clipped.Count==2,"Expected both triangles of clipped upright face");
+                foreach(var face in clipped)
+                    Check(VerticalFaceBuilder.IsValidCadFace(face),
+                        "Clipped upright face is rejected by real CAD quality gate");
+                Check(VerticalFaceBuilder.IsValidCadFace(source),
+                    "Original AB vertical edge rejected");
+                Check(VerticalFaceBuilder.IsValidCadFace(new Triangle3(
+                    source.B,source.C,source.A)), "CA vertical edge rejected");
+                Check(VerticalFaceBuilder.IsValidCadFace(new Triangle3(
+                    source.C,source.A,source.B)), "BC vertical edge rejected");
+                Check(!VerticalFaceBuilder.IsValidCadFace(new Triangle3(
+                    P(0,0,0),P(1,0,0),P(0,1,0))),
+                    "Horizontal triangle must not be treated as vertical curtain");
+                Check(!VerticalFaceBuilder.IsValidCadFace(new Triangle3(
+                    P(0,0,0),P(0,0,0),P(1,0,0))),
+                    "Degenerate face accepted");
+            },
             ["quick_section_bent_route_uses_true_cumulative_chainage_without_system"] = ()=>{
                 var ht=new TinSurface("ht",new[]{
                     new Triangle3(P(0,0,10),P(10,0,10),P(10,10,10)),
