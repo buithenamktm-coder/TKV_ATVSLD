@@ -113,6 +113,31 @@ internal static class CoreRegression
                     Math.Abs(result.Segments.Last().Map1.Y-9)<1e-6,
                     "Bent route's original CAD XY geometry was discarded");
             },
+            ["vertical_3d_face_accepts_tiny_true_height_and_narrow_clip_without_missing_triangle_error"] = ()=>{
+                // Both triangles have exactly ZERO XY projected area but valid
+                // nonzero 3D areas. A prior absolute 1e-8 XY/Z threshold
+                // wrongly made the CAD renderer reject narrow boundary clips.
+                var tinyHeight=new Triangle3(P(2269184.0,2936930.0,10),
+                    P(2269184.0,2936930.0,10+1e-9),
+                    P(2269234.0,2936930.0,10));
+                Check(tinyHeight.Area2D == 0 &&
+                    VerticalFaceBuilder.IsValidCadFace(tinyHeight),
+                    "Positive 3D area with tiny Z height rejected");
+                var narrow=new Triangle3(P(2269184.0,2936930.0,10),
+                    P(2269184.0,2936930.0,12),
+                    P(2269184.0+1e-9,2936930.0,11));
+                Check(narrow.Area2D == 0 &&
+                    VerticalFaceBuilder.IsValidCadFace(narrow),
+                    "Positive 3D area with very short XY span rejected");
+                // Test the second diagonal of a clipped curtain (BC upright).
+                var bc=new Triangle3(P(1,2,10),P(2,2,10),
+                    P(2,2,12));
+                Check(VerticalFaceBuilder.IsValidCadFace(bc),
+                    "Valid clipped curtain B-C upright diagonal rejected");
+                var invalid=new Triangle3(P(1,2,10),P(1,2,10),P(2,2,10));
+                Check(!VerticalFaceBuilder.IsValidCadFace(invalid),
+                    "Exactly zero-area face incorrectly accepted");
+            },
             ["cad_validation_1681755_faces_retains_tiny_positive"] = ()=>{
                 const double x=2500000,y=450000;
                 var tiny=new Triangle3(P(x,y,1),P(x+0.000001,y,1),P(x,y+0.000001,1));
