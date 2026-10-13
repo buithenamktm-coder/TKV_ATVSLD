@@ -315,8 +315,13 @@ namespace MiningVolume2023.UI
                     ? "Đã tính "+result.Cells.Count.ToString("n0")+" ô. Đào "+
                         result.TotalCutVolume.ToString("n2")+" m³; đắp "+
                         result.TotalFillVolume.ToString("n2")+" m³."
-                    : "Tính xong nhưng còn "+result.TotalNoDataArea.ToString("n2")+
-                        " m² thiếu TIN. Chưa được nghiệm thu khối lượng.";
+                    : result.AmbiguousCells > 0
+                        ? "Đã tính phần hợp lệ; "+result.AmbiguousCells.ToString("n0")+
+                          " ô ("+result.AmbiguousArea.ToString("n2")+
+                          " m²) gặp mặt đứng nhiều Z: CHƯA CÓ KHỐI LƯỢNG XÁC NHẬN. " +
+                          "Không coi các ô này là thể tích bằng 0."
+                        : "Tính xong nhưng còn "+result.TotalNoDataArea.ToString("n2")+
+                          " m² thiếu TIN. Chưa được nghiệm thu khối lượng.";
                 RefreshCells();
             }
             catch(OperationCanceledException){_status.Text="Đã hủy tính lưới theo yêu cầu.";}
@@ -420,10 +425,11 @@ namespace MiningVolume2023.UI
                 case 2:e.Value=c.J;break;
                 case 3:e.Value=c.Volume.CalculationArea.ToString("0.00");break;
                 case 4:e.Value=c.Volume.NoDataArea.ToString("0.00");break;
-                case 5:e.Value=c.Volume.CutVolume.ToString("0.00");break;
-                case 6:e.Value=c.Volume.FillVolume.ToString("0.00");break;
-                case 7:e.Value=c.Volume.NetVolume.ToString("0.00");break;
-                case 8:e.Value=c.Volume.IsComplete?"Đủ":"Thiếu TIN";break;
+                case 5:e.Value=c.IsVerticalConflict?"—":c.Volume.CutVolume.ToString("0.00");break;
+                case 6:e.Value=c.IsVerticalConflict?"—":c.Volume.FillVolume.ToString("0.00");break;
+                case 7:e.Value=c.IsVerticalConflict?"—":c.Volume.NetVolume.ToString("0.00");break;
+                case 8:e.Value=c.IsVerticalConflict?"Nhiều Z – kiểm tra":
+                    c.Volume.IsComplete?"Đủ":"Thiếu TIN";break;
             }
         }
 
