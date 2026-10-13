@@ -16,7 +16,7 @@ def test_section_core_files_exist_and_have_real_algorithms():
 def test_section_page_no_placeholder_messages():
     s=read('src/MiningVolume.Plugin2023/UI/SectionPage.cs')
     assert 'Sẽ nối' not in s
-    assert 'XEM TRƯỚC TUYẾN' in s
+    assert 'Button("Xem trước tuyến", Preview)' in s
     assert 'Xuất / Vẽ mặt cắt' in s
     assert 'Thêm tuyến' in s and 'Dịch tuyến' in s and 'Xóa tuyến' in s
 
