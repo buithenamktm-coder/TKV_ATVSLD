@@ -107,16 +107,36 @@ namespace MiningVolume2023.Services
                         throw new InvalidOperationException($"Layer '{layers[i]}' không có dữ liệu hợp lệ theo loại đang chọn.");
                 }
             }
+            var state = ProjectState.Current;
+            bool sameTinRegion = state.HasTinRegion &&
+                string.Equals(state.TinRegionHandle, boundaryHandle, StringComparison.OrdinalIgnoreCase) &&
+                state.TinRegionPolygon.Count == polygon.Count;
+            if (sameTinRegion)
+                for (int i = 0; i < polygon.Count; i++)
+                    if (!Geometry2D.AlmostSame(state.TinRegionPolygon[i], polygon[i], 1e-7))
+                    {
+                        sameTinRegion = false;
+                        break;
+                    }
+            // The Via4 button must not increment TinRegionRevision merely
+            // because an unchanged preset is loaded a second time. If the
+            // polygon HAS changed, increment BEFORE inspecting existing TINs
+            // so neither of the original surfaces can be incorrectly reused.
+            if (!sameTinRegion)
+            {
+                state.TinRegionHandle = boundaryHandle;
+                state.TinRegionPolygon.Clear();
+                state.TinRegionPolygon.AddRange(polygon);
+                state.MarkTinRegionChanged();
+            }
             var result = new[]
             {
                 CommitLoadedSource(ModelRole.Existing, layers[0], SourceSelectionMode.Layer, sources[0], allowedTypes),
                 CommitLoadedSource(ModelRole.Design, layers[1], SourceSelectionMode.Layer, sources[1], allowedTypes)
             };
-            var state = ProjectState.Current;
-            state.TinRegionHandle = boundaryHandle;
-            state.TinRegionPolygon.Clear();
-            state.TinRegionPolygon.AddRange(polygon);
-            state.MarkTinRegionChanged();
+            if (sameTinRegion && result.All(x => x.ReusedExistingTin) &&
+                string.Equals(state.BoundaryHandle, boundaryHandle, StringComparison.OrdinalIgnoreCase))
+                return result; // Completely unchanged preset: retain both TINs and all approved results.
             // Use the same boundary for section-based volume calculation.
             state.BoundaryHandle = boundaryHandle;
             state.SectionSystem = null;
