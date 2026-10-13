@@ -270,7 +270,7 @@ namespace MiningVolume2023.Services
                             elevation,3.0,0);
                     }
                     AddProfilePolylines(ms,tr,profile,x0,y0,baseZ,
-                        exaggeration,ht,tk);
+                        exaggeration,ht,tk, tagForEditing: false);
                     AddText(ms,tr,style,label,new Point3d(x0+width/2-4,y0-11,0),
                         "L (m)",3.0,0);
                     AddText(ms,tr,style,label,new Point3d(x0,y0-20,0),
@@ -330,7 +330,8 @@ namespace MiningVolume2023.Services
             double baseZ,
             double vExag,
             ObjectId existingLayer,
-            ObjectId designLayer)
+            ObjectId designLayer,
+            bool tagForEditing = true)
         {
             if (profile == null || profile.Segments == null || profile.Segments.Count == 0)
                 return;
@@ -352,7 +353,8 @@ namespace MiningVolume2023.Services
                     if (existing.Count >= 2)
                     {
                         FlushProfilePair(ms, tr, profile.Line.Name, runIndex++,
-                            existing, design, existingLayer, designLayer, x0, y0, baseZ, vExag);
+                            existing, design, existingLayer, designLayer,
+                            x0, y0, baseZ, vExag, tagForEditing);
                     }
                     existing.Clear();
                     design.Clear();
@@ -376,21 +378,29 @@ namespace MiningVolume2023.Services
 
             if (existing.Count >= 2)
                 FlushProfilePair(ms, tr, profile.Line.Name, runIndex,
-                    existing, design, existingLayer, designLayer, x0, y0, baseZ, vExag);
+                    existing, design, existingLayer, designLayer,
+                    x0, y0, baseZ, vExag, tagForEditing);
         }
 
         private static void FlushProfilePair(
             BlockTableRecord ms, Transaction tr, string section, int run,
             List<Point2d> existing, List<Point2d> design,
             ObjectId existingLayer, ObjectId designLayer,
-            double x0, double y0, double baseZ, double vExag)
+            double x0, double y0, double baseZ, double vExag,
+            bool tagForEditing)
         {
             var a = FlushProfilePolyline(ms, tr, existing, existingLayer);
             var c = FlushProfilePolyline(ms, tr, design, designLayer);
             if (a == null || c == null)
                 throw new InvalidOperationException("Không tạo được hai đường mặt cắt đối ứng.");
-            StampSection(a, section, "HT", run, x0, y0, baseZ, vExag);
-            StampSection(c, section, "TK", run, x0, y0, baseZ, vExag);
+            // Only approved volume sections carry EditRegApp metadata.
+            // Quick sections on MV_MC_NHANH_* must NEVER be picked up by
+            // EditableSectionCadService when the user exports quantities.
+            if (tagForEditing)
+            {
+                StampSection(a, section, "HT", run, x0, y0, baseZ, vExag);
+                StampSection(c, section, "TK", run, x0, y0, baseZ, vExag);
+            }
         }
 
         private static void StampSection(Polyline poly, string section, string role, int run,
