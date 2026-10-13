@@ -503,9 +503,42 @@ namespace MiningVolume2023.UI
                 // manually accepted profiles and volumes untouched.
                 SectionWorkflowService.CommitProfiles(profiles);
 
+                // The old default 0..100 cannot intersect elevations such as
+                // +330..+380 in KL mb.dwg. Automatically match the real range
+                // only when the ENTIRE requested range is outside the sampled
+                // elevations; make the adjustment visible and editable.
+                string autoRangeNote = "";
+                var measurable = profiles.Where(x=>x!=null && x.HasData).ToArray();
+                if (measurable.Length > 0)
+                {
+                    double minZ=measurable.Min(x=>x.MinZ);
+                    double maxZ=measurable.Max(x=>x.MaxZ);
+                    double requestedLow=Math.Min(state.FromLevel,state.ToLevel);
+                    double requestedHigh=Math.Max(state.FromLevel,state.ToLevel);
+                    if (requestedHigh<minZ-1e-7 || requestedLow>maxZ+1e-7 ||
+                        Math.Abs(state.FromLevel-state.ToLevel)<1e-7)
+                    {
+                        double zStep=(double)_levelStep.Value;
+                        double from=Math.Floor(minZ/zStep)*zStep;
+                        double to=Math.Ceiling(maxZ/zStep)*zStep;
+                        if(to<=from)to=from+zStep;
+                        _syncing=true;
+                        try
+                        {
+                            _fromLevel.Value=Clamp(_fromLevel,from);
+                            _toLevel.Value=Clamp(_toLevel,to);
+                            state.FromLevel=(double)_fromLevel.Value;
+                            state.ToLevel=(double)_toLevel.Value;
+                        }
+                        finally { _syncing=false; }
+                        autoRangeNote=$" Đã tự đặt mức tính theo TIN: {state.FromLevel:0.###} đến {state.ToLevel:0.###} m.";
+                        state.NotifyChanged();
+                    }
+                }
+
                 _status.Text =
                     $"Đã thành lập {profiles.Count:n0} mặt cắt; {valid:n0} mặt cắt có đủ dữ liệu hai TIN. " +
-                    $"Tính {watch.Elapsed.TotalSeconds:0.0}s; vẽ {drawWatch.Elapsed.TotalSeconds:0.0}s.";
+                    $"Tính {watch.Elapsed.TotalSeconds:0.0}s; vẽ {drawWatch.Elapsed.TotalSeconds:0.0}s." + autoRangeNote;
                 RefreshGrid();
             }
             catch (Exception ex)
@@ -801,7 +834,7 @@ namespace MiningVolume2023.UI
                     p == null ? "-" : p.CutArea.ToString("0.00"), p == null ? "-" : p.FillArea.ToString("0.00"),
                     p == null ? "Chưa tính" :
                     !p.HasData ? "Thiếu dữ liệu TIN" :
-                    p.Warnings.Any(w => w.StartsWith("ĐIỂM TRÙNG XY:", StringComparison.OrdinalIgnoreCase))
+                    p.Warnings.Any(w => w.StartsWith("MẶT ĐỨNG NHIỀU Z:", StringComparison.OrdinalIgnoreCase))
                         ? "CẦN KIỂM TRA MC" : "OK");
             }
         }
