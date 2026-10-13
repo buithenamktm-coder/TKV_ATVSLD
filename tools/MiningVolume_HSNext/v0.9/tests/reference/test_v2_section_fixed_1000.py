@@ -100,3 +100,23 @@ def test_changing_station_spacing_invalidates_old_section_geometry_and_volume():
         "private void ParameterModeChanged(", 1
     )[0]
     assert "st.VolumeResult = null;" in other
+
+
+def test_manual_station_edits_cannot_falsely_retain_tt34_spacing_preset():
+    workflow = read("src/MiningVolume.Plugin2023/Services/SectionWorkflowService.cs")
+    assert workflow.count("ReconcileManualStationLimit(state, candidate);") == 3
+    assert "ReconcileManualStationLimit(state, system);" in workflow
+    policy = workflow.split("private static void ReconcileManualStationLimit(", 1)[1].split(
+        "private static void DrawPreview(", 1
+    )[0]
+    assert '"TT34/2018/TT-BCT"' in policy
+    assert "const double maxStationGap = 20.0;" in policy
+    assert "boundaryOffsets.Min()" in policy and "boundaryOffsets.Max()" in policy
+    assert "offsets[i] - offsets[i - 1] > maxStationGap + tolerance" in policy
+    assert 'state.SectionParameterMode = "Tùy chỉnh";' in policy
+    assert workflow.index("DrawPreview(candidate);") < workflow.index(
+        "ReconcileManualStationLimit(state, candidate);"
+    )
+    assert workflow.index("ReconcileManualStationLimit(state, candidate);") < workflow.index(
+        "state.SectionSystem = candidate;"
+    )
