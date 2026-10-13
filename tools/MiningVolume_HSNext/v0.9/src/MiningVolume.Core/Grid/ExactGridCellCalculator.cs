@@ -28,6 +28,31 @@ namespace MiningVolume.Core.Grid
     {
         private const double Eps = 1e-9;
 
+        public sealed class PreparedBoundary
+        {
+            internal readonly List<List<Vec2>> Outer;
+            internal readonly List<List<Vec2>> Exclusions;
+            internal PreparedBoundary(List<List<Vec2>> outer,
+                List<List<Vec2>> exclusions)
+            {
+                Outer = outer;
+                Exclusions = exclusions;
+            }
+        }
+
+        // Boundary ear-clipping is independent of grid cell position.
+        // Prepare ONCE per 5,000–100,000-cell calculation, not once per cell.
+        public static PreparedBoundary PrepareBoundary(
+            IReadOnlyList<Vec2> outerBoundary,
+            IReadOnlyList<IReadOnlyList<Vec2>> holes = null)
+        {
+            var outer = outerBoundary == null ? null : Triangulate(outerBoundary);
+            var exclusions = new List<List<Vec2>>();
+            if (holes != null)
+                foreach (var hole in holes) exclusions.AddRange(Triangulate(hole));
+            return new PreparedBoundary(outer, exclusions);
+        }
+
         public static GridCellVolume Calculate(
             IReadOnlyList<Triangle3> existing,
             IReadOnlyList<Triangle3> design,
@@ -35,20 +60,25 @@ namespace MiningVolume.Core.Grid
             IReadOnlyList<Vec2> outerBoundary = null,
             IReadOnlyList<IReadOnlyList<Vec2>> holes = null)
         {
+            return CalculatePrepared(existing, design, cellPolygon,
+                PrepareBoundary(outerBoundary, holes));
+        }
+
+        public static GridCellVolume CalculatePrepared(
+            IReadOnlyList<Triangle3> existing,
+            IReadOnlyList<Triangle3> design,
+            IReadOnlyList<Vec2> cellPolygon,
+            PreparedBoundary boundary)
+        {
             if (existing == null) throw new ArgumentNullException(nameof(existing));
             if (design == null) throw new ArgumentNullException(nameof(design));
+            if (boundary == null) throw new ArgumentNullException(nameof(boundary));
             var cell = Normalize(cellPolygon);
             if (cell.Count < 3 || !Convex(cell))
                 throw new ArgumentException("Ô lưới phải là đa giác lồi hợp lệ, có diện tích dương.", nameof(cellPolygon));
 
-            var outer = outerBoundary == null
-                ? new List<List<Vec2>> { cell }
-                : Triangulate(outerBoundary);
-            var exclusions = new List<List<Vec2>>();
-            if (holes != null)
-                foreach (var hole in holes)
-                    exclusions.AddRange(Triangulate(hole));
-
+            var outer = boundary.Outer ?? new List<List<Vec2>> { cell };
+            var exclusions = boundary.Exclusions;
             var result = new GridCellVolume();
             foreach (var polygon in outer)
                 result.CalculationArea += Area(Clip(cell, polygon));
