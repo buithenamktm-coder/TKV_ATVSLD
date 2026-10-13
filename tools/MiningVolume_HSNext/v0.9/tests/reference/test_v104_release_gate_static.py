@@ -277,7 +277,8 @@ def test_imsat_branding_is_packaged_for_ribbon_excel_and_setup():
     assert "imsat_logo_64.png" in ribbon
     assert "imsat_logo.png" in branding
     assert "Thông tin" in branding and "Tổng khối" in branding
-    assert "logo IMSAT" in export_ui
+    assert "logo IMSAT" not in export_ui
+    assert "ExportClicked" in export_ui  # export formatting and logo still handled in writer
     assert "DisplayIcon" in installer
     assert "IMSAT VOLUME.lnk" in installer
     assert "rsrc -ico imsat.ico" in hosted
