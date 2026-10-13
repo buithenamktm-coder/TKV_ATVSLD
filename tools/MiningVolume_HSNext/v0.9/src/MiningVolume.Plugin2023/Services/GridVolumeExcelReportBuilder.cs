@@ -130,9 +130,12 @@ namespace MiningVolume2023.Services
                 {
                     ReportCell.Int(++i),ReportCell.Text(c.CellCode),ReportCell.Int(c.I),ReportCell.Int(c.J),
                     ReportCell.N3(c.Volume.CalculationArea),ReportCell.N3(c.Volume.CoveredArea),
-                    ReportCell.N3(c.Volume.NoDataArea),ReportCell.N3(c.Volume.CutVolume),
-                    ReportCell.N3(c.Volume.FillVolume),ReportCell.Formula3("H"+row+"-I"+row),
-                    ReportCell.Text(c.Volume.IsComplete?"Đủ":"THIẾU DỮ LIỆU")
+                    ReportCell.N3(c.Volume.NoDataArea),
+                    c.IsVerticalConflict ? ReportCell.Text("") : ReportCell.N3(c.Volume.CutVolume),
+                    c.IsVerticalConflict ? ReportCell.Text("") : ReportCell.N3(c.Volume.FillVolume),
+                    c.IsVerticalConflict ? ReportCell.Text("") : ReportCell.Formula3("H"+row+"-I"+row),
+                    ReportCell.Text(c.IsVerticalConflict ? "NHIỀU Z - CHƯA XÁC NHẬN" :
+                        c.Volume.IsComplete ? "Đủ" : "THIẾU DỮ LIỆU")
                 });
                 row++;
             }
