@@ -137,6 +137,11 @@ namespace MiningVolume2023.Services
                 AddKV(s, "Đơn vị cấp trên", TkvParentHeading);
             AddKV(s, "Đơn vị tính toán", EmptyAsNotSet(unitName));
             AddKV(s, "Loại đơn vị", unitGroup);
+            AddKV(s, "Thông số mặt cắt", st.SectionParameterMode);
+            AddKV(s, "Tỷ lệ mặt cắt (ngang / đứng)", "1:1.000 / 1:1.000");
+            AddKV(s, "Khoảng cách mặt cắt, m", st.SectionSpacing.ToString("0.###"));
+            AddKV(s, "Bước chia trục Z, m", st.SectionAxisElevationInterval.ToString("0.###"));
+            AddKV(s, "Mức chia tầng tính khối lượng, m", st.LevelStep.ToString("0.###"));
             AddKV(s, "Kỳ tính khối lượng", st.VolumePeriodLabel);
             AddKV(s, "Thời điểm tính khối lượng", FormatCalculationTime(st.VolumeCalculatedUtc));
             AddKV(s, "Thời gian thực tính khối lượng, giây", FormatDuration(st.VolumeCalculationSeconds));
