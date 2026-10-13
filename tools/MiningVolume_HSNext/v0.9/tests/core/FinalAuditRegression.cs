@@ -397,14 +397,43 @@ internal static class FinalAuditRegression
             try {Fixtures(dir);foreach(var file in Directory.GetFiles(dir,"*.xlsx"))VerifyWorkbook(file);}
             finally{if(Directory.Exists(dir))Directory.Delete(dir,true);}
         };
-        tests["rf14_failed_branding_preserves_existing_workbook"]=()=>{
+        tests["rf14_embedded_logo_missing_file_and_outside_tkv_both_export"]=()=>{
             var dir=Path.Combine(Path.GetTempPath(),Guid.NewGuid().ToString("N"));Directory.CreateDirectory(dir);
-            var file=Path.Combine(dir,"previous.xlsx");var logo=Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"Assets","imsat_logo_64.png");
-            var bytes=File.ReadAllBytes(logo);File.WriteAllText(file,"previous-accepted-workbook");
-            try {File.Delete(logo);bool failed=false;try{ExportWorkflowService.WriteXlsx(file,ExportWorkflowService.BuildReport(State(),new ExportOptions()));}catch(FileNotFoundException){failed=true;}
-                Check(failed&&File.ReadAllText(file)=="previous-accepted-workbook","Failed export overwrote user's file");
-                Check(Directory.GetFiles(dir).Length==1,"Staging file leaked");}
-            finally{File.WriteAllBytes(logo,bytes);Directory.Delete(dir,true);}
+            var file=Path.Combine(dir,"previous.xlsx");
+            var logo=Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"Assets","imsat_logo_64.png");
+            byte[] bytes=File.Exists(logo)?File.ReadAllBytes(logo):null;
+            File.WriteAllText(file,"previous-accepted-workbook");
+            try {
+                if(bytes!=null)File.Delete(logo);
+                var tkv=ExportWorkflowService.BuildReport(State(),new ExportOptions());
+                Check(tkv.IncludeImsatLogo,"TKV report should request optional branding");
+                ExportWorkflowService.WriteXlsx(file,tkv);
+                using(var zip=ZipFile.OpenRead(file))
+                    Check(zip.GetEntry("xl/media/imsat_logo.png")!=null,
+                        "Embedded IMSAT logo was not used when external Assets file was absent");
+                Check(Directory.GetFiles(dir).Length==1,"A staging file leaked");
+                var outside=State();
+                outside.MiningUnitGroup=MiningUnitCatalog.OutsideTkv;
+                outside.MiningUnitName="Công ty ngoài TKV QA";
+                var report=ExportWorkflowService.BuildReport(outside,new ExportOptions());
+                Check(!report.IncludeImsatLogo,"Outside TKV must not show IMSAT logo");
+                ExportWorkflowService.WriteXlsx(Path.Combine(dir,"outside.xlsx"),report);
+                using(var zip=ZipFile.OpenRead(Path.Combine(dir,"outside.xlsx"))){
+                    Check(zip.GetEntry("xl/media/imsat_logo.png")==null,
+                        "Outside TKV incorrectly branded with IMSAT logo");
+                    var first=zip.GetEntry("xl/worksheets/sheet1.xml");
+                    using(var rd=new StreamReader(first.Open())){
+                        var xml=rd.ReadToEnd();
+                        Check(xml.Contains("Công ty ngoài TKV QA") &&
+                            !xml.Contains(ExportWorkflowService.TkvParentHeading),
+                            "Outside TKV report carries wrong organizational affiliation");
+                    }
+                }
+                Check(Directory.GetFiles(dir).Length==2,"Staging file leaked");
+            } finally {
+                if(bytes!=null)File.WriteAllBytes(logo,bytes);
+                Directory.Delete(dir,true);
+            }
         };
     }
     static ProjectState State(){
