@@ -21,6 +21,7 @@ namespace MiningVolume2023.UI
         private readonly Button _calculate, _cancel, _draw, _excel;
         private readonly CheckBox _labels;
         private readonly Label _status;
+        private readonly Label _tinReuseStatus;
         private readonly DataGridView _cells;
         private bool _syncing;
         private CancellationTokenSource _cts;
@@ -39,11 +40,12 @@ namespace MiningVolume2023.UI
 
             var root = _rootLayout = new TableLayoutPanel
             {
-                Dock=DockStyle.Fill,ColumnCount=1,RowCount=5,
+                Dock=DockStyle.Fill,ColumnCount=1,RowCount=6,
                 Padding=Padding.Empty,Margin=Padding.Empty
             };
             root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));
             root.RowStyles.Add(new RowStyle(SizeType.Absolute,34));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute,46)); // shared HT/TK TIN status
             root.RowStyles.Add(new RowStyle(SizeType.Absolute,80));
             root.RowStyles.Add(new RowStyle(SizeType.Absolute,83));
             root.RowStyles.Add(new RowStyle(SizeType.Absolute,56));
@@ -79,7 +81,18 @@ namespace MiningVolume2023.UI
             _angleCaption=new Label{Text="Góc xoay",Dock=DockStyle.Fill};
             settings.Controls.Add(_angleCaption,4,1);
             settings.Controls.Add(_angle,5,1);
-            root.Controls.Add(settings,0,1);
+            _tinReuseStatus=new Label
+            {
+                Dock=DockStyle.Fill,
+                AutoEllipsis=true,
+                BackColor=UiTheme.Soft,
+                ForeColor=UiTheme.TextStrong,
+                Font=new Font("Arial",9.5F,FontStyle.Bold),
+                Padding=new Padding(12,6,8,6),
+                TextAlign=ContentAlignment.MiddleLeft
+            };
+            root.Controls.Add(_tinReuseStatus,0,1);
+            root.Controls.Add(settings,0,2);
 
             var actions=_actionPanel=new FlowLayoutPanel {Dock=DockStyle.Fill,WrapContents=true,Padding=new Padding(4,3,4,3)};
             _calculate=Btn("TÍNH LƯỚI",async(s,e)=>await CalculateAsync());
@@ -90,12 +103,12 @@ namespace MiningVolume2023.UI
                 AutoSize=true,Margin=new Padding(10,9,4,4)};
             actions.Controls.Add(_calculate);actions.Controls.Add(_cancel);
             actions.Controls.Add(_draw);actions.Controls.Add(_excel);actions.Controls.Add(_labels);
-            root.Controls.Add(actions,0,2);
+            root.Controls.Add(actions,0,3);
 
             _status=new Label{Dock=DockStyle.Fill,AutoEllipsis=true,
                 Text="Chọn đường bao, nhập kích thước ô lưới rồi tính.",ForeColor=Color.DimGray,
                 TextAlign=ContentAlignment.MiddleLeft,Padding=new Padding(6)};
-            root.Controls.Add(_status,0,3);
+            root.Controls.Add(_status,0,4);
 
             _cells=new DataGridView
             {
@@ -108,7 +121,7 @@ namespace MiningVolume2023.UI
                 "V đào (m³)","V đắp (m³)","V thuần (m³)","Trạng thái"})
                 _cells.Columns.Add(col,col);
             _cells.CellValueNeeded+=CellValueNeeded;
-            root.Controls.Add(_cells,0,4);
+            root.Controls.Add(_cells,0,5);
 
             _sizeX.ValueChanged+=ParametersChanged;
             _sizeY.ValueChanged+=ParametersChanged;
@@ -163,8 +176,8 @@ namespace MiningVolume2023.UI
                     _settingsGrid.Controls.Add(_yCaption,2,1); _settingsGrid.Controls.Add(_sizeY,3,1);
                     _settingsGrid.Controls.Add(_angleCaption,4,1); _settingsGrid.Controls.Add(_angle,5,1);
                 }
-                _rootLayout.RowStyles[1].Height = compact ? 184F : 80F;
-                _rootLayout.RowStyles[2].Height = compact ? 148F : 83F;
+                _rootLayout.RowStyles[2].Height = compact ? 184F : 80F;
+                _rootLayout.RowStyles[3].Height = compact ? 148F : 83F;
             }
             finally { _settingsGrid.ResumeLayout(true); }
         }
@@ -198,6 +211,23 @@ namespace MiningVolume2023.UI
                 ?"Chưa chọn đường bao":"Handle: "+st.GridBoundaryHandle;
             _syncing=false;
             RefreshCells();
+        }
+
+        private static string TinReuseMessage()
+        {
+            var state=ProjectState.Current;
+            bool existing=state.Existing.IsTinCurrent;
+            bool design=state.Design.IsTinCurrent;
+            if(existing && design)
+                return "ĐÃ CÓ TIN HIỆN TRẠNG (" +
+                    state.Existing.Tin.Triangles.Count.ToString("N0") +
+                    ") + THIẾT KẾ (" + state.Design.Tin.Triangles.Count.ToString("N0") +
+                    ") → Lưới ô vuông dùng lại trực tiếp; KHÔNG cần dựng TIN mới.";
+            string missing = !existing && !design
+                ? "hiện trạng và thiết kế"
+                : !existing ? "hiện trạng" : "thiết kế";
+            return "TIN " + missing + " chưa sẵn sàng hoặc đã thay đổi. " +
+                "Chỉ tạo/cập nhật mô hình còn thiếu; TIN hợp lệ còn lại được giữ nguyên.";
         }
 
         private void ParametersChanged(object sender,EventArgs e)
@@ -354,6 +384,10 @@ namespace MiningVolume2023.UI
         private void RefreshCells()
         {
             var r=GridWorkflowService.Report;
+            _tinReuseStatus.Text=TinReuseMessage();
+            _tinReuseStatus.ForeColor=
+                ProjectState.Current.Existing.IsTinCurrent && ProjectState.Current.Design.IsTinCurrent
+                    ? Color.FromArgb(14,87,62) : UiTheme.TextStrong;
             _cells.RowCount=r?.Cells.Count??0;
             _cells.Invalidate();
             _draw.Enabled=r!=null;
