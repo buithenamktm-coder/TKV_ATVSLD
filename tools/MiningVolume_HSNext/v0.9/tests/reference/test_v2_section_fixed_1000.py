@@ -88,7 +88,7 @@ def test_changing_station_spacing_invalidates_old_section_geometry_and_volume():
         "st.SectionSystem = null;",
         "st.SectionProfiles.Clear();",
         "st.VolumeResult = null;",
-        'Bấm XEM TRƯỚC TUYẾN',
+        "Bấm 'Xem trước tuyến', rồi vẽ lại mặt cắt.",
         "if (geometryChanged) st.NotifyChanged();",
     ]:
         assert statement in part
