@@ -161,24 +161,26 @@ namespace MiningVolume2023.UI
             }
             catch { }
 
-            header.Controls.Add(new Label
+            // Paint the title directly on the frosted header instead of
+            // placing transparent WinForms Labels over a UserPaint panel.
+            // The latter caused opaque rectangular patches behind the title
+            // in AutoCAD's palette host (as shown in the field QA capture).
+            const string title = "IMSAT VOLUME";
+            const string subtitle = "Phát triển: Bùi Thế Nam  •  ĐT/Zalo: 0967280686";
+            int left = textLeft;
+            header.Paint += (sender, args) =>
             {
-                Text = "IMSAT VOLUME",
-                AutoSize = true,
-                Font = new Font("Arial", 15F, FontStyle.Bold),
-                ForeColor = UiTheme.ChromeText,
-                BackColor = Color.Transparent,
-                Location = new Point(textLeft, 12)
-            });
-            header.Controls.Add(new Label
-            {
-                Text = "Phát triển: Bùi Thế Nam  •  ĐT/Zalo: 0967280686",
-                AutoSize = true,
-                Font = new Font("Arial", 9F),
-                ForeColor = UiTheme.ChromeMuted,
-                BackColor = Color.Transparent,
-                Location = new Point(textLeft + 1, 43)
-            });
+                args.Graphics.TextRenderingHint =
+                    System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+                using (var big = new Font("Arial", 15F, FontStyle.Bold))
+                using (var small = new Font("Arial", 9F))
+                using (var white = new SolidBrush(UiTheme.ChromeText))
+                using (var muted = new SolidBrush(UiTheme.ChromeMuted))
+                {
+                    args.Graphics.DrawString(title, big, white, left, 12);
+                    args.Graphics.DrawString(subtitle, small, muted, left + 1, 43);
+                }
+            };
 
             header.Controls.Add(new Panel
             {
