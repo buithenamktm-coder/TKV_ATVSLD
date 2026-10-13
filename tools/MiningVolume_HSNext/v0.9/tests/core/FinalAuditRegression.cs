@@ -482,6 +482,63 @@ internal static class FinalAuditRegression
             }catch(InvalidOperationException){refused=true;}
             Check(refused,"Overlapping planar TIN sheets were silently accepted as a single elevation");
         };
+        tests["rf26_actual_KLmb_DXF_3DFACE_vertical_wall_grid_reference"]=()=>{
+            // Extracted, XY-translated (to avoid large coordinates) from the
+            // user's real KL mb.dxf: 8 existing + 17 design planar 3DFACEs.
+            // Region origin in original drawing: 472468.6 / 2399099.1.
+            // Independent Shapely geometry reference: area=0.81 square m,
+            // cut=0.00062917912154 m3 and fill=0.15513678565021 m3.
+            var ht=new TinSurface("KLmb-HT",new[]{
+                new Triangle3(new Vec3(1.09057541261,1.01273436192,357.05669195741),new Vec3(-0.139397529885,1.71029254608,357.1114133271),new Vec3(0.231725389545,0.530345237814,357)),
+                new Triangle3(new Vec3(-0.906560207368,0.512142819818,357),new Vec3(-2.97682430857,-5.42806296702,356.5),new Vec3(0.231725389545,0.530345237814,357)),
+                new Triangle3(new Vec3(-1.95220935857,-6.51513914717,356.5),new Vec3(0.231725389545,0.530345237814,357),new Vec3(-2.97682430857,-5.42806296702,356.5)),
+                new Triangle3(new Vec3(-1.0782808548,2.24276421685,357.16284945242),new Vec3(-0.906560207368,0.512142819818,357),new Vec3(0.231725389545,0.530345237814,357)),
+                new Triangle3(new Vec3(-1.0782808548,2.24276421685,357.16284945242),new Vec3(0.231725389545,0.530345237814,357),new Vec3(-0.139397529885,1.71029254608,357.1114133271)),
+                new Triangle3(new Vec3(0.231725389545,0.530345237814,357),new Vec3(-1.95220935857,-6.51513914717,356.5),new Vec3(1.20201016305,0.491533867083,357)),
+                new Triangle3(new Vec3(1.4679673083,0.79870298272,357.03486669317),new Vec3(1.09057541261,1.01273436192,357.05669195741),new Vec3(0.231725389545,0.530345237814,357)),
+                new Triangle3(new Vec3(1.4679673083,0.79870298272,357.03486669317),new Vec3(0.231725389545,0.530345237814,357),new Vec3(1.20201016305,0.491533867083,357))
+            },Array.Empty<ValidationIssue>());
+            var root=new ConflictGroup{Position=new Vec2(0.463389133045,0.521078692749)};
+            root.Sources.Add(new ConflictSource{Z=357,VertexIndex=0});
+            root.Sources.Add(new ConflictSource{Z=357.14541593259,VertexIndex=1});
+            var tk=new TinSurface("KLmb-TK",new[]{
+                new Triangle3(new Vec3(0.231725389545,0.530345237814,357),new Vec3(-2.97682430857,-5.42806296702,356.5),new Vec3(0.463389133045,0.521078692749,357)),
+                new Triangle3(new Vec3(0.570006424095,1.30796618899,357.5),new Vec3(2.31732670922,-9.13237032807,357.5),new Vec3(0.719438603439,1.2232182757,357.5)),
+                new Triangle3(new Vec3(-0.139397529885,1.71029254608,357.1114133271),new Vec3(0.231725389545,0.530345237814,357),new Vec3(0.142959203338,1.55015873909,357.08743363075)),
+                new Triangle3(new Vec3(0.231725389545,0.530345237814,357),new Vec3(-0.139397529885,1.71029254608,357.1114133271),new Vec3(-1.0782808548,2.24276421685,357.16284945242)),
+                new Triangle3(new Vec3(0.231725389545,0.530345237814,357),new Vec3(-1.0782808548,2.24276421685,357.16284945242),new Vec3(-0.906560207368,0.512142819818,357)),
+                new Triangle3(new Vec3(2.10697622824,-9.08063039416,357.5),new Vec3(0.463389133045,0.521078692749,357),new Vec3(1.6250180697,-8.65712742088,356.58826192562)),
+                new Triangle3(new Vec3(-1.95220935857,-6.51513914717,356.5),new Vec3(0.463389133045,0.521078692749,357),new Vec3(-2.97682430857,-5.42806296702,356.5)),
+                new Triangle3(new Vec3(-1.11859351455,-7.40724215424,356.5),new Vec3(0.463389133045,0.521078692749,357),new Vec3(-1.95220935857,-6.51513914717,356.5)),
+                new Triangle3(new Vec3(2.10697622824,-9.08063039416,357.5),new Vec3(0.497664282098,1.34899380105,357.5),new Vec3(0.347851698811,1.43395745382,357.07814142764)),
+                new Triangle3(new Vec3(2.10697622824,-9.08063039416,357.5),new Vec3(0.347851698811,1.43395745382,357.07814142764),new Vec3(0.463389133045,0.521078692749,357)),
+                new Triangle3(new Vec3(1.6250180697,-8.65712742088,356.58826192562),new Vec3(0.463389133045,0.521078692749,357),new Vec3(-1.11859351455,-7.40724215424,356.5)),
+                new Triangle3(new Vec3(0.719438603439,1.2232182757,357.5),new Vec3(2.31732670922,-9.13237032807,357.5),new Vec3(0.889676785446,1.12667059386,357.5)),
+                new Triangle3(new Vec3(0.231725389545,0.530345237814,357),new Vec3(-0.906560207368,0.512142819818,357),new Vec3(-2.97682430857,-5.42806296702,356.5)),
+                new Triangle3(new Vec3(0.142959203338,1.55015873909,357.08743363075),new Vec3(0.231725389545,0.530345237814,357),new Vec3(0.463389133045,0.521078692749,357)),
+                new Triangle3(new Vec3(0.142959203338,1.55015873909,357.08743363075),new Vec3(0.463389133045,0.521078692749,357),new Vec3(0.347851698811,1.43395745382,357.07814142764)),
+                new Triangle3(new Vec3(2.31732670922,-9.13237032807,357.5),new Vec3(0.570006424095,1.30796618899,357.5),new Vec3(0.497664282098,1.34899380105,357.5)),
+                new Triangle3(new Vec3(2.31732670922,-9.13237032807,357.5),new Vec3(0.497664282098,1.34899380105,357.5),new Vec3(2.10697622824,-9.08063039416,357.5))
+            },Array.Empty<ValidationIssue>(),new[]{
+                new Triangle3(new Vec3(0.463389133045,0.521078692749,357),
+                    new Vec3(0.463389133045,0.521078692749,357.14541593259),
+                    new Vec3(0.231725389545,0.530345237814,357))
+            },new[]{root});
+            var square=new[]{
+                new Vec2(0,0),new Vec2(.9,0),
+                new Vec2(.9,.9),new Vec2(0,.9)};
+            var r=new GridVolumeCalculator().Calculate(ht,tk,
+                new GridVolumeOptions{Boundary=square,SizeX=.9,SizeY=.9});
+            Check(r.Cells.Count==1 && r.IsComplete && r.AmbiguousCells==0,
+                "Actual KL mb.dxf single-valued planar TIN patch was wrongly quarantined");
+            Check(Math.Abs(r.Cells[0].Volume.CalculationArea-0.81)<1e-7,
+                "Actual KL mb.dxf cell area changed");
+            Check(Math.Abs(r.TotalNoDataArea)<1e-7,
+                "Actual KL mb.dxf two accepted TIN surfaces lost overlapping XY support");
+            Check(Math.Abs(r.TotalCutVolume-0.00062917912154)<1e-5 &&
+                  Math.Abs(r.TotalFillVolume-0.15513678565021)<1e-5,
+                "Exact signed integration disagrees with independent KL mb.dxf reference");
+        };
         tests["rf23_large_survey_coordinates_and_rotated_grid_keep_full_TIN_overlap"]=()=>{
             const double shiftX=472500.0,shiftY=2399000.0;
             TinSurface Move(TinSurface source)=>new TinSurface("translated",
