@@ -7,21 +7,21 @@ def read(name):
     return (ROOT / name).read_text(encoding="utf-8")
 
 
-def test_both_section_axes_fixed_1000_even_in_custom_mode():
+def test_tt34_defaults_1000_but_custom_scales_are_editable():
     ui = read("src/MiningVolume.Plugin2023/UI/SectionPage.cs")
     service = read("src/MiningVolume.Plugin2023/Services/SectionWorkflowService.cs")
     renderer = read("src/MiningVolume.Plugin2023/Services/SectionCadRenderer.cs")
-    assert 'Add(top, 8, "Tỷ lệ ngang 1/ (cố định)", _hScale' in ui
-    assert 'Add(top, 9, "Tỷ lệ đứng 1/ (cố định)", _vScale' in ui
-    assert "_hScale.Enabled = false" in ui
-    assert "_vScale.Enabled = false" in ui
-    assert "st.HorizontalScale = 1000;" in ui
-    assert "st.VerticalScale = 1000;" in ui
-    assert "1000.0,\n                    1000.0,\n                    (double)_axisStep.Value" in ui
+    assert 'Add(top, 8, "Tỷ lệ ngang 1/", _hScale' in ui
+    assert 'Add(top, 9, "Tỷ lệ đứng 1/", _vScale' in ui
+    assert "UpdateScaleAvailability()" in ui
+    assert "_hScale.Enabled = custom;" in ui
+    assert "_vScale.Enabled = custom;" in ui
+    assert "st.HorizontalScale = (double)_hScale.Value;" in ui
+    assert "st.VerticalScale = (double)_vScale.Value;" in ui
+    assert "(double)_hScale.Value,\n                    (double)_vScale.Value," in ui
     assert "Math.Abs(horizontalScale - 1000.0) > 1e-9" in service
     assert "Math.Abs(verticalScale - 1000.0) > 1e-9" in service
-    assert "Math.Abs(horizontalScale - 1000.0) > 1e-9" in renderer
-    assert "Math.Abs(verticalScale - 1000.0) > 1e-9" in renderer
+    assert "double vExag = horizontalScale / verticalScale;" in renderer
 
 
 def test_user_can_change_other_section_calculation_and_plot_parameters():
@@ -42,16 +42,17 @@ def test_user_can_change_other_section_calculation_and_plot_parameters():
     assert "HorizontalScale / VerticalScale" not in ui
 
 
-def test_old_dwg_preserves_user_defined_other_settings_but_normalizes_scales():
+def test_old_dwg_preserves_custom_scales_and_tt34_defaults():
     project = read("src/MiningVolume.Plugin2023/Services/ProjectPersistenceService.cs")
     snap = read("src/MiningVolume.Plugin2023/Services/ProjectSnapshot.cs")
     assert "SectionParameterMode = state.SectionParameterMode" in project
     assert "SectionAxisElevationInterval = state.SectionAxisElevationInterval" in project
     assert "snap.SectionParameterMode == null" in project
-    assert "state.HorizontalScale = 1000.0;" in project
-    assert "state.VerticalScale = 1000.0;" in project
+    assert 'state.HorizontalScale = state.SectionParameterMode == "Tùy chỉnh"' in project
+    assert 'state.VerticalScale = state.SectionParameterMode == "Tùy chỉnh"' in project
+    assert "PositiveOr(snap.HorizontalScale, 1000.0)" in project
+    assert "PositiveOr(snap.VerticalScale, 1000.0)" in project
     assert "state.SectionMapScale = 1000;" in project
-    assert "Project cũ dùng tỷ lệ mặt cắt khác 1:1.000" in project
     assert "DataMember(Order = 44)] public double SectionAxisElevationInterval" in snap
 
 
@@ -64,13 +65,14 @@ def test_elevation_axis_step_is_independent_from_earthwork_level_step():
     assert "st.SectionAxisElevationInterval = (double)_axisStep.Value;" in ui
 
 
-def test_fixed_1000_scale_and_user_parameters_are_in_report_metadata():
+def test_actual_custom_scales_and_user_parameters_are_in_report_metadata():
     volume = read("src/MiningVolume.Plugin2023/Services/ExportWorkflowService.cs")
     grid = read("src/MiningVolume.Plugin2023/Services/GridVolumeExcelReportBuilder.cs")
     mineral = read("src/MiningVolume.Plugin2023/Services/MineralVolumeExcelReportBuilder.cs")
     for content in [volume, grid, mineral]:
         assert '"Tỷ lệ mặt cắt (ngang / đứng)"' in content
-        assert '"1:1.000 / 1:1.000"' in content
+        assert 'HorizontalScale.ToString("N0")' in content
+        assert 'VerticalScale.ToString("N0")' in content
         assert '"Bước chia trục Z, m"' in content
         assert "SectionAxisElevationInterval" in content
 
