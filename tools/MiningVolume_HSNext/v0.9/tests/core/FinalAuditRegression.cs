@@ -432,6 +432,56 @@ internal static class FinalAuditRegression
                     row[9].Value.ToString()==""),
                 "Unmeasured cell got fake 0.00 m³ in Excel");
         };
+        tests["rf24_vertical_step_3D_wall_zero_plan_area_grid_has_both_cut_and_fill"]=()=>{
+            // One actual step face: the same XY at x=1 has two elevations
+            // 8 m and 12 m. The vertical face has zero projected area.
+            // Two planar support pieces still cover a 2x2 m grid completely.
+            var ht=new TinSurface("ht",new[]{
+                new Triangle3(new Vec3(0,0,10),new Vec3(2,0,10),new Vec3(2,2,10)),
+                new Triangle3(new Vec3(0,0,10),new Vec3(2,2,10),new Vec3(0,2,10))
+            },Array.Empty<ValidationIssue>());
+            var tk=new TinSurface("tk",new[]{
+                new Triangle3(new Vec3(0,0,8),new Vec3(1,0,8),new Vec3(1,2,8)),
+                new Triangle3(new Vec3(0,0,8),new Vec3(1,2,8),new Vec3(0,2,8)),
+                new Triangle3(new Vec3(1,0,12),new Vec3(2,0,12),new Vec3(2,2,12)),
+                new Triangle3(new Vec3(1,0,12),new Vec3(2,2,12),new Vec3(1,2,12))
+            },Array.Empty<ValidationIssue>(),
+            new[]{
+                new Triangle3(new Vec3(1,0,8),new Vec3(1,0,12),new Vec3(1,2,8)),
+                new Triangle3(new Vec3(1,2,8),new Vec3(1,0,12),new Vec3(1,2,12))
+            },
+            new[]{
+                new ConflictGroup{Position=new Vec2(1,0)},
+                new ConflictGroup{Position=new Vec2(1,2)}
+            });
+            var r=new GridVolumeCalculator().Calculate(ht,tk,
+                new GridVolumeOptions{Boundary=new[]{
+                    new Vec2(0,0),new Vec2(2,0),
+                    new Vec2(2,2),new Vec2(0,2)},SizeX=1,SizeY=1});
+            Check(r.IsComplete && r.AmbiguousCells==0 && r.Cells.Count==4,
+                "Wall with zero XY area removed covered grid cells");
+            Near(r.TotalCutVolume,4.0);
+            Near(r.TotalFillVolume,4.0);
+            Near(r.TotalNoDataArea,0.0);
+            Check(r.Cells.All(c=>c.Volume.IsComplete),
+                "Vertical step wrongly marked as missing TIN");
+        };
+        tests["rf25_overlapping_planar_multisheet_must_fail_not_fabricate_volume"]=()=>{
+            var footprint=new[]{
+                new Vec2(0,0),new Vec2(2,0),
+                new Vec2(2,2),new Vec2(0,2)};
+            var ht=Plane(10);
+            var lower=new Triangle3(new Vec3(0,0,5),new Vec3(2,0,5),new Vec3(2,2,5));
+            var upper=new Triangle3(new Vec3(0,0,12),new Vec3(2,0,12),new Vec3(2,2,12));
+            var tk=new TinSurface("overlapping-sheets",
+                new[]{lower,upper},Array.Empty<ValidationIssue>());
+            bool refused=false;
+            try{
+                new GridVolumeCalculator().Calculate(ht,tk,
+                    new GridVolumeOptions{Boundary=footprint,SizeX=1,SizeY=1});
+            }catch(InvalidOperationException){refused=true;}
+            Check(refused,"Overlapping planar TIN sheets were silently accepted as a single elevation");
+        };
         tests["rf23_large_survey_coordinates_and_rotated_grid_keep_full_TIN_overlap"]=()=>{
             const double shiftX=472500.0,shiftY=2399000.0;
             TinSurface Move(TinSurface source)=>new TinSurface("translated",
