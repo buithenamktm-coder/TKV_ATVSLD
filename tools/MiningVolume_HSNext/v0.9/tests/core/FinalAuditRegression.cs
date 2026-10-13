@@ -31,6 +31,29 @@ internal static class FinalAuditRegression
         new SectionSystem(new Vec2(1,0),new Vec2(0,1),Boundary,p.Select(x=>x.Line).ToArray(),Array.Empty<string>()),p,Plane(5),Plane(0),
         new VolumeCalculationOptions{FromLevel=0,ToLevel=10,LevelStep=5});
     public static void Add(IDictionary<string,Action> tests) {
+        tests["multicad_grid_overlap_outside_selected_boundary_does_not_block"] = () => {
+            var cell = new[]{new Vec2(0,0),new Vec2(10,0),new Vec2(10,10),new Vec2(0,10)};
+            var region = new[]{new Vec2(0,0),new Vec2(2,0),new Vec2(2,2),new Vec2(0,2)};
+            var baseFaces = new[]{
+                new Triangle3(new Vec3(0,0,5),new Vec3(10,0,5),new Vec3(10,10,5)),
+                new Triangle3(new Vec3(0,0,5),new Vec3(10,10,5),new Vec3(0,10,5))};
+            var extra = new Triangle3(new Vec3(7,7,20),new Vec3(9,7,20),new Vec3(9,9,20));
+            var design = baseFaces.Select(t=>new Triangle3(new Vec3(t.A.X,t.A.Y,0),
+                new Vec3(t.B.X,t.B.Y,0),new Vec3(t.C.X,t.C.Y,0))).ToArray();
+            var result=ExactGridCellCalculator.Calculate(baseFaces.Concat(new[]{extra}).ToArray(),design,cell,region);
+            Near(result.CalculationArea,4); Near(result.CoveredArea,4); Near(result.CutVolume,20);
+        };
+        tests["multicad_grid_subnanometre_sign_change_keeps_cut_and_fill"] = () => {
+            var cell=new[]{new Vec2(0,0),new Vec2(100,0),new Vec2(100,100),new Vec2(0,100)};
+            var ht=new[]{
+                new Triangle3(new Vec3(0,0,-1e-10),new Vec3(100,0,1e-10),new Vec3(100,100,1e-10)),
+                new Triangle3(new Vec3(0,0,-1e-10),new Vec3(100,100,1e-10),new Vec3(0,100,-1e-10))};
+            var tk=ht.Select(t=>new Triangle3(new Vec3(t.A.X,t.A.Y,0),new Vec3(t.B.X,t.B.Y,0),new Vec3(t.C.X,t.C.Y,0))).ToArray();
+            var result=ExactGridCellCalculator.Calculate(ht,tk,cell);
+            // Each half: 5,000 m2 * mean depth 0.5e-10 m, analytically.
+            Check(Math.Abs(result.CutVolume-2.5e-7)<1e-16,"Small cut was lost");
+            Check(Math.Abs(result.FillVolume-2.5e-7)<1e-16,"Small fill was lost");
+        };
         tests["normalizer_cell_keys_preserve_neighbors_at_positive_and_negative_mine_coordinates"] = () => {
             foreach(double origin in new[]{0d,2500000d,-2500000d}) {
                 var raw=new[]{new Vec3(origin,450000,5),new Vec3(origin+0.0000005,450000,5),

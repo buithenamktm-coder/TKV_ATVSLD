@@ -100,7 +100,7 @@ namespace MiningVolume.Surface
                         prepared.VerticalConflictGroups.Count==0?double.NegativeInfinity:
                         prepared.VerticalConflictGroups.Max(g=>g.Sources.Max(v=>v.Z))),
                     PrepareMilliseconds=prepareMs,TriangulationMilliseconds=triangulationMs,
-                    PreviewTriangles=Array.Empty<Triangle3>()
+                    PreviewTriangles=MiningVolume.Core.Compatibility.EmptyArray<Triangle3>.Value
                 };
                 progress?.Invoke(3,3,$"TIN hoàn thành: {tiles.Count:n0} tam giác • {tiles.Tiles.Count:n0} vùng lưu.");
                 transferred=true;

@@ -94,8 +94,8 @@ namespace MiningVolume.Core.Grid
             result.CalculationArea = Math.Max(0, result.CalculationArea);
             if (result.CalculationArea <= Eps) return result;
 
-            ValidateSingleSheet(existing,cell,"hiện trạng");
-            ValidateSingleSheet(design,cell,"thiết kế");
+            ValidateSingleSheet(existing,cell,boundary,"hiện trạng");
+            ValidateSingleSheet(design,cell,boundary,"thiết kế");
 
             foreach (var tn in existing)
             {
@@ -197,7 +197,7 @@ namespace MiningVolume.Core.Grid
         }
 
         private static void ValidateSingleSheet(IReadOnlyList<Triangle3> candidates,
-            IReadOnlyList<Vec2> cell,string source)
+            IReadOnlyList<Vec2> cell,PreparedBoundary boundary,string source)
         {
             if(candidates == null || candidates.Count < 2)return;
             var boxes=new List<PlanarBox>();
@@ -223,7 +223,16 @@ namespace MiningVolume.Core.Grid
                     if(a.MaxY <= b.MinY+Eps || b.MaxY <= a.MinY+Eps)continue;
                     var first=Clip(cell,Triangle(a.Triangle));
                     if(Area(first)<=Eps)continue;
-                    double intersection=Area(Clip(first,Triangle(b.Triangle)));
+                    var overlap=Clip(first,Triangle(b.Triangle));
+                    // A cell can straddle the selected boundary or a hole.
+                    // Reject only ambiguous area that actually participates
+                    // in the integral; outside geometry is not project data.
+                    double intersection=0;
+                    if(boundary.Outer==null) intersection=Area(overlap);
+                    else foreach(var piece in boundary.Outer)
+                        intersection+=Area(Clip(overlap,piece));
+                    foreach(var hole in boundary.Exclusions)
+                        intersection-=Area(Clip(overlap,hole));
                     double tol=Math.Max(1e-9,
                         Math.Min(a.Triangle.Area2D,b.Triangle.Area2D)*1e-9);
                     if(intersection>tol)
@@ -260,14 +269,17 @@ namespace MiningVolume.Core.Grid
             var output = new List<SignedPoint>();
             if (vertices.Count == 0) return output;
             var previous = vertices[vertices.Count - 1];
-            bool previousIn = positive ? previous.Delta >= -Eps : previous.Delta <= Eps;
+            // Delta is metres, unlike the XY area/edge tolerance. Expanding
+            // BOTH half-planes by Eps integrates opposite signs together
+            // and can silently cancel real cut/fill on nearly level surfaces.
+            bool previousIn = positive ? previous.Delta >= 0 : previous.Delta <= 0;
             foreach (var next in vertices)
             {
-                bool nextIn = positive ? next.Delta >= -Eps : next.Delta <= Eps;
+                bool nextIn = positive ? next.Delta >= 0 : next.Delta <= 0;
                 if (nextIn != previousIn)
                 {
                     double den = previous.Delta - next.Delta;
-                    if (Math.Abs(den) > 1e-15)
+                    if (den != 0)
                     {
                         double alpha = previous.Delta / den;
                         alpha = Math.Max(0, Math.Min(1, alpha));

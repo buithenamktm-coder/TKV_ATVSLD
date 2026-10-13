@@ -139,7 +139,7 @@ def test_large_tin_is_file_backed_and_cad_render_uses_complete_mesh():
     assert "ITiledTriangleSource" in store
     assert "FileOptions.SequentialScan" in store
     assert "cacheTiles:6" in read("src/MiningVolume.Surface/AdaptiveTinStore.cs")
-    assert "PreviewTriangles=Array.Empty<Triangle3>()" in tiled
+    assert "PreviewTriangles=MiningVolume.Core.Compatibility.EmptyArray<Triangle3>.Value" in tiled
     assert "Math.Min(200000,tiles.Count)" not in tiled
     assert "var ht = existing.Tin;" in workflow
     assert "var tk = design.Tin;" in workflow

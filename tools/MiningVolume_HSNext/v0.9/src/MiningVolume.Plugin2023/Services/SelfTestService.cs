@@ -212,7 +212,7 @@ namespace MiningVolume2023.Services
                     // Exact runtime regression for the former Area2D <= 1e-12 gate.
                     var tiny=new MiningVolume.Core.Geometry.Triangle3(
                         new Vec3(2500000,450000,10),new Vec3(2500000.000001,450000,10),new Vec3(2500000,450000.000001,10));
-                    var tinyTin=new TinSurface("tiny-positive-runtime",new[]{tiny},Array.Empty<ValidationIssue>());
+                    var tinyTin=new TinSurface("tiny-positive-runtime",new[]{tiny},MiningVolume.Core.Compatibility.EmptyArray<ValidationIssue>.Value);
                     Check(r,TinCadRenderer.Replace(doc.Database,existingLayer,tinyTin,1)==1 &&
                         TinCadRenderer.CountFaces(doc.Database,existingLayer)==1,
                         "AutoCAD 3DFACE giữ tam giác XY dương nhỏ hơn 1e-12 tại tọa độ mỏ lớn");
@@ -221,7 +221,7 @@ namespace MiningVolume2023.Services
                     int writtenDesign = TinCadRenderer.Replace(doc.Database, designLayer, design, 3);
 
                     var invalidFace = new Triangle3(new Vec3(0,0,0),new Vec3(1,0,0),new Vec3(2,0,0));
-                    var invalidTin = new TinSurface("invalid-runtime",new[]{invalidFace},Array.Empty<ValidationIssue>());
+                    var invalidTin = new TinSurface("invalid-runtime",new[]{invalidFace},MiningVolume.Core.Compatibility.EmptyArray<ValidationIssue>.Value);
                     bool pairRejected=false;
                     try { TinCadRenderer.ReplacePair(doc.Database,existingLayer,tinyTin,designLayer,invalidTin); }
                     catch(InvalidOperationException) { pairRejected=true; }

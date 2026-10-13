@@ -65,7 +65,7 @@ namespace MiningVolume2023.Services
             $" • Z: {MinZ:0.###} → {MaxZ:0.###}" +
             $" • dựng {CoreMilliseconds / 1000.0:0.00}s" +
             (WarningCount > 0 ? $" • {WarningCount:n0} cảnh báo" : string.Empty) +
-            string.Concat((Tin?.Issues ?? Array.Empty<ValidationIssue>()).Where(x=>x.Code=="SKIPPED_DEGENERATE_TRIANGLES").Select(x=>" • "+x.Message));
+            string.Concat((Tin?.Issues ?? MiningVolume.Core.Compatibility.EmptyArray<ValidationIssue>.Value).Where(x=>x.Code=="SKIPPED_DEGENERATE_TRIANGLES").Select(x=>" • "+x.Message));
     }
 
     public static class SurfaceWorkflowService

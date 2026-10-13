@@ -178,7 +178,7 @@ namespace MiningVolume.Core.Surface
             TinSurface existing,TinSurface design)
         {
             var index = new ConflictRootIndex(existing, design);
-            if (index.IsEmpty) return Array.Empty<Triangle3>();
+            if (index.IsEmpty) return MiningVolume.Core.Compatibility.EmptyArray<Triangle3>.Value;
             var incident = new List<Triangle3>();
             void Add(TinSurface tin)
             {

@@ -148,7 +148,7 @@ namespace MiningVolume.Core.Surface
                 throw new ArgumentNullException("sites/meshIndices/conflicts");
             if (xyTolerance <= 0 || zTolerance < 0)
                 throw new ArgumentOutOfRangeException(nameof(xyTolerance));
-            if (conflicts.Count == 0) return Array.Empty<Triangle3>();
+            if (conflicts.Count == 0) return MiningVolume.Core.Compatibility.EmptyArray<Triangle3>.Value;
 
             Cell At(Vec2 p) => new Cell(
                 checked((long)Math.Floor(p.X / xyTolerance)),

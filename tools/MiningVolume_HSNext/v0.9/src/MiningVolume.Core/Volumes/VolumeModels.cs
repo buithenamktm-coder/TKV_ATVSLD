@@ -55,7 +55,7 @@ namespace MiningVolume.Core.Volumes
         {
             SectionName = sectionName;
             Offset = offset;
-            Bands = bands ?? Array.Empty<BandArea>();
+            Bands = bands ?? MiningVolume.Core.Compatibility.EmptyArray<BandArea>.Value;
             double c = 0, f = 0;
             foreach (var b in Bands) { c += b.CutArea; f += b.FillArea; }
             CutArea = c;
@@ -126,11 +126,11 @@ namespace MiningVolume.Core.Volumes
             int skippedIntervals = 0)
         {
             ExcludedIntervals = skippedIntervals;
-            Bands = bands ?? Array.Empty<LevelBand>();
-            Intervals = intervals ?? Array.Empty<SectionIntervalVolume>();
-            Levels = levels ?? Array.Empty<LevelVolumeSummary>();
-            SectionAreas = sectionAreas ?? Array.Empty<SectionBandAreas>();
-            Warnings = warnings ?? Array.Empty<string>();
+            Bands = bands ?? MiningVolume.Core.Compatibility.EmptyArray<LevelBand>.Value;
+            Intervals = intervals ?? MiningVolume.Core.Compatibility.EmptyArray<SectionIntervalVolume>.Value;
+            Levels = levels ?? MiningVolume.Core.Compatibility.EmptyArray<LevelVolumeSummary>.Value;
+            SectionAreas = sectionAreas ?? MiningVolume.Core.Compatibility.EmptyArray<SectionBandAreas>.Value;
+            Warnings = warnings ?? MiningVolume.Core.Compatibility.EmptyArray<string>.Value;
             double c = 0, f = 0;
             foreach (var x in Intervals) { c += x.CutVolume; f += x.FillVolume; }
             TotalCutVolume = c;

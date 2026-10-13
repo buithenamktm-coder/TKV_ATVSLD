@@ -8,6 +8,19 @@ PROPS = ROOT / "compat" / "IMSAT.CadCompatibility.props"
 
 
 class CompatibilityBuildContracts(unittest.TestCase):
+    def test_net45_sources_do_not_use_net46_empty_array_api(self):
+        for file in (ROOT / 'src').rglob('*.cs'):
+            if any(x.startswith(('obj', 'bin')) for x in file.parts):
+                continue
+            self.assertNotIn('Array.Empty<', file.read_text('utf-8-sig'), str(file))
+
+    def test_compile_candidate_preserves_dependencies_and_provenance(self):
+        data = (ROOT / 'compat/build_compat.ps1').read_text('utf-8')
+        for required in ('COMPILE_MANIFEST.json', 'SourceRevisionId=$sha',
+                         'MiningVolume.Cdt.Native.dll', 'System.ValueTuple.dll',
+                         'IMSATVolume.Cad.$Flavor.dll', 'Get-FileHash'):
+            self.assertIn(required, data)
+
     def test_five_supported_compile_flavors_are_unique(self):
         root = ET.parse(PROPS).getroot()
         props = [

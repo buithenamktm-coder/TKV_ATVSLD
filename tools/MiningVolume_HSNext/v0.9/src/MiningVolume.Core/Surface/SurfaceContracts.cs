@@ -22,7 +22,7 @@ namespace MiningVolume.Core.Surface
             : base($"Dữ liệu mô hình {modelName} có xung đột cao độ Z. Mở Điểm trùng tọa độ để kiểm tra và xử lý nguồn.")
         {
             ModelName = modelName ?? "Mô hình";
-            Issues = issues ?? Array.Empty<ValidationIssue>();
+            Issues = issues ?? MiningVolume.Core.Compatibility.EmptyArray<ValidationIssue>.Value;
         }
 
         public string ModelName { get; }
@@ -104,8 +104,8 @@ namespace MiningVolume.Core.Surface
             Name = name;
             Triangles = triangles;
             Issues = issues;
-            VerticalFaces = verticalFaces ?? Array.Empty<Triangle3>();
-            VerticalConflicts = verticalConflicts ?? Array.Empty<ConflictGroup>();
+            VerticalFaces = verticalFaces ?? MiningVolume.Core.Compatibility.EmptyArray<Triangle3>.Value;
+            VerticalConflicts = verticalConflicts ?? MiningVolume.Core.Compatibility.EmptyArray<ConflictGroup>.Value;
             SameXYZDuplicateVertices = sameXYZDuplicates;
             RelaxedBreaklineConstraints = relaxedBreaklineConstraints;
         }

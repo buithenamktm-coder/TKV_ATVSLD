@@ -17,6 +17,11 @@ if ([string]::IsNullOrWhiteSpace($Output)) {
     $Output=Join-Path $base ("dist/compat/"+$Flavor)
 }
 $opts=@("-p:IMSATCadFlavor=$Flavor")
+$sha=(git -C $base rev-parse HEAD 2>$null)
+if ($LASTEXITCODE -ne 0 -or $sha -notmatch '^[0-9a-f]{40}$') {
+    throw 'Cannot identify the source commit for this compatibility build.'
+}
+$opts+= "-p:SourceRevisionId=$sha"
 if ($NuGetReferences) {$opts+= '-p:UseAutoCADNuGet=true'}
 else {
     if([string]::IsNullOrWhiteSpace($AutoCADDir)) {
@@ -39,16 +44,37 @@ try {
     & dotnet build 'MiningVolume.HSNext.sln' --no-restore -c Release @opts
     if ($LASTEXITCODE -ne 0) { throw "Build failed: $Flavor" }
     $project = Join-Path $base 'src/MiningVolume.Plugin2023'
-    $assemblies = Get-ChildItem -Path (Join-Path $project 'bin_compat') -Filter 'IMSATVolume.*.dll' -Recurse |
+    $flavorOutput=Join-Path $project ("bin_compat/"+$Flavor)
+    $assemblies = Get-ChildItem -Path $flavorOutput -Filter 'IMSATVolume.*.dll' -Recurse |
         Where-Object { $_.Name -eq "IMSATVolume.$Flavor.dll" }
     if ($Flavor -eq 'ACAD2023_NET48') {
-        $assemblies=Get-ChildItem -Path (Join-Path $project 'bin_compat') -Filter 'MiningVolume2023.dll' -Recurse
+        $assemblies=Get-ChildItem -Path $flavorOutput -Filter 'MiningVolume2023.dll' -Recurse
     }
     if (@($assemblies).Count -ne 1) { throw "Expected exactly one built entry assembly for $Flavor" }
     New-Item -Path $Output -ItemType Directory -Force | Out-Null
-    Copy-Item $assemblies[0].FullName -Destination $Output -Force
+    # Preserve the managed dependencies needed for a later host smoke test.
+    # Never redistribute Autodesk SDK DLLs, even if an SDK copies them locally.
+    $cadName="IMSATVolume.Cad.$Flavor.dll"
+    if($Flavor -eq 'ACAD2023_NET48') {$cadName='MiningVolume.Cad2023.dll'}
+    $allowed=@($assemblies[0].Name,'MiningVolume.Core.dll','MiningVolume.Surface.dll',
+        $cadName,'MiningVolume.Cdt.Native.dll','System.ValueTuple.dll')
+    $files=@()
+    foreach($name in $allowed) {
+        $path=Join-Path $assemblies[0].DirectoryName $name
+        if($name -eq 'MiningVolume.Cdt.Native.dll') {
+            $native=@(Get-ChildItem (Join-Path $base "src/MiningVolume.Surface/bin_compat/$Flavor") -Filter $name -Recurse)
+            if($native.Count -ne 1) {throw 'Native triangulation DLL missing or ambiguous.'}
+            $path=$native[0].FullName
+        }
+        if(Test-Path $path) {
+            Copy-Item $path -Destination $Output -Force
+            $files+=@{name=$name;sha256=(Get-FileHash $path -Algorithm SHA256).Hash.ToLowerInvariant();bytes=(Get-Item $path).Length}
+        } elseif($name -ne 'System.ValueTuple.dll') {throw "Missing compiled dependency: $name"}
+    }
+    @{schema=1;flavor=$Flavor;source_sha=$sha;compile='PASS';host='NOT_TESTED';
+        functional='NOT_TESTED';release='BLOCKED';files=$files} |
+        ConvertTo-Json -Depth 5 | Set-Content (Join-Path $Output 'COMPILE_MANIFEST.json') -Encoding UTF8
     # A compile is NOT a host-runtime PASS; preserve provenance and audit.
-    $sha=(git rev-parse HEAD 2>$null)
     @(
         'IMSAT VOLUME COMPATIBILITY BUILD — QA ONLY, NOT FOR INSTALLATION'
         "Flavor=$Flavor"

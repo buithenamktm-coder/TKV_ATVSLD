@@ -311,7 +311,7 @@ namespace MiningVolume.Core.Sections
 
             public TriangleGridIndex(TinSurface tin)
             {
-                _triangles = tin.Triangles ?? Array.Empty<Triangle3>();
+                _triangles = tin.Triangles ?? MiningVolume.Core.Compatibility.EmptyArray<Triangle3>.Value;
                 _tiled = _triangles as ITiledTriangleSource;
                 int count = _triangles.Count;
 
@@ -320,7 +320,7 @@ namespace MiningVolume.Core.Sections
                 // of faces; query only intersecting tiles on demand.
                 if (_tiled != null)
                 {
-                    _minX = _maxX = _minY = _maxY = Array.Empty<double>();
+                    _minX = _maxX = _minY = _maxY = MiningVolume.Core.Compatibility.EmptyArray<double>.Value;
                     _originX = _originY = 0;
                     _cell = 1;
                     return;

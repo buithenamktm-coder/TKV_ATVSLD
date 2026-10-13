@@ -121,7 +121,7 @@ namespace MiningVolume2023.Services
             if (string.Equals(group, Coal, StringComparison.Ordinal)) return CoalUnits;
             if (string.Equals(group, Mineral, StringComparison.Ordinal)) return MineralUnits;
             if (string.Equals(group, TkvOther, StringComparison.Ordinal)) return OtherTkvUnits;
-            return Array.Empty<string>(); // Outside TKV: user enters full name.
+            return MiningVolume.Core.Compatibility.EmptyArray<string>.Value; // Outside TKV: user enters full name.
         }
     }
 

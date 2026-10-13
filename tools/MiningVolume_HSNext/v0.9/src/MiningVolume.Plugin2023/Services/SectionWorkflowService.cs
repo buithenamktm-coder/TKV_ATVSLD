@@ -220,7 +220,7 @@ namespace MiningVolume2023.Services
                 if (line != null) { lines.Add(line); index++; }
             }
             if (lines.Count == 0) throw new InvalidOperationException("Sau hiệu chỉnh không còn tuyến mặt cắt hợp lệ trong đường bao.");
-            return new SectionSystem(old.Direction, old.Normal, boundary, lines, Array.Empty<string>());
+            return new SectionSystem(old.Direction, old.Normal, boundary, lines, MiningVolume.Core.Compatibility.EmptyArray<string>.Value);
         }
 
         // A user may move/delete stations after selecting the statutory 20m

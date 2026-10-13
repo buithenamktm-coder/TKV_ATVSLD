@@ -329,7 +329,7 @@ namespace MiningVolume2023.Services
                     x.Spans.Select(y => new SectionSpan(y.StartT, y.EndT)).ToList())).ToList();
                 var direction = lines[0].Direction;
                 var normal = lines[0].Normal;
-                state.SectionSystem = new SectionSystem(direction, normal, boundary, lines, Array.Empty<string>());
+                state.SectionSystem = new SectionSystem(direction, normal, boundary, lines, MiningVolume.Core.Compatibility.EmptyArray<string>.Value);
             }
 
             if (rebuildDerived)

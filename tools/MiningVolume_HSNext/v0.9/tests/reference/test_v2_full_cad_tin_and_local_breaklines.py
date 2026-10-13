@@ -10,7 +10,7 @@ def read(path):
 def test_large_tin_does_not_use_stride_sampled_mesh_as_official_geometry():
     store = read("src/MiningVolume.Surface/TiledConformingTinBuilder.cs")
     workflow = read("src/MiningVolume.Plugin2023/Services/SurfaceWorkflowService.cs")
-    assert "PreviewTriangles=Array.Empty<Triangle3>()" in store
+    assert "PreviewTriangles=MiningVolume.Core.Compatibility.EmptyArray<Triangle3>.Value" in store
     assert "preview.Add(triangle)" not in store
     pair = workflow.split("public static void DrawTinPair(", 1)[1].split(
         "public static void DrawTin(ModelRole role, SurfaceBuildResult build)", 1
