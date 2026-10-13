@@ -9,8 +9,8 @@ def read(rel):
 def test_export_gap_is_distinct_from_survey_section_spacing():
     ui = read("src/MiningVolume.Plugin2023/UI/SectionPage.cs")
     state = read("src/MiningVolume.Plugin2023/Services/ProjectState.cs")
-    assert 'Add(top, 2, "Khoảng cách mặt cắt, m", _spacing' in ui
-    assert 'Add(top, 8, "Giãn cách khi xuất CAD", _layoutGap' in ui
+    assert 'Add(top, 3, "Khoảng cách mặt cắt, m", _spacing' in ui
+    assert 'Add(top, 10, "Giãn cách khi xuất CAD", _layoutGap' in ui
     assert '_layoutGap = Num(90, 30, 10000);' in ui
     assert 'SectionLayoutGap { get; set; } = 90.0' in state
     assert 'SectionSpacing { get; set; } = 20.0' in state
