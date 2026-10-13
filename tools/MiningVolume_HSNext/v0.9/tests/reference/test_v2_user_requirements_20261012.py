@@ -23,7 +23,7 @@ def test_palette_hides_for_all_interactive_cad_prompts_and_returns_on_esc():
 def test_dock_left_palette_uses_compact_vertical_scroll_layout():
     palette = read("src/MiningVolume.Plugin2023/UI/MainPaletteControl.cs")
     entry = read("src/MiningVolume.Plugin2023/EntryPoint.cs")
-    assert "bool compact = ClientSize.Width < 650;" in palette
+    assert "bool compact = ClientSize.Width < 730;" in palette
     assert "_compactHeader.Visible = compact;" in palette
     assert "_sidebar.Visible = !compact;" in palette
     assert "AutoScroll = true" in palette
