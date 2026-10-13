@@ -276,7 +276,9 @@ namespace MiningVolume2023.UI
                 bool active = kv.Key == page;
                 kv.Value.BackColor = active ? UiTheme.Accent : UiTheme.Sidebar;
                 kv.Value.ForeColor = active ? Color.White : UiTheme.ChromeText;
-                kv.Value.FlatAppearance.BorderSize = active ? 1 : 0;
+                // Active navigation is indicated by the fill only.
+                // A white border is clipped at WinForms rounded corners.
+                kv.Value.FlatAppearance.BorderSize = 0;
                 kv.Value.FlatAppearance.BorderColor = active ? UiTheme.ChromeMuted : UiTheme.Sidebar;
                 kv.Value.Font = new Font("Arial", 9.5F, active ? FontStyle.Bold : FontStyle.Regular);
             }
