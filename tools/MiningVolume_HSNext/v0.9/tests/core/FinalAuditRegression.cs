@@ -392,6 +392,46 @@ internal static class FinalAuditRegression
             var s=ProjectState.Current;s.VolumeResult=Calculate(Profile(1,5),Profile(2,5));s.VolumeCalculatedUtc=DateTime.UtcNow;s.VolumeCalculationSeconds=1.23;
             s.VolumeResult=null;Check(!s.VolumeCalculatedUtc.HasValue&&!s.VolumeCalculationSeconds.HasValue,"Stale timing survives invalidation");
         };
+        tests["rf17_excel_uneven_vietnamese_headers_have_full_text_and_keep_formula_row"]=()=>{
+            var report=new SpreadsheetReport{Title="IMSAT VOLUME"};
+            var sheet=new ReportSheet{Name="Header QA",Title="BẢNG KHỐI LƯỢNG"};
+            sheet.Notes.Add("Kiểm tra tên cột không bị cắt");
+            sheet.Headers.AddRange(new[]{
+                "Thứ tự","Khối lượng đào (m³)","Khối lượng đắp (m³)","Chênh lệch đào đắp (m³)"
+            });
+            sheet.ColumnWidths.AddRange(new[]{12d,12d,12d,12d});
+            sheet.Rows.Add(new ReportCell[]{
+                ReportCell.Int(1),ReportCell.N3(10),ReportCell.N3(3),
+                ReportCell.Formula3("B4-C4")
+            });
+            report.Sheets.Add(sheet);
+            var dir=Path.Combine(Path.GetTempPath(),"imsat-hdr-"+Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
+            try{
+                var target=Path.Combine(dir,"headers.xlsx");
+                SimpleXlsxWriter.Write(target,report);
+                using(var zip=ZipFile.OpenRead(target))
+                using(var stream=zip.GetEntry("xl/worksheets/sheet1.xml").Open()){
+                    var xml=XDocument.Load(stream);
+                    var header=xml.Descendants().FirstOrDefault(x=>x.Name.LocalName=="row"
+                        && (string)x.Attribute("r")=="3");
+                    Check(header!=null && double.Parse((string)header.Attribute("ht"),
+                        System.Globalization.CultureInfo.InvariantCulture)>=60,
+                        "Long wrapped Vietnamese header is clipped to old fixed 30-point row");
+                    foreach(var column in new[]{"B3","C3","D3"}){
+                        var cell=xml.Descendants().FirstOrDefault(x=>x.Name.LocalName=="c"
+                            && (string)x.Attribute("r")==column);
+                        Check(cell!=null && cell.Descendants().Any(x=>x.Name.LocalName=="t"
+                            && x.Value.Contains("m³")),"Lost full column heading: "+column);
+                    }
+                    var formula=xml.Descendants().FirstOrDefault(x=>x.Name.LocalName=="c"
+                        && (string)x.Attribute("r")=="D4");
+                    Check(formula!=null && formula.Descendants().Any(x=>
+                        x.Name.LocalName=="f" && x.Value=="B4-C4"),
+                        "Excel heading height changed formula/data coordinates");
+                }
+            }finally{Directory.Delete(dir,true);}
+        };
         tests["rf14_three_production_workbooks_metadata_formulas_logo"]=()=>{
             var dir=Path.Combine(Path.GetTempPath(),Guid.NewGuid().ToString("N"));
             try {Fixtures(dir);foreach(var file in Directory.GetFiles(dir,"*.xlsx"))VerifyWorkbook(file);}
