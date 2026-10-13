@@ -364,6 +364,26 @@ internal static class FinalAuditRegression
             Check(grid.Cells.Where(c=>c.IsVerticalConflict).All(c=>
                 c.Volume.CutVolume==0 && !c.Volume.IsComplete),
                 "Unverified incident support triangle received authoritative volume");
+            // Neither the section routes nor the upright face at y=0 crosses
+            // this strip, but the incident support triangles cover it.
+            var nearA = new SectionLine(41,"CUT-41",6,new Vec2(1,0),
+                new Vec2(0,1),new[]{new SectionSpan(0,10)});
+            var nearB = new SectionLine(42,"CUT-42",8,new Vec2(1,0),
+                new Vec2(0,1),new[]{new SectionSpan(0,10)});
+            SectionProfile Flat(SectionLine line) =>
+                new SectionProfile(line,
+                    new[]{new SectionProfileSegment(0,10,line.PointAt(0),
+                        line.PointAt(10),5,5,0,0)},50,0,Array.Empty<string>());
+            bool rejected=false;
+            try {
+                new SectionVolumeCalculator().Calculate(
+                    new SectionSystem(new Vec2(1,0),new Vec2(0,1),
+                        Boundary,new[]{nearA,nearB},Array.Empty<string>()),
+                    new[]{Flat(nearA),Flat(nearB)},vertical,Plane(0),
+                    new VolumeCalculationOptions{FromLevel=0,ToLevel=10,LevelStep=5});
+            } catch(InvalidOperationException) { rejected=true; }
+            Check(rejected,
+                "A strip with ambiguous support geometry was incorrectly certified because it did not touch the curtain");
         };
         tests["rf15_grid_rejects_stale_boundary_and_cell_settings"]=()=>{
             var st=ProjectState.Current;
