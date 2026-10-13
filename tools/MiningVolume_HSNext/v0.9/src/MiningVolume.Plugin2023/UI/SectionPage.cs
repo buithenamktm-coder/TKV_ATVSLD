@@ -52,11 +52,11 @@ namespace MiningVolume2023.UI
                 BackColor = Color.White
             };
             root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 32F));   // title
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 340F));  // parameters
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 42F));   // primary actions
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 74F));   // edit tools + CAD profile update
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 28F));   // status
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 38F));   // title
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 394F));  // parameters
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 50F));   // primary actions
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 90F));   // edit tools + CAD profile update
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));   // status
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));   // grid
             Controls.Add(root);
 
@@ -64,7 +64,9 @@ namespace MiningVolume2023.UI
             {
                 Text = "HỆ MẶT CẮT",
                 Dock = DockStyle.Fill,
-                Font = new Font("Arial", 11F, FontStyle.Bold),
+                Font = new Font("Arial", 12F, FontStyle.Bold),
+                ForeColor = UiTheme.TextStrong,
+                Padding = new Padding(12, 0, 0, 0),
                 TextAlign = ContentAlignment.MiddleLeft
             };
             root.Controls.Add(title, 0, 0);
@@ -74,14 +76,14 @@ namespace MiningVolume2023.UI
                 Dock = DockStyle.Fill,
                 ColumnCount = 3,
                 RowCount = 11,
-                Padding = new Padding(4, 2, 4, 2),
-                Margin = Padding.Empty,
+                Padding = new Padding(10, 8, 10, 8),
+                Margin = new Padding(0, 4, 0, 6),
                 AutoScroll = true, // compact 13-row parameters stay reachable in a 620px palette
-                BackColor = Color.White
+                BackColor = Color.FromArgb(246, 250, 255)
             };
-            top.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150F));
+            top.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 192F));
             top.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-            top.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 118F));
+            top.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 126F));
             for (int i = 0; i < 11; i++)
                 top.RowStyles.Add(new RowStyle(SizeType.Percent, 100F / 11F));
 
@@ -145,7 +147,7 @@ namespace MiningVolume2023.UI
                 Dock = DockStyle.Fill,
                 ColumnCount = 2,
                 RowCount = 1,
-                Padding = new Padding(4, 3, 4, 3),
+                Padding = new Padding(8, 4, 8, 4),
                 Margin = Padding.Empty
             };
             primary.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
@@ -169,7 +171,7 @@ namespace MiningVolume2023.UI
                 FlowDirection = FlowDirection.LeftToRight,
                 WrapContents = true,
                 AutoScroll = true,
-                Padding = new Padding(4, 2, 4, 2),
+                Padding = new Padding(9, 6, 9, 6),
                 Margin = Padding.Empty
             };
             tools.Controls.Add(Button("Thêm tuyến", AddLine));
@@ -179,7 +181,7 @@ namespace MiningVolume2023.UI
             var updateEdited = Button("CẬP NHẬT MẶT CẮT", UpdateEditedProfiles);
             updateEdited.Name = "btnUpdateEditedSections";
             updateEdited.Font = new Font("Arial", 9F, FontStyle.Bold);
-            updateEdited.MinimumSize = new Size(175, 34);
+            updateEdited.MinimumSize = new Size(175, 36);
             tools.Controls.Add(updateEdited);
             root.Controls.Add(tools, 0, 3);
 
@@ -187,9 +189,10 @@ namespace MiningVolume2023.UI
             {
                 Dock = DockStyle.Fill,
                 Text = "Chưa tạo hệ mặt cắt.",
-                ForeColor = Color.DimGray,
+                ForeColor = UiTheme.Text,
+                BackColor = UiTheme.Soft,
                 TextAlign = ContentAlignment.MiddleLeft,
-                Padding = new Padding(7, 0, 0, 0)
+                Padding = new Padding(12, 0, 0, 0)
             };
             root.Controls.Add(_status, 0, 4);
 
@@ -240,16 +243,16 @@ namespace MiningVolume2023.UI
                 _parameterLayout.RowCount = compact ? 13 : 11;
                 if (compact)
                 {
-                    _parameterLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 134F));
+                    _parameterLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 174F));
                     _parameterLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
                     for (int k = 0; k < 13; k++)
-                        _parameterLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36F));
+                        _parameterLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 38F));
                 }
                 else
                 {
-                    _parameterLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150F));
+                    _parameterLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 192F));
                     _parameterLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-                    _parameterLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 118F));
+                    _parameterLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 126F));
                     for (int k = 0; k < 11; k++)
                         _parameterLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F / 11F));
                 }
@@ -275,7 +278,7 @@ namespace MiningVolume2023.UI
                         _parameterLayout.Controls.Add(_parameterActions[i], 2, row);
                     }
                 }
-                _rootLayout.RowStyles[1].Height = compact ? 365F : 340F;
+                _rootLayout.RowStyles[1].Height = compact ? 430F : 394F;
             }
             finally { _parameterLayout.ResumeLayout(true); }
         }
@@ -299,8 +302,10 @@ namespace MiningVolume2023.UI
             n.Value = Math.Max(min, Math.Min(max, v));
             return n;
         }
-        private static Button Button(string t, EventHandler h) { var b = new Button { Text = t, AutoSize = true, Height = 28, Margin = new Padding(2) }; b.Click += h; return b; }
-        private static void Add(TableLayoutPanel p, int r, string label, Control c, Control b) { p.Controls.Add(new Label { Text = label, Dock = DockStyle.Fill, AutoEllipsis = true, TextAlign = ContentAlignment.MiddleLeft }, 0, r); p.Controls.Add(c, 1, r); p.Controls.Add(b, 2, r); }
+        private static Button Button(string t, EventHandler h) { var b = new Button { Text = t, AutoSize = true, Height = 36, Margin = new Padding(3, 2, 3, 2) }; b.Click += h; return b; }
+        private static void Add(TableLayoutPanel p, int r, string label, Control c, Control b) { p.Controls.Add(new Label { Text = label, Dock = DockStyle.Fill, AutoEllipsis = true,
+                Font = new Font("Arial", 9.5F, FontStyle.Bold), ForeColor = UiTheme.Text,
+                TextAlign = ContentAlignment.MiddleLeft }, 0, r); p.Controls.Add(c, 1, r); p.Controls.Add(b, 2, r); }
 
         private void PickBoundary(object s, EventArgs e)
         {
