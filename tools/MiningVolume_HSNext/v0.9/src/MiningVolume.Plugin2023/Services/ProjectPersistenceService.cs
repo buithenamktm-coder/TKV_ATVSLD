@@ -137,6 +137,9 @@ namespace MiningVolume2023.Services
                 DirectionX = state.SectionDirection?.X ?? 0,
                 DirectionY = state.SectionDirection?.Y ?? 0,
                 SectionSpacing = state.SectionSpacing,
+                SectionParameterMode = state.SectionParameterMode,
+                SectionMapScale = state.SectionMapScale,
+                SectionAxisElevationInterval = state.SectionAxisElevationInterval,
                 SectionLayoutGap = state.SectionLayoutGap,
                 GridBoundaryHandle = state.GridBoundaryHandle,
                 GridSizeX = state.GridSizeX,
@@ -232,6 +235,13 @@ namespace MiningVolume2023.Services
             var state = ProjectState.Current;
             state.Reset();
             state.SectionSpacing = PositiveOr(snap.SectionSpacing, 20);
+            // Legacy DWGs have no preset fields. Treat them as Custom, preserving
+            // their original numeric values rather than silently applying TT34.
+            state.SectionParameterMode = snap.SectionParameterMode == "TT34/2018/TT-BCT"
+                ? snap.SectionParameterMode : "Tùy chỉnh";
+            state.SectionMapScale = snap.SectionMapScale == 500 ? 500 : 1000;
+            state.SectionAxisElevationInterval =
+                PositiveOr(snap.SectionAxisElevationInterval, snap.SectionParameterMode == null ? PositiveOr(snap.LevelStep, 5) : 20);
             state.SectionLayoutGap = Math.Max(30.0, PositiveOr(snap.SectionLayoutGap, 90));
             state.GridBoundaryHandle = snap.GridBoundaryHandle;
             state.GridSizeX = PositiveOr(snap.GridSizeX, 20);
@@ -241,7 +251,7 @@ namespace MiningVolume2023.Services
             state.FromLevel = snap.FromLevel;
             state.ToLevel = snap.ToLevel;
             state.HorizontalScale = PositiveOr(snap.HorizontalScale, 1000);
-            state.VerticalScale = PositiveOr(snap.VerticalScale, 500);
+            state.VerticalScale = PositiveOr(snap.VerticalScale, 1000);
             state.DeveloperName = "Bùi Thế Nam";
             state.DeveloperContact = "ĐT/Zalo: 0967280686";
             state.MiningUnitGroup = MiningUnitCatalog.IsKnownGroup(snap.MiningUnitGroup)
