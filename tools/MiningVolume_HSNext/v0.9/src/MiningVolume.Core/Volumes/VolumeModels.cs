@@ -122,8 +122,10 @@ namespace MiningVolume.Core.Volumes
             IReadOnlyList<SectionIntervalVolume> intervals,
             IReadOnlyList<LevelVolumeSummary> levels,
             IReadOnlyList<SectionBandAreas> sectionAreas,
-            IReadOnlyList<string> warnings)
+            IReadOnlyList<string> warnings,
+            int skippedIntervals = 0)
         {
+            ExcludedIntervals = skippedIntervals;
             Bands = bands ?? Array.Empty<LevelBand>();
             Intervals = intervals ?? Array.Empty<SectionIntervalVolume>();
             Levels = levels ?? Array.Empty<LevelVolumeSummary>();
@@ -140,6 +142,9 @@ namespace MiningVolume.Core.Volumes
         public IReadOnlyList<LevelVolumeSummary> Levels { get; }
         public IReadOnlyList<SectionBandAreas> SectionAreas { get; }
         public IReadOnlyList<string> Warnings { get; }
+        public int ExcludedIntervals { get; }
+        public bool IsComplete => ExcludedIntervals == 0 && Intervals.Count > 0;
+        // Partial valid intervals are informative, not a mine-wide certified total.
         public double TotalCutVolume { get; }
         public double TotalFillVolume { get; }
         public double NetVolume => TotalCutVolume - TotalFillVolume;
