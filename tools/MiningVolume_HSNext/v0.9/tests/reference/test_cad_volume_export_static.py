@@ -12,7 +12,13 @@ def test_cad_volume_tables_are_native_and_not_images():
     assert "table.GenerateLayout();" in s
     assert "model.AppendEntity(table);" in s
     assert 'internal const string OutputLayer = "MV_KL_BANG";' in s
-    assert "result.Intervals.Count + 1" in s
+    assert "int totalRow = result.Intervals.Count + topRows;" in s
+    assert "interval.MergeCells(CellRange.Create(interval, 0, 0, 0, columns - 1))" in s
+    assert "interval.MergeCells(CellRange.Create(interval, 1, 4, 1, 7))" in s
+    assert "interval.MergeCells(CellRange.Create(interval, 1, 8, 1, 10))" in s
+    assert "StyleTable(interval, arial, totalRow)" in s
+    assert '"BẢNG TỔNG HỢP KHỐI LƯỢNG THEO MẶT CẮT"' in s
+    assert "interval.Cells[totalRow, 8].TextString = F(result.TotalCutVolume)" in s
     assert "result.Levels.Count + 1" in s
     assert "result.TotalCutVolume" in s
     assert "result.TotalFillVolume" in s
