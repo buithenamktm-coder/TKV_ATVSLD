@@ -150,10 +150,18 @@ namespace MiningVolume2023.Services
             double layoutGap = 90.0,
             IReadOnlyList<SectionProfile> profilesToDraw = null)
         {
-            if (Math.Abs(horizontalScale - 1000.0) > 1e-9 ||
-                Math.Abs(verticalScale - 1000.0) > 1e-9)
+            if (double.IsNaN(horizontalScale) || double.IsInfinity(horizontalScale) ||
+                double.IsNaN(verticalScale) || double.IsInfinity(verticalScale) ||
+                horizontalScale < 1 || verticalScale < 1)
+                throw new ArgumentOutOfRangeException(
+                    "Tỷ lệ ngang/đứng phải là số dương hợp lệ.");
+            if (string.Equals(ProjectState.Current.SectionParameterMode,
+                    "TT34/2018/TT-BCT", StringComparison.Ordinal) &&
+                (Math.Abs(horizontalScale - 1000.0) > 1e-9 ||
+                 Math.Abs(verticalScale - 1000.0) > 1e-9))
                 throw new InvalidOperationException(
-                    "V2.0 chỉ xuất mặt cắt tỷ lệ ngang và đứng 1:1.000.");
+                    "Bộ thông số TT34 sử dụng tỷ lệ ngang và đứng 1:1.000. " +
+                    "Muốn thay đổi tỷ lệ, hãy chọn Tùy chỉnh.");
             var state = ProjectState.Current;
             if (profilesToDraw == null && state.SectionProfiles.Count == 0) BuildProfiles();
             var drawingProfiles = profilesToDraw ?? state.SectionProfiles;
