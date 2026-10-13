@@ -96,3 +96,24 @@ def test_excel_hint_is_gone_and_user_brand_name_is_imsat_volume():
     entry = src("MiningVolume.Plugin2023/EntryPoint.cs")
     assert '"IMSAT VOLUME"' in title
     assert 'PaletteSet("IMSAT VOLUME"' in entry
+
+
+
+def test_axis_tick_density_is_guarded_before_creating_cad_geometry():
+    """Very fine axis ticks on deep pits must fail clearly, not freeze CAD."""
+    renderer = src("MiningVolume.Plugin2023/Services/SectionCadRenderer.cs")
+    assert "private const int MaxElevationTicksPerProfile = 250;" in renderer
+    assert "EnsureElevationTickBudget(baseZ, topZ, levelStep, p.Line.Name);" in renderer
+    assert "EnsureElevationTickBudget(baseZ, topZ, elevationStep, profile.Line.Name);" in renderer
+    assert "ticks > MaxElevationTicksPerProfile + 0.000001" in renderer
+    assert "Bước chia tầng tính khối lượng không thay đổi." in renderer
+    # The original independently chosen CAD axis step must never be silently
+    # enlarged: otherwise the user sees a section at the wrong annotation step.
+    assert "EnsureElevationTickBudget(baseZ, topZ, levelStep, p.Line.Name);" in renderer.split(
+        "for (int pi = startIndex;", 1)[1].split(
+        "AddLine(ms, tr", 1)[0]
+    )
+    assert "EnsureElevationTickBudget(baseZ, topZ, elevationStep, profile.Line.Name);" in renderer.split(
+        "public static void DrawQuickProfiles(", 1)[1].split(
+        "AddLine(ms,tr,new Point3d", 1)[0]
+    )
