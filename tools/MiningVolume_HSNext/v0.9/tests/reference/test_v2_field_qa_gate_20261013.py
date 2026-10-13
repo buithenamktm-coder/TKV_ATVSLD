@@ -187,8 +187,13 @@ def test_multi_z_volume_and_grid_are_localized_and_never_certify_missing_cells()
     assert "skippedIntervals++;" in calc
     assert "ExcludedIntervals" in volume_page
     assert "!st.VolumeResult.IsComplete" in export
-    assert "unsafeCells.Contains(" in grid
-    assert "IsVerticalConflict = ambiguous" in grid
+    # The accepted planar TIN is single-valued over its support; projected
+    # vertical curtains have zero XY area and MUST NOT erase grid cells.
+    assert "unsafeCells.Contains(" not in grid
+    assert "rootIndex.AnyIncident(tn)" not in grid
+    assert "var tn = existingIndex.Candidates(" in grid
+    assert "var tk = designIndex.Candidates(" in grid
+    assert "IsVerticalConflict = false" in grid
     assert "AmbiguousCells" in grid and "AmbiguousArea" in grid
     assert 'c.IsVerticalConflict || c.Volume.CoveredArea<=1e-9' in excel
     assert 'c.v.IsVerticalConflict || c.v.Volume.CoveredArea<=1e-9' in excel
