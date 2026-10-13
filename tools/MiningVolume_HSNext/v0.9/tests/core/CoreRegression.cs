@@ -248,7 +248,7 @@ internal static class CoreRegression
                 var line=new SectionLine(1,"MC-01",5,new Vec2(1,0),new Vec2(0,1),
                     new[]{new SectionSpan(0,10)});
                 var section=new TinSectionSampler().BuildProfile(line,tin,design);
-                Check(section.HasData&&section.Warnings.Any(w=>w.Contains("ĐIỂM TRÙNG XY:")),
+                Check(section.HasData&&section.Warnings.Any(w=>w.Contains("MẶT ĐỨNG NHIỀU Z:")),
                     "Section crossing double-Z position has no review warning");
                 Check(low.Vertices[0].Position.Z==10&&high.Vertices[0].Position.Z==20,
                     "Contour source elevations were modified");
