@@ -146,9 +146,9 @@ namespace MiningVolume2023.Services
             PromptPointResult p1, p2;
             using (CadSelectionPaletteScope.Hide())
             {
-            p1 = doc.Editor.GetPoint("\nChọn điểm thứ nhất xác định hướng mặt cắt: ");
+            p1 = doc.Editor.GetPoint("\nChọn điểm thứ nhất xác định phương chuẩn (mặt cắt vuông góc): ");
                 if (p1.Status != PromptStatus.OK) return null;
-            var opt = new PromptPointOptions("\nChọn điểm thứ hai xác định hướng mặt cắt: ") { BasePoint = p1.Value, UseBasePoint = true, UseDashedLine = true };
+            var opt = new PromptPointOptions("\nChọn điểm thứ hai trên phương chuẩn (mặt cắt vuông góc): ") { BasePoint = p1.Value, UseBasePoint = true, UseDashedLine = true };
             p2 = doc.Editor.GetPoint(opt);
             }
             if (p2.Status != PromptStatus.OK) return null;
