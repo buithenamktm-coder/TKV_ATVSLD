@@ -120,3 +120,16 @@ def test_manual_station_edits_cannot_falsely_retain_tt34_spacing_preset():
     assert workflow.index("ReconcileManualStationLimit(state, candidate);") < workflow.index(
         "state.SectionSystem = candidate;"
     )
+
+
+def test_excel_distinguishes_requested_station_step_from_actual_manual_gap():
+    report = read("src/MiningVolume.Plugin2023/Services/ExportWorkflowService.cs")
+    assert '"Bước tuyến thiết lập, m"' in report
+    assert '"Khoảng cách tuyến lớn nhất thực tế, m"' in report
+    method = report.split("private static double? MaxActualSectionGap(", 1)[1].split(
+        "private static ReportSheet BuildSourceXyzSheet(", 1
+    )[0]
+    assert "system.Lines.Select(x => x.Offset).OrderBy(x => x).ToArray();" in method
+    assert "projected.Min()" in method and "projected.Max()" in method
+    assert "stations[i] - stations[i - 1]" in method
+    assert "return Math.Max(0.0, gap);" in method
