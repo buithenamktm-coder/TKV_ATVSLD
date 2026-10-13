@@ -28,6 +28,24 @@ namespace MiningVolume.Core.Grid
         public IReadOnlyList<double?> ExistingNodeHeights { get; internal set; }
         public IReadOnlyList<double?> DesignNodeHeights { get; internal set; }
         public GridCellVolume Volume { get; internal set; }
+        public double ExistingCoveredArea { get; internal set; }
+        public double DesignCoveredArea { get; internal set; }
+        public string CoverageStatus
+        {
+            get
+            {
+                if (IsVerticalConflict) return "Nhiều Z - chưa xác nhận";
+                if (Volume == null) return "Chưa tính";
+                double tol = Math.Max(1e-7, Volume.CalculationArea * 1e-7);
+                if (Volume.IsComplete) return "Đủ";
+                bool ht = ExistingCoveredArea + tol >= Volume.CalculationArea;
+                bool tk = DesignCoveredArea + tol >= Volume.CalculationArea;
+                if (!ht && !tk) return "Thiếu cả TIN HT/TK";
+                if (!ht) return "Thiếu phủ TIN hiện trạng";
+                if (!tk) return "Thiếu phủ TIN thiết kế";
+                return "Lỗi giao hai TIN - cần đối chiếu";
+            }
+        }
         // A zero-volume grid cell with this flag is NOT certified zero.
         public bool IsVerticalConflict { get; internal set; }
     }
@@ -41,6 +59,18 @@ namespace MiningVolume.Core.Grid
         public bool IsComplete => Cells.All(x => x.Volume.IsComplete) && AmbiguousCells == 0;
         public int AmbiguousCells => Cells.Count(x => x.IsVerticalConflict);
         public double AmbiguousArea => Cells.Where(x => x.IsVerticalConflict).Sum(x => x.Volume.CalculationArea);
+        public int MissingExistingCells => Cells.Count(c=>!c.IsVerticalConflict &&
+            c.Volume.CalculationArea-c.ExistingCoveredArea >
+            Math.Max(1e-7,c.Volume.CalculationArea*1e-7));
+        public int MissingDesignCells => Cells.Count(c=>!c.IsVerticalConflict &&
+            c.Volume.CalculationArea-c.DesignCoveredArea >
+            Math.Max(1e-7,c.Volume.CalculationArea*1e-7));
+        public int IntersectionMismatchCells => Cells.Count(c=>!c.IsVerticalConflict &&
+            !c.Volume.IsComplete &&
+            c.ExistingCoveredArea >= c.Volume.CalculationArea -
+                Math.Max(1e-7,c.Volume.CalculationArea*1e-7) &&
+            c.DesignCoveredArea >= c.Volume.CalculationArea -
+                Math.Max(1e-7,c.Volume.CalculationArea*1e-7));
         public string Method => "TIN overlay – exact signed integration";
     }
 
@@ -143,6 +173,20 @@ namespace MiningVolume.Core.Grid
                         }
                         var volume = ExactGridCellCalculator.CalculatePrepared(tn, tk, cell, clipBoundary);
                         if (volume.CalculationArea > 1e-9)
+                        {
+                            double htArea=0, tkArea=0;
+                            if (!ambiguous)
+                            {
+                                if (!volume.IsComplete)
+                                {
+                                    htArea=ExactGridCellCalculator.MeasureSurfaceCoveragePrepared(
+                                        tn,cell,clipBoundary);
+                                    tkArea=ExactGridCellCalculator.MeasureSurfaceCoveragePrepared(
+                                        tk,cell,clipBoundary);
+                                }
+                                else
+                                    htArea=tkArea=volume.CalculationArea;
+                            }
                             cells.Add(new GridVolumeCell
                             {
                                 I = checked((int)i), J = checked((int)j),
@@ -150,8 +194,11 @@ namespace MiningVolume.Core.Grid
                                 ExistingNodeHeights = cell.Select(p => SampleZ(tn, p)).ToArray(),
                                 DesignNodeHeights = cell.Select(p => SampleZ(tk, p)).ToArray(),
                                 Volume = volume,
+                                ExistingCoveredArea=htArea,
+                                DesignCoveredArea=tkArea,
                                 IsVerticalConflict = ambiguous
                             });
+                        }
                         processed++;
                         if (processed == total || processed % 100 == 0) progress?.Invoke(processed, total);
                     }
