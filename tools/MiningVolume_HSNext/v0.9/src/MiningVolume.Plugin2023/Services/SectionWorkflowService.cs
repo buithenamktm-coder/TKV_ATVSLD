@@ -146,6 +146,10 @@ namespace MiningVolume2023.Services
             double layoutGap = 90.0,
             IReadOnlyList<SectionProfile> profilesToDraw = null)
         {
+            if (Math.Abs(horizontalScale - 1000.0) > 1e-9 ||
+                Math.Abs(verticalScale - 1000.0) > 1e-9)
+                throw new InvalidOperationException(
+                    "V2.0 chỉ xuất mặt cắt tỷ lệ ngang và đứng 1:1.000.");
             var state = ProjectState.Current;
             if (profilesToDraw == null && state.SectionProfiles.Count == 0) BuildProfiles();
             var drawingProfiles = profilesToDraw ?? state.SectionProfiles;
