@@ -250,16 +250,18 @@ namespace MiningVolume2023.Services
             state.LevelStep = PositiveOr(snap.LevelStep, 5);
             state.FromLevel = snap.FromLevel;
             state.ToLevel = snap.ToLevel;
-            // V2 decision: horizontal and vertical section scales are BOTH 1:1000.
-            // Existing CAD entities are not silently redrawn during restore.
-            // Warn before users reuse old drawings laid out at another scale.
-            if ((snap.HorizontalScale > 0 && Math.Abs(snap.HorizontalScale - 1000.0) > 1e-9) ||
-                (snap.VerticalScale > 0 && Math.Abs(snap.VerticalScale - 1000.0) > 1e-9))
-                warnings.Add("Project cũ dùng tỷ lệ mặt cắt khác 1:1.000. " +
-                    "Thông số V2.0 đã chốt 1:1.000 cho cả hai trục; cần vẽ lại " +
-                    "các mặt cắt CAD cũ trước khi nghiệm thu.");
-            state.HorizontalScale = 1000.0;
-            state.VerticalScale = 1000.0;
+            // Custom projects preserve the EXACT chosen scales across DWG reopen.
+            // TT34 keeps the default 1:1000 on both axes. A legacy project
+            // without a saved mode is treated as Custom (never silently discard).
+            state.HorizontalScale = state.SectionParameterMode == "Tùy chỉnh"
+                ? PositiveOr(snap.HorizontalScale, 1000.0) : 1000.0;
+            state.VerticalScale = state.SectionParameterMode == "Tùy chỉnh"
+                ? PositiveOr(snap.VerticalScale, 1000.0) : 1000.0;
+            if (state.SectionParameterMode != "Tùy chỉnh" &&
+                ((snap.HorizontalScale > 0 && Math.Abs(snap.HorizontalScale - 1000.0) > 1e-9) ||
+                 (snap.VerticalScale > 0 && Math.Abs(snap.VerticalScale - 1000.0) > 1e-9)))
+                warnings.Add("Bộ thông số TT34 sử dụng mặt cắt 1:1.000 trên hai trục. " +
+                    "Project cũ chứa tỷ lệ khác; kiểm tra và vẽ lại mặt cắt CAD nếu cần.");
             state.DeveloperName = "Bùi Thế Nam";
             state.DeveloperContact = "ĐT/Zalo: 0967280686";
             state.MiningUnitGroup = MiningUnitCatalog.IsKnownGroup(snap.MiningUnitGroup)
