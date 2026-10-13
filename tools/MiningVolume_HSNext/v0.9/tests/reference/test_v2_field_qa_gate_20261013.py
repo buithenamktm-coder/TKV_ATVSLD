@@ -183,7 +183,8 @@ def test_multi_z_volume_and_grid_are_localized_and_never_certify_missing_cells()
     assert "AffectedGridCells(" in footprint
     assert "SegmentHitsRect(" in footprint
     assert "VerticalConflictFootprint.TouchesSection(" in sampler
-    assert "VerticalConflictFootprint.TouchesStrip(" in calc
+    assert "VerticalConflictFootprint.TouchesStrip(" not in calc
+    assert "upper < minZ-options.Tolerance" in calc
     assert "skippedIntervals++;" in calc
     assert "ExcludedIntervals" in volume_page
     assert "!st.VolumeResult.IsComplete" in export
