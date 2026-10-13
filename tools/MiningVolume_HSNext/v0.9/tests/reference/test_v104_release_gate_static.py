@@ -233,7 +233,8 @@ def test_main_palette_shows_fixed_developer_name():
     ui = read("src/MiningVolume.Plugin2023/UI/MainPaletteControl.cs")
     assert 'Phát triển: Bùi Thế Nam' in ui
     assert 'ĐT/Zalo: 0967280686' in ui
-    assert 'Height = 66' in ui
+    assert 'Height = 76' in ui
+    assert 'UiTheme.ChromeText' in ui
 
 
 def test_palette_uses_shared_professional_ui_theme():
