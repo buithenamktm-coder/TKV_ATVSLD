@@ -11,6 +11,7 @@ namespace MiningVolume2023.Services
     internal static class SectionCadRenderer
     {
         private const string PreviewLayer = "MV_MC_BINHDO";
+        private const string PreviewLabelLayer = "MV_MC_BINHDO_TEN";
         private const string ExistingLayer = "MV_MC_HIENTRANG";
         private const string DesignLayer = "MV_MC_THIETKE";
         private const string AxisLayer = "MV_MC_TRUC";
@@ -25,10 +26,11 @@ namespace MiningVolume2023.Services
             using (var tr = db.TransactionManager.StartTransaction())
             {
                 ObjectId layerId = EnsureLayer(db, tr, PreviewLayer, 2);
+                ObjectId namesLayerId = EnsureLayer(db, tr, PreviewLabelLayer, 2);
                 ObjectId styleId = EnsureArialStyle(db, tr);
                 EnsureFrameRegApp(db, tr);
                 var ms = ModelSpace(db, tr, true);
-                EraseOnLayers(ms, tr, new[] { layerId });
+                EraseOnLayers(ms, tr, new[] { layerId, namesLayerId });
 
                 foreach (var line in system.Lines)
                 {
@@ -43,11 +45,14 @@ namespace MiningVolume2023.Services
                         var p = line.PointAt(line.Spans[0].StartT);
                         var txt = new DBText
                         {
-                            Position = new Point3d(p.X, p.Y, 0),
+                            // Draw labels outside the dense TIN and route
+                            // crossings; keep a separate toggleable label layer.
+                            Position = new Point3d(p.X-18.0*line.Direction.X,
+                                p.Y-18.0*line.Direction.Y,0),
                             TextString = line.Name,
                             Height = 3.0,
                             Rotation = Math.Atan2(line.Direction.Y, line.Direction.X),
-                            LayerId = layerId,
+                            LayerId = namesLayerId,
                             TextStyleId = styleId
                         };
                         ms.AppendEntity(txt); tr.AddNewlyCreatedDBObject(txt, true);
@@ -62,9 +67,13 @@ namespace MiningVolume2023.Services
             using (var tr = db.TransactionManager.StartTransaction())
             {
                 var lt = (LayerTable)tr.GetObject(db.LayerTableId, OpenMode.ForRead);
-                if (!lt.Has(PreviewLayer)) { tr.Commit(); return; }
+                if (!lt.Has(PreviewLayer) && !lt.Has(PreviewLabelLayer))
+                { tr.Commit(); return; }
                 var ms = ModelSpace(db, tr, true);
-                EraseOnLayers(ms, tr, new[] { lt[PreviewLayer] });
+                var clear = new List<ObjectId>();
+                if(lt.Has(PreviewLayer))clear.Add(lt[PreviewLayer]);
+                if(lt.Has(PreviewLabelLayer))clear.Add(lt[PreviewLabelLayer]);
+                EraseOnLayers(ms, tr, clear);
                 tr.Commit();
             }
         }
