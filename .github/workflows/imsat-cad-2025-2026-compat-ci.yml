@@ -1,4 +1,4 @@
-name: IMSAT VOLUME - AutoCAD 2021-2026 compatibility compile (NOT RELEASE)
+name: IMSAT VOLUME - AutoCAD 2019-2026 compatibility compile (NOT RELEASE)
 
 on:
   workflow_dispatch:
@@ -18,6 +18,8 @@ jobs:
       fail-fast: false
       matrix:
         flavor:
+          - ACAD2019_NET47
+          - ACAD2020_NET47
           - ACAD2021_NET48
           - ACAD2022_NET48
           - ACAD2024_NET48
