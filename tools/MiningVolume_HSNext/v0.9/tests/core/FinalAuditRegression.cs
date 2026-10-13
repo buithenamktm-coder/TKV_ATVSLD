@@ -433,6 +433,30 @@ internal static class FinalAuditRegression
                     row[9].Value.ToString()==""),
                 "Unmeasured cell got fake 0.00 m³ in Excel");
         };
+        tests["rf23_large_survey_coordinates_and_rotated_grid_keep_full_TIN_overlap"]=()=>{
+            const double shiftX=472500.0,shiftY=2399000.0;
+            TinSurface Move(TinSurface source)=>new TinSurface("translated",
+                source.Triangles.Select(t=>new Triangle3(
+                    new Vec3(t.A.X+shiftX,t.A.Y+shiftY,t.A.Z),
+                    new Vec3(t.B.X+shiftX,t.B.Y+shiftY,t.B.Z),
+                    new Vec3(t.C.X+shiftX,t.C.Y+shiftY,t.C.Z))).ToArray(),
+                Array.Empty<ValidationIssue>());
+            var bounds=Boundary.Select(v=>new Vec2(v.X+shiftX,v.Y+shiftY)).ToArray();
+            foreach(double angle in new[]{0d,17d,90d})
+            {
+                var report=new GridVolumeCalculator().Calculate(Move(Plane(5)),
+                    Move(Plane(0)),new GridVolumeOptions{
+                        Origin=bounds[0],Boundary=bounds,SizeX=5,SizeY=5,
+                        RotationDegrees=angle});
+                Check(report.Cells.Count>0 && report.IsComplete &&
+                    report.MissingExistingCells==0 &&
+                    report.MissingDesignCells==0 &&
+                    report.IntersectionMismatchCells==0,
+                    "Correctly overlaid TINs at mine XY reported missing: rotation="+angle);
+                Near(report.TotalCutVolume,1000.0);
+                Near(report.TotalNoDataArea,0.0);
+            }
+        };
         tests["rf15_grid_rejects_stale_boundary_and_cell_settings"]=()=>{
             var st=ProjectState.Current;
             st.Reset();
