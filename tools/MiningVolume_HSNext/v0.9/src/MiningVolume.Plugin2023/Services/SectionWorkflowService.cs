@@ -24,6 +24,7 @@ namespace MiningVolume2023.Services
             // Never invalidate accepted section/volume state before the CAD
             // preview transaction has successfully committed.
             DrawPreview(system);
+            ReconcileManualStationLimit(state, system);
             state.SectionSpacing = spacing;
             state.SectionDirection = direction;
             state.SectionSystem = system;
@@ -44,6 +45,7 @@ namespace MiningVolume2023.Services
             // the previous accepted section geometry or calculated volume.
             var candidate = RebuildAtOffsets(offsets);
             DrawPreview(candidate);
+            ReconcileManualStationLimit(state, candidate);
             state.SectionSystem = candidate;
             state.SectionProfiles.Clear();
             state.VolumeResult = null;
@@ -64,6 +66,7 @@ namespace MiningVolume2023.Services
             // the previous accepted section geometry or calculated volume.
             var candidate = RebuildAtOffsets(offsets);
             DrawPreview(candidate);
+            ReconcileManualStationLimit(state, candidate);
             state.SectionSystem = candidate;
             state.SectionProfiles.Clear();
             state.VolumeResult = null;
@@ -83,6 +86,7 @@ namespace MiningVolume2023.Services
             // the previous accepted section geometry or calculated volume.
             var candidate = RebuildAtOffsets(offsets);
             DrawPreview(candidate);
+            ReconcileManualStationLimit(state, candidate);
             state.SectionSystem = candidate;
             state.SectionProfiles.Clear();
             state.VolumeResult = null;
@@ -209,6 +213,31 @@ namespace MiningVolume2023.Services
             }
             if (lines.Count == 0) throw new InvalidOperationException("Sau hiệu chỉnh không còn tuyến mặt cắt hợp lệ trong đường bao.");
             return new SectionSystem(old.Direction, old.Normal, boundary, lines, Array.Empty<string>());
+        }
+
+        // A user may move/delete stations after selecting the statutory 20m
+        // preset. The UI must not still label the result "Theo TT34" when
+        // the actual offsets are farther apart. Do not prevent manual edits:
+        // mark them Custom, persist the choice and report it in Excel.
+        private static void ReconcileManualStationLimit(ProjectState state, SectionSystem system)
+        {
+            if (!string.Equals(state.SectionParameterMode, "TT34/2018/TT-BCT",
+                    StringComparison.Ordinal) || system == null ||
+                system.Lines == null || system.Lines.Count == 0)
+                return;
+
+            const double maxStationGap = 20.0;
+            const double tolerance = 1e-6;
+            var offsets = system.Lines.Select(x => x.Offset).OrderBy(x => x).ToArray();
+            var boundaryOffsets = system.Boundary.Select(x => Dot(x, system.Normal)).ToArray();
+            if (boundaryOffsets.Length == 0)
+                return;
+            bool tooWide = offsets[0] - boundaryOffsets.Min() > maxStationGap + tolerance ||
+                boundaryOffsets.Max() - offsets[offsets.Length - 1] > maxStationGap + tolerance;
+            for (int i = 1; i < offsets.Length && !tooWide; i++)
+                tooWide = offsets[i] - offsets[i - 1] > maxStationGap + tolerance;
+            if (tooWide)
+                state.SectionParameterMode = "Tùy chỉnh";
         }
 
         private static void DrawPreview(SectionSystem system)
