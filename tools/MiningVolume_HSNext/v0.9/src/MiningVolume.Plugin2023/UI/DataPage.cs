@@ -118,7 +118,7 @@ namespace MiningVolume2023.UI
             {
                 Text = "Loại dữ liệu tham gia TIN",
                 Width = 520,
-                Height = 96,
+                Height = 106,
                 Margin = new Padding(0, 0, 0, 8)
             };
             _types = new CheckedListBox
@@ -127,14 +127,16 @@ namespace MiningVolume2023.UI
                 CheckOnClick = true,
                 IntegralHeight = false,
                 MultiColumn = true,
-                ColumnWidth = 165,
+                ColumnWidth = 192,
+                HorizontalScrollbar = false,
                 BorderStyle = BorderStyle.None,
                 Margin = new Padding(0),
                 BackColor = UiTheme.Surface
             };
             foreach (var x in new[] { "POINT", "LINE", "LWPOLYLINE", "2D POLYLINE", "3D POLYLINE", "Đường đồng mức" })
                 _types.Items.Add(x, true);
-            var typePanel = new Panel { Dock = DockStyle.Fill, Padding = new Padding(10, 6, 10, 8) };
+            var typePanel = new Panel { Dock = DockStyle.Fill,
+                Padding = new Padding(12, 8, 12, 8) };
             typePanel.Controls.Add(_types);
             typeBox.Controls.Add(typePanel);
             body.Controls.Add(typeBox);
