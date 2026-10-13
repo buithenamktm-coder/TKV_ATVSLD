@@ -12,6 +12,11 @@ namespace MiningVolume.Core.Grid
         public double NetVolume => CutVolume - FillVolume;
         public double CalculationArea { get; internal set; }
         public double CoveredArea { get; internal set; }
+        // Area of each planar TIN independently. A genuine overlapping
+        // multi-sheet has surface area SUM greater than the cell XY area,
+        // unlike a zero-area vertical curtain separating two planar sheets.
+        public double ExistingSurfaceArea { get; internal set; }
+        public double DesignSurfaceArea { get; internal set; }
         public double NoDataArea => Math.Max(0, CalculationArea - CoveredArea);
         public bool IsComplete => NoDataArea <= Math.Max(1e-8, CalculationArea * 1e-8);
     }
@@ -118,6 +123,20 @@ namespace MiningVolume.Core.Grid
             }
 
             double tol = Math.Max(1e-7, result.CalculationArea * 1e-7);
+            // Crucial invariant: each TIN must be a single planar sheet
+            // almost everywhere. A vertical 3DFACE of zero area is harmless,
+            // but two planar triangles occupying the same XY region with
+            // different Z must NEVER be double-counted as one elevation.
+            result.ExistingSurfaceArea =
+                MeasureSurfaceCoveragePrepared(existing, cell, boundary);
+            result.DesignSurfaceArea =
+                MeasureSurfaceCoveragePrepared(design, cell, boundary);
+            if (result.ExistingSurfaceArea > result.CalculationArea + tol ||
+                result.DesignSurfaceArea > result.CalculationArea + tol)
+                throw new InvalidOperationException(
+                    "TIN hiện trạng/thiết kế có mặt tam giác nằm chồng nhau trên cùng diện tích XY " +
+                    "(nhiều lớp cao độ). Không thể tính đúng theo phương pháp lưới 2,5D; " +
+                    "kiểm tra và chọn bề mặt thiết kế/hiện trạng phù hợp.");
             if (result.CoveredArea > result.CalculationArea + tol)
                 throw new InvalidOperationException("Hai TIN có tam giác chồng lấn hoặc đường bao không hợp lệ; diện tích tính bị đếm trùng.");
             if (result.CoveredArea < -tol || result.CutVolume < -tol || result.FillVolume < -tol)
