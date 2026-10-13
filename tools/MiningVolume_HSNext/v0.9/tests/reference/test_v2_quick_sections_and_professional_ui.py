@@ -22,6 +22,9 @@ def test_quick_section_selects_selected_routes_not_parallel_volume_stations():
     assert "SurfaceWorkflowService.EnsureBothTinsReady(synchronizeCadLayers: false)" in page
     assert "new QuickSectionProfileBuilder()" in page
     assert "new TinSectionSampler()" in page
+    # A long TIN sample must not use an old CAD drawing gap if the user
+    # changes layout settings while the background calculation is running.
+    assert "st.SectionLayoutGap != layoutGap" in page
     assert "selected.Select((route, i)" in page
     assert "SectionCadRenderer.DrawQuickProfiles(" in page
     assert "st.SectionSystem =" not in page.split(
