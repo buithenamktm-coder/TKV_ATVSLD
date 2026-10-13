@@ -88,8 +88,13 @@ namespace MiningVolume2023.Services
             double layoutGap = 90.0)
         {
             if (profiles == null || profiles.Count == 0) throw new InvalidOperationException("Chưa có dữ liệu mặt cắt.");
-            if (horizontalScale <= 0 || verticalScale <= 0) throw new ArgumentOutOfRangeException("Tỷ lệ mặt cắt phải lớn hơn 0.");
-            if (levelStep <= 0) levelStep = 5.0;
+            if (Math.Abs(horizontalScale - 1000.0) > 1e-9 ||
+                Math.Abs(verticalScale - 1000.0) > 1e-9)
+                throw new InvalidOperationException(
+                    "Tất cả mặt cắt V2.0 phải có tỷ lệ ngang 1:1.000 và tỷ lệ đứng 1:1.000.");
+            if (levelStep <= 0)
+                throw new ArgumentOutOfRangeException(nameof(levelStep),
+                    "Bước chia trục cao độ trên mặt cắt phải lớn hơn 0.");
             if (double.IsNaN(layoutGap) || double.IsInfinity(layoutGap) || layoutGap < 30.0)
                 throw new ArgumentOutOfRangeException(nameof(layoutGap), "Giãn cách bố trí mặt cắt trên CAD phải từ 30 đơn vị trở lên.");
             double vExag = horizontalScale / verticalScale;
