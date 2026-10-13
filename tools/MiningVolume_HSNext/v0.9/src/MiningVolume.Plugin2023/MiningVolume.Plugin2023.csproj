@@ -18,7 +18,7 @@
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies.net47" Version="1.0.3" PrivateAssets="all" Condition="'$(IMSATCadFramework)' == 'net47'" />
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies.net48" Version="1.0.3" PrivateAssets="all" Condition="'$(IMSATCadFramework)' == 'net48'" />
   </ItemGroup>
-  <ItemGroup Condition="'$(IMSATCadFramework)' == 'net48'">
+  <ItemGroup Condition="'$(IMSATCadIsModern)' != 'true'">
     <Reference Include="System.Windows.Forms" />
     <Reference Include="System.Drawing" />
     <Reference Include="System.Runtime.Serialization" />
