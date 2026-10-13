@@ -385,6 +385,21 @@ internal static class FinalAuditRegression
             Check(rejected,
                 "A strip with ambiguous support geometry was incorrectly certified because it did not touch the curtain");
         };
+        tests["rf21_missing_elevation_in_one_section_must_not_certify_partial_volume"]=()=>{
+            var a=Profile(1,5);var b=Profile(2,5);
+            var missing=new SectionProfile(a.Line,a.Segments,a.CutArea,a.FillArea,
+                new[]{"MC-1: có đoạn thiếu giao TIN hiện trạng/thiết kế; không đủ dữ liệu."});
+            var system=new SectionSystem(new Vec2(1,0),new Vec2(0,1),
+                Boundary,new[]{a.Line,b.Line},Array.Empty<string>());
+            var options=new VolumeCalculationOptions{
+                FromLevel=0,ToLevel=10,LevelStep=5};
+            bool failed=false;
+            try {
+                new SectionVolumeCalculator().Calculate(system,
+                    new[]{missing,b},Plane(5),Plane(0),options);
+            } catch(InvalidOperationException) { failed=true; }
+            Check(failed,"A partly sampled section was erroneously certified as a full-volume result");
+        };
         tests["rf15_grid_rejects_stale_boundary_and_cell_settings"]=()=>{
             var st=ProjectState.Current;
             st.Reset();
