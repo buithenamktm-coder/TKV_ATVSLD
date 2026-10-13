@@ -320,8 +320,11 @@ namespace MiningVolume2023.UI
                           " ô ("+result.AmbiguousArea.ToString("n2")+
                           " m²) gặp mặt đứng nhiều Z: CHƯA CÓ KHỐI LƯỢNG XÁC NHẬN. " +
                           "Không coi các ô này là thể tích bằng 0."
-                        : "Tính xong nhưng còn "+result.TotalNoDataArea.ToString("n2")+
-                          " m² thiếu TIN. Chưa được nghiệm thu khối lượng.";
+                        : "Có "+result.TotalNoDataArea.ToString("n2")+
+                          " m² chưa phủ đủ: "+result.MissingExistingCells.ToString("n0")+
+                          " ô thiếu HT; "+result.MissingDesignCells.ToString("n0")+
+                          " ô thiếu TK; "+result.IntersectionMismatchCells.ToString("n0")+
+                          " ô hai TIN đều phủ nhưng không giao đúng. Chưa nghiệm thu.";
                 RefreshCells();
             }
             catch(OperationCanceledException){_status.Text="Đã hủy tính lưới theo yêu cầu.";}
@@ -444,11 +447,16 @@ namespace MiningVolume2023.UI
                 case 2:e.Value=c.J;break;
                 case 3:e.Value=c.Volume.CalculationArea.ToString("0.00");break;
                 case 4:e.Value=c.Volume.NoDataArea.ToString("0.00");break;
-                case 5:e.Value=c.IsVerticalConflict?"—":c.Volume.CutVolume.ToString("0.00");break;
-                case 6:e.Value=c.IsVerticalConflict?"—":c.Volume.FillVolume.ToString("0.00");break;
-                case 7:e.Value=c.IsVerticalConflict?"—":c.Volume.NetVolume.ToString("0.00");break;
-                case 8:e.Value=c.IsVerticalConflict?"Nhiều Z – kiểm tra":
-                    c.Volume.IsComplete?"Đủ":"Thiếu TIN";break;
+                // A cell with zero covered area is unmeasured, not a
+                // certified 0.00 m³. Preserve true partial volumes when
+                // the overlap covers some nonzero portion of a cell.
+                case 5:e.Value=c.IsVerticalConflict||c.Volume.CoveredArea<=1e-9
+                    ?"—":c.Volume.CutVolume.ToString("0.00");break;
+                case 6:e.Value=c.IsVerticalConflict||c.Volume.CoveredArea<=1e-9
+                    ?"—":c.Volume.FillVolume.ToString("0.00");break;
+                case 7:e.Value=c.IsVerticalConflict||c.Volume.CoveredArea<=1e-9
+                    ?"—":c.Volume.NetVolume.ToString("0.00");break;
+                case 8:e.Value=c.CoverageStatus;break;
             }
         }
 
