@@ -35,6 +35,73 @@ namespace MiningVolume.Core.Surface
                 foreach (var g in design.VerticalConflicts) yield return g.Position;
         }
 
+        /// <summary>
+        /// The 2.5D CDT triangulates a single representative Z at conflicting
+        /// XY. All support triangles INCIDENT to that XY can inherit this
+        /// arbitrary branch, even cells not directly crossed by the upright
+        /// curtain. This spatial hash lets callers quarantine those triangles
+        /// without an O(number of conflicts) scan per grid cell.
+        /// </summary>
+        public sealed class ConflictRootIndex
+        {
+            private readonly Dictionary<(long,long), List<Vec2>> _sites =
+                new Dictionary<(long,long), List<Vec2>>();
+            private readonly double _epsilon;
+            public bool IsEmpty => _sites.Count == 0;
+
+            public ConflictRootIndex(TinSurface existing, TinSurface design,
+                double epsilon = 1e-6)
+            {
+                if (!(epsilon > 0) || !Finite(epsilon))
+                    throw new ArgumentOutOfRangeException(nameof(epsilon));
+                _epsilon = epsilon;
+                foreach (var root in Roots(existing, design))
+                {
+                    var key = Key(root);
+                    if (!_sites.TryGetValue(key, out var list))
+                        _sites.Add(key, list = new List<Vec2>());
+                    list.Add(root);
+                }
+            }
+
+            private (long,long) Key(Vec2 p)
+            {
+                if (!Finite(p.X) || !Finite(p.Y))
+                    throw new InvalidOperationException("XY mặt đứng không hữu hạn.");
+                return (checked((long)Math.Floor(p.X / _epsilon)),
+                    checked((long)Math.Floor(p.Y / _epsilon)));
+            }
+
+            public bool Contains(Vec2 p)
+            {
+                if (IsEmpty) return false;
+                var cell = Key(p);
+                for (long dx=-1;dx<=1;dx++)
+                    for (long dy=-1;dy<=1;dy++)
+                    {
+                        var key=(checked(cell.Item1+dx),checked(cell.Item2+dy));
+                        if (!_sites.TryGetValue(key,out var values)) continue;
+                        foreach (var v in values)
+                        {
+                            double ax=v.X-p.X, ay=v.Y-p.Y;
+                            if (ax*ax+ay*ay<=_epsilon*_epsilon) return true;
+                        }
+                    }
+                return false;
+            }
+
+            public bool Incident(Triangle3 t) =>
+                Contains(t.A.XY) || Contains(t.B.XY) || Contains(t.C.XY);
+
+            public bool AnyIncident(IReadOnlyList<Triangle3> triangles)
+            {
+                if (IsEmpty || triangles == null) return false;
+                foreach (var t in triangles)
+                    if (Incident(t)) return true;
+                return false;
+            }
+        }
+
         // Every preserved face projects to a segment (possibly repeated in a
         // two-triangle curtain). Choose its most separated XY vertices.
         private static bool Projection(Triangle3 f, out Vec2 a, out Vec2 b)
