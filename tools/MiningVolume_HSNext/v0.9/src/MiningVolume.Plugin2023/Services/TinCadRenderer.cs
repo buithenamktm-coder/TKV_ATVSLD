@@ -337,10 +337,24 @@ namespace MiningVolume2023.Services
                 !Finite(t.B.X) || !Finite(t.B.Y) || !Finite(t.B.Z) ||
                 !Finite(t.C.X) || !Finite(t.C.Y) || !Finite(t.C.Z))
                 throw new InvalidOperationException("Mặt đứng 3D có tọa độ không hợp lệ.");
-            double dz = t.B.Z - t.A.Z;
-            if (t.A.XY.DistanceTo(t.B.XY) > 1e-6 || Math.Abs(dz) <= 1e-8 ||
-                t.A.XY.DistanceTo(t.C.XY) <= 1e-8)
+            // Polygon clipping can triangulate the upright curtain with
+            // the vertical edge at AB, BC OR CA. The previous validator
+            // demanded AB only and rejected correctly clipped 3D triangles.
+            // Require any vertical pair and a third XY-distinct point.
+            // Never accept an arbitrary flat or zero-area face.
+            bool ab = VerticalEdge(t.A, t.B, t.C);
+            bool bc = VerticalEdge(t.B, t.C, t.A);
+            bool ca = VerticalEdge(t.C, t.A, t.B);
+            if (!(ab || bc || ca))
                 throw new InvalidOperationException("Mặt đứng 3D không phải tam giác hợp lệ.");
+        }
+
+        private static bool VerticalEdge(MiningVolume.Core.Geometry.Vec3 a,
+            MiningVolume.Core.Geometry.Vec3 b, MiningVolume.Core.Geometry.Vec3 other)
+        {
+            return a.XY.DistanceTo(b.XY) <= 1e-6 &&
+                   Math.Abs(a.Z - b.Z) > 1e-8 &&
+                   a.XY.DistanceTo(other.XY) > 1e-8;
         }
 
         private static bool Finite(double v) => !double.IsNaN(v) && !double.IsInfinity(v);
