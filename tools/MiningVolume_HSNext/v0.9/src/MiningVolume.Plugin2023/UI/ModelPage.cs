@@ -91,7 +91,7 @@ namespace MiningVolume2023.UI
             _info = new Label
             {
                 Dock = DockStyle.Bottom,
-                Height = 58,
+                Height = 82,
                 Text = "Chưa có dữ liệu.",
                 ForeColor = Color.DimGray,
                 AutoEllipsis = true
@@ -170,7 +170,14 @@ namespace MiningVolume2023.UI
                 $"{s.Name} • nguồn: {s.Layer ?? "-"} • {s.EntityCount:n0} đối tượng • {s.ActiveVertexCount:n0}/{s.VertexCount:n0} đỉnh đang dùng" +
                 Environment.NewLine +
                 SurfaceWorkflowService.TinStatusText(ModelRole.Existing) + "   |   " +
-                SurfaceWorkflowService.TinStatusText(ModelRole.Design);
+                SurfaceWorkflowService.TinStatusText(ModelRole.Design) +
+                Environment.NewLine +
+                (ProjectState.Current.HasTinRegion
+                    ? "PHẠM VI TIN: ĐÃ GIỚI HẠN theo đường bao CAD " +
+                      ProjectState.Current.TinRegionHandle +
+                      " (áp dụng cho cả HT/TK)."
+                    : "PHẠM VI TIN: TOÀN BỘ NGUỒN. Đường bao MẶT CẮT không cắt TIN; " +
+                      "muốn giới hạn: DỮ LIỆU → Phạm vi tạo TIN → Chọn vùng trên CAD.");
 
             _toggleTin.Text = s.TinVisible ? "Ẩn TIN" : "Hiện TIN";
             _toggleTin.Enabled = s.Tin != null && !_busy;
