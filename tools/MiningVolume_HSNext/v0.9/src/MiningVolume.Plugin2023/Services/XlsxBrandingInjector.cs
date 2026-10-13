@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Xml;
 using MiningVolume.Core.Reporting;
@@ -25,9 +26,9 @@ namespace MiningVolume2023.Services
         public static void Apply(string filePath, SpreadsheetReport report)
         {
             if (report == null) throw new ArgumentNullException(nameof(report));
-            string logoPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Assets", "imsat_logo_64.png");
-            if (!File.Exists(logoPath))
-                throw new FileNotFoundException("Thiếu logo IMSAT để đóng dấu nhận diện vào báo cáo Excel.", logoPath);
+            if (!report.IncludeImsatLogo) return; // non-TKV must have no IMSAT logo
+            byte[] logo = LoadLogoOrNull();
+            if (logo == null) return; // logo is optional, workbook must still export
 
             var targets = report.Sheets
                 .Select((sheet, index) => new { Sheet = sheet, Index = index + 1 })
@@ -39,7 +40,7 @@ namespace MiningVolume2023.Services
             using (var fs = new FileStream(filePath, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
             using (var zip = new ZipArchive(fs, ZipArchiveMode.Update, leaveOpen: false, entryNameEncoding: Encoding.UTF8))
             {
-                ReplaceBinary(zip, "xl/media/imsat_logo.png", File.ReadAllBytes(logoPath));
+                ReplaceBinary(zip, "xl/media/imsat_logo.png", logo);
                 UpdateContentTypes(zip, targets.Select(x => x.Index));
 
                 foreach (var target in targets)
@@ -58,6 +59,32 @@ namespace MiningVolume2023.Services
                     WriteDrawingRelationships(zip, target.Index);
                 }
             }
+        }
+
+        private static byte[] LoadLogoOrNull()
+        {
+            // Primary source is the actual logo EMBEDDED in the plugin DLL.
+            // Installer paths / custom bundle layouts must never block Excel.
+            try
+            {
+                using (var embedded = typeof(XlsxBrandingInjector).Assembly
+                    .GetManifestResourceStream("MiningVolume2023.Assets.imsat_logo_64.png"))
+                {
+                    if (embedded != null)
+                    {
+                        using (var memory = new MemoryStream())
+                        {
+                            embedded.CopyTo(memory);
+                            if (memory.Length > 0) return memory.ToArray();
+                        }
+                    }
+                }
+                string fallback = Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
+                    "Assets", "imsat_logo_64.png");
+                return File.Exists(fallback) ? File.ReadAllBytes(fallback) : null;
+            }
+            catch (IOException) { return null; }
+            catch (UnauthorizedAccessException) { return null; }
         }
 
         private static void UpdateContentTypes(ZipArchive zip, IEnumerable<int> sheetIndexes)
