@@ -65,10 +65,26 @@ namespace MiningVolume.Core.Surface
                         a.X + t * dx, a.Y + t * dy, b.Z + t * (c.Z - b.Z));
                     var lo0 = Low(t0); var hi0 = High(t0);
                     var lo1 = Low(t1); var hi1 = High(t1);
+                    // Reject only genuinely zero-area pieces. Both new faces
+                    // must pass the SAME CAD validator used by TinCadRenderer:
+                    // a failure here is a diagnostic on the clipping algorithm,
+                    // not a reason to truncate a valid high-fidelity TIN.
                     if (HasThreeDimensionalArea(lo0, hi0, lo1))
-                        output.Add(new Triangle3(lo0, hi0, lo1));
+                    {
+                        var cut = new Triangle3(lo0, hi0, lo1);
+                        if (!IsValidCadFace(cut))
+                            throw new InvalidOperationException(
+                                "Lỗi cắt mặt đứng tại đường bao TIN: nhánh A không hợp lệ.");
+                        output.Add(cut);
+                    }
                     if (HasThreeDimensionalArea(hi0, hi1, lo1))
-                        output.Add(new Triangle3(hi0, hi1, lo1));
+                    {
+                        var cut = new Triangle3(hi0, hi1, lo1);
+                        if (!IsValidCadFace(cut))
+                            throw new InvalidOperationException(
+                                "Lỗi cắt mặt đứng tại đường bao TIN: nhánh B không hợp lệ.");
+                        output.Add(cut);
+                    }
                 }
             }
             return output;
@@ -84,10 +100,17 @@ namespace MiningVolume.Core.Surface
                 !double.IsNaN(p.Z) && !double.IsInfinity(p.Z);
             if (!Finite(face.A) || !Finite(face.B) || !Finite(face.C))
                 return false;
+            // Clipping a narrow polygon against a large mine TIN can produce
+            // upright triangles with VERY short XY runs or tiny (but nonzero)
+            // Z separation. An absolute 1e-8 cutoff wrongly rejected such
+            // genuine 3D triangles AFTER full triangulation, causing the
+            // "Mặt đứng 3D không phải tam giác hợp lệ" CAD export failure.
+            // Their true 3D cross product is checked below; never use the
+            // area in XY, because vertical faces intentionally have zero XY area.
             bool VerticalPair(Vec3 x, Vec3 y, Vec3 other) =>
-                x.XY.DistanceTo(y.XY) <= 1e-6 &&
-                Math.Abs(x.Z - y.Z) > 1e-8 &&
-                x.XY.DistanceTo(other.XY) > 1e-8;
+                x.X == y.X && x.Y == y.Y &&
+                x.Z != y.Z &&
+                (x.X != other.X || x.Y != other.Y);
             return HasThreeDimensionalArea(face.A, face.B, face.C) &&
                    (VerticalPair(face.A, face.B, face.C) ||
                     VerticalPair(face.B, face.C, face.A) ||
