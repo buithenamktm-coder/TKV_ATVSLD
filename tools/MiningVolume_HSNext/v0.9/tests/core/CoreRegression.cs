@@ -67,6 +67,31 @@ internal static class CoreRegression
     static void RunTests()
     {
         var tests=new Dictionary<string,Action> {
+            ["quick_section_bent_route_uses_true_cumulative_chainage_without_system"] = ()=>{
+                var ht=new TinSurface("ht",new[]{
+                    new Triangle3(P(0,0,10),P(10,0,10),P(10,10,10)),
+                    new Triangle3(P(0,0,10),P(10,10,10),P(0,10,10))},
+                    Array.Empty<ValidationIssue>());
+                var tk=new TinSurface("tk",new[]{
+                    new Triangle3(P(0,0,2),P(10,0,2),P(10,10,2)),
+                    new Triangle3(P(0,0,2),P(10,10,2),P(0,10,2))},
+                    Array.Empty<ValidationIssue>());
+                var route=new[]{new Vec2(1,1),new Vec2(9,1),new Vec2(9,9)};
+                var result=new QuickSectionProfileBuilder().Build(1,"MCN-01",
+                    route,ht,tk,new TinSectionSampler());
+                Check(result.HasData,"Bent quick route produced no sampled segments");
+                Check(Math.Abs(result.Line.MaxT-16)<1e-8 &&
+                    Math.Abs(result.Line.MinT)<1e-8,
+                    "Quick route must use 8m + 8m chainage (not 11.314m chord)");
+                Check(Math.Abs(result.CutArea-128)<1e-5 &&
+                    Math.Abs(result.FillArea)<1e-5,
+                    "TIN 10/2 elevation difference across 16m route not preserved");
+                Check(result.Segments.All(x=>x.S0>=-1e-6 && x.S1<=16+1e-6),
+                    "Quick section stations exceed actual selected CAD route");
+                Check(Math.Abs(result.Segments.First().Map0.X-1)<1e-6 &&
+                    Math.Abs(result.Segments.Last().Map1.Y-9)<1e-6,
+                    "Bent route's original CAD XY geometry was discarded");
+            },
             ["cad_validation_1681755_faces_retains_tiny_positive"] = ()=>{
                 const double x=2500000,y=450000;
                 var tiny=new Triangle3(P(x,y,1),P(x+0.000001,y,1),P(x,y+0.000001,1));
