@@ -19,7 +19,11 @@ def test_cad_volume_tables_are_native_and_not_images():
     assert "StyleTable(interval, arial, totalRow)" in s
     assert '"BẢNG TỔNG HỢP KHỐI LƯỢNG THEO MẶT CẮT"' in s
     assert "interval.Cells[totalRow, 8].TextString = F(result.TotalCutVolume)" in s
-    assert "result.Levels.Count + 1" in s
+    # The old +1 row made AutoCAD treat STT as a merged TITLE and hide
+    # the other five headings. A title row + six-header row + total now exist.
+    assert "int levelsTotalRow = result.Levels.Count + levelHeaderRows;" in s
+    assert "Set(levels, 1, \"Thứ tự\"" in s
+    assert "Tổng theo các tầng" in s
     assert "result.TotalCutVolume" in s
     assert "result.TotalFillVolume" in s
     assert "tr.Commit();" in s
