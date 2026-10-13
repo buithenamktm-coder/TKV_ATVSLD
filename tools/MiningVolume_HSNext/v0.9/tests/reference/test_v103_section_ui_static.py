@@ -27,12 +27,15 @@ def test_section_layout_is_single_explicit_vertical_grid_not_overlapping_top_doc
 def test_all_section_parameters_are_visible_rows_before_actions():
     s = read("src/MiningVolume.Plugin2023/UI/SectionPage.cs")
     for token in [
-        'Add(top, 2, "Khoảng cách mặt cắt, m"',
-        'Add(top, 3, "Mức chia tầng, m"',
-        'Add(top, 4, "Tính từ mức"',
-        'Add(top, 5, "Đến mức"',
-        'Add(top, 6, "Tỷ lệ ngang 1/"',
-        'Add(top, 7, "Tỷ lệ đứng 1/"'
+        'Add(top, 2, "Thông số theo"',
+        'Add(top, 3, "Khoảng cách mặt cắt, m"',
+        'Add(top, 4, "Bước chia trục Z, m"',
+        'Add(top, 5, "Mức chia tầng tính KL, m"',
+        'Add(top, 6, "Tính từ mức"',
+        'Add(top, 7, "Đến mức"',
+        'Add(top, 8, "Tỷ lệ ngang 1/ (cố định)"',
+        'Add(top, 9, "Tỷ lệ đứng 1/ (cố định)"',
+        'Add(top, 10, "Giãn cách khi xuất CAD"'
     ]:
         assert token in s
 
