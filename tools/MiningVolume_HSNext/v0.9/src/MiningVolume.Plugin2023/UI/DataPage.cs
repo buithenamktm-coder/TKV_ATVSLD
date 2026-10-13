@@ -127,7 +127,7 @@ namespace MiningVolume2023.UI
                 CheckOnClick = true,
                 IntegralHeight = false,
                 MultiColumn = true,
-                ColumnWidth = 192,
+                ColumnWidth = 148, // compact, three columns fit without horizontal scrolling
                 HorizontalScrollbar = false,
                 BorderStyle = BorderStyle.None,
                 Margin = new Padding(0),
