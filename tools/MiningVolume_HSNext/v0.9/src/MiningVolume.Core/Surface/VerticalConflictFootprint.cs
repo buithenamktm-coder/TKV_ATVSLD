@@ -170,6 +170,83 @@ namespace MiningVolume.Core.Surface
         }
 
         /// <summary>
+        /// Find planar CDT triangles sharing a multiple-Z source root. The
+        /// representative Z chosen for these triangles cannot be certified
+        /// without review. Build once per section-volume job, not once per line.
+        /// </summary>
+        public static IReadOnlyList<Triangle3> IncidentSupport(
+            TinSurface existing,TinSurface design)
+        {
+            var index = new ConflictRootIndex(existing, design);
+            if (index.IsEmpty) return Array.Empty<Triangle3>();
+            var incident = new List<Triangle3>();
+            void Add(TinSurface tin)
+            {
+                if (tin?.Triangles == null) return;
+                foreach (var triangle in tin.Triangles)
+                    if (index.Incident(triangle)) incident.Add(triangle);
+            }
+            Add(existing);
+            Add(design);
+            return incident;
+        }
+
+        private static bool SupportBBoxInStrip(
+            IReadOnlyList<Triangle3> incident, Vec2 normal, Vec2 direction,
+            double lowN,double highN,double lowT,double highT)
+        {
+            if (incident == null || incident.Count == 0) return false;
+            foreach (var triangle in incident)
+            {
+                var p = new[] { triangle.A.XY,triangle.B.XY,triangle.C.XY };
+                double minN=double.PositiveInfinity,maxN=double.NegativeInfinity;
+                double minT=double.PositiveInfinity,maxT=double.NegativeInfinity;
+                foreach (var vertex in p)
+                {
+                    double n=Dot(vertex,normal),t=Dot(vertex,direction);
+                    minN=Math.Min(minN,n);maxN=Math.Max(maxN,n);
+                    minT=Math.Min(minT,t);maxT=Math.Max(maxT,t);
+                }
+                if (maxN>=lowN && minN<=highN &&
+                    maxT>=lowT && minT<=highT)
+                    return true;
+            }
+            return false;
+        }
+
+        public static bool TouchesSupportSection(SectionLine line,
+            IReadOnlyList<Triangle3> incident, double tolerance=1e-7)
+        {
+            if(line==null)return false;
+            double tol=Math.Max(1e-7,tolerance*20);
+            foreach (var span in line.Spans)
+                if(SupportBBoxInStrip(incident,line.Normal,line.Direction,
+                    line.Offset-tol,line.Offset+tol,
+                    span.StartT-tol,span.EndT+tol))return true;
+            return false;
+        }
+
+        public static bool TouchesSupportStrip(SectionLine first,SectionLine second,
+            IReadOnlyList<Triangle3> incident,double tolerance=1e-7)
+        {
+            if(first==null||second==null)return false;
+            double tol=Math.Max(1e-7,tolerance*20);
+            double lowN=Math.Min(first.Offset,second.Offset)-tol;
+            double highN=Math.Max(first.Offset,second.Offset)+tol;
+            foreach(var f in first.Spans)
+                foreach(var s in second.Spans)
+                {
+                    // Conservative common-span rectangle; no false certified
+                    // quantity at a crossing of an ambiguous support region.
+                    double startT=Math.Min(f.StartT,s.StartT)-tol;
+                    double endT=Math.Max(f.EndT,s.EndT)+tol;
+                    if(SupportBBoxInStrip(incident,first.Normal,first.Direction,
+                        lowN,highN,startT,endT))return true;
+                }
+            return false;
+        }
+
+        /// <summary>
         /// A section interval spans a two-dimensional strip. If a vertical
         /// curtain touches that strip, its interpolated volume is not yet
         /// certified even if neither end section passes through the root.
