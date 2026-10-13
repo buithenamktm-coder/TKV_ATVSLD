@@ -167,3 +167,28 @@ def test_field_qa_layer_buttons_have_dedicated_full_width_row():
     assert "_sourceTable.Controls.Add(_sourceChoose[1],1,3);" in data
     assert "new ColumnStyle(SizeType.Absolute, 92)" not in data
     assert "new ColumnStyle(SizeType.Absolute, 112)" not in data
+
+
+
+def test_multi_z_volume_and_grid_are_localized_and_never_certify_missing_cells():
+    footprint = src("MiningVolume.Core/Surface/VerticalConflictFootprint.cs")
+    sampler = src("MiningVolume.Core/Sections/TinSectionSampler.cs")
+    calc = src("MiningVolume.Core/Volumes/SectionVolumeCalculator.cs")
+    grid = src("MiningVolume.Core/Grid/GridVolumeCalculator.cs")
+    excel = src("MiningVolume.Plugin2023/Services/GridVolumeExcelReportBuilder.cs")
+    volume_page = src("MiningVolume.Plugin2023/UI/VolumePage.cs")
+    export = src("MiningVolume.Plugin2023/UI/ExportPage.cs")
+    assert "TouchesSection(SectionLine line" in footprint
+    assert "TouchesStrip(SectionLine first, SectionLine second" in footprint
+    assert "AffectedGridCells(" in footprint
+    assert "SegmentHitsRect(" in footprint
+    assert "VerticalConflictFootprint.TouchesSection(" in sampler
+    assert "VerticalConflictFootprint.TouchesStrip(" in calc
+    assert "skippedIntervals++;" in calc
+    assert "ExcludedIntervals" in volume_page
+    assert "!st.VolumeResult.IsComplete" in export
+    assert "unsafeCells.Contains(" in grid
+    assert "IsVerticalConflict = ambiguous" in grid
+    assert "AmbiguousCells" in grid and "AmbiguousArea" in grid
+    assert 'c.IsVerticalConflict ? ReportCell.Text("")' in excel
+    assert "NHIỀU Z - CHƯA XÁC NHẬN" in excel
