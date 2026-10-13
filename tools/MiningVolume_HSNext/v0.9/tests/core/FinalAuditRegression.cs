@@ -269,7 +269,7 @@ internal static class FinalAuditRegression
                 Check(rejected,"Invalid/oversized band input accepted");}
             var bands=SectionVolumeCalculator.BuildBands(11,0,5);Check(bands.Count==3,"Descending bands wrong");Near(bands.Last().EndZ,0);
         };
-        tests["hsm0_vertical_faces_require_section_review_and_block_2_5d_grid"]=()=>{
+        tests["hsm0_vertical_faces_require_section_review_but_integrate_valid_planar_TIN"]=()=>{
             var center = new ConflictGroup { Position = new Vec2(5,5) };
             center.Sources.Add(new ConflictSource {Z=5,VertexIndex=0});
             center.Sources.Add(new ConflictSource {Z=9,VertexIndex=0});
@@ -289,12 +289,11 @@ internal static class FinalAuditRegression
             Check(rejected,"Unreviewed multi-Z section was accepted into final earthwork volume");
             var localGrid=new GridVolumeCalculator().Calculate(vertical,design,
                 new GridVolumeOptions{Boundary=Boundary,SizeX=5,SizeY=5});
-            Check(localGrid.AmbiguousCells>0 && !localGrid.IsComplete,
-                "Vertical multi-Z cells incorrectly certified as finished 2.5D volume");
-            Check(localGrid.Cells.Where(c=>c.IsVerticalConflict).All(c=>
-                c.Volume.CoveredArea==0 && c.Volume.CutVolume==0 &&
-                c.Volume.NoDataArea>0),
-                "A vertical conflict was assigned fabricated confirmed volumes");
+            Check(localGrid.AmbiguousCells==0 && localGrid.IsComplete,
+                "Planar grid wrongly excluded cells touching zero-area vertical faces");
+            Check(localGrid.Cells.All(c=>c.Volume.IsComplete) &&
+                localGrid.TotalCutVolume>0,
+                "Valid 2.5D support triangles were not integrated");
             var reviewed=profiles.Select(p=>Edit(p,5,5)).ToArray();
             var volumes=new SectionVolumeCalculator().Calculate(sectionSystem,reviewed,vertical,design,volumeOptions);
             Check(volumes.TotalCutVolume>0,"Accepted section volume did not calculate");
@@ -343,7 +342,7 @@ internal static class FinalAuditRegression
                 "More-than-5,000-cell calculation failed with one pretriangulated boundary");
             Near(grid.TotalCutVolume,1000);
         };
-        tests["rf20_double_z_isolates_incident_support_triangles_not_only_curtain"]=()=>{
+        tests["rf20_zero_plan_area_vertical_curtain_does_not_void_support_triangles"]=()=>{
             var conflict=new ConflictGroup{Position=new Vec2(0,0)};
             conflict.Sources.Add(new ConflictSource{Z=5,VertexIndex=0});
             conflict.Sources.Add(new ConflictSource{Z=9,VertexIndex=1});
@@ -359,11 +358,11 @@ internal static class FinalAuditRegression
                 "Conflict-root index falsely matches a remote point");
             var grid=new GridVolumeCalculator().Calculate(vertical,Plane(0),
                 new GridVolumeOptions{Boundary=Boundary,SizeX=2,SizeY=2});
-            Check(grid.AmbiguousCells>1 && !grid.IsComplete,
-                "Incident support triangle cells were not quarantined beyond the short vertical curtain");
-            Check(grid.Cells.Where(c=>c.IsVerticalConflict).All(c=>
-                c.Volume.CutVolume==0 && !c.Volume.IsComplete),
-                "Unverified incident support triangle received authoritative volume");
+            Check(grid.AmbiguousCells==0 && grid.IsComplete,
+                "Zero-area vertical curtain must not quarantine covered planar TIN cells");
+            Near(grid.TotalCutVolume,1000);
+            Check(grid.Cells.All(c=>c.Volume.IsComplete),
+                "Planar triangles unexpectedly lost coverage near a vertical curtain");
             // Neither the section routes nor the upright face at y=0 crosses
             // this strip, but the incident support triangles cover it.
             var nearA = new SectionLine(41,"CUT-41",6,new Vec2(1,0),
