@@ -35,24 +35,24 @@ namespace MiningVolume2023.UI
             };
             _compactNavigation.Items.AddRange(new object[] {
                 "Dự án", "Dữ liệu", "TIN / Mô hình", "Mặt cắt",
-                "Khối lượng", "Lưới ô vuông", "Vỉa / Quặng", "Xuất bảng", "Bản quyền"
+                "Khối lượng", "Lưới ô vuông", "Vỉa than/quặng", "Xuất bảng", "Bản quyền"
             });
             _compactNavigation.SelectedIndexChanged += (sender, args) =>
             {
                 if (_compactNavigation.SelectedIndex >= 0)
                     ShowPage((AppPage)_compactNavigation.SelectedIndex);
             };
-            _compactHeader = new GlassPanel
+            _compactHeader = new GlassPanel(true)
             {
                 Dock = DockStyle.Top, Height = 46, Visible = false,
-                BackColor = UiTheme.GlassSurface, Padding = new Padding(10, 6, 10, 6)
+                BackColor = UiTheme.ChromeBottom, Padding = new Padding(12, 6, 12, 6)
             };
             _compactHeader.Controls.Add(_compactNavigation);
 
             _content = new Panel
             {
                 Dock = DockStyle.Fill,
-                Padding = new Padding(10),
+                Padding = new Padding(14, 12, 14, 12),
                 BackColor = UiTheme.Canvas,
                 AutoScroll = true
             };
@@ -84,7 +84,7 @@ namespace MiningVolume2023.UI
             AddNav(nav, AppPage.Section, "3", "Mặt cắt");
             AddNav(nav, AppPage.Volume, "4", "Khối lượng");
             AddNav(nav, AppPage.Grid, "5", "Lưới ô vuông");
-            AddNav(nav, AppPage.Mineral, "6", "Vỉa / Quặng");
+            AddNav(nav, AppPage.Mineral, "6", "Vỉa than/quặng");
             AddNav(nav, AppPage.Export, "7", "Xuất bảng");
             AddNav(nav, AppPage.License, "8", "Bản quyền");
 
@@ -99,7 +99,7 @@ namespace MiningVolume2023.UI
             // Replace the permanent side menu with a compact TOP selector,
             // giving narrow windows their full width for vertically scrolling
             // workflow pages. No page is recreated; form values are preserved.
-            bool compact = ClientSize.Width < 650;
+            bool compact = ClientSize.Width < 730;
             if (_compact != compact)
             {
                 _compact = compact;
@@ -126,11 +126,11 @@ namespace MiningVolume2023.UI
 
         private static Panel BuildHeader()
         {
-            var header = new GlassPanel
+            var header = new GlassPanel(true)
             {
                 Dock = DockStyle.Top,
-                Height = 66,
-                BackColor = UiTheme.GlassSurface
+                Height = 76,
+                BackColor = UiTheme.ChromeBottom
             };
 
             int textLeft = 14;
@@ -149,13 +149,13 @@ namespace MiningVolume2023.UI
                         {
                             Image = logoImage,
                             SizeMode = PictureBoxSizeMode.Zoom,
-                            Size = new Size(44, 44),
-                            Location = new Point(14, 10),
+                            Size = new Size(48, 48),
+                            Location = new Point(15, 14),
                             BackColor = Color.Transparent
                         };
                         logo.Disposed += (s, e) => logoImage.Dispose();
                         header.Controls.Add(logo);
-                        textLeft = 70;
+                        textLeft = 76;
                     }
                 }
             }
@@ -165,56 +165,56 @@ namespace MiningVolume2023.UI
             {
                 Text = "IMSAT VOLUME",
                 AutoSize = true,
-                Font = new Font("Arial", 14F, FontStyle.Bold),
-                ForeColor = UiTheme.TextStrong,
-                Location = new Point(textLeft, 8)
+                Font = new Font("Arial", 15F, FontStyle.Bold),
+                ForeColor = UiTheme.ChromeText,
+                Location = new Point(textLeft, 12)
             });
             header.Controls.Add(new Label
             {
                 Text = "Phát triển: Bùi Thế Nam  •  ĐT/Zalo: 0967280686",
                 AutoSize = true,
-                Font = new Font("Arial", 8.5F),
-                ForeColor = UiTheme.Muted,
-                Location = new Point(textLeft + 1, 37)
+                Font = new Font("Arial", 9F),
+                ForeColor = UiTheme.ChromeMuted,
+                Location = new Point(textLeft + 1, 43)
             });
 
             header.Controls.Add(new Panel
             {
                 Dock = DockStyle.Bottom,
                 Height = 1,
-                BackColor = UiTheme.Border
+                BackColor = UiTheme.ChromeEdge
             });
             return header;
         }
 
         private static Panel BuildSidebar(out FlowLayoutPanel nav)
         {
-            var sidebar = new GlassPanel
+            var sidebar = new GlassPanel(true)
             {
                 Dock = DockStyle.Left,
-                Width = 152,
-                BackColor = UiTheme.GlassSurface
+                Width = 180,
+                BackColor = UiTheme.ChromeBottom
             };
 
             var sectionTitle = new Label
             {
                 Text = "QUY TRÌNH",
                 Dock = DockStyle.Top,
-                Height = 30,
-                Padding = new Padding(10, 10, 0, 0),
-                Font = new Font("Arial", 8F, FontStyle.Bold),
-                ForeColor = UiTheme.Muted
+                Height = 42,
+                Padding = new Padding(14, 16, 0, 0),
+                Font = new Font("Arial", 9F, FontStyle.Bold),
+                ForeColor = UiTheme.ChromeMuted
             };
 
             var footer = new Label
             {
                 Text = "TKL  •  Hiện / ẩn IMSAT VOLUME",
                 Dock = DockStyle.Bottom,
-                Height = 42,
-                Padding = new Padding(10, 9, 6, 6),
-                Font = new Font("Arial", 7.75F),
-                ForeColor = UiTheme.Muted,
-                BackColor = UiTheme.GlassSurface
+                Height = 56,
+                Padding = new Padding(14, 12, 6, 6),
+                Font = new Font("Arial", 8.5F),
+                ForeColor = UiTheme.ChromeMuted,
+                BackColor = UiTheme.ChromeBottom
             };
 
             nav = new FlowLayoutPanel
@@ -222,8 +222,8 @@ namespace MiningVolume2023.UI
                 Dock = DockStyle.Fill,
                 FlowDirection = FlowDirection.TopDown,
                 WrapContents = false,
-                Padding = new Padding(7, 6, 7, 6),
-                BackColor = UiTheme.GlassSurface
+                Padding = new Padding(8, 8, 8, 6),
+                BackColor = UiTheme.ChromeBottom
             };
 
             sidebar.Controls.Add(nav);
@@ -237,21 +237,21 @@ namespace MiningVolume2023.UI
             var b = new Button
             {
                 Text = number + "   " + text,
-                Width = 138,
-                Height = 40,
+                Width = 164,
+                Height = 44,
                 FlatStyle = FlatStyle.Flat,
                 TextAlign = ContentAlignment.MiddleLeft,
-                Margin = new Padding(0, 0, 0, 4),
-                Padding = new Padding(8, 0, 0, 0),
-                Font = new Font("Arial", 9F),
-                ForeColor = UiTheme.Text,
-                BackColor = UiTheme.GlassSurface,
+                Margin = new Padding(0, 0, 0, 6),
+                Padding = new Padding(11, 0, 0, 0),
+                Font = new Font("Arial", 9.5F),
+                ForeColor = UiTheme.ChromeText,
+                BackColor = UiTheme.Sidebar,
                 Cursor = Cursors.Hand
             };
             b.FlatAppearance.BorderSize = 0;
             UiTheme.ApplyRoundedButtonMask(b);
             b.FlatAppearance.MouseOverBackColor = UiTheme.SidebarHover;
-            b.FlatAppearance.MouseDownBackColor = UiTheme.Soft;
+            b.FlatAppearance.MouseDownBackColor = UiTheme.AccentDark;
             b.Click += (s, e) => ShowPage(page);
             parent.Controls.Add(b);
             _buttons[page] = b;
@@ -274,9 +274,11 @@ namespace MiningVolume2023.UI
             foreach (var kv in _buttons)
             {
                 bool active = kv.Key == page;
-                kv.Value.BackColor = active ? UiTheme.Accent : UiTheme.GlassSurface;
-                kv.Value.ForeColor = active ? Color.White : UiTheme.Text;
-                kv.Value.Font = new Font("Arial", 9F, active ? FontStyle.Bold : FontStyle.Regular);
+                kv.Value.BackColor = active ? UiTheme.Accent : UiTheme.Sidebar;
+                kv.Value.ForeColor = active ? Color.White : UiTheme.ChromeText;
+                kv.Value.FlatAppearance.BorderSize = active ? 1 : 0;
+                kv.Value.FlatAppearance.BorderColor = active ? UiTheme.ChromeMuted : UiTheme.Sidebar;
+                kv.Value.Font = new Font("Arial", 9.5F, active ? FontStyle.Bold : FontStyle.Regular);
             }
         }
     }
