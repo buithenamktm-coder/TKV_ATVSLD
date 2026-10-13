@@ -389,8 +389,22 @@ namespace MiningVolume.Core.Reporting
                 }
                 if (sheet.Headers.Count > 0)
                 {
-                    WriteRowStart(x, row, 30);
-                    for (int c = 0; c < sheet.Headers.Count; c++) WriteCell(x, c + 1, row, ReportCell.Text(sheet.Headers[c], true), StyleHeader);
+                    // A fixed 30-point row clips wrapped Vietnamese headers
+                    // such as "Khối lượng đào (m³)". Size only the visual
+                    // header height; DO NOT insert rows or shift formulas.
+                    int headerHeight = 34;
+                    for (int c = 0; c < sheet.Headers.Count; c++)
+                    {
+                        string caption = sheet.Headers[c] ?? string.Empty;
+                        double width = c < sheet.ColumnWidths.Count ? sheet.ColumnWidths[c] : 15.0;
+                        int charsPerLine = Math.Max(6, (int)(Math.Max(6.0,
+                            Math.Min(45.0, width)) * 0.72));
+                        int lines = Math.Max(1, (caption.Length + charsPerLine - 1) / charsPerLine);
+                        headerHeight = Math.Max(headerHeight, Math.Min(120, lines * 20 + 8));
+                    }
+                    WriteRowStart(x, row, headerHeight);
+                    for (int c = 0; c < sheet.Headers.Count; c++)
+                        WriteCell(x, c + 1, row, ReportCell.Text(sheet.Headers[c], true), StyleHeader);
                     x.WriteEndElement(); row++;
                 }
                 bool signatureStarted = false;
