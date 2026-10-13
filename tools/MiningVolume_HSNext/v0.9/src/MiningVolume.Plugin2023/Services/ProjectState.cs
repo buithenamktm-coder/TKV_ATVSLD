@@ -249,7 +249,7 @@ namespace MiningVolume2023.Services
         // Users can select Custom and change every parameter; never silently
         // represent a noncompliant configuration as legally approved.
         public string SectionParameterMode { get; set; } = "TT34/2018/TT-BCT";
-        public int SectionMapScale { get; set; } = 1000; // V2.0: only 1:1000 for both section axes.
+        public int SectionMapScale { get; set; } = 1000; // 1:1000 default; Custom scales are stored separately.
         // Grid-line elevation spacing on the drawn section (not bench band size).
         public double SectionAxisElevationInterval { get; set; } = 20.0;
         // Khoảng trống xuất hình CAD, không ảnh hưởng chiều dài tính khối lượng.
