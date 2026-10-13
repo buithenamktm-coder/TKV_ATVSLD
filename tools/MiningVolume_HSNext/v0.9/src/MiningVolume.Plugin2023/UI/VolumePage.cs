@@ -80,6 +80,30 @@ namespace MiningVolume2023.UI
                 var doc = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument;
                 if (doc == null)
                     throw new InvalidOperationException("Không có bản vẽ AutoCAD đang hoạt động.");
+                string autoLevelNote = "";
+                // Repair an old/stale Project default (e.g. 0..+100) without
+                // requiring the operator to redraw all CAD sections first.
+                // Change only if the complete requested range misses the
+                // measured TIN elevation extent; ordinary custom bands remain.
+                var measured=st.SectionProfiles.Where(p=>p!=null && p.HasData).ToArray();
+                if (measured.Length>0 && st.LevelStep>0 &&
+                    !double.IsNaN(st.LevelStep) && !double.IsInfinity(st.LevelStep))
+                {
+                    double minZ=measured.Min(p=>p.MinZ);
+                    double maxZ=measured.Max(p=>p.MaxZ);
+                    double low=Math.Min(st.FromLevel,st.ToLevel);
+                    double high=Math.Max(st.FromLevel,st.ToLevel);
+                    if (high<minZ-1e-7 || low>maxZ+1e-7 ||
+                        Math.Abs(st.FromLevel-st.ToLevel)<1e-7)
+                    {
+                        st.FromLevel=Math.Floor(minZ/st.LevelStep)*st.LevelStep;
+                        st.ToLevel=Math.Ceiling(maxZ/st.LevelStep)*st.LevelStep;
+                        if(st.ToLevel<=st.FromLevel)st.ToLevel=st.FromLevel+st.LevelStep;
+                        st.VolumeResult=null;
+                        autoLevelNote=$"Đã điều chỉnh mức tính theo TIN: {st.FromLevel:0.###} đến {st.ToLevel:0.###} m. ";
+                        st.NotifyChanged();
+                    }
+                }
                 double from = st.FromLevel, to = st.ToLevel, step = st.LevelStep;
                 var system = st.SectionSystem;
                 var profiles = st.SectionProfiles.ToArray();
@@ -109,10 +133,10 @@ namespace MiningVolume2023.UI
                 st.VolumeCalculationSeconds = watch.Elapsed.TotalSeconds;
                 BindResult(result);
                 _status.Text = !result.IsComplete
-                    ? $"CHƯA ĐẦY ĐỦ: {result.ExcludedIntervals:n0} khoảng chưa xác nhận; chỉ hiển thị phần khối lượng hợp lệ."
+                    ? autoLevelNote+$"CHƯA ĐẦY ĐỦ: {result.ExcludedIntervals:n0} khoảng chưa xác nhận; chỉ hiển thị phần khối lượng hợp lệ."
                     : result.Warnings.Count == 0
-                        ? $"Hoàn thành: {result.Intervals.Count:n0} khoảng mặt cắt; {result.Levels.Count:n0} tầng/mức."
-                        : $"Hoàn thành, có {result.Warnings.Count:n0} cảnh báo kiểm soát.";
+                        ? autoLevelNote+$"Hoàn thành: {result.Intervals.Count:n0} khoảng mặt cắt; {result.Levels.Count:n0} tầng/mức."
+                        : autoLevelNote+$"Hoàn thành, có {result.Warnings.Count:n0} cảnh báo kiểm soát.";
             }
             catch (Exception ex)
             {
