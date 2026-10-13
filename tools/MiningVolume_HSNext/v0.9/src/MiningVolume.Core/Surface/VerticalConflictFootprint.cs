@@ -207,11 +207,35 @@ namespace MiningVolume.Core.Surface
                     minN=Math.Min(minN,n);maxN=Math.Max(maxN,n);
                     minT=Math.Min(minT,t);maxT=Math.Max(maxT,t);
                 }
-                if (maxN>=lowN && minN<=highN &&
-                    maxT>=lowT && minT<=highT)
-                    return true;
+                if (maxN<lowN || minN>highN ||
+                    maxT<lowT || minT>highT) continue;
+                // BBox alone would quarantine unrelated cells on the other
+                // side of a long diagonal triangle. Verify real 2D overlap.
+                var a=new Vec2(Dot(p[0],normal),Dot(p[0],direction));
+                var b=new Vec2(Dot(p[1],normal),Dot(p[1],direction));
+                var c=new Vec2(Dot(p[2],normal),Dot(p[2],direction));
+                bool Inside(Vec2 v) => v.X>=lowN-1e-8 && v.X<=highN+1e-8 &&
+                    v.Y>=lowT-1e-8 && v.Y<=highT+1e-8;
+                if (Inside(a)||Inside(b)||Inside(c)) return true;
+                if (SegmentHitsRect(a,b,lowN,lowT,highN,highT) ||
+                    SegmentHitsRect(b,c,lowN,lowT,highN,highT) ||
+                    SegmentHitsRect(c,a,lowN,lowT,highN,highT)) return true;
+                foreach(var corner in new[]{
+                    new Vec2(lowN,lowT),new Vec2(highN,lowT),
+                    new Vec2(highN,highT),new Vec2(lowN,highT)})
+                    if(PointInTriangle(corner,a,b,c))return true;
             }
             return false;
+        }
+
+        private static bool PointInTriangle(Vec2 p,Vec2 a,Vec2 b,Vec2 c)
+        {
+            double Cross(Vec2 u,Vec2 v,Vec2 w) =>
+                (v.X-u.X)*(w.Y-u.Y)-(v.Y-u.Y)*(w.X-u.X);
+            double ab=Cross(a,b,p),bc=Cross(b,c,p),ca=Cross(c,a,p);
+            bool negative=ab<-1e-8||bc<-1e-8||ca<-1e-8;
+            bool positive=ab>1e-8||bc>1e-8||ca>1e-8;
+            return !(negative&&positive);
         }
 
         public static bool TouchesSupportSection(SectionLine line,
