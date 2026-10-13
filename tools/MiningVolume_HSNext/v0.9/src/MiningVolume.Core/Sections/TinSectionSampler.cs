@@ -53,7 +53,12 @@ namespace MiningVolume.Core.Sections
 
             var options = new ParallelOptions
             {
-                MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount - 1)
+                // File-backed tiles share a bounded cache and disk. Unrestricted
+                // core-count parallelism evicts hot tiles and serializes reads.
+                MaxDegreeOfParallelism =
+                    existingIndex.IsTiled || designIndex.IsTiled
+                        ? Math.Max(1, Math.Min(4, Environment.ProcessorCount - 1))
+                        : Math.Max(1, Environment.ProcessorCount - 1)
             };
 
             Parallel.For(0, lines.Count, options, i =>
@@ -297,6 +302,14 @@ namespace MiningVolume.Core.Sections
         {
             private readonly IReadOnlyList<Triangle3> _triangles;
             private readonly ITiledTriangleSource _tiled;
+            // Only hot tiles are retained for this section-sampling operation.
+            // Unlike rereading all ~8192 triangles at EACH elevation knot,
+            // each hot tile has a small XY bounding-box index.
+            private const int MaxHotTiles = 24;
+            private readonly object _tileSync = new object();
+            private readonly Dictionary<int, TilePointIndex> _hotTiles =
+                new Dictionary<int, TilePointIndex>();
+            private readonly LinkedList<int> _hotTileLru = new LinkedList<int>();
             private readonly Dictionary<long, List<int>> _cells =
                 new Dictionary<long, List<int>>();
             private readonly double[] _minX;
@@ -375,6 +388,32 @@ namespace MiningVolume.Core.Sections
             }
 
             public IReadOnlyList<Triangle3> Triangles => _triangles;
+            public bool IsTiled => _tiled != null;
+
+            private TilePointIndex GetTile(int index)
+            {
+                lock (_tileSync)
+                {
+                    TilePointIndex item;
+                    if (_hotTiles.TryGetValue(index, out item))
+                    {
+                        _hotTileLru.Remove(index);
+                        _hotTileLru.AddLast(index);
+                        return item;
+                    }
+                    item = new TilePointIndex(
+                        _tiled.ReadTile(index), _tiled.Tiles[index]);
+                    _hotTiles.Add(index, item);
+                    _hotTileLru.AddLast(index);
+                    while (_hotTiles.Count > MaxHotTiles)
+                    {
+                        int victim = _hotTileLru.First.Value;
+                        _hotTileLru.RemoveFirst();
+                        _hotTiles.Remove(victim);
+                    }
+                    return item;
+                }
+            }
 
             public bool TryElevation(Vec2 p, double tol, out double z)
             {
@@ -384,10 +423,8 @@ namespace MiningVolume.Core.Sections
                     foreach (int tileIndex in _tiled.QueryTiles(
                         p.X - pad, p.Y - pad, p.X + pad, p.Y + pad))
                     {
-                        var tris = _tiled.ReadTile(tileIndex);
-                        foreach (var tri in tris)
-                            if (TryElevationOnTriangle(tri, p, tol, out z))
-                                return true;
+                        if (GetTile(tileIndex).TryElevation(p, tol, out z))
+                            return true;
                     }
                     z = 0;
                     return false;
@@ -428,7 +465,7 @@ namespace MiningVolume.Core.Sections
 
                     foreach (int tileIndex in _tiled.QueryTiles(minX, minY, maxX, maxY))
                     {
-                        var tris = _tiled.ReadTile(tileIndex);
+                        var tris = GetTile(tileIndex).Triangles;
                         foreach (var tri in tris)
                         {
                             double tMinX = Math.Min(tri.A.X, Math.Min(tri.B.X, tri.C.X));
@@ -445,6 +482,98 @@ namespace MiningVolume.Core.Sections
 
                 foreach (int triIndex in QuerySegment(a, b))
                     yield return _triangles[triIndex];
+            }
+
+            // Exact geometry: candidate bins only filter triangle bounding
+            // rectangles. Elevation still uses the original robust barycentric
+            // test, with no thinning, interpolation shortcuts or skipped faces.
+            private sealed class TilePointIndex
+            {
+                private const int GridSide = 32;
+                private const int MaxCoveredCells = 64;
+                private readonly IReadOnlyList<Triangle3> _triangles;
+                private readonly Dictionary<int, List<int>> _bins =
+                    new Dictionary<int, List<int>>();
+                private readonly List<int> _broad = new List<int>();
+                private readonly double _x, _y, _dx, _dy;
+                private readonly double[] _minX, _maxX, _minY, _maxY;
+
+                public TilePointIndex(IReadOnlyList<Triangle3> triangles, TinTileInfo tile)
+                {
+                    _triangles = triangles;
+                    _x = tile.MinX;
+                    _y = tile.MinY;
+                    _dx = Math.Max(1e-9, (tile.MaxX - tile.MinX) / GridSide);
+                    _dy = Math.Max(1e-9, (tile.MaxY - tile.MinY) / GridSide);
+                    _minX = new double[triangles.Count];
+                    _maxX = new double[triangles.Count];
+                    _minY = new double[triangles.Count];
+                    _maxY = new double[triangles.Count];
+                    for (int i = 0; i < triangles.Count; i++)
+                    {
+                        var t = triangles[i];
+                        double x0 = Math.Min(t.A.X, Math.Min(t.B.X, t.C.X));
+                        double x1 = Math.Max(t.A.X, Math.Max(t.B.X, t.C.X));
+                        double y0 = Math.Min(t.A.Y, Math.Min(t.B.Y, t.C.Y));
+                        double y1 = Math.Max(t.A.Y, Math.Max(t.B.Y, t.C.Y));
+                        _minX[i] = x0; _maxX[i] = x1;
+                        _minY[i] = y0; _maxY[i] = y1;
+                        int ix0 = Bin(x0, _x, _dx), ix1 = Bin(x1, _x, _dx);
+                        int iy0 = Bin(y0, _y, _dy), iy1 = Bin(y1, _y, _dy);
+                        if ((ix1 - ix0 + 1) * (iy1 - iy0 + 1) > MaxCoveredCells)
+                        {
+                            // Very wide triangles are tested globally: never
+                            // silently omit one that spans several cells.
+                            _broad.Add(i);
+                            continue;
+                        }
+                        for (int ix = ix0; ix <= ix1; ix++)
+                        for (int iy = iy0; iy <= iy1; iy++)
+                        {
+                            int key = ix * GridSide + iy;
+                            List<int> list;
+                            if (!_bins.TryGetValue(key, out list))
+                            {
+                                list = new List<int>();
+                                _bins[key] = list;
+                            }
+                            list.Add(i);
+                        }
+                    }
+                }
+
+                public IReadOnlyList<Triangle3> Triangles => _triangles;
+
+                public bool TryElevation(Vec2 p, double tol, out double z)
+                {
+                    int ix0 = Bin(p.X - tol, _x, _dx), ix1 = Bin(p.X + tol, _x, _dx);
+                    int iy0 = Bin(p.Y - tol, _y, _dy), iy1 = Bin(p.Y + tol, _y, _dy);
+                    for (int ix = ix0; ix <= ix1; ix++)
+                    for (int iy = iy0; iy <= iy1; iy++)
+                    {
+                        List<int> candidates;
+                        if (!_bins.TryGetValue(ix * GridSide + iy, out candidates))
+                            continue;
+                        foreach (int i in candidates)
+                            if (ContainsXY(i, p, tol) &&
+                                TryElevationOnTriangle(_triangles[i], p, tol, out z))
+                                return true;
+                    }
+                    foreach (int i in _broad)
+                        if (ContainsXY(i, p, tol) &&
+                            TryElevationOnTriangle(_triangles[i], p, tol, out z))
+                            return true;
+                    z = 0;
+                    return false;
+                }
+
+                private bool ContainsXY(int index, Vec2 p, double tol)
+                    => p.X >= _minX[index] - tol && p.X <= _maxX[index] + tol &&
+                       p.Y >= _minY[index] - tol && p.Y <= _maxY[index] + tol;
+
+                private static int Bin(double point, double origin, double cell)
+                    => Math.Max(0, Math.Min(GridSide - 1,
+                        (int)Math.Floor((point - origin) / cell)));
             }
 
             public HashSet<int> QuerySegment(Vec2 a, Vec2 b)
