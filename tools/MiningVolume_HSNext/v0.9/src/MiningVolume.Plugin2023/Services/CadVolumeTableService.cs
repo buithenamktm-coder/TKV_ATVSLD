@@ -147,6 +147,12 @@ namespace MiningVolume2023.Services
             for (int row = 0; row < rows; row++)
                 for (int col = 0; col < columns; col++)
                 {
+                    // Do not touch covered native TABLE cells after merge:
+                    // summary/level title spans all columns; level total
+                    // merges the first four columns.
+                    if (row == 0 && col > 0) continue;
+                    if (columns == 6 && row == rows - 1 && col >= 1 && col <= 3)
+                        continue;
                     table.Cells[row, col].TextStyleId = arial;
                     table.Cells[row, col].TextHeight = 2.6;
                     table.Cells[row, col].Alignment = CellAlignment.MiddleCenter;
