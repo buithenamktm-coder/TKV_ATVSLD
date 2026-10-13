@@ -519,6 +519,24 @@ namespace MiningVolume2023.UI
                     throw new InvalidOperationException("Vùng tạo TIN không có đủ đỉnh hợp lệ.");
 
                 var state = ProjectState.Current;
+                bool sameRegion = state.HasTinRegion &&
+                    string.Equals(state.TinRegionHandle, handle, StringComparison.OrdinalIgnoreCase) &&
+                    state.TinRegionPolygon.Count == polygon.Count;
+                if (sameRegion)
+                    for (int i = 0; i < polygon.Count; i++)
+                        if (Math.Abs(state.TinRegionPolygon[i].X - polygon[i].X) > 1e-7 ||
+                            Math.Abs(state.TinRegionPolygon[i].Y - polygon[i].Y) > 1e-7)
+                        {
+                            sameRegion = false;
+                            break;
+                        }
+                if (sameRegion)
+                {
+                    RefreshTinRegionStatus();
+                    _status.Text = "Vùng tạo TIN không thay đổi. GIỮ NGUYÊN hai TIN hiện có; " +
+                        "tiếp tục tính mặt cắt hoặc lưới ô vuông mà không phải dựng lại.";
+                    return;
+                }
                 state.TinRegionHandle = handle;
                 state.TinRegionPolygon.Clear();
                 state.TinRegionPolygon.AddRange(polygon);
@@ -552,9 +570,18 @@ namespace MiningVolume2023.UI
         {
             var state = ProjectState.Current;
             bool hadRegion = state.HasTinRegion;
+            // No-op when there is no selected TIN clip. Previously merely
+            // pressing "Bỏ vùng" incremented TinRegionRevision, instantly
+            // making both unchanged, valid TINs appear stale to GridPage.
+            if (!hadRegion && string.IsNullOrWhiteSpace(state.TinRegionHandle))
+            {
+                RefreshTinRegionStatus();
+                _status.Text = "Chưa giới hạn vùng TIN; hai mô hình hiện có được giữ nguyên.";
+                return;
+            }
             state.TinRegionHandle = null;
             state.TinRegionPolygon.Clear();
-            state.MarkTinRegionChanged();
+            if (hadRegion) state.MarkTinRegionChanged();
 
             if (hadRegion)
             {
