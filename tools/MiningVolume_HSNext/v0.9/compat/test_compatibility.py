@@ -14,15 +14,18 @@ class CompatibilityBuildContracts(unittest.TestCase):
             (n.attrib.get("Condition", ""), n.text.strip() if n.text else "")
             for n in root.iter() if n.tag == "IMSATCadPackageVersion"
         ]
-        flavors = ("ACAD2019_NET47", "ACAD2020_NET47",
+        flavors = ("ACAD2015_NET45", "ACAD2016_NET45",
+                   "ACAD2017_NET46", "ACAD2018_NET46",
+                   "ACAD2019_NET47", "ACAD2020_NET47",
                    "ACAD2021_NET48", "ACAD2022_NET48",
                    "ACAD2023_NET48", "ACAD2024_NET48",
                    "ACAD2025_NET8", "ACAD2025_NET10",
                    "ACAD2026_NET8", "ACAD2026_NET10")
-        versions = ("23.0.0", "23.1.0",
+        versions = ("20.0.1", "20.1.0", "21.0.0", "22.0.0",
+                    "23.0.0", "23.1.0",
                     "24.0.0", "24.1.51000", "24.2.0", "24.3.0",
                     "25.0.1", "25.0.2", "25.1.0", "25.1.1")
-        self.assertEqual(len(props), 10)
+        self.assertEqual(len(props), 14)
         for flavor, version in zip(flavors, versions):
             self.assertEqual(sum(flavor in cond for cond, _ in props), 1)
             self.assertTrue(any(flavor in cond and value == version
