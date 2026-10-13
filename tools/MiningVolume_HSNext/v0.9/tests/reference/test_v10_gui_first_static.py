@@ -23,7 +23,7 @@ def test_user_pages_have_real_controls():
     assert "ComboBox" in data and "LoadModel" in data
     assert "DataGridView" in model and "BuildTinAsync" in model
     assert "NumericUpDown" in section and "Preview" in section and "BuildProfiles" in section
-    assert "TÍNH / CẬP NHẬT KHỐI LƯỢNG" in volume
+    assert "Tính / cập nhật khối lượng" in volume
     assert "SaveFileDialog" in export and "XUẤT EXCEL" in export
 
 def test_cli_commands_are_not_used_by_ribbon():
