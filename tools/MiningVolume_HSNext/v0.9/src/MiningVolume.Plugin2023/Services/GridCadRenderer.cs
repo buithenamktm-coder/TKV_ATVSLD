@@ -75,7 +75,13 @@ namespace MiningVolume2023.Services
                             TextString= cell.IsVerticalConflict
                                 ? cell.CellCode + " NHIEU Z - CHUA XAC NHAN"
                                 : !v.IsComplete
-                                ? cell.CellCode + " THIEU TIN"
+                                ? cell.CellCode + (cell.CoverageStatus == "Thiếu phủ TIN hiện trạng"
+                                    ? " THIEU HT"
+                                    : cell.CoverageStatus == "Thiếu phủ TIN thiết kế"
+                                        ? " THIEU TK"
+                                        : cell.CoverageStatus == "Thiếu cả TIN HT/TK"
+                                            ? " THIEU HT+TK"
+                                            : " LOI GIAO TIN")
                                 : cell.CellCode + " D" + v.CutVolume.ToString("0.0") +
                                     " / P" + v.FillVolume.ToString("0.0")
                         };
