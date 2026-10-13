@@ -287,14 +287,42 @@ internal static class FinalAuditRegression
             try{new SectionVolumeCalculator().Calculate(sectionSystem,profiles,vertical,design,volumeOptions);}
             catch(InvalidOperationException){rejected=true;}
             Check(rejected,"Unreviewed multi-Z section was accepted into final earthwork volume");
-            rejected=false;
-            try{new GridVolumeCalculator().Calculate(vertical,design,
-                new GridVolumeOptions{Boundary=Boundary,SizeX=5,SizeY=5});}
-            catch(InvalidOperationException){rejected=true;}
-            Check(rejected,"2.5D grid silently integrated a non-single-valued vertical surface");
+            var localGrid=new GridVolumeCalculator().Calculate(vertical,design,
+                new GridVolumeOptions{Boundary=Boundary,SizeX=5,SizeY=5});
+            Check(localGrid.AmbiguousCells>0 && !localGrid.IsComplete,
+                "Vertical multi-Z cells incorrectly certified as finished 2.5D volume");
+            Check(localGrid.Cells.Where(c=>c.IsVerticalConflict).All(c=>
+                c.Volume.CoveredArea==0 && c.Volume.CutVolume==0 &&
+                c.Volume.NoDataArea>0),
+                "A vertical conflict was assigned fabricated confirmed volumes");
             var reviewed=profiles.Select(p=>Edit(p,5,5)).ToArray();
             var volumes=new SectionVolumeCalculator().Calculate(sectionSystem,reviewed,vertical,design,volumeOptions);
             Check(volumes.TotalCutVolume>0,"Accepted section volume did not calculate");
+        };
+        tests["rf18_remote_double_z_must_not_block_safe_grid_or_sections"]=()=>{
+            var far=new ConflictGroup{Position=new Vec2(100,100)};
+            far.Sources.Add(new ConflictSource{Z=10,VertexIndex=0});
+            far.Sources.Add(new ConflictSource{Z=20,VertexIndex=1});
+            var support=Plane(5);
+            var remote=new TinSurface("remote",support.Triangles,
+                Array.Empty<ValidationIssue>(),
+                new[]{new Triangle3(new Vec3(100,100,10),
+                    new Vec3(100,100,20),new Vec3(110,100,10))},
+                new[]{far});
+            var plain=Plane(0);
+            var grid=new GridVolumeCalculator().Calculate(remote,plain,
+                new GridVolumeOptions{Boundary=Boundary,SizeX=5,SizeY=5});
+            Check(grid.IsComplete&&grid.AmbiguousCells==0,
+                "Unrelated double-Z point blocked safe grid cells");
+            Near(grid.TotalCutVolume,1000);
+            var a=Profile(1,5);var d=Profile(2,5);
+            var section=new SectionSystem(new Vec2(1,0),new Vec2(0,1),
+                Boundary,new[]{a.Line,d.Line},Array.Empty<string>());
+            var volumes=new SectionVolumeCalculator().Calculate(section,
+                new[]{a,d},remote,plain,
+                new VolumeCalculationOptions{FromLevel=0,ToLevel=10,LevelStep=5});
+            Check(volumes.IsComplete && volumes.ExcludedIntervals==0 &&
+                volumes.TotalCutVolume>0,"Remote double-Z blocked valid section volume");
         };
         tests["rf15_grid_rejects_stale_boundary_and_cell_settings"]=()=>{
             var st=ProjectState.Current;
