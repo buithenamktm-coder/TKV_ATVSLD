@@ -2,7 +2,7 @@
   "schema": 1,
   "product": "IMSAT VOLUME V2.0",
   "policy": "NO_RELEASE_UNTIL_EACH_HOST_RUNTIME_PASS",
-  "notes": "Matrix is an implementation target, NOT a list of verified supported platforms. Different .NET runtimes sharing one AutoCAD release series MUST NOT be packed into a single auto-loaded component without a reliable host update detector.",
+  "notes": "Matrix is an implementation target, NOT a list of verified supported platforms. Different .NET runtimes sharing one AutoCAD release series MUST NOT be packed into a single auto-loaded component without a reliable host update detector. For years 2015–2020, trial compile flavors exist but must not be described as supported before toolchain and real host checks pass. 2012–2014 need a separately implemented legacy API adapter because current Core and GUI cannot be loaded by .NET 3.5/4.0.",
   "targets": [
     {
       "year": 2012,
@@ -29,57 +29,57 @@
       "year": 2015,
       "series": "R20.0",
       "runtime": "net45",
-      "flavor": null,
-      "stage": "PORT_REQUIRED"
+      "flavor": "ACAD2015_NET45",
+      "stage": "COMPAT_BUILD_UNDER_TEST"
     },
     {
       "year": 2016,
       "series": "R20.1",
       "runtime": "net45",
-      "flavor": null,
-      "stage": "PORT_REQUIRED"
+      "flavor": "ACAD2016_NET45",
+      "stage": "COMPAT_BUILD_UNDER_TEST"
     },
     {
       "year": 2017,
       "series": "R21.0",
       "runtime": "net46",
-      "flavor": null,
-      "stage": "PORT_REQUIRED"
+      "flavor": "ACAD2017_NET46",
+      "stage": "COMPAT_BUILD_UNDER_TEST"
     },
     {
       "year": 2018,
       "series": "R22.0",
       "runtime": "net46",
-      "flavor": null,
-      "stage": "PORT_REQUIRED"
+      "flavor": "ACAD2018_NET46",
+      "stage": "COMPAT_BUILD_UNDER_TEST"
     },
     {
       "year": 2019,
       "series": "R23.0",
       "runtime": "net47",
-      "flavor": null,
-      "stage": "PORT_REQUIRED"
+      "flavor": "ACAD2019_NET47",
+      "stage": "COMPAT_BUILD_UNDER_TEST"
     },
     {
       "year": 2020,
       "series": "R23.1",
       "runtime": "net47",
-      "flavor": null,
-      "stage": "PORT_REQUIRED"
+      "flavor": "ACAD2020_NET47",
+      "stage": "COMPAT_BUILD_UNDER_TEST"
     },
     {
       "year": 2021,
       "series": "R24.0",
       "runtime": "net48",
-      "flavor": null,
-      "stage": "API_BUILD_REQUIRED"
+      "flavor": "ACAD2021_NET48",
+      "stage": "COMPILE_CANDIDATE"
     },
     {
       "year": 2022,
       "series": "R24.1",
       "runtime": "net48",
-      "flavor": null,
-      "stage": "API_BUILD_REQUIRED"
+      "flavor": "ACAD2022_NET48",
+      "stage": "COMPILE_CANDIDATE"
     },
     {
       "year": 2023,
@@ -92,8 +92,8 @@
       "year": 2024,
       "series": "R24.3",
       "runtime": "net48",
-      "flavor": null,
-      "stage": "API_BUILD_REQUIRED"
+      "flavor": "ACAD2024_NET48",
+      "stage": "COMPILE_CANDIDATE"
     },
     {
       "year": 2025,
