@@ -384,6 +384,25 @@ namespace MiningVolume2023.UI
                 })
                 {
                     if(dlg.ShowDialog(this)!=DialogResult.OK)return;
+                    // A partial grid may still be useful for field review,
+                    // but never let an operator mistake its totals for complete
+                    // approved excavation quantities.
+                    var currentGrid = GridWorkflowService.Report;
+                    if (currentGrid == null)
+                        throw new InvalidOperationException("Không còn kết quả lưới hiện hành.");
+                    if (!currentGrid.IsComplete)
+                    {
+                        var confirm = MessageBox.Show(
+                            "Hệ lưới còn " + currentGrid.AmbiguousCells.ToString("n0") +
+                            " ô nhiều Z và " + currentGrid.TotalNoDataArea.ToString("n2") +
+                            " m² chưa xác nhận. Workbook sẽ ghi rõ TẠM TÍNH, các ô chưa có " +
+                            "thể tích xác nhận để trống; không dùng tổng này làm khối lượng nghiệm thu. " +
+                            "Anh có muốn xuất Excel để rà soát không?",
+                            "Xuất lưới chưa đủ dữ liệu",
+                            MessageBoxButtons.YesNo, MessageBoxIcon.Warning,
+                            MessageBoxDefaultButton.Button2);
+                        if (confirm != DialogResult.Yes) return;
+                    }
                     // The Save As dialog can remain open while a CAD boundary is
                     // grip-edited. Re-read the actual polygon immediately before
                     // taking a workbook snapshot.
