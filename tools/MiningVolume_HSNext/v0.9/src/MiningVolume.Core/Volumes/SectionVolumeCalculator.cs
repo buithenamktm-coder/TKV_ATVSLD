@@ -25,12 +25,36 @@ namespace MiningVolume.Core.Volumes
             if (existing == null) throw new ArgumentNullException(nameof(existing));
             if (design == null) throw new ArgumentNullException(nameof(design));
             options = options ?? new VolumeCalculationOptions();
+            // A nonoverlapping level range previously produced "valid" zero
+            // volumes on every section. Fail with the true TIN Z extent.
+            // The UI can offer the user a computed range; never publish fake
+            // 0.00 m3 for surveyed elevations outside requested bands.
+            var supportedProfiles = endProfiles.Where(p=>p!=null && p.HasData).ToArray();
+            if (supportedProfiles.Length > 0)
+            {
+                var minZ = supportedProfiles.Min(p=>p.MinZ);
+                var maxZ = supportedProfiles.Max(p=>p.MaxZ);
+                double lower = Math.Min(options.FromLevel,options.ToLevel);
+                double upper = Math.Max(options.FromLevel,options.ToLevel);
+                if (upper < minZ-options.Tolerance || lower > maxZ+options.Tolerance)
+                {
+                    double suggestedFrom=Math.Floor(minZ/options.LevelStep)*options.LevelStep;
+                    double suggestedTo=Math.Ceiling(maxZ/options.LevelStep)*options.LevelStep;
+                    if(suggestedTo<=suggestedFrom)suggestedTo=suggestedFrom+options.LevelStep;
+                    throw new InvalidOperationException(
+                        $"Dải mức tính {options.FromLevel:0.###} đến {options.ToLevel:0.###} không chứa cao độ TIN " +
+                        $"({minZ:0.###} đến {maxZ:0.###} m). Đề nghị tính từ {suggestedFrom:0.###} " +
+                        $"đến {suggestedTo:0.###} m, hoặc nhập dải mức phù hợp. Không trả khối lượng 0 giả.");
+                }
+            }
             var bands = BuildBands(options.FromLevel, options.ToLevel, options.LevelStep, options.Tolerance);
             if (bands.Count == 0) throw new InvalidOperationException("Không tạo được dải cao độ tính khối lượng.");
 
-            // One-time scan: candidate 2.5D support triangles incident to
-            // an XY with multiple source Z are not authoritative.
-            var incidentSupport = VerticalConflictFootprint.IncidentSupport(existing, design);
+            // The planar TIN has already been accepted by surface integrity
+            // checks. A vertical curtain is a zero-plan-area feature: a
+            // section may cross a step, and it must NOT cause us to discard
+            // entire otherwise valid profiles/intervals. The segment sampler
+            // remains authoritative for coverage and elevation continuity.
             var warnings = new List<string>();
             var profileByName = endProfiles.Where(p => p != null).GroupBy(p => p.Line.Name)
                 .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
@@ -52,18 +76,6 @@ namespace MiningVolume.Core.Volumes
                 {
                     warnings.Add(line.Name +
                         ": thiếu dữ liệu cao độ trên một phần tuyến; diện tích mặt cắt chưa đầy đủ.");
-                    continue;
-                }
-                // The support TIN may contain remote double-Z points; only a
-                // route actually touching a preserved vertical curtain needs
-                // inspection. Approved/edited CAD geometry is authoritative.
-                if (!p.IsUserEdited &&
-                    (VerticalConflictFootprint.TouchesSection(
-                        line, existing, design, options.Tolerance) ||
-                     VerticalConflictFootprint.TouchesSupportSection(
-                        line, incidentSupport, options.Tolerance)))
-                {
-                    warnings.Add(line.Name + ": tuyến gặp mặt đứng hoặc tam giác hỗ trợ gần đỉnh nhiều Z; cần kiểm tra/Cập nhật mặt cắt trước khi xác nhận diện tích.");
                     continue;
                 }
                 var ba = areaCalc.Calculate(p, bands, options.Tolerance);
@@ -92,15 +104,6 @@ namespace MiningVolume.Core.Volumes
                     continue;
                 }
 
-                if (!(pa.IsUserEdited && pb.IsUserEdited) &&
-                    (VerticalConflictFootprint.TouchesStrip(a, b, existing, design, options.Tolerance) ||
-                     VerticalConflictFootprint.TouchesSupportStrip(
-                         a, b, incidentSupport, options.Tolerance)))
-                {
-                    warnings.Add($"{a.Name}-{b.Name}: mặt đứng hoặc tam giác TIN hỗ trợ chứa đỉnh nhiều Z ảnh hưởng vùng giữa hai tuyến; khối lượng chưa xác nhận, không cộng vào tổng.");
-                    skippedIntervals++;
-                    continue;
-                }
 
                 SectionProfile pm = null;
                 SectionBandAreas am = null;
