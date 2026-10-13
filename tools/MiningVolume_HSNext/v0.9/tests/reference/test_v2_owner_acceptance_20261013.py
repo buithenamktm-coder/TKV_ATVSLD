@@ -70,6 +70,10 @@ def test_ui_fix_header_gap_compact_data_types_and_button_case():
     assert "Math.Max(5, button.Margin.Left)" in theme
     assert "Height = 212" in mineral
     assert "AutoScroll = true" in mineral
+    sections = source("MiningVolume.Plugin2023/UI/SectionPage.cs")
+    assert "top.RowStyles.Add(new RowStyle(SizeType.Absolute, i < 2 ? 48F : 35F))" in sections
+    assert "_parameterLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, k < 4 ? 48F : 35F))" in sections
+    assert "float preferred = 440F;" in sections
     assert "Bản quyền IMSAT VOLUME" in source("MiningVolume.Plugin2023/UI/LicensePage.cs")
 
 
