@@ -1,6 +1,7 @@
 using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.Text.RegularExpressions;
 using System.Windows.Forms;
 
 namespace MiningVolume2023.UI
@@ -116,14 +117,23 @@ namespace MiningVolume2023.UI
         private static void StyleButton(Button button)
         {
             button.FlatStyle = FlatStyle.Flat;
-            button.FlatAppearance.BorderSize = 1;
+            // Native WinForms 1px border clips at the rounded Region edge,
+            // leaving black/white slivers on high-DPI AutoCAD palettes.
+            button.FlatAppearance.BorderSize = 0;
             button.FlatAppearance.BorderColor = ButtonBorder;
             button.Font = new Font("Arial", 9.5F, FontStyle.Bold);
+            button.Text = SentenceCaseButton(button.Text);
+            button.TextAlign = ContentAlignment.MiddleCenter;
             button.UseVisualStyleBackColor = false;
             button.Cursor = Cursors.Hand;
             if (button.MinimumSize.Height < 36)
                 button.MinimumSize = new Size(button.MinimumSize.Width, 36);
-            button.Padding = new Padding(5, 2, 5, 2);
+            // Real whitespace between controls, not a larger clickable
+            // surface touching adjacent buttons on short palettes.
+            button.Margin = new Padding(
+                Math.Max(5, button.Margin.Left), Math.Max(4, button.Margin.Top),
+                Math.Max(5, button.Margin.Right), Math.Max(4, button.Margin.Bottom));
+            button.Padding = new Padding(12, 3, 12, 3);
             button.UseCompatibleTextRendering = true;
             ApplyRoundedButtonMask(button);
 
@@ -156,6 +166,35 @@ namespace MiningVolume2023.UI
             }
         }
 
+        // Sentence-case action labels, preserving AutoCAD/engineering acronyms.
+        // Capitalization happens once at initialization, never in repaint.
+        internal static string SentenceCaseButton(string original)
+        {
+            string value = (original ?? string.Empty).Trim();
+            if (value.Length == 0) return value;
+            bool hasLetter = false, allUpper = true;
+            foreach (char ch in value)
+            {
+                if (!char.IsLetter(ch)) continue;
+                hasLetter = true;
+                if (char.IsLower(ch)) { allUpper = false; break; }
+            }
+            if (!hasLetter || !allUpper) return value;
+            string lower = value.ToLowerInvariant();
+            for (int i = 0; i < lower.Length; i++)
+                if (char.IsLetter(lower[i]))
+                {
+                    lower = lower.Substring(0, i) + char.ToUpperInvariant(lower[i]) +
+                        lower.Substring(i + 1);
+                    break;
+                }
+            return Regex.Replace(lower,
+                @"(?<!\p{L})(imsat|tin|cad|dwg|excel|ht|tk|2d|3d|z|mvlic)(?!\p{L})",
+                m => string.Equals(m.Value, "excel", StringComparison.OrdinalIgnoreCase)
+                    ? "Excel" : m.Value.ToUpperInvariant(),
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        }
+
         /// <summary>
         /// Bo tròn góc 9 px ở kích thước Windows/Palette hiện tại. Recompute
         /// Region sau Resize để không bị cắt chữ khi DPI hoặc cửa sổ thay đổi.
@@ -179,7 +218,7 @@ namespace MiningVolume2023.UI
             int diameter = radius * 2;
             using (var path = new GraphicsPath())
             {
-                var rect = new Rectangle(0, 0, button.Width - 1, button.Height - 1);
+                var rect = new Rectangle(0, 0, button.Width, button.Height);
                 path.AddArc(rect.Left, rect.Top, diameter, diameter, 180, 90);
                 path.AddArc(rect.Right - diameter, rect.Top, diameter, diameter, 270, 90);
                 path.AddArc(rect.Right - diameter, rect.Bottom - diameter, diameter, diameter, 0, 90);
