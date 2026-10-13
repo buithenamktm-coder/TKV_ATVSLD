@@ -208,6 +208,79 @@ namespace MiningVolume2023.Services
             }
         }
 
+        // Quick-section output is completely separate from the official
+        // section station system and CAD layers. It never clears or changes
+        // MV_MC_* geometry and is never used for quantity calculations.
+        public static void DrawQuickProfiles(Database db,
+            IReadOnlyList<SectionProfile> profiles, Point3d insertion,
+            double horizontalScale, double verticalScale,
+            double elevationStep, double layoutGap)
+        {
+            if (db == null) throw new ArgumentNullException(nameof(db));
+            if (profiles == null || profiles.Count == 0)
+                throw new InvalidOperationException("Không có mặt cắt nhanh để vẽ.");
+            if (horizontalScale < 1 || verticalScale < 1 ||
+                double.IsInfinity(horizontalScale) || double.IsInfinity(verticalScale) ||
+                double.IsNaN(horizontalScale) || double.IsNaN(verticalScale))
+                throw new ArgumentOutOfRangeException(nameof(horizontalScale));
+            if (elevationStep <= 0 || double.IsNaN(elevationStep) ||
+                double.IsInfinity(elevationStep))
+                throw new ArgumentOutOfRangeException(nameof(elevationStep));
+            double exaggeration = horizontalScale / verticalScale;
+            using (var tr = db.TransactionManager.StartTransaction())
+            {
+                EnsureFrameRegApp(db, tr);
+                var ht = EnsureLayer(db, tr, "MV_MC_NHANH_HT", 1);
+                var tk = EnsureLayer(db, tr, "MV_MC_NHANH_TK", 5);
+                var axis = EnsureLayer(db, tr, "MV_MC_NHANH_TRUC", 7);
+                var label = EnsureLayer(db, tr, "MV_MC_NHANH_CHU", 7);
+                var style = EnsureArialStyle(db, tr);
+                var ms = ModelSpace(db, tr, true);
+                double baseX = insertion.X, currentY = insertion.Y;
+                foreach (var profile in profiles)
+                {
+                    if (profile == null || !profile.HasData) continue;
+                    double baseZ = Math.Floor(profile.MinZ / elevationStep) * elevationStep;
+                    double topZ = Math.Ceiling(profile.MaxZ / elevationStep) * elevationStep;
+                    if (topZ <= baseZ) topZ = baseZ + elevationStep;
+                    double height = (topZ - baseZ) * exaggeration;
+                    double width = Math.Max(1, profile.Line.MaxT - profile.Line.MinT);
+                    double x0 = baseX, y0 = currentY, right = x0 + width;
+                    // Axes are mirrored. Both ends display exactly identical
+                    // elevation tick values, independent of the quick route bend.
+                    AddLine(ms, tr, new Point3d(x0,y0,0),
+                        new Point3d(right,y0,0),axis);
+                    AddLine(ms, tr, new Point3d(x0,y0,0),
+                        new Point3d(x0,y0+height,0),axis);
+                    AddLine(ms, tr, new Point3d(right,y0,0),
+                        new Point3d(right,y0+height,0),axis);
+                    AddText(ms,tr,style,label,new Point3d(x0,y0+height+9,0),
+                        "Mặt cắt nhanh " + profile.Line.Name,3.0,0);
+                    for (double z = baseZ; z <= topZ + elevationStep*1e-6; z += elevationStep)
+                    {
+                        double yy = y0 + (z-baseZ)*exaggeration;
+                        AddLine(ms,tr,new Point3d(x0-1.5,yy,0),
+                            new Point3d(x0+1.5,yy,0),axis);
+                        AddLine(ms,tr,new Point3d(right-1.5,yy,0),
+                            new Point3d(right+1.5,yy,0),axis);
+                        string elevation = z.ToString("0.##");
+                        AddText(ms,tr,style,label,new Point3d(x0-12,yy-1.5,0),
+                            elevation,3.0,0);
+                        AddText(ms,tr,style,label,new Point3d(right+4,yy-1.5,0),
+                            elevation,3.0,0);
+                    }
+                    AddProfilePolylines(ms,tr,profile,x0,y0,baseZ,
+                        exaggeration,ht,tk);
+                    AddText(ms,tr,style,label,new Point3d(x0+width/2-4,y0-11,0),
+                        "L (m)",3.0,0);
+                    AddText(ms,tr,style,label,new Point3d(x0,y0-20,0),
+                        "Chỉ tra TIN; không dùng tính khối lượng",2.5,0);
+                    currentY -= height + Math.Max(40.0, layoutGap);
+                }
+                tr.Commit();
+            }
+        }
+
         private static BlockTableRecord ModelSpace(Database db, Transaction tr, bool write)
         {
             var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
