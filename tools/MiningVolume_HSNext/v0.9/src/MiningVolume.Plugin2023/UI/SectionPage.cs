@@ -55,7 +55,7 @@ namespace MiningVolume2023.UI
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 440F));  // scrollable parameters
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 58F));   // spaced primary actions
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 110F));   // edit tools + CAD profile update
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 30F));   // status
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 46F));   // multi-line status
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));   // grid
             Controls.Add(root);
 
@@ -195,7 +195,7 @@ namespace MiningVolume2023.UI
                 ForeColor = UiTheme.Text,
                 BackColor = UiTheme.Soft,
                 TextAlign = ContentAlignment.MiddleLeft,
-                Padding = new Padding(12, 0, 0, 0)
+                Padding = new Padding(12, 5, 8, 5)
             };
             root.Controls.Add(_status, 0, 4);
 
@@ -241,7 +241,7 @@ namespace MiningVolume2023.UI
             // Reserve usable space for the table of section results even on
             // 620px Windows palettes; the parameter panel scrolls internally.
             int visibleHeight = Math.Max(500, ClientSize.Height);
-            int reserved = 38 + 58 + 110 + 30 + Math.Max(105, visibleHeight / 5);
+            int reserved = 38 + 58 + 110 + 46 + Math.Max(105, visibleHeight / 5);
             float maxParameters = Math.Max(210, visibleHeight - reserved);
             float preferred = 440F;
             _rootLayout.RowStyles[1].Height = Math.Min(preferred, maxParameters);
@@ -734,8 +734,7 @@ namespace MiningVolume2023.UI
                 st.SectionSystem = null;
                 st.SectionProfiles.Clear();
                 st.VolumeResult = null;
-                _status.Text = "Đã thay đổi khoảng cách tuyến. Bấm XEM TRƯỚC TUYẾN " +
-                    "rồi thành lập lại mặt cắt trước khi tính hoặc xuất khối lượng.";
+                _status.Text = "Đã đổi bước tuyến. Bấm 'Xem trước tuyến', rồi vẽ lại mặt cắt.";
             }
             st.SectionSpacing = newSpacing;
             st.SectionAxisElevationInterval = (double)_axisStep.Value;
