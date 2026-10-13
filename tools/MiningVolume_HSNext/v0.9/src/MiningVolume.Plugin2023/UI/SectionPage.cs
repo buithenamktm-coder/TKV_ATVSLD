@@ -53,10 +53,10 @@ namespace MiningVolume2023.UI
             };
             root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 38F));   // title
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 394F));  // parameters
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 50F));   // primary actions
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 90F));   // edit tools + CAD profile update
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));   // status
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 316F));  // parameters
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 46F));   // primary actions
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 72F));   // edit tools + CAD profile update
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 30F));   // status
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));   // grid
             Controls.Add(root);
 
@@ -223,8 +223,25 @@ namespace MiningVolume2023.UI
             _layoutGap.ValueChanged += GeneralParameterChanged;
             _hScale.ValueChanged += GeneralParameterChanged;
             _vScale.ValueChanged += GeneralParameterChanged;
-            SizeChanged += (sender, args) => ApplyResponsiveParameterLayout();
+            SizeChanged += (sender, args) =>
+            {
+                ApplyResponsiveParameterLayout();
+                AdjustParameterHeightToAvailableSpace();
+            };
             ApplyResponsiveParameterLayout();
+            AdjustParameterHeightToAvailableSpace();
+        }
+
+        private void AdjustParameterHeightToAvailableSpace()
+        {
+            if (_rootLayout == null) return;
+            // Reserve usable space for the table of section results even on
+            // 620px Windows palettes; the parameter panel scrolls internally.
+            int visibleHeight = Math.Max(500, ClientSize.Height);
+            int reserved = 38 + 46 + 72 + 30 + Math.Max(105, visibleHeight / 5);
+            float maxParameters = Math.Max(210, visibleHeight - reserved);
+            float preferred = _compactParameters ? 320F : 316F;
+            _rootLayout.RowStyles[1].Height = Math.Min(preferred, maxParameters);
         }
 
         private void ApplyResponsiveParameterLayout()
@@ -278,7 +295,7 @@ namespace MiningVolume2023.UI
                         _parameterLayout.Controls.Add(_parameterActions[i], 2, row);
                     }
                 }
-                _rootLayout.RowStyles[1].Height = compact ? 430F : 394F;
+                _rootLayout.RowStyles[1].Height = compact ? 320F : 316F;
             }
             finally { _parameterLayout.ResumeLayout(true); }
         }
