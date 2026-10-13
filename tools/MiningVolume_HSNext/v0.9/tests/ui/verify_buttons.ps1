@@ -128,10 +128,48 @@ if([Math]::Abs([double]$state.HorizontalScale - 1000.0) -gt 1e-9 -or
    [Math]::Abs([double]$state.VerticalScale - 1000.0) -gt 1e-9) {
   throw "Section page allowed an old unequal CAD scale."
 }
+# Custom mode MUST unlock both independent scales; switching to TT34
+# must restore both to 1:1000 without changing 3D TIN geometry.
+$horizontal=[Windows.Forms.NumericUpDown]$sectionType.GetField('_hScale',$flags).GetValue($section)
+$vertical=[Windows.Forms.NumericUpDown]$sectionType.GetField('_vScale',$flags).GetValue($section)
+$mode.SelectedItem='Tùy chỉnh'
+if(!$horizontal.Enabled -or !$vertical.Enabled) {
+  throw "Custom section mode did not unlock horizontal AND vertical scale."
+}
+$horizontal.Value=[decimal]2000
+$vertical.Value=[decimal]500
+if([Math]::Abs([double]$state.HorizontalScale-2000.0) -gt 1e-9 -or
+   [Math]::Abs([double]$state.VerticalScale-500.0) -gt 1e-9) {
+  throw "Custom scales did not flow from actual WinForms controls into ProjectState."
+}
+$mode.SelectedItem='TT34/2018/TT-BCT'
+if($horizontal.Enabled -or $vertical.Enabled -or
+   [Math]::Abs([double]$state.HorizontalScale-1000.0) -gt 1e-9 -or
+   [Math]::Abs([double]$state.VerticalScale-1000.0) -gt 1e-9) {
+  throw "TT34 preset did not lock and restore both 1:1000 scales."
+}
+# Check the user's crowded three-button toolbar in a REAL WinForms layout.
+$nativeSection=[System.Windows.Forms.Control]$section.PSObject.BaseObject
+$apply.Invoke($null,[object[]]@($nativeSection)) | Out-Null
+[Windows.Forms.Application]::DoEvents()
+$quick=[Windows.Forms.Button]($section.Controls.Find('btnQuickSections',$true)[0])
+$draw=[Windows.Forms.Button]($section.Controls.Find('btnDrawSections',$true)[0])
+if($null -eq $quick -or $null -eq $draw -or !$quick.Visible -or !$draw.Visible) {
+  throw 'Section draw / quick-section buttons missing or hidden.'
+}
+if($quick.Left-$draw.Right -lt 6) {
+  throw "Three section buttons are touching/overlapping: gap=$($quick.Left-$draw.Right)px"
+}
+$sectionImage=New-Object Drawing.Bitmap(590,620)
+$sectionForm.DrawToBitmap($sectionImage,
+  (New-Object Drawing.Rectangle(0,0,590,620)))
+$sectionImage.Save((Join-Path $out 'UI_SECTION_LAYOUT.png'),
+  [Drawing.Imaging.ImageFormat]::Png)
+$sectionImage.Dispose()
 $sectionForm.Close();$sectionForm.Dispose()
 @{scope='Real WinForms SectionPage event; no AutoCAD host';change_station='20 to 10m invalidates old geometry';
-  z_axis_ticks='15m without station change';tt34_preset='20m';section_axes='1000/1000';status='PASS';
+  z_axis_ticks='15m without station change';tt34_preset='20m';section_axes='custom 2000/500; TT34 1000/1000';button_gap_min_px=6;status='PASS';
   source_sha=$env:SOURCE_SHA;autocad_runtime='NOT TESTED'} |
   ConvertTo-Json -Depth 4 | Set-Content -Encoding UTF8 (Join-Path $out 'UI_SECTION_PARAMETERS.json')
-Write-Host 'PASS: section parameter change, Z axis, TT34 preset and fixed 1:1000 scales (WinForms)'
+Write-Host 'PASS: real SectionPage 20m preset, editable Custom 2000/500, TT34 1:1000 and action gaps'
 Write-Host 'PASS: actual Windows WinForms buttons, text contrast >=4.5; AutoCAD runtime NOT TESTED'
