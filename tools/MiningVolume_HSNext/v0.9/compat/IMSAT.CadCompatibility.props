@@ -6,17 +6,26 @@
   -->
   <PropertyGroup>
     <IMSATCadFlavor Condition="'$(IMSATCadFlavor)' == ''">ACAD2023_NET48</IMSATCadFlavor>
+    <IMSATCadFramework Condition="'$(IMSATCadFlavor)' == 'ACAD2021_NET48'">net48</IMSATCadFramework>
+    <IMSATCadFramework Condition="'$(IMSATCadFlavor)' == 'ACAD2022_NET48'">net48</IMSATCadFramework>
     <IMSATCadFramework Condition="'$(IMSATCadFlavor)' == 'ACAD2023_NET48'">net48</IMSATCadFramework>
+    <IMSATCadFramework Condition="'$(IMSATCadFlavor)' == 'ACAD2024_NET48'">net48</IMSATCadFramework>
     <IMSATCadFramework Condition="'$(IMSATCadFlavor)' == 'ACAD2025_NET8'">net8.0-windows</IMSATCadFramework>
     <IMSATCadFramework Condition="'$(IMSATCadFlavor)' == 'ACAD2025_NET10'">net10.0-windows</IMSATCadFramework>
     <IMSATCadFramework Condition="'$(IMSATCadFlavor)' == 'ACAD2026_NET8'">net8.0-windows</IMSATCadFramework>
     <IMSATCadFramework Condition="'$(IMSATCadFlavor)' == 'ACAD2026_NET10'">net10.0-windows</IMSATCadFramework>
+    <IMSATCadPackageVersion Condition="'$(IMSATCadFlavor)' == 'ACAD2021_NET48'">24.0.0</IMSATCadPackageVersion>
+    <IMSATCadPackageVersion Condition="'$(IMSATCadFlavor)' == 'ACAD2022_NET48'">24.1.51000</IMSATCadPackageVersion>
     <IMSATCadPackageVersion Condition="'$(IMSATCadFlavor)' == 'ACAD2023_NET48'">24.2.0</IMSATCadPackageVersion>
+    <IMSATCadPackageVersion Condition="'$(IMSATCadFlavor)' == 'ACAD2024_NET48'">24.3.0</IMSATCadPackageVersion>
     <IMSATCadPackageVersion Condition="'$(IMSATCadFlavor)' == 'ACAD2025_NET8'">25.0.1</IMSATCadPackageVersion>
     <IMSATCadPackageVersion Condition="'$(IMSATCadFlavor)' == 'ACAD2025_NET10'">25.0.2</IMSATCadPackageVersion>
     <IMSATCadPackageVersion Condition="'$(IMSATCadFlavor)' == 'ACAD2026_NET8'">25.1.0</IMSATCadPackageVersion>
     <IMSATCadPackageVersion Condition="'$(IMSATCadFlavor)' == 'ACAD2026_NET10'">25.1.1</IMSATCadPackageVersion>
+    <IMSATCadHostYear Condition="'$(IMSATCadFlavor)' == 'ACAD2021_NET48'">2021</IMSATCadHostYear>
+    <IMSATCadHostYear Condition="'$(IMSATCadFlavor)' == 'ACAD2022_NET48'">2022</IMSATCadHostYear>
     <IMSATCadHostYear Condition="'$(IMSATCadFlavor)' == 'ACAD2023_NET48'">2023</IMSATCadHostYear>
+    <IMSATCadHostYear Condition="'$(IMSATCadFlavor)' == 'ACAD2024_NET48'">2024</IMSATCadHostYear>
     <IMSATCadHostYear Condition="'$(IMSATCadFlavor)' == 'ACAD2025_NET8' Or '$(IMSATCadFlavor)' == 'ACAD2025_NET10'">2025</IMSATCadHostYear>
     <IMSATCadHostYear Condition="'$(IMSATCadFlavor)' == 'ACAD2026_NET8' Or '$(IMSATCadFlavor)' == 'ACAD2026_NET10'">2026</IMSATCadHostYear>
     <IMSATCadHostDir Condition="'$(IMSATCadHostDir)' == ''">C:\Program Files\Autodesk\AutoCAD $(IMSATCadHostYear)</IMSATCadHostDir>
