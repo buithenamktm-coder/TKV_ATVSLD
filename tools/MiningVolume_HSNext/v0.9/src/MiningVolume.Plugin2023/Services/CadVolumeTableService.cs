@@ -37,17 +37,21 @@ namespace MiningVolume2023.Services
                 double x = insertion.X;
                 double y = insertion.Y;
 
-                var summary = NewTable(database, layer, 7, 2, new Point3d(x, y, 0), 54);
-                Set(summary, 0, "IMSAT VOLUME – TỔNG HỢP KHỐI LƯỢNG", "Giá trị");
-                Set(summary, 1, "Thời điểm xuất", DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss"));
-                Set(summary, 2, "Tổng khối lượng đào, m³", F(result.TotalCutVolume));
-                Set(summary, 3, "Tổng khối lượng đắp, m³", F(result.TotalFillVolume));
-                Set(summary, 4, "Chênh lệch đào − đắp, m³", F(result.NetVolume));
-                Set(summary, 5, "Số khoảng mặt cắt", result.Intervals.Count.ToString());
-                Set(summary, 6, "Phát triển", "Bùi Thế Nam · 0967280686");
-                StyleSimpleTable(summary, arial, 7, 2);
+                const int summaryRows = 8;
+                var summary = NewTable(database, layer, summaryRows, 2,
+                    new Point3d(x, y, 0), 68);
+                summary.MergeCells(CellRange.Create(summary, 0, 0, 0, 1));
+                summary.Cells[0, 0].TextString = "IMSAT VOLUME – TỔNG HỢP KHỐI LƯỢNG";
+                Set(summary, 1, "Hạng mục", "Giá trị");
+                Set(summary, 2, "Thời điểm xuất", DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss"));
+                Set(summary, 3, "Tổng khối lượng đào, m³", F(result.TotalCutVolume));
+                Set(summary, 4, "Tổng khối lượng đắp, m³", F(result.TotalFillVolume));
+                Set(summary, 5, "Chênh lệch đào − đắp, m³", F(result.NetVolume));
+                Set(summary, 6, "Số khoảng mặt cắt", result.Intervals.Count.ToString());
+                Set(summary, 7, "Phát triển", "Bùi Thế Nam · 0967280686");
+                StyleSimpleTable(summary, arial, summaryRows, 2);
                 Append(model, tr, summary);
-                y -= RowHeight * 7 + TableGap;
+                y -= RowHeight * summaryRows + TableGap;
 
                 // Match the accepted CAD sample: native editable TABLE, full
                 // outer frame, merged title and grouped multi-level headers.
