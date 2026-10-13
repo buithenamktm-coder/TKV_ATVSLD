@@ -48,8 +48,112 @@ namespace MiningVolume2023.Services
         }
     }
 
+    public sealed class QuickSectionCadRoute
+    {
+        public string SourceHandle { get; set; }
+        public IReadOnlyList<Vec2> Vertices { get; set; }
+    }
+
     public static class SelectionService
     {
+        /// <summary>
+        /// Select independent quick-section routes right on the survey plan.
+        /// Read the actual CAD geometry (not cached section-station offsets).
+        /// Arc bulges are rejected rather than silently turning them into an
+        /// inaccurate straight chord. Polyline vertices may have Z but final
+        /// elevations always come from the approved TINs.
+        /// </summary>
+        public static IReadOnlyList<QuickSectionCadRoute> PickQuickSectionRoutes()
+        {
+            var doc = Application.DocumentManager.MdiActiveDocument;
+            if (doc == null) throw new InvalidOperationException("Không có bản vẽ AutoCAD.");
+            var options = new PromptSelectionOptions
+            {
+                MessageForAdding = "\nChọn một hoặc nhiều tuyến mặt cắt nhanh LINE/POLYLINE trên bình đồ: ",
+                MessageForRemoval = "\nBỏ tuyến khỏi danh sách: ",
+                AllowDuplicates = false
+            };
+            var filter = new SelectionFilter(new[]
+            {
+                new TypedValue((int)DxfCode.Operator, "<OR"),
+                new TypedValue((int)DxfCode.Start, "LINE"),
+                new TypedValue((int)DxfCode.Start, "LWPOLYLINE"),
+                new TypedValue((int)DxfCode.Start, "POLYLINE"),
+                new TypedValue((int)DxfCode.Operator, "OR>")
+            });
+            PromptSelectionResult selected;
+            using (CadSelectionPaletteScope.Hide())
+                selected = doc.Editor.GetSelection(options, filter);
+            if (selected.Status != PromptStatus.OK || selected.Value == null) return null;
+            var ids = selected.Value.GetObjectIds();
+            if (ids.Length > 250)
+                throw new InvalidOperationException(
+                    "Một lượt chỉ chọn tối đa 250 tuyến mặt cắt nhanh.");
+            var routes = new List<QuickSectionCadRoute>(ids.Length);
+            using (var tr = doc.Database.TransactionManager.StartOpenCloseTransaction())
+            {
+                foreach (var id in ids)
+                {
+                    var entity = tr.GetObject(id, OpenMode.ForRead) as Entity;
+                    if (entity == null || entity.IsErased) continue;
+                    var vertices = new List<Vec2>();
+                    var line = entity as Line;
+                    if (line != null)
+                    {
+                        vertices.Add(new Vec2(line.StartPoint.X, line.StartPoint.Y));
+                        vertices.Add(new Vec2(line.EndPoint.X, line.EndPoint.Y));
+                    }
+                    else if (entity is Polyline polyline)
+                    {
+                        for (int i = 0; i < polyline.NumberOfVertices; i++)
+                        {
+                            if (Math.Abs(polyline.GetBulgeAt(i)) > 1e-10)
+                                throw new InvalidOperationException(
+                                    "Tuyến " + entity.Handle +
+                                    " có cung tròn (bulge). Hãy chuyển cung thành các đoạn thẳng trước khi vẽ mặt cắt nhanh.");
+                            var point = polyline.GetPoint2dAt(i);
+                            vertices.Add(new Vec2(point.X, point.Y));
+                        }
+                        if (polyline.Closed && vertices.Count > 2)
+                            vertices.Add(vertices[0]);
+                    }
+                    else if (entity is Polyline2d poly2d)
+                    {
+                        foreach (ObjectId vid in poly2d)
+                        {
+                            var v = tr.GetObject(vid, OpenMode.ForRead) as Vertex2d;
+                            if (v == null) continue;
+                            if (Math.Abs(v.Bulge) > 1e-10)
+                                throw new InvalidOperationException(
+                                    "Tuyến " + entity.Handle +
+                                    " có cung tròn. Hãy đổi thành đoạn thẳng trước khi vẽ.");
+                            vertices.Add(new Vec2(v.Position.X, v.Position.Y));
+                        }
+                        if (poly2d.Closed && vertices.Count > 2)
+                            vertices.Add(vertices[0]);
+                    }
+                    else if (entity is Polyline3d poly3d)
+                    {
+                        foreach (ObjectId vid in poly3d)
+                        {
+                            var v = tr.GetObject(vid, OpenMode.ForRead) as PolylineVertex3d;
+                            if (v != null) vertices.Add(new Vec2(v.Position.X, v.Position.Y));
+                        }
+                        if (poly3d.Closed && vertices.Count > 2)
+                            vertices.Add(vertices[0]);
+                    }
+                    if (vertices.Count < 2)
+                        throw new InvalidOperationException(
+                            "Đối tượng " + entity.Handle +
+                            " không có đủ hai đỉnh XY hợp lệ để lấy mặt cắt.");
+                    routes.Add(new QuickSectionCadRoute {
+                        SourceHandle = entity.Handle.ToString(), Vertices = vertices
+                    });
+                }
+            }
+            return routes;
+        }
+
         public static IReadOnlyList<ObjectId> PickSurfaceEntities(string modelName)
         {
             var doc = Application.DocumentManager.MdiActiveDocument;
