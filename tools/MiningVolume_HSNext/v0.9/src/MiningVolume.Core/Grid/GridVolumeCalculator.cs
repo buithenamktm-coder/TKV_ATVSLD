@@ -100,6 +100,10 @@ namespace MiningVolume.Core.Grid
             var unsafeCells = VerticalConflictFootprint.AffectedGridCells(
                 existing, design, options.Origin, options.SizeX, options.SizeY,
                 cos, sin, startI, endI, startJ, endJ);
+            // A collapsed multi-Z support vertex can affect every incident
+            // planar triangle, not only the zero-plan-area vertical curtain.
+            var rootIndex = new VerticalConflictFootprint.ConflictRootIndex(
+                existing, design, 1e-6);
             using (var existingIndex = new TriangleGridIndex(existing.Triangles, options, cos, sin))
             using (var designIndex = new TriangleGridIndex(design.Triangles, options, cos, sin))
             {
@@ -118,10 +122,20 @@ namespace MiningVolume.Core.Grid
                             World(u0, v0 + options.SizeY, options.Origin, cos, sin)
                         };
                         bool ambiguous = unsafeCells.Contains((checked((int)i),checked((int)j)));
-                        // Affected cells still carry the accurate clipped XY
-                        // calculation area but NO invented cut/fill quantities.
-                        var tn = ambiguous ? Array.Empty<Triangle3>() : existingIndex.Candidates((int)i, (int)j, cell);
-                        var tk = ambiguous ? Array.Empty<Triangle3>() : designIndex.Candidates((int)i, (int)j, cell);
+                        var tn = ambiguous ? (IReadOnlyList<Triangle3>)Array.Empty<Triangle3>()
+                            : existingIndex.Candidates((int)i, (int)j, cell);
+                        var tk = ambiguous ? (IReadOnlyList<Triangle3>)Array.Empty<Triangle3>()
+                            : designIndex.Candidates((int)i, (int)j, cell);
+                        if (!ambiguous && (rootIndex.AnyIncident(tn) || rootIndex.AnyIncident(tk)))
+                            ambiguous = true;
+                        // An incident support triangle has a non-authoritative Z
+                        // near the multi-Z root. Its volume is unverified; do not
+                        // silently use the CDT's arbitrarily retained elevation.
+                        if (ambiguous)
+                        {
+                            tn = Array.Empty<Triangle3>();
+                            tk = Array.Empty<Triangle3>();
+                        }
                         var volume = ExactGridCellCalculator.Calculate(tn, tk, cell, options.Boundary, options.Holes);
                         if (volume.CalculationArea > 1e-9)
                             cells.Add(new GridVolumeCell
