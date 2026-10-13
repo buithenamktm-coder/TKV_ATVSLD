@@ -115,3 +115,51 @@ def test_axis_tick_density_is_guarded_before_creating_cad_geometry():
     assert "EnsureElevationTickBudget(baseZ, topZ, elevationStep, profile.Line.Name);" in renderer.split(
         "public static void DrawQuickProfiles(", 1)[1].split(
         "AddLine(ms,tr,new Point3d", 1)[0]
+
+
+
+def test_field_qa_grid_more_than_five_thousand_cells_is_not_blocked_by_cad_renderer():
+    grid = src("MiningVolume.Plugin2023/Services/GridCadRenderer.cs")
+    page = src("MiningVolume.Plugin2023/UI/GridPage.cs")
+    assert "report.Cells.Count > 5000" not in grid
+    assert "Hệ lưới trên 5.000 ô" not in grid
+    assert "report.Cells.Count > 100000" in grid
+    assert "cancellationToken.ThrowIfCancellationRequested();" in grid
+    assert "progress?.Invoke(completed, total);" in grid
+    assert "tr.Commit();" in grid
+    assert "GridCadRenderer.Draw(doc.Database,grid,_labels.Checked," in page
+    assert "Đang vẽ lưới CAD:" in page
+    assert "finally { UseWaitCursor=false; _draw.Enabled=GridWorkflowService.Report!=null; }" in page
+
+
+def test_field_qa_cad_level_table_has_six_visible_headers_below_native_title():
+    cad = src("MiningVolume.Plugin2023/Services/CadVolumeTableService.cs")
+    assert "const int levelHeaderRows = 2;" in cad
+    assert "BẢNG KHỐI LƯỢNG ĐÀO ĐẮP THEO TẦNG" in cad
+    assert 'Set(levels, 1, "Thứ tự", "Tầng/mức", "Cao độ dưới (m)"' in cad
+    assert '"Cao độ trên (m)", "Khối lượng đào (m³)", "Khối lượng đắp (m³)"' in cad
+    assert "Set(levels, i + levelHeaderRows" in cad
+    assert "Tổng theo các tầng" in cad
+    assert "Set(levels, 0, \"STT\"" not in cad
+
+
+def test_field_qa_excel_wrapped_headers_have_enough_height_without_row_insert():
+    writer = src("MiningVolume.Core/Reporting/SpreadsheetReport.cs")
+    assert "int headerHeight = 34;" in writer
+    assert "caption.Length + charsPerLine - 1" in writer
+    assert "WriteRowStart(x, row, headerHeight);" in writer
+    assert "for (int c = 0; c < sheet.Headers.Count; c++)" in writer
+    assert "int firstDataRow = titleRows + noteRows +" in writer
+
+
+def test_field_qa_layer_buttons_have_dedicated_full_width_row():
+    data = src("MiningVolume.Plugin2023/UI/DataPage.cs")
+    assert "bool compact = width < 820;" in data
+    assert "_sourceBox.Height = 278;" in data
+    assert "new RowStyle(SizeType.Absolute, 46)" in data
+    assert "_sourceTable.Controls.Add(_sourceLoad[0],0,1);" in data
+    assert "_sourceTable.Controls.Add(_sourceChoose[0],1,1);" in data
+    assert "_sourceTable.Controls.Add(_sourceLoad[1],0,3);" in data
+    assert "_sourceTable.Controls.Add(_sourceChoose[1],1,3);" in data
+    assert "new ColumnStyle(SizeType.Absolute, 92)" not in data
+    assert "new ColumnStyle(SizeType.Absolute, 112)" not in data
