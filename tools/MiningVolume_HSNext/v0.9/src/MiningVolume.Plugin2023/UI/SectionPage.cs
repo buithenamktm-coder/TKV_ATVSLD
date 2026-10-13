@@ -598,13 +598,28 @@ namespace MiningVolume2023.UI
                 try { _parameterMode.SelectedItem = "Tùy chỉnh"; }
                 finally { _syncing = false; }
             }
-            st.SectionSpacing = (double)_spacing.Value;
+            double newSpacing = (double)_spacing.Value;
+            bool geometryChanged = Math.Abs(st.SectionSpacing - newSpacing) > 1e-9;
+            // The preview geometry is generated at the accepted station step.
+            // Editing that step must never leave an apparently current 20-m
+            // line system while the UI/Excel says 10 m. Plot-only parameters
+            // (Z-axis marks, drawing separation) do not change volume geometry.
+            if (geometryChanged)
+            {
+                st.SectionSystem = null;
+                st.SectionProfiles.Clear();
+                st.VolumeResult = null;
+                _status.Text = "Đã thay đổi khoảng cách tuyến. Bấm XEM TRƯỚC TUYẾN " +
+                    "rồi thành lập lại mặt cắt trước khi tính hoặc xuất khối lượng.";
+            }
+            st.SectionSpacing = newSpacing;
             st.SectionAxisElevationInterval = (double)_axisStep.Value;
             st.SectionMapScale = 1000;
             st.SectionParameterMode = _parameterMode.SelectedItem as string ?? "Tùy chỉnh";
             st.SectionLayoutGap = (double)_layoutGap.Value;
             st.HorizontalScale = 1000;
             st.VerticalScale = 1000;
+            if (geometryChanged) st.NotifyChanged();
         }
 
         private void SaveParameters()
