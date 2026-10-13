@@ -15,7 +15,8 @@ def test_liquid_glass_is_a_native_static_palette_surface_without_autocad_blur():
     assert "ControlStyles.ResizeRedraw" in theme
     assert "LinearGradientBrush(" in theme
     assert "GlassHighlight" in theme
-    assert "group.BackColor = GlassSurface" in theme
+    assert "group.BackColor = Color.FromArgb(247, 251, 255)" in theme
+    assert "private readonly bool _dark;" in theme
     assert "var header = new GlassPanel" in palette
     assert "var sidebar = new GlassPanel" in palette
     assert "_compactHeader = new GlassPanel" in palette
@@ -34,7 +35,7 @@ def test_liquid_glass_preserves_contrasting_native_actions_and_responsive_naviga
     assert "button.BackColor = ButtonSecondary" in theme
     assert "button.ForeColor = ButtonText" in theme
     assert "UiTheme.ApplyRoundedButtonMask" in palette
-    assert "ClientSize.Width < 650" in palette
+    assert "ClientSize.Width < 730" in palette
     assert "_compactNavigation" in palette
 
 
