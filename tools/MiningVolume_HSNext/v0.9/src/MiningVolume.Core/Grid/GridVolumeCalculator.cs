@@ -163,16 +163,8 @@ namespace MiningVolume.Core.Grid
                         var volume = ExactGridCellCalculator.CalculatePrepared(tn, tk, cell, clipBoundary);
                         if (volume.CalculationArea > 1e-9)
                         {
-                            double htArea=0, tkArea=0;
-                            if (!volume.IsComplete)
-                            {
-                                htArea=ExactGridCellCalculator.MeasureSurfaceCoveragePrepared(
-                                    tn,cell,clipBoundary);
-                                tkArea=ExactGridCellCalculator.MeasureSurfaceCoveragePrepared(
-                                    tk,cell,clipBoundary);
-                            }
-                            else
-                                htArea=tkArea=volume.CalculationArea;
+                            double htArea=volume.ExistingSurfaceArea;
+                            double tkArea=volume.DesignSurfaceArea;
                             cells.Add(new GridVolumeCell
                             {
                                 I = checked((int)i), J = checked((int)j),
