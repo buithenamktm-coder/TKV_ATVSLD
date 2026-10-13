@@ -53,8 +53,8 @@ namespace MiningVolume2023.UI
             root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 38F));   // title
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 316F));  // parameters
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 46F));   // primary actions
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 72F));   // edit tools + CAD profile update
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 58F));   // spaced primary actions
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 92F));   // edit tools + CAD profile update
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 30F));   // status
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));   // grid
             Controls.Add(root);
@@ -144,7 +144,7 @@ namespace MiningVolume2023.UI
                 Dock = DockStyle.Fill,
                 ColumnCount = 3,
                 RowCount = 1,
-                Padding = new Padding(9, 5, 9, 5),
+                Padding = new Padding(10, 7, 10, 7),
                 Margin = Padding.Empty
             };
             primary.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.333F));
@@ -174,7 +174,7 @@ namespace MiningVolume2023.UI
                 FlowDirection = FlowDirection.LeftToRight,
                 WrapContents = true,
                 AutoScroll = true,
-                Padding = new Padding(9, 6, 9, 6),
+                Padding = new Padding(10, 9, 10, 9),
                 Margin = Padding.Empty
             };
             tools.Controls.Add(Button("Thêm tuyến", AddLine));
@@ -241,7 +241,7 @@ namespace MiningVolume2023.UI
             // Reserve usable space for the table of section results even on
             // 620px Windows palettes; the parameter panel scrolls internally.
             int visibleHeight = Math.Max(500, ClientSize.Height);
-            int reserved = 38 + 46 + 72 + 30 + Math.Max(105, visibleHeight / 5);
+            int reserved = 38 + 58 + 92 + 30 + Math.Max(105, visibleHeight / 5);
             float maxParameters = Math.Max(210, visibleHeight - reserved);
             float preferred = _compactParameters ? 320F : 316F;
             _rootLayout.RowStyles[1].Height = Math.Min(preferred, maxParameters);
@@ -322,7 +322,7 @@ namespace MiningVolume2023.UI
             n.Value = Math.Max(min, Math.Min(max, v));
             return n;
         }
-        private static Button Button(string t, EventHandler h) { var b = new Button { Text = t, AutoSize = true, Height = 36, Margin = new Padding(3, 2, 3, 2) }; b.Click += h; return b; }
+        private static Button Button(string t, EventHandler h) { var b = new Button { Text = t, AutoSize = true, Height = 38, Margin = new Padding(6, 4, 6, 4) }; b.Click += h; return b; }
         private static void Add(TableLayoutPanel p, int r, string label, Control c, Control b) { p.Controls.Add(new Label { Text = label, Dock = DockStyle.Fill, AutoEllipsis = true,
                 Font = new Font("Arial", 9.5F, FontStyle.Bold), ForeColor = UiTheme.Text,
                 TextAlign = ContentAlignment.MiddleLeft }, 0, r); p.Controls.Add(c, 1, r); p.Controls.Add(b, 2, r); }
