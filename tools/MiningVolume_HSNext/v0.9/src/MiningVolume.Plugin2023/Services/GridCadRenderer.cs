@@ -49,7 +49,7 @@ namespace MiningVolume2023.Services
                     if (cell == null || cell.Corners == null || cell.Corners.Count < 3)
                         throw new InvalidOperationException("Ô lưới có đường bao không hợp lệ.");
                     var v=cell.Volume;
-                    ObjectId layer = !v.IsComplete ? noData :
+                    ObjectId layer = cell.IsVerticalConflict ? noData : !v.IsComplete ? noData :
                         v.CutVolume > 1e-8 && v.FillVolume > 1e-8 ? mixed :
                         v.CutVolume > 1e-8 ? cut : v.FillVolume > 1e-8 ? fill : empty;
                     var poly = new Polyline(cell.Corners.Count) { LayerId=layer, Closed=true };
@@ -72,7 +72,9 @@ namespace MiningVolume2023.Services
                             LayerId=text,
                             Position=new Point3d(x,y,0),
                             Height=height,
-                            TextString= !v.IsComplete
+                            TextString= cell.IsVerticalConflict
+                                ? cell.CellCode + " NHIEU Z - CHUA XAC NHAN"
+                                : !v.IsComplete
                                 ? cell.CellCode + " THIEU TIN"
                                 : cell.CellCode + " D" + v.CutVolume.ToString("0.0") +
                                     " / P" + v.FillVolume.ToString("0.0")
