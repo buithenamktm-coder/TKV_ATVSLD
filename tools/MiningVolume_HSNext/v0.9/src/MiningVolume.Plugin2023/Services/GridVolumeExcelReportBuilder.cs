@@ -74,6 +74,9 @@ namespace MiningVolume2023.Services
             Row(s,"Góc xoay (độ)",opt.RotationDegrees.ToString("0.###"));
             Row(s,"Số ô tính",grid.Cells.Count.ToString());
             Row(s,"Số ô nhiều Z chưa xác nhận",grid.AmbiguousCells.ToString());
+            Row(s,"Số ô thiếu phủ hiện trạng",grid.MissingExistingCells.ToString());
+            Row(s,"Số ô thiếu phủ thiết kế",grid.MissingDesignCells.ToString());
+            Row(s,"Số ô hai TIN đều phủ nhưng không giao đúng",grid.IntersectionMismatchCells.ToString());
             Row(s,"Diện tích nhiều Z chưa xác nhận (m²)",grid.AmbiguousArea.ToString("0.###"));
             Row(s,"Độ đầy đủ dữ liệu",grid.IsComplete?"Đủ hai TIN":"THIẾU DỮ LIỆU – CHƯA ĐƯỢC NGHIỆM THU");
             return s;
@@ -139,11 +142,13 @@ namespace MiningVolume2023.Services
                     ReportCell.Int(++i),ReportCell.Text(c.CellCode),ReportCell.Int(c.I),ReportCell.Int(c.J),
                     ReportCell.N3(c.Volume.CalculationArea),ReportCell.N3(c.Volume.CoveredArea),
                     ReportCell.N3(c.Volume.NoDataArea),
-                    c.IsVerticalConflict ? ReportCell.Text("") : ReportCell.N3(c.Volume.CutVolume),
-                    c.IsVerticalConflict ? ReportCell.Text("") : ReportCell.N3(c.Volume.FillVolume),
-                    c.IsVerticalConflict ? ReportCell.Text("") : ReportCell.Formula3("H"+row+"-I"+row),
-                    ReportCell.Text(c.IsVerticalConflict ? "NHIỀU Z - CHƯA XÁC NHẬN" :
-                        c.Volume.IsComplete ? "Đủ" : "THIẾU DỮ LIỆU")
+                    c.IsVerticalConflict || c.Volume.CoveredArea<=1e-9
+                        ? ReportCell.Text("") : ReportCell.N3(c.Volume.CutVolume),
+                    c.IsVerticalConflict || c.Volume.CoveredArea<=1e-9
+                        ? ReportCell.Text("") : ReportCell.N3(c.Volume.FillVolume),
+                    c.IsVerticalConflict || c.Volume.CoveredArea<=1e-9
+                        ? ReportCell.Text("") : ReportCell.Formula3("H"+row+"-I"+row),
+                    ReportCell.Text(c.CoverageStatus)
                 });
                 row++;
             }
@@ -163,9 +168,12 @@ namespace MiningVolume2023.Services
                 {
                     ReportCell.Text(c.v.CellCode),
                     ReportCell.Formula3(pre+"E"+n),
-                    c.v.IsVerticalConflict ? ReportCell.Text("") : ReportCell.Formula3(pre+"H"+n),
-                    c.v.IsVerticalConflict ? ReportCell.Text("") : ReportCell.Formula3(pre+"I"+n),
-                    c.v.IsVerticalConflict ? ReportCell.Text("") : ReportCell.Formula3("C"+n+"-D"+n)
+                    c.v.IsVerticalConflict || c.v.Volume.CoveredArea<=1e-9
+                        ? ReportCell.Text("") : ReportCell.Formula3(pre+"H"+n),
+                    c.v.IsVerticalConflict || c.v.Volume.CoveredArea<=1e-9
+                        ? ReportCell.Text("") : ReportCell.Formula3(pre+"I"+n),
+                    c.v.IsVerticalConflict || c.v.Volume.CoveredArea<=1e-9
+                        ? ReportCell.Text("") : ReportCell.Formula3("C"+n+"-D"+n)
                 });
             }
             return s;
@@ -232,10 +240,11 @@ namespace MiningVolume2023.Services
                 {
                     ReportCell.Text(c.CellCode),ReportCell.Text("TIN overlay exact"),
                     ReportCell.Formula3(prefix+"F"+row),
-                    c.IsVerticalConflict ? ReportCell.Text("") : ReportCell.Formula3(prefix+"H"+row),
-                    c.IsVerticalConflict ? ReportCell.Text("") : ReportCell.Formula3(prefix+"I"+row),
-                    ReportCell.Text(c.IsVerticalConflict ? "NHIỀU Z - CHƯA XÁC NHẬN" :
-                        c.Volume.IsComplete ? "Đã phủ" : "Chưa đủ hai TIN")
+                    c.IsVerticalConflict || c.Volume.CoveredArea<=1e-9
+                        ? ReportCell.Text("") : ReportCell.Formula3(prefix+"H"+row),
+                    c.IsVerticalConflict || c.Volume.CoveredArea<=1e-9
+                        ? ReportCell.Text("") : ReportCell.Formula3(prefix+"I"+row),
+                    ReportCell.Text(c.CoverageStatus)
                 });
             }
             return s;
