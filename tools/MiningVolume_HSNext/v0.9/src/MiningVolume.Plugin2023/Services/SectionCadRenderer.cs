@@ -136,6 +136,7 @@ namespace MiningVolume2023.Services
                     double baseZ = Math.Floor(p.MinZ / levelStep) * levelStep;
                     double topZ = Math.Ceiling(p.MaxZ / levelStep) * levelStep;
                     if (topZ <= baseZ) topZ = baseZ + levelStep;
+                    EnsureElevationTickBudget(baseZ, topZ, levelStep, p.Line.Name);
                     double height = (topZ - baseZ) * vExag;
                     double x0 = baseX, y0 = currentY;
                     double rightAxisX = x0 + width;
@@ -243,6 +244,7 @@ namespace MiningVolume2023.Services
                     double baseZ = Math.Floor(profile.MinZ / elevationStep) * elevationStep;
                     double topZ = Math.Ceiling(profile.MaxZ / elevationStep) * elevationStep;
                     if (topZ <= baseZ) topZ = baseZ + elevationStep;
+                    EnsureElevationTickBudget(baseZ, topZ, elevationStep, profile.Line.Name);
                     double height = (topZ - baseZ) * exaggeration;
                     double width = Math.Max(1, profile.Line.MaxT - profile.Line.MinT);
                     double x0 = baseX, y0 = currentY, right = x0 + width;
@@ -279,6 +281,33 @@ namespace MiningVolume2023.Services
                 }
                 tr.Commit();
             }
+        }
+
+        // A user can set the CAD elevation-axis step as small as 0.1 m.
+        // Without a bound, long sections produce tens of thousands of lines
+        // and text labels per profile and can make AutoCAD appear frozen.
+        // This protects only CAD annotation; it NEVER changes the separate
+        // volume-band calculation parameters or silently coarsens a drawing.
+        private const int MaxElevationTicksPerProfile = 250;
+
+        private static void EnsureElevationTickBudget(
+            double baseZ, double topZ, double step, string profileName)
+        {
+            if (double.IsNaN(baseZ) || double.IsInfinity(baseZ) ||
+                double.IsNaN(topZ) || double.IsInfinity(topZ) ||
+                double.IsNaN(step) || double.IsInfinity(step) || step <= 0)
+                throw new InvalidOperationException(
+                    "Cao độ hoặc bước chia trục Z của mặt cắt không hợp lệ.");
+
+            double ticks = (topZ - baseZ) / step + 1.0;
+            if (double.IsNaN(ticks) || double.IsInfinity(ticks) ||
+                ticks > MaxElevationTicksPerProfile + 0.000001)
+                throw new InvalidOperationException(
+                    "Mặt cắt " + profileName +
+                    ": bước chia trục Z quá nhỏ so với dải cao độ, vượt " +
+                    MaxElevationTicksPerProfile.ToString("n0") +
+                    " vạch/nhãn trên CAD. Hãy tăng 'Bước chia trục Z, m' " +
+                    "rồi vẽ lại. Bước chia tầng tính khối lượng không thay đổi.");
         }
 
         private static BlockTableRecord ModelSpace(Database db, Transaction tr, bool write)
