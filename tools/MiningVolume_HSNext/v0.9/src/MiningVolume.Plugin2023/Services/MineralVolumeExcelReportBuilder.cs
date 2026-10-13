@@ -96,6 +96,10 @@ namespace MiningVolume2023.Services
                 Metadata("Đơn vị cấp trên",ExportWorkflowService.TkvParentHeading);
             Metadata("Đơn vị tính toán",string.IsNullOrWhiteSpace(state.MiningUnitName)?"Chưa thiết lập":state.MiningUnitName);
             Metadata("Loại đơn vị",state.MiningUnitGroup);
+            Metadata("Tỷ lệ mặt cắt (ngang / đứng)","1:1.000 / 1:1.000");
+            Metadata("Thông số mặt cắt",state.SectionParameterMode);
+            Metadata("Khoảng cách mặt cắt, m",state.SectionSpacing.ToString("0.###"));
+            Metadata("Bước chia trục Z, m",state.SectionAxisElevationInterval.ToString("0.###"));
             Metadata("Kỳ tính khối lượng",state.VolumePeriodLabel);
             Metadata("Thời điểm tính thành công",summary.CalculatedUtc?.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss")??"Chưa xác nhận");
             Metadata("Thời gian thực tính, giây",summary.CalculationSeconds?.ToString("0.000")??"Chưa xác nhận");
