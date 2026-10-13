@@ -82,9 +82,9 @@ namespace MiningVolume2023.UI
             };
             top.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 192F));
             top.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-            top.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 126F));
+            top.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 160F));
             for (int i = 0; i < 11; i++)
-                top.RowStyles.Add(new RowStyle(SizeType.Absolute, i < 2 ? 48F : 35F));
+                top.RowStyles.Add(new RowStyle(SizeType.Absolute, i < 2 ? 54F : 35F));
 
             _boundary = new Label
             {
@@ -272,9 +272,9 @@ namespace MiningVolume2023.UI
                 {
                     _parameterLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 192F));
                     _parameterLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-                    _parameterLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 126F));
+                    _parameterLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 160F));
                     for (int k = 0; k < 11; k++)
-                        _parameterLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, k < 2 ? 48F : 35F));
+                        _parameterLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, k < 2 ? 54F : 35F));
                 }
                 for (int i = 0; i < 11; i++)
                 {
