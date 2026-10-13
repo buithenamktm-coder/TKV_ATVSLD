@@ -138,7 +138,9 @@ namespace MiningVolume2023.Services
             AddKV(s, "Đơn vị tính toán", EmptyAsNotSet(unitName));
             AddKV(s, "Loại đơn vị", unitGroup);
             AddKV(s, "Thông số mặt cắt", st.SectionParameterMode);
-            AddKV(s, "Tỷ lệ mặt cắt (ngang / đứng)", "1:1.000 / 1:1.000");
+            AddKV(s, "Tỷ lệ mặt cắt (ngang / đứng)",
+                "1:" + st.HorizontalScale.ToString("N0") +
+                " / 1:" + st.VerticalScale.ToString("N0"));
             AddKV(s, "Bước tuyến thiết lập, m", st.SectionSpacing.ToString("0.###"));
             double? observedGap = MaxActualSectionGap(st.SectionSystem);
             if (observedGap.HasValue)
