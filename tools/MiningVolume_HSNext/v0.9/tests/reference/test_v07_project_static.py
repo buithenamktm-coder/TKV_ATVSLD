@@ -112,8 +112,10 @@ def test_project_scale_is_persisted_but_report_identity_is_fixed():
     service = read('src/MiningVolume.Plugin2023/Services/ExportWorkflowService.cs')
     for token in ['HorizontalScale', 'VerticalScale']:
         assert token in state
-    assert 'st.HorizontalScale = (double)_hScale.Value' in section
-    assert 'st.VerticalScale = (double)_vScale.Value' in section
+    assert 'st.HorizontalScale = 1000;' in section
+    assert 'st.VerticalScale = 1000;' in section
+    assert '_hScale.Enabled = false;' in section
+    assert '_vScale.Enabled = false;' in section
     assert 'ExportOptions.FixedDeveloperName' in export
     assert 'ExportOptions.FixedDeveloperContact' in export
     assert 'FixedDeveloperName = "Bùi Thế Nam"' in service
