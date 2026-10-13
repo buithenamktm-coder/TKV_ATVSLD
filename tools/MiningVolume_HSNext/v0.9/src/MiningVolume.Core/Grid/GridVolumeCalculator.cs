@@ -91,9 +91,14 @@ namespace MiningVolume.Core.Grid
                 throw new ArgumentException("TIN hiện trạng chưa hợp lệ.", nameof(existing));
             if (design == null || design.Triangles == null || design.Triangles.Count == 0)
                 throw new ArgumentException("TIN thiết kế chưa hợp lệ.", nameof(design));
-            // Do not globally reject an otherwise valid grid because of a
-            // remote double-Z point. Instead mark cells touched by the real
-            // vertical curtain as unverified; never silently choose a Z.
+            // A 3D vertical face has zero planimetric area and contributes
+            // zero to the integral of (Zexisting - Zdesign) over the XY grid.
+            // Both accepted TINs already contain the piecewise-planar support
+            // triangles, which MUST remain in the calculation even when
+            // duplicate-XY heights formed an upright curtain. Safety is
+            // enforced by the exact overlap/coverage check in the kernel:
+            // a true double-sheet/overlapping planar support is rejected.
+            // No source Z is deleted, averaged or chosen at runtime.
             if (options == null || options.Boundary == null || options.Boundary.Count < 3)
                 throw new ArgumentException("Cần đường bao khép kín có ít nhất ba đỉnh.", nameof(options));
             if (!Finite(options.SizeX) || !Finite(options.SizeY) ||
@@ -132,13 +137,6 @@ namespace MiningVolume.Core.Grid
             // O(vertices^2) ear-clipping passes for large mine boundaries.
             var clipBoundary = ExactGridCellCalculator.PrepareBoundary(
                 options.Boundary, options.Holes);
-            var unsafeCells = VerticalConflictFootprint.AffectedGridCells(
-                existing, design, options.Origin, options.SizeX, options.SizeY,
-                cos, sin, startI, endI, startJ, endJ);
-            // A collapsed multi-Z support vertex can affect every incident
-            // planar triangle, not only the zero-plan-area vertical curtain.
-            var rootIndex = new VerticalConflictFootprint.ConflictRootIndex(
-                existing, design, 1e-6);
             using (var existingIndex = new TriangleGridIndex(existing.Triangles, options, cos, sin))
             using (var designIndex = new TriangleGridIndex(design.Triangles, options, cos, sin))
             {
@@ -156,37 +154,25 @@ namespace MiningVolume.Core.Grid
                             World(u0 + options.SizeX, v0 + options.SizeY, options.Origin, cos, sin),
                             World(u0, v0 + options.SizeY, options.Origin, cos, sin)
                         };
-                        bool ambiguous = unsafeCells.Contains((checked((int)i),checked((int)j)));
-                        var tn = ambiguous ? (IReadOnlyList<Triangle3>)Array.Empty<Triangle3>()
-                            : existingIndex.Candidates((int)i, (int)j, cell);
-                        var tk = ambiguous ? (IReadOnlyList<Triangle3>)Array.Empty<Triangle3>()
-                            : designIndex.Candidates((int)i, (int)j, cell);
-                        if (!ambiguous && (rootIndex.AnyIncident(tn) || rootIndex.AnyIncident(tk)))
-                            ambiguous = true;
-                        // An incident support triangle has a non-authoritative Z
-                        // near the multi-Z root. Its volume is unverified; do not
-                        // silently use the CDT's arbitrarily retained elevation.
-                        if (ambiguous)
-                        {
-                            tn = Array.Empty<Triangle3>();
-                            tk = Array.Empty<Triangle3>();
-                        }
+                        // Integrate exactly over the XY support triangles.
+                        // The additional vertical 3DFACEs have ZERO XY area;
+                        // excluding entire incident cells invented "missing TIN"
+                        // over otherwise fully covered mine surfaces (KL mb.dxf).
+                        var tn = existingIndex.Candidates((int)i, (int)j, cell);
+                        var tk = designIndex.Candidates((int)i, (int)j, cell);
                         var volume = ExactGridCellCalculator.CalculatePrepared(tn, tk, cell, clipBoundary);
                         if (volume.CalculationArea > 1e-9)
                         {
                             double htArea=0, tkArea=0;
-                            if (!ambiguous)
+                            if (!volume.IsComplete)
                             {
-                                if (!volume.IsComplete)
-                                {
-                                    htArea=ExactGridCellCalculator.MeasureSurfaceCoveragePrepared(
-                                        tn,cell,clipBoundary);
-                                    tkArea=ExactGridCellCalculator.MeasureSurfaceCoveragePrepared(
-                                        tk,cell,clipBoundary);
-                                }
-                                else
-                                    htArea=tkArea=volume.CalculationArea;
+                                htArea=ExactGridCellCalculator.MeasureSurfaceCoveragePrepared(
+                                    tn,cell,clipBoundary);
+                                tkArea=ExactGridCellCalculator.MeasureSurfaceCoveragePrepared(
+                                    tk,cell,clipBoundary);
                             }
+                            else
+                                htArea=tkArea=volume.CalculationArea;
                             cells.Add(new GridVolumeCell
                             {
                                 I = checked((int)i), J = checked((int)j),
@@ -196,7 +182,7 @@ namespace MiningVolume.Core.Grid
                                 Volume = volume,
                                 ExistingCoveredArea=htArea,
                                 DesignCoveredArea=tkArea,
-                                IsVerticalConflict = ambiguous
+                                IsVerticalConflict = false
                             });
                         }
                         processed++;
