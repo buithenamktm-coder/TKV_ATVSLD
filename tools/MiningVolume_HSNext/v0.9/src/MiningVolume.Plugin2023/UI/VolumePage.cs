@@ -108,9 +108,11 @@ namespace MiningVolume2023.UI
                 st.VolumeCalculatedUtc = DateTime.UtcNow;
                 st.VolumeCalculationSeconds = watch.Elapsed.TotalSeconds;
                 BindResult(result);
-                _status.Text = result.Warnings.Count == 0
-                    ? $"Hoàn thành: {result.Intervals.Count:n0} khoảng mặt cắt; {result.Levels.Count:n0} tầng/mức."
-                    : $"Hoàn thành, có {result.Warnings.Count:n0} cảnh báo kiểm soát.";
+                _status.Text = !result.IsComplete
+                    ? $"CHƯA ĐẦY ĐỦ: {result.ExcludedIntervals:n0} khoảng chưa xác nhận; chỉ hiển thị phần khối lượng hợp lệ."
+                    : result.Warnings.Count == 0
+                        ? $"Hoàn thành: {result.Intervals.Count:n0} khoảng mặt cắt; {result.Levels.Count:n0} tầng/mức."
+                        : $"Hoàn thành, có {result.Warnings.Count:n0} cảnh báo kiểm soát.";
             }
             catch (Exception ex)
             {
@@ -154,7 +156,8 @@ namespace MiningVolume2023.UI
             foreach (var x in r.Levels)
                 _levels.Rows.Add(x.Band.Name, F3(x.Band.LowerZ), F3(x.Band.UpperZ), F2(x.CutVolume), F2(x.FillVolume), F2(x.NetVolume));
 
-            _totals.Text = $"Đào: {r.TotalCutVolume:n2} m³   |   Đắp: {r.TotalFillVolume:n2} m³   |   Chênh: {r.NetVolume:n2} m³";
+            _totals.Text = (r.IsComplete ? "" : "CHỈ PHẦN HỢP LỆ – CHƯA CHỐT  |  ") +
+                $"Đào: {r.TotalCutVolume:n2} m³   |   Đắp: {r.TotalFillVolume:n2} m³   |   Chênh: {r.NetVolume:n2} m³";
         }
 
         private static DataGridView Grid(string[] columns)
