@@ -88,10 +88,11 @@ namespace MiningVolume2023.Services
             double layoutGap = 90.0)
         {
             if (profiles == null || profiles.Count == 0) throw new InvalidOperationException("Chưa có dữ liệu mặt cắt.");
-            if (Math.Abs(horizontalScale - 1000.0) > 1e-9 ||
-                Math.Abs(verticalScale - 1000.0) > 1e-9)
-                throw new InvalidOperationException(
-                    "Tất cả mặt cắt V2.0 phải có tỷ lệ ngang 1:1.000 và tỷ lệ đứng 1:1.000.");
+            if (double.IsNaN(horizontalScale) || double.IsInfinity(horizontalScale) ||
+                double.IsNaN(verticalScale) || double.IsInfinity(verticalScale) ||
+                horizontalScale < 1 || verticalScale < 1)
+                throw new ArgumentOutOfRangeException(
+                    "Tỷ lệ ngang/đứng phải là số dương hợp lệ.");
             if (levelStep <= 0)
                 throw new ArgumentOutOfRangeException(nameof(levelStep),
                     "Bước chia trục cao độ trên mặt cắt phải lớn hơn 0.");
