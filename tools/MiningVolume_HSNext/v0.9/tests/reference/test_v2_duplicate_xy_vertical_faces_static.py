@@ -45,15 +45,16 @@ def test_user_sees_warning_not_manual_point_removal():
     assert "CẬP NHẬT MẶT CẮT" in ui
 
 
-def test_unreviewed_3d_vertical_faces_cannot_be_used_for_final_volume():
+def test_zero_plan_area_vertical_faces_do_not_quarantine_safely_sampled_sections():
     workflow = read("MiningVolume.Plugin2023/Services/VolumeWorkflowService.cs")
     sampler = read("MiningVolume.Core/Sections/TinSectionSampler.cs")
     page = read("MiningVolume.Plugin2023/UI/SectionPage.cs")
     core = read("MiningVolume.Core/Volumes/SectionVolumeCalculator.cs")
     projection = read("MiningVolume.Core/Surface/VerticalConflictFootprint.cs")
     export = read("MiningVolume.Plugin2023/UI/ExportPage.cs")
-    assert "VerticalConflictFootprint.TouchesSection(" in core
-    assert "VerticalConflictFootprint.TouchesStrip(" in core
+    assert "VerticalConflictFootprint.TouchesSection(" not in core
+    assert "VerticalConflictFootprint.TouchesStrip(" not in core
+    assert "upper < minZ-options.Tolerance" in core
     assert "p.HasData" in core and "!p.IsUserEdited" in core
     assert "AnnotateVerticalConflicts(" in sampler
     assert "MẶT ĐỨNG NHIỀU Z:" in sampler
