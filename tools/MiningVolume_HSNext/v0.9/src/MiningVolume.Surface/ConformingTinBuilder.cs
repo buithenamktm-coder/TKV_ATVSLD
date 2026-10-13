@@ -131,10 +131,23 @@ namespace MiningVolume.Surface
                         "SKIPPED_DEGENERATE_TRIANGLES", $"Bỏ qua {skippedDegenerate:n0} tam giác suy biến có diện tích XY bằng 0 chính xác; diện tích loại 0 m², đã kiểm bảo toàn đỉnh/breakline; giữ nguyên dữ liệu CAD gốc. Kiểm tra chất lượng TIN trước khi tính khối lượng."));
                     if (retainedSmall > 0) storedIssues.Add(new ValidationIssue(ValidationSeverity.Warning,
                         "RETAIN_SMALL_TRIANGLES", $"Giữ {retainedSmall:n0} tam giác diện tích nhỏ dương để bảo toàn điểm và breakline."));
-                    return new TinSurface(name, store, storedIssues,
-                        verticalFaces, input.VerticalConflictGroups,
-                    input.ConflictReport?.SameXYZDuplicates ?? 0,
-                        input.RelaxedBreaklineConstraints);
+                    try
+                    {
+                        var result = new TinSurface(name, store, storedIssues,
+                            verticalFaces, input.VerticalConflictGroups,
+                            input.ConflictReport?.SameXYZDuplicates ?? 0,
+                            input.RelaxedBreaklineConstraints);
+                        if (options.ClipBoundary != null)
+                            TinRegionIntegrityVerifier.Verify(result,
+                                options.ClipBoundary, options.XyTolerance * 10,
+                                cancellationToken);
+                        return result;
+                    }
+                    catch
+                    {
+                        store.Dispose(); // never retain an invalid file-backed mesh
+                        throw;
+                    }
                 }
                 var output = new List<Triangle3>(count);
                 var clipper = options.ClipBoundary == null ? null : new TinPolygonClipper(options.ClipBoundary, cancellationToken);
@@ -160,10 +173,15 @@ namespace MiningVolume.Surface
                     "SKIPPED_DEGENERATE_TRIANGLES", $"Bỏ qua {skippedDegenerateInMemory:n0} tam giác suy biến có diện tích XY bằng 0 chính xác; diện tích loại 0 m², đã kiểm bảo toàn đỉnh/breakline; giữ nguyên dữ liệu CAD gốc. Kiểm tra chất lượng TIN trước khi tính khối lượng."));
                 if (small > 0) issues.Add(new ValidationIssue(ValidationSeverity.Warning, "RETAIN_SMALL_TRIANGLES",
                     $"Giữ {small:n0} tam giác diện tích nhỏ dương để bảo toàn điểm và breakline."));
-                return new TinSurface(name, output, issues,
+                var clippedSurface = new TinSurface(name, output, issues,
                     verticalFaces, input.VerticalConflictGroups,
                     input.ConflictReport?.SameXYZDuplicates ?? 0,
-                        input.RelaxedBreaklineConstraints);
+                    input.RelaxedBreaklineConstraints);
+                if (options.ClipBoundary != null)
+                    TinRegionIntegrityVerifier.Verify(clippedSurface,
+                        options.ClipBoundary, options.XyTolerance * 10,
+                        cancellationToken);
+                return clippedSurface;
             }
             catch (DllNotFoundException ex) { throw new InvalidOperationException("Thiếu thư viện dựng TIN. Hãy cài lại đầy đủ bộ cài IMSAT VOLUME.", ex); }
             finally { if (mesh != IntPtr.Zero) mv_cdt_free(mesh); }
