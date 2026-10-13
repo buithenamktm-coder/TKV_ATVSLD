@@ -139,7 +139,11 @@ namespace MiningVolume2023.Services
             AddKV(s, "Loại đơn vị", unitGroup);
             AddKV(s, "Thông số mặt cắt", st.SectionParameterMode);
             AddKV(s, "Tỷ lệ mặt cắt (ngang / đứng)", "1:1.000 / 1:1.000");
-            AddKV(s, "Khoảng cách mặt cắt, m", st.SectionSpacing.ToString("0.###"));
+            AddKV(s, "Bước tuyến thiết lập, m", st.SectionSpacing.ToString("0.###"));
+            double? observedGap = MaxActualSectionGap(st.SectionSystem);
+            if (observedGap.HasValue)
+                AddKV(s, "Khoảng cách tuyến lớn nhất thực tế, m",
+                    observedGap.Value.ToString("0.###"));
             AddKV(s, "Bước chia trục Z, m", st.SectionAxisElevationInterval.ToString("0.###"));
             AddKV(s, "Mức chia tầng tính khối lượng, m", st.LevelStep.ToString("0.###"));
             AddKV(s, "Kỳ tính khối lượng", st.VolumePeriodLabel);
@@ -164,6 +168,25 @@ namespace MiningVolume2023.Services
             AddKV(s, "Quy tắc công thức theo từng dải cao độ", "1 đầu bằng 0: hình chóp; chênh F1-F2 ≤ 40%: TB hai đầu; chênh > 40%: hình chóp cụt");
             AddKV(s, "Nguyên tắc Excel", "Công thức tham chiếu trực tiếp các ô L, F1, F2 và tự đổi nhánh khi dữ liệu ô thay đổi");
             return s;
+        }
+
+        // Do not mislabel a manually moved/deleted section system by only
+        // showing the originally requested station step. Include the actual
+        // maximum projected gap, including both polygon-boundary margins.
+        private static double? MaxActualSectionGap(SectionSystem system)
+        {
+            if (system == null || system.Lines == null ||
+                system.Lines.Count == 0 || system.Boundary == null ||
+                system.Boundary.Count == 0)
+                return null;
+            var stations = system.Lines.Select(x => x.Offset).OrderBy(x => x).ToArray();
+            var projected = system.Boundary.Select(x =>
+                x.X * system.Normal.X + x.Y * system.Normal.Y).ToArray();
+            double gap = Math.Max(stations[0] - projected.Min(),
+                projected.Max() - stations[stations.Length - 1]);
+            for (int i = 1; i < stations.Length; i++)
+                gap = Math.Max(gap, stations[i] - stations[i - 1]);
+            return Math.Max(0.0, gap);
         }
 
         private static ReportSheet BuildSourceXyzSheet(ProjectState st)
