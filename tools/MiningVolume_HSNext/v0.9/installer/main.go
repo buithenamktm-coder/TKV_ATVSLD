@@ -55,9 +55,8 @@ func install() {
     cad, err := findAutoCAD2023()
     if err != nil { msg(err.Error(), 0x10); return }
 
-    temp := filepath.Join(os.TempDir(), fmt.Sprintf("MiningVolume_%s_%d", version, os.Getpid()))
-    os.RemoveAll(temp)
-    if err := os.MkdirAll(temp, 0755); err != nil { msg(err.Error(), 0x10); return }
+    temp, err := os.MkdirTemp("", "MiningVolume_"+version+"_")
+    if err != nil { msg(err.Error(), 0x10); return }
     defer os.RemoveAll(temp)
     if err := extractPayload(temp); err != nil { msg("Không giải nén được bộ cài: "+err.Error(), 0x10); return }
 
@@ -131,7 +130,10 @@ func validatePrebuiltBundle(root string) error {
         filepath.Join(windowsDir, "MiningVolume.Cad2023.dll"),
     }
     for _, p := range required {
-        if !exists(p) { return fmt.Errorf("Thiếu file Release: %s", filepath.Base(p)) }
+        info, err := os.Stat(p)
+        if err != nil || !info.Mode().IsRegular() || info.Size() == 0 {
+            return fmt.Errorf("File Release thiếu, rỗng hoặc không hợp lệ: %s", filepath.Base(p))
+        }
     }
 
     entries, err := os.ReadDir(windowsDir)
@@ -147,16 +149,69 @@ func validatePrebuiltBundle(root string) error {
 
     xmlBytes, err := os.ReadFile(packageXml)
     if err != nil { return fmt.Errorf("Không đọc được PackageContents.xml: %w", err) }
-    xmlText := string(xmlBytes)
-    for _, token := range []string{
-        `AppVersion="`+version+`"`,
-        `SeriesMin="R24.2"`,
-        `SeriesMax="R24.2"`,
-        `LoadOnAutoCADStartup="True"`,
-    } {
-        if !strings.Contains(xmlText, token) {
-            return fmt.Errorf("PackageContents.xml thiếu cấu hình bắt buộc: %s", token)
+    return validatePackageXML(xmlBytes)
+}
+
+// Validate the actual loader tree, not text tokens (which can occur in comments
+// or on a different component). This payload is deliberately R24.2-only.
+func validatePackageXML(data []byte) error {
+    decoder := xml.NewDecoder(bytes.NewReader(data))
+    depth, roots := 0, 0
+    for {
+        token, err := decoder.Token()
+        if err == io.EOF { break }
+        if err != nil { return fmt.Errorf("PackageContents.xml không hợp lệ: %w", err) }
+        switch v := token.(type) {
+        case xml.StartElement:
+            if depth == 0 { roots++ }
+            depth++
+            seen := map[xml.Name]bool{}
+            for _, a := range v.Attr {
+                if seen[a.Name] { return fmt.Errorf("Thuộc tính XML bị lặp: %s", a.Name.Local) }
+                seen[a.Name] = true
+            }
+        case xml.EndElement:
+            depth--
+        case xml.Directive:
+            return fmt.Errorf("Không chấp nhận directive trong package XML")
         }
+    }
+    if roots != 1 || depth != 0 { return fmt.Errorf("Package XML phải có đúng một root") }
+    type requirements struct {
+        OS string `xml:"OS,attr"`
+        Platform string `xml:"Platform,attr"`
+        Min string `xml:"SeriesMin,attr"`
+        Max string `xml:"SeriesMax,attr"`
+    }
+    type entry struct {
+        Name string `xml:"AppName,attr"`
+        Version string `xml:"Version,attr"`
+        Module string `xml:"ModuleName,attr"`
+        Startup string `xml:"LoadOnAutoCADStartup,attr"`
+    }
+    var p struct {
+        XMLName xml.Name `xml:"ApplicationPackage"`
+        Version string `xml:"AppVersion,attr"`
+        Requirements []requirements `xml:"RuntimeRequirements"`
+        Entries []entry `xml:"ComponentEntry"`
+        Components []struct {
+            Requirements []requirements `xml:"RuntimeRequirements"`
+            Entries []entry `xml:"ComponentEntry"`
+        } `xml:"Components"`
+    }
+    if err := xml.Unmarshal(data, &p); err != nil { return err }
+    valid := func(r []requirements) bool {
+        return len(r)==1 && r[0].OS=="Win64" && r[0].Platform=="AutoCAD*" &&
+            r[0].Min=="R24.2" && r[0].Max=="R24.2"
+    }
+    if p.XMLName.Space!="" || p.Version!=version || !valid(p.Requirements) || len(p.Entries)!=0 ||
+        len(p.Components)!=1 || !valid(p.Components[0].Requirements) || len(p.Components[0].Entries)!=1 {
+        return fmt.Errorf("Package không khớp phiên bản và phạm vi AutoCAD R24.2 x64")
+    }
+    e := p.Components[0].Entries[0]
+    if e.Name!="MiningVolume2023" || e.Version!=version || e.Startup!="True" ||
+        e.Module!="./Contents/Windows/MiningVolume2023.dll" {
+        return fmt.Errorf("Module tự nạp không khớp DLL đã kiểm chứng trong bộ cài")
     }
     return nil
 }
@@ -506,14 +561,51 @@ func detectAutoCADHosts() []cadHost {
 
 func extractPayload(dst string) error {
     b,err:=payloadFS.ReadFile("payload.zip"); if err!=nil{return err}
+    return extractZipPayload(b,dst)
+}
+
+func payloadRelativePath(name string) (string,error) {
+    normalized := strings.TrimSuffix(strings.ReplaceAll(name,`\`,"/"),"/")
+    // IsLocal uses Windows volume/device-name rules on the installer host.
+    // Reject aliases too, so two archive entries cannot name the same file.
+    for _,part := range strings.Split(normalized,"/") {
+        if part=="" || part=="." || part==".." || strings.TrimRight(part," .")!=part ||
+            strings.ContainsAny(part,":\x00") || !filepath.IsLocal(part) {
+            return "",fmt.Errorf("payload path không hợp lệ: %s",name)
+        }
+    }
+    clean := filepath.FromSlash(normalized)
+    if !filepath.IsLocal(clean) { return "",fmt.Errorf("payload path không nằm trong bộ cài") }
+    return clean,nil
+}
+
+func extractZipPayload(b []byte, dst string) error {
     zr,err:=zip.NewReader(bytes.NewReader(b),int64(len(b))); if err!=nil{return err}
-    for _,f:=range zr.File {
-        clean:=filepath.Clean(f.Name); if strings.HasPrefix(clean,"..") { return fmt.Errorf("payload path không hợp lệ") }
+    paths:=make([]string,len(zr.File))
+    seen:=map[string]bool{}
+    // Validate every entry before writing any bytes. ZIP symlinks and Windows
+    // path aliases must not escape or overwrite an earlier validated module.
+    for i,f:=range zr.File {
+        clean,e:=payloadRelativePath(f.Name);if e!=nil{return e}
+        if f.Mode().Type()!=0 && f.Mode().Type()!=os.ModeDir{return fmt.Errorf("payload chứa loại file không được phép")}
+        key:=strings.ToLower(clean)
+        if _,duplicate:=seen[key];duplicate{return fmt.Errorf("payload chứa đường dẫn trùng: %s",f.Name)}
+        paths[i]=clean;seen[key]=f.FileInfo().IsDir()
+    }
+    for _,clean:=range paths {
+        for parent:=filepath.Dir(clean);parent!=".";parent=filepath.Dir(parent) {
+            if directory,found:=seen[strings.ToLower(parent)];found&&!directory{return fmt.Errorf("payload dùng file làm thư mục")}
+        }
+    }
+    for i,f:=range zr.File {
+        clean:=paths[i]
         path:=filepath.Join(dst,clean)
-        if f.FileInfo().IsDir(){ os.MkdirAll(path,0755); continue }
+        if f.FileInfo().IsDir(){ if err:=os.MkdirAll(path,0755);err!=nil{return err};continue }
         if err:=os.MkdirAll(filepath.Dir(path),0755);err!=nil{return err}
-        rc,err:=f.Open(); if err!=nil{return err}; w,err:=os.Create(path); if err!=nil{rc.Close();return err}
-        _,e:=io.Copy(w,rc); w.Close(); rc.Close(); if e!=nil{return e}
+        rc,err:=f.Open(); if err!=nil{return err}
+        w,err:=os.OpenFile(path,os.O_CREATE|os.O_EXCL|os.O_WRONLY,0644); if err!=nil{rc.Close();return err}
+        _,e:=io.Copy(w,rc);closeErr:=w.Close();readErr:=rc.Close()
+        if e!=nil{return e};if closeErr!=nil{return closeErr};if readErr!=nil{return readErr}
     }
     return nil
 }

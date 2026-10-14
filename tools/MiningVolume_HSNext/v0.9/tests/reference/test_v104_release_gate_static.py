@@ -200,10 +200,13 @@ def test_installer_rejects_foreign_dlls_and_wrong_package_metadata():
     ]:
         assert dll in installer
     assert "Bundle chứa DLL ngoài danh sách cho phép" in installer
-    assert '`AppVersion="`+version+`"`' in installer  # Actual package validation runs in Go tests
-    assert 'SeriesMin="R24.2"' in installer
-    assert 'SeriesMax="R24.2"' in installer
-    assert 'LoadOnAutoCADStartup="True"' in installer
+    # Validate the parsed loader tree; text tokens may occur in XML comments.
+    assert 'return validatePackageXML(xmlBytes)' in installer
+    assert 'xml.Unmarshal(data, &p)' in installer
+    assert 'p.Version!=version' in installer
+    assert 'r[0].Min=="R24.2"' in installer
+    assert 'r[0].Max=="R24.2"' in installer
+    assert 'e.Startup!="True"' in installer
 
 
 def test_autocad2023_version_accepts_autodesk_r24_2_prefix():

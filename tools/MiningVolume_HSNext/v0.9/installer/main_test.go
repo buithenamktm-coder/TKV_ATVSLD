@@ -3,6 +3,8 @@
 package main
 
 import (
+    "archive/zip"
+    "bytes"
     "os"
     "crypto/sha256"
     "encoding/hex"
@@ -11,6 +13,75 @@ import (
     "strings"
     "testing"
 )
+
+func validPackageXML() string {
+    return `<ApplicationPackage AppVersion="`+version+`"><RuntimeRequirements OS="Win64" Platform="AutoCAD*" SeriesMin="R24.2" SeriesMax="R24.2"/><Components><RuntimeRequirements OS="Win64" Platform="AutoCAD*" SeriesMin="R24.2" SeriesMax="R24.2"/><ComponentEntry AppName="MiningVolume2023" Version="`+version+`" ModuleName="./Contents/Windows/MiningVolume2023.dll" LoadOnAutoCADStartup="True"/></Components></ApplicationPackage>`
+}
+
+func TestPackageLoaderStructureRejectsWrongModuleAndCommentTokens(t *testing.T) {
+    good:=validPackageXML()
+    if e:=validatePackageXML([]byte(good));e!=nil{t.Fatal(e)}
+    oldVersion:=version
+    version="2.0.0"
+    err:=validatePackageXML([]byte(validPackageXML()))
+    version=oldVersion
+    if err!=nil{t.Fatal("V2 package rejected",err)}
+    cases:=[]string{
+        `<ApplicationPackage AppVersion="`+version+`"><!-- SeriesMin="R24.2" SeriesMax="R24.2" LoadOnAutoCADStartup="True" --></ApplicationPackage>`,
+        strings.Replace(good,`ModuleName="./Contents/Windows/MiningVolume2023.dll"`,`ModuleName="../old/MiningVolume2023.dll"`,1),
+        strings.Replace(good,`SeriesMax="R24.2"`,`SeriesMax="R25.1"`,1),
+        strings.ReplaceAll(good,`OS="Win64"`,`OS="Win32"`),
+        strings.Replace(good,`LoadOnAutoCADStartup="True"`,`LoadOnAutoCADStartup="False"`,1),
+        strings.Replace(good,`</Components>`,`<ComponentEntry AppName="Foreign" ModuleName="foreign.dll"/></Components>`,1),
+        strings.Replace(good,`AppVersion="`+version+`"`,`AppVersion="0.0.0" AppVersion="`+version+`"`,1),
+        good+good,
+        strings.Replace(good,`<ApplicationPackage `,`<ApplicationPackage xmlns="urn:other" `,1),
+        good[:len(good)-5],
+    }
+    for i,data:=range cases {if validatePackageXML([]byte(data))==nil{t.Fatalf("Invalid loader structure accepted: %d",i)}}
+}
+
+func testZip(t *testing.T, names []string, mode os.FileMode) []byte {
+    t.Helper();var b bytes.Buffer;w:=zip.NewWriter(&b)
+    for _,name:=range names {
+        header:=&zip.FileHeader{Name:name,Method:zip.Store};header.SetMode(mode)
+        f,e:=w.CreateHeader(header);if e!=nil{t.Fatal(e)}
+        if _,e=f.Write([]byte("fixture"));e!=nil{t.Fatal(e)}
+    }
+    if e:=w.Close();e!=nil{t.Fatal(e)};return b.Bytes()
+}
+
+func TestPayloadRejectsEscapeAliasesAndLinksBeforeWriting(t *testing.T) {
+    for _,name:=range []string{"../escape.dll",`..\escape.dll`,"/escape.dll",`C:\escape.dll`,
+        `C:escape.dll`,`\\server\share\escape.dll`,"bundle/../escape.dll","bundle/./file.dll",
+        "bundle//file.dll","bundle/file.dll:stream","bundle/CON","bundle/file.dll.","bundle/file.dll "} {
+        root:=t.TempDir()
+        // A valid first entry must not be written if a later path is invalid.
+        if e:=extractZipPayload(testZip(t,[]string{"valid.dll",name},0644),root);e==nil{t.Fatalf("Invalid path accepted: %s",name)}
+        entries,e:=os.ReadDir(root);if e!=nil||len(entries)!=0{t.Fatal("Archive partially written before path validation",e)}
+    }
+    for _,names:=range [][]string{{"bundle/a.dll","BUNDLE/A.DLL"},{"bundle","bundle/a.dll"}} {
+        if e:=extractZipPayload(testZip(t,names,0644),t.TempDir());e==nil{t.Fatal("Duplicate or file-parent archive accepted")}
+    }
+    if e:=extractZipPayload(testZip(t,[]string{"bundle/link"},os.ModeSymlink|0777),t.TempDir());e==nil{t.Fatal("ZIP symlink accepted")}
+}
+
+func TestPayloadExtractsVerifiedPathsWithoutOverwritingExistingFiles(t *testing.T) {
+    root:=t.TempDir();data:=testZip(t,[]string{"bundle/a.dll",`bundle\b.dll`},0644)
+    if e:=extractZipPayload(data,root);e!=nil{t.Fatal(e)}
+    p:=filepath.Join(root,"bundle","a.dll")
+    got,e:=os.ReadFile(p);if e!=nil||string(got)!="fixture"{t.Fatal("Extraction failed",e)}
+    if e=os.WriteFile(p,[]byte("keep existing"),0644);e!=nil{t.Fatal(e)}
+    if extractZipPayload(data,root)==nil{t.Fatal("Existing staging file overwritten")}
+    got,e=os.ReadFile(p);if e!=nil||string(got)!="keep existing"{t.Fatal("Existing data changed",e)}
+}
+
+func TestEmbeddedReleasePayloadExtractsAndMatchesLoaderAndHashes(t *testing.T) {
+    // Exercise the actual CI-built payload, not just fixture DLL strings.
+    root:=t.TempDir()
+    if e:=extractPayload(root);e!=nil{t.Fatal(e)}
+    if e:=validatePrebuiltBundle(filepath.Join(root,"bundle","MiningVolume2023.bundle"));e!=nil{t.Fatal(e)}
+}
 
 func TestCADReleaseAndRuntimeClassification(t *testing.T) {
     cases:=[]struct{major,minor,clr,year int;flavor string}{
@@ -59,7 +130,7 @@ func TestWindowsExecutableVersionAndInvalidHostDetection(t *testing.T) {
 func TestBundleVersionAndForeignDLL(t *testing.T) {
     root:=t.TempDir(); dir:=filepath.Join(root,"Contents","Windows");os.MkdirAll(dir,0755)
     for _,f:=range []string{"MiningVolume2023.dll","MiningVolume.Core.dll","MiningVolume.Surface.dll","MiningVolume.Cdt.Native.dll","MiningVolume.Cad2023.dll","LICENSE-CDT.txt","NOTICE.txt"} {os.WriteFile(filepath.Join(dir,f),[]byte("fixture"),0644)}
-    xml:=`<ApplicationPackage AppVersion="`+version+`"><RuntimeRequirements SeriesMin="R24.2" SeriesMax="R24.2"/><ComponentEntry LoadOnAutoCADStartup="True"/></ApplicationPackage>`
+    xml:=validPackageXML()
     os.WriteFile(filepath.Join(root,"PackageContents.xml"),[]byte(xml),0644)
     if err:=validatePrebuiltBundle(root);err!=nil{t.Fatal(err)}
     got,err:=bundleVersion(root);if err!=nil||got!=version{t.Fatal(got,err)}
@@ -67,6 +138,9 @@ func TestBundleVersionAndForeignDLL(t *testing.T) {
     if validatePrebuiltBundle(root)==nil {t.Fatal("foreign DLL accepted")};os.Remove(filepath.Join(dir,"foreign.dll"))
     os.WriteFile(filepath.Join(root,"PackageContents.xml"),[]byte(strings.ReplaceAll(xml,version,"0.0.0")),0644)
     if validatePrebuiltBundle(root)==nil {t.Fatal("wrong AppVersion accepted")}
+    os.WriteFile(filepath.Join(root,"PackageContents.xml"),[]byte(xml),0644)
+    os.WriteFile(filepath.Join(dir,"MiningVolume2023.dll"),nil,0644)
+    if validatePrebuiltBundle(root)==nil {t.Fatal("empty DLL accepted")}
 }
 
 func TestRegistrationRollbackPreservesFilesAndRegistry(t *testing.T) {
