@@ -27,6 +27,7 @@ namespace MiningVolume2023.UI
         private readonly Label _status;
         private bool _syncing;
         private readonly bool _quickOnly;
+        private readonly Action<AppPage> _navigate;
         private bool _compactParameters;
         private readonly TableLayoutPanel _rootLayout;
         private readonly TableLayoutPanel _parameterLayout;
@@ -34,11 +35,14 @@ namespace MiningVolume2023.UI
         private readonly Control[] _parameterValues = new Control[11];
         private readonly Control[] _parameterActions = new Control[11];
 
-        public SectionPage() : this(false) { }
+        public SectionPage() : this(false, null) { }
 
-        public SectionPage(bool quickOnly)
+        public SectionPage(bool quickOnly) : this(quickOnly, null) { }
+
+        public SectionPage(bool quickOnly, Action<AppPage> navigate)
         {
             _quickOnly = quickOnly;
+            _navigate = navigate;
             Font = new Font("Arial", 9F);
             BackColor = Color.White;
 
@@ -190,6 +194,12 @@ namespace MiningVolume2023.UI
             updateEdited.Font = new Font("Arial", 9F, FontStyle.Bold);
             updateEdited.MinimumSize = new Size(175, 36);
             tools.Controls.Add(updateEdited);
+            if (!_quickOnly && _navigate != null)
+            {
+                tools.Controls.Add(Button("Tính khối lượng", (sender, args) => _navigate(AppPage.Volume)));
+                tools.Controls.Add(Button("Vỉa than/quặng", (sender, args) => _navigate(AppPage.Mineral)));
+                tools.Controls.Add(Button("Xuất CAD / Excel", (sender, args) => _navigate(AppPage.Export)));
+            }
             root.Controls.Add(tools, 0, 3);
 
             _status = new Label
