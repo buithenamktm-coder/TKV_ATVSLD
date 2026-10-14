@@ -316,6 +316,31 @@ namespace MiningVolume2023.UI
         {
             if (!_pages.TryGetValue(page, out var control)) return;
 
+            // Public MV_* commands can open a legacy page directly.
+            // Keep the simplified 5-group navigation in sync with that page.
+            AppPage targetGroup;
+            switch (page)
+            {
+                case AppPage.Data:
+                case AppPage.Model: targetGroup = AppPage.Model; break;
+                case AppPage.Section:
+                case AppPage.Volume:
+                case AppPage.Grid:
+                case AppPage.Mineral:
+                case AppPage.Export: targetGroup = AppPage.Volume; break;
+                default: targetGroup = page; break;
+            }
+            if (_currentGroup != targetGroup)
+            {
+                _currentGroup = targetGroup;
+                _updatingNav = true;
+                _subNavigation.Items.Clear();
+                foreach (var member in GetGroupPages(targetGroup))
+                    _subNavigation.Items.Add(PageLabel(member));
+                _subNavigationPanel.Visible = _subNavigation.Items.Count > 1;
+                _updatingNav = false;
+            }
+
             _currentPage = page;
             _content.SuspendLayout();
             _content.Controls.Clear();
