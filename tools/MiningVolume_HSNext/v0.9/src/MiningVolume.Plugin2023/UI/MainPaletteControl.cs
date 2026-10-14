@@ -23,6 +23,8 @@ namespace MiningVolume2023.UI
         private readonly AppPage[] _groups = { AppPage.Project, AppPage.Model, AppPage.Volume, AppPage.QuickSection, AppPage.License };
         private AppPage _currentGroup = AppPage.Project;
         private bool _updatingNav;
+        private bool _showAdvancedVolume;
+        private readonly Button _advancedVolumeButton;
 
         public MainPaletteControl()
         {
@@ -63,11 +65,21 @@ namespace MiningVolume2023.UI
             _subNavigation.SelectedIndexChanged += (sender, args) =>
             {
                 if (_updatingNav || _subNavigation.SelectedIndex < 0) return;
-                var pages = GetGroupPages(_currentGroup);
+                var pages = VisiblePages(_currentGroup);
                 if (_subNavigation.SelectedIndex < pages.Length) ShowPage(pages[_subNavigation.SelectedIndex]);
             };
             _subNavigationPanel = new Panel { Dock = DockStyle.Top, Height = 42, Padding = new Padding(12, 5, 12, 5), BackColor = UiTheme.Canvas };
+            _advancedVolumeButton = new Button {
+                Dock = DockStyle.Right, Width = 116, Text = "Nâng cao",
+                Visible = false, FlatStyle = FlatStyle.Flat, Font = new Font("Arial", 9F)
+            };
+            _advancedVolumeButton.FlatAppearance.BorderSize = 0;
+            _advancedVolumeButton.Click += (sender, args) => {
+                _showAdvancedVolume = !_showAdvancedVolume;
+                ShowGroup(AppPage.Volume);
+            };
             _subNavigationPanel.Controls.Add(_subNavigation);
+            _subNavigationPanel.Controls.Add(_advancedVolumeButton);
             Controls.Add(_content);
             Controls.Add(_subNavigationPanel);
             Controls.Add(_compactHeader);
@@ -277,9 +289,16 @@ namespace MiningVolume2023.UI
             switch (group)
             {
                 case AppPage.Model: return new[] { AppPage.Data, AppPage.Model };
-                case AppPage.Volume: return new[] { AppPage.Section, AppPage.Volume, AppPage.Grid, AppPage.Mineral, AppPage.Export };
+                case AppPage.Volume: return new[] { AppPage.Section, AppPage.Grid };
                 default: return new[] { group };
             }
+        }
+
+        private AppPage[] VisiblePages(AppPage group)
+        {
+            if (group == AppPage.Volume && _showAdvancedVolume)
+                return new[] { AppPage.Section, AppPage.Grid, AppPage.Volume, AppPage.Mineral, AppPage.Export };
+            return GetGroupPages(group);
         }
 
         private static string PageLabel(AppPage page)
@@ -300,7 +319,9 @@ namespace MiningVolume2023.UI
         public void ShowGroup(AppPage group)
         {
             _currentGroup = group;
-            var pages = GetGroupPages(group);
+            var pages = VisiblePages(group);
+            _advancedVolumeButton.Visible = group == AppPage.Volume;
+            _advancedVolumeButton.Text = _showAdvancedVolume ? "Ẩn nâng cao" : "Nâng cao";
             _updatingNav = true;
             _subNavigation.Items.Clear();
             foreach (var page in pages) _subNavigation.Items.Add(PageLabel(page));
@@ -330,12 +351,14 @@ namespace MiningVolume2023.UI
                 case AppPage.Export: targetGroup = AppPage.Volume; break;
                 default: targetGroup = page; break;
             }
+            if (targetGroup == AppPage.Volume && page != AppPage.Section && page != AppPage.Grid)
+                _showAdvancedVolume = true;
             if (_currentGroup != targetGroup)
             {
                 _currentGroup = targetGroup;
                 _updatingNav = true;
                 _subNavigation.Items.Clear();
-                foreach (var member in GetGroupPages(targetGroup))
+                foreach (var member in VisiblePages(targetGroup))
                     _subNavigation.Items.Add(PageLabel(member));
                 _subNavigationPanel.Visible = _subNavigation.Items.Count > 1;
                 _updatingNav = false;
@@ -348,7 +371,13 @@ namespace MiningVolume2023.UI
             _content.Controls.Add(control);
             _content.ResumeLayout();
             _updatingNav = true;
-            var groupPages = GetGroupPages(_currentGroup);
+            _advancedVolumeButton.Visible = _currentGroup == AppPage.Volume;
+            _advancedVolumeButton.Text = _showAdvancedVolume ? "Ẩn nâng cao" : "Nâng cao";
+            _updatingNav = true;
+            _subNavigation.Items.Clear();
+            foreach (var member in VisiblePages(_currentGroup))
+                _subNavigation.Items.Add(PageLabel(member));
+            var groupPages = VisiblePages(_currentGroup);
             int subIndex = Array.IndexOf(groupPages, page);
             if (subIndex >= 0) _subNavigation.SelectedIndex = subIndex;
             int groupIndex = Array.IndexOf(_groups, _currentGroup);
