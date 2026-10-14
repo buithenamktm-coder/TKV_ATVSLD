@@ -67,7 +67,7 @@ namespace MiningVolume2023.UI
             settings.Controls.Add(_scopeCaption,0,0);
             settings.Controls.Add(_boundary,1,0);
             settings.SetColumnSpan(_boundary,3);
-            var pick=_pickBoundary=Btn("CHỌN TRÊN CAD",(s,e)=>ChooseBoundary());
+            var pick=_pickBoundary=Btn("Chọn trên CAD",(s,e)=>ChooseBoundary());
             settings.Controls.Add(pick,4,0);settings.SetColumnSpan(pick,2);
             _sizeX=Num(20,0.1M,100000);
             _sizeY=Num(20,0.1M,100000);
@@ -95,10 +95,10 @@ namespace MiningVolume2023.UI
             root.Controls.Add(settings,0,2);
 
             var actions=_actionPanel=new FlowLayoutPanel {Dock=DockStyle.Fill,WrapContents=true,Padding=new Padding(4,3,4,3)};
-            _calculate=Btn("TÍNH LƯỚI",async(s,e)=>await CalculateAsync());
-            _cancel=Btn("HỦY TÍNH",(s,e)=>_cts?.Cancel());
-            _draw=Btn("VẼ LƯỚI CAD",(s,e)=>DrawCad());
-            _excel=Btn("XUẤT EXCEL",async(s,e)=>await ExportExcelAsync());
+            _calculate=Btn("Tính khối lượng",async(s,e)=>await CalculateAsync());
+            _cancel=Btn("Hủy tính",(s,e)=>_cts?.Cancel());
+            _draw=Btn("Vẽ lưới CAD",(s,e)=>DrawCad());
+            _excel=Btn("Xuất Excel",async(s,e)=>await ExportExcelAsync());
             _labels=new CheckBox{Text="Nhãn thể tích trên ô",Checked=false,
                 AutoSize=true,Margin=new Padding(10,9,4,4)};
             actions.Controls.Add(_calculate);actions.Controls.Add(_cancel);
