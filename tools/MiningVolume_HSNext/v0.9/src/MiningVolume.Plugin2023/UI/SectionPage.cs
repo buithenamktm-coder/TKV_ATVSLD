@@ -33,7 +33,9 @@ namespace MiningVolume2023.UI
         private readonly Control[] _parameterValues = new Control[11];
         private readonly Control[] _parameterActions = new Control[11];
 
-        public SectionPage()
+        public SectionPage() : this(false) { }
+
+        public SectionPage(bool quickOnly)
         {
             Font = new Font("Arial", 9F);
             BackColor = Color.White;
@@ -233,6 +235,29 @@ namespace MiningVolume2023.UI
             };
             ApplyResponsiveParameterLayout();
             AdjustParameterHeightToAvailableSpace();
+            if (quickOnly)
+            {
+                title.Text = "Vẽ nhanh mặt cắt";
+                preview.Visible = false;
+                draw.Visible = false;
+                primary.SetColumnSpan(quick, 3);
+                tools.Visible = false;
+                _grid.Visible = false;
+                _rootLayout.RowStyles[1].Height = 155F;
+                _rootLayout.RowStyles[3].Height = 0F;
+                _rootLayout.RowStyles[5].Height = 0F;
+                for (int i = 0; i < 11; i++)
+                {
+                    bool show = i == 8 || i == 9 || i == 10;
+                    _parameterLabels[i].Visible = show;
+                    _parameterValues[i].Visible = show;
+                    _parameterActions[i].Visible = false;
+                    _parameterLayout.RowStyles[i].Height = show ? 39F : 0F;
+                }
+                _hScale.Enabled = true;
+                _vScale.Enabled = true;
+                _status.Text = "Chọn tuyến trên CAD để vẽ mặt cắt nhanh từ TIN.";
+            }
         }
 
         private void AdjustParameterHeightToAvailableSpace()
