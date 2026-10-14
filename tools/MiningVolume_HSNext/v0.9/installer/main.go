@@ -500,10 +500,12 @@ func executableVersion(file string) (uint32,uint32,error) {
     data:=make([]byte,int(size))
     ok,_,_:=dll.NewProc("GetFileVersionInfoW").Call(uintptr(unsafe.Pointer(ptr)),0,size,uintptr(unsafe.Pointer(&data[0])))
     if ok==0{return 0,0,fmt.Errorf("Version EXE không hợp lệ")}
-    root,_:=syscall.UTF16PtrFromString(`\`);var value uintptr;var length uint32
+    // VerQueryValueW writes a pointer into data. Keep it as a pointer rather
+    // than storing it as uintptr and converting back outside the syscall.
+    root,_:=syscall.UTF16PtrFromString(`\`);var value unsafe.Pointer;var length uint32
     ok,_,_ =dll.NewProc("VerQueryValueW").Call(uintptr(unsafe.Pointer(&data[0])),uintptr(unsafe.Pointer(root)),uintptr(unsafe.Pointer(&value)),uintptr(unsafe.Pointer(&length)))
-    if ok==0 || value==0 || length<52{return 0,0,fmt.Errorf("Thiếu VS_FIXEDFILEINFO")}
-    info:=(*[13]uint32)(unsafe.Pointer(value))
+    if ok==0 || value==nil || length<52{return 0,0,fmt.Errorf("Thiếu VS_FIXEDFILEINFO")}
+    info:=(*[13]uint32)(value)
     if info[0]!=0xFEEF04BD{return 0,0,fmt.Errorf("Sai chữ ký version EXE")}
     ms,ls:=info[2],info[3];runtime.KeepAlive(data)
     return ms,ls,nil

@@ -30,7 +30,14 @@ still performed only after payload validation succeeds.
 
 ## Verification and limits
 
-- Local Python suite: 330 tests and 4 subtests PASS.
+MC-016: Windows logs exposed a masked `go vet` failure in the executable-version
+reader. `VerQueryValueW` now writes into an `unsafe.Pointer`, avoiding a deferred
+uintptr-to-pointer conversion; the buffer is still kept alive through the read.
+The existing Windows version-resource test exercises this call. CI now checks
+the vet exit code immediately, before running tests, so a subsequent successful
+command cannot overwrite that failure. Earlier green runs did not prove vet PASS.
+
+- Local Python suite: 331 tests and 4 subtests PASS.
 - Windows Go tests include malformed loader configurations, path aliases and
   traversal, ZIP links, valid extraction, preservation of existing files, empty
   DLL rejection, and extraction/loader/hash validation of the **actual embedded

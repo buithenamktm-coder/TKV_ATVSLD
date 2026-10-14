@@ -5,6 +5,12 @@ ROOT = Path(__file__).resolve().parents[2]
 def read(rel):
     return (ROOT / rel).read_text(encoding="utf-8")
 
+def test_installer_vet_failure_cannot_be_masked_by_following_test_command():
+    workflow = read("../../../.github/workflows/build-miningvolume-autocad2023.yml")
+    commands = [line.strip() for line in workflow.splitlines() if line.strip()]
+    index = commands.index("go vet main.go")
+    assert commands[index + 1] == 'if ($LASTEXITCODE -ne 0) { throw "Installer go vet failed." }'
+
 def test_project_restore_rebuilds_saved_tin_pair_atomically():
     s = read("src/MiningVolume.Plugin2023/Services/ProjectPersistenceService.cs")
     assert "RebuildSavedTins" in s
