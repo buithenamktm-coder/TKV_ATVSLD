@@ -431,6 +431,18 @@ func findAutoCAD2023() (string,error) {
         // release never authorizes relabeling or loading this DLL there.
         if host.Year==2023 && host.Flavor=="ACAD2023_NET48" && host.Error=="" {return host.Directory,nil}
     }
+    // Autodesk allows installing AutoCAD on a custom drive. Offer an explicit
+    // file picker only when registry/default discovery failed. Always validate
+    // the selected binary against the same x64/R24.2/managed API gates.
+    selected, pickErr := pickAutoCADExecutable()
+    if pickErr == nil && selected != "" {
+        host := inspectCADDirectory(filepath.Dir(selected))
+        if host.Year == 2023 && host.Flavor == "ACAD2023_NET48" && host.Error == "" {
+            writePersistentLog("autocad_inventory",string(report)+"\nManual CAD path: "+host.Directory)
+            return host.Directory,nil
+        }
+        return "",fmt.Errorf("Đường dẫn AutoCAD đã chọn không đúng bản full 2023 x64 R24.2: %s. Chi tiết: %s",selected,host.Error)
+    }
     return "",fmt.Errorf("Không tìm thấy AutoCAD 2023 full x64 có phiên bản EXE R24.2 hợp lệ. "+
         "Đã ghi danh sách các bản CAD phát hiện được vào log autocad_inventory. "+
         "Bộ cài này không tự chuyển DLL 2023 sang đời CAD khác.")
@@ -542,6 +554,15 @@ func inspectCADDirectory(dir string) cadHost {
     return h
 }
 
+// Folder layout may be nonstandard. Let the user select the real acad.exe
+// instead of misreporting AutoCAD absent; never relax host validation.
+func pickAutoCADExecutable() (string,error) {
+    script := `Add-Type -AssemblyName System.Windows.Forms; $d = New-Object System.Windows.Forms.OpenFileDialog; $d.Title='Chọn acad.exe của AutoCAD 2023'; $d.Filter='AutoCAD executable (acad.exe)|acad.exe'; $d.CheckFileExists=$true; if ($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { [Console]::Out.Write($d.FileName) }`
+    output,err:=exec.Command("powershell.exe","-NoProfile","-STA","-NonInteractive","-Command",script).Output()
+    if err!=nil {return "",err}
+    return strings.TrimSpace(string(output)),nil
+}
+
 func detectAutoCADHosts() []cadHost {
     candidates:=[]string{}
     for _,base:=range []string{os.Getenv("ProgramFiles"),`C:\Program Files`} {
@@ -550,10 +571,16 @@ func detectAutoCADHosts() []cadHost {
     }
     // Explicit 64-bit registry view; do not mistake a WOW6432Node product
     // or AutoCAD LT registry hive for a managed x64 host.
-    output,_:=exec.Command("reg","query",`HKLM\SOFTWARE\Autodesk\AutoCAD`,"/s","/v","AcadLocation","/reg:64").Output()
-    for _,line:=range strings.Split(string(output),"\n") {
-        at:=strings.Index(line,"REG_SZ")
-        if at>=0 && strings.Contains(line[:at],"AcadLocation") {candidates=append(candidates,strings.TrimSpace(line[at+len("REG_SZ"):]))}
+    for _,key:=range []string{`HKLM\SOFTWARE\Autodesk\AutoCAD`,`HKCU\SOFTWARE\Autodesk\AutoCAD`} {
+        args:=[]string{"query",key,"/s","/v","AcadLocation"}
+        if strings.HasPrefix(key,"HKLM") {args=append(args,"/reg:64")}
+        output,_:=exec.Command("reg",args...).Output()
+        for _,line:=range strings.Split(string(output),"\n") {
+            at:=strings.Index(line,"REG_SZ")
+            if at>=0 && strings.Contains(line[:at],"AcadLocation") {
+                candidates=append(candidates,strings.TrimSpace(line[at+len("REG_SZ"):]))
+            }
+        }
     }
     hosts:=[]cadHost{};seen:=map[string]bool{}
     for _,dir:=range candidates {
