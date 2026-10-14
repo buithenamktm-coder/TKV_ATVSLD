@@ -322,7 +322,6 @@ namespace MiningVolume2023.UI
             var pages = VisiblePages(group);
             _advancedVolumeButton.Visible = group == AppPage.Volume;
             _advancedVolumeButton.Text = _showAdvancedVolume ? "Ẩn nâng cao" : "Nâng cao";
-            _updatingNav = true;
             _subNavigation.Items.Clear();
             foreach (var page in pages) _subNavigation.Items.Add(PageLabel(page));
             _subNavigationPanel.Visible = pages.Length > 1;
