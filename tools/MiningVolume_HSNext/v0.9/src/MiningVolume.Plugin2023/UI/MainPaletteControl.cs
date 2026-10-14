@@ -6,7 +6,7 @@ using System.Windows.Forms;
 
 namespace MiningVolume2023.UI
 {
-    public enum AppPage { Project, Data, Model, Section, Volume, Grid, Mineral, Export, License }
+    public enum AppPage { Project, Data, Model, Section, Volume, Grid, Mineral, Export, License, QuickSection }
 
     public sealed class MainPaletteControl : UserControl
     {
@@ -20,7 +20,7 @@ namespace MiningVolume2023.UI
         private readonly Dictionary<AppPage, Button> _buttons = new Dictionary<AppPage, Button>();
         private readonly ComboBox _subNavigation;
         private readonly Panel _subNavigationPanel;
-        private readonly AppPage[] _groups = { AppPage.Project, AppPage.Model, AppPage.Volume, AppPage.Section, AppPage.License };
+        private readonly AppPage[] _groups = { AppPage.Project, AppPage.Model, AppPage.Volume, AppPage.QuickSection, AppPage.License };
         private AppPage _currentGroup = AppPage.Project;
         private bool _updatingNav;
 
@@ -80,6 +80,7 @@ namespace MiningVolume2023.UI
                 [AppPage.Data] = new DataPage(),
                 [AppPage.Model] = new ModelPage(),
                 [AppPage.Section] = new SectionPage(),
+                [AppPage.QuickSection] = new SectionPage(true),
                 [AppPage.Volume] = new VolumePage(),
                 [AppPage.Grid] = new GridPage(),
                 [AppPage.Mineral] = new MineralPage(),
@@ -93,7 +94,7 @@ namespace MiningVolume2023.UI
             AddNav(nav, AppPage.Project, "1", "Dự án");
             AddNav(nav, AppPage.Model, "2", "Mô hình");
             AddNav(nav, AppPage.Volume, "3", "Tính khối lượng");
-            AddNav(nav, AppPage.Section, "4", "Vẽ nhanh mặt cắt");
+            AddNav(nav, AppPage.QuickSection, "4", "Vẽ nhanh mặt cắt");
             AddNav(nav, AppPage.License, "5", "Thông tin liên hệ");
 
             ShowGroup(AppPage.Project);
