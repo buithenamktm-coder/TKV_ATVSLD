@@ -239,3 +239,20 @@ func TestRetireFailureAndRollbackCollisionNeverDeleteSource(t *testing.T) {
     got,e=os.ReadFile(user);if e!=nil||string(got)!="retain drawing"{t.Fatal("Rollback deleted drawing",e)}
     got,e=os.ReadFile(filepath.Join(backup,"old.dll"));if e!=nil||string(got)!="old binary"{t.Fatal("Rollback deleted backup",e)}
 }
+
+
+func TestAcad2023UsesProductVersionNotFileVersion(t *testing.T) {
+    // Autodesk AutoCAD 2023 executable: FileVersion 30.2, ProductVersion 24.2.
+    // The installer must map the API product version (R24.2).
+    source,err:=os.ReadFile("main.go")
+    if err!=nil {t.Fatal(err)}
+    code:=string(source)
+    if !strings.Contains(code,"ms,ls:=info[4],info[5]") {
+        t.Fatal("AutoCAD detection must use VS_FIXEDFILEINFO dwProductVersionMS/LS, not dwFileVersionMS/LS")
+    }
+    host,err:=classifyCAD(24,2,0)
+    if err!=nil || host.Year!=2023 || host.Flavor!="ACAD2023_NET48" {
+        t.Fatalf("Wrong AutoCAD 2023 product classification: %+v %v",host,err)
+    }
+}
+
