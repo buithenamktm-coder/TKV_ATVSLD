@@ -84,7 +84,7 @@ namespace MiningVolume2023.UI
                 [AppPage.Grid] = new GridPage(),
                 [AppPage.Mineral] = new MineralPage(),
                 [AppPage.Export] = new ExportPage(),
-                [AppPage.License] = new LicensePage()
+                [AppPage.License] = new ContactInfoPage()
             };
 
             foreach (var page in _pages.Values)
