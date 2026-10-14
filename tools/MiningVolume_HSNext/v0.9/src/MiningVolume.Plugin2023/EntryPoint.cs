@@ -245,6 +245,7 @@ namespace MiningVolume2023
             Tin3DViewService.Start(ModelRole.Design);
         }
         [CommandMethod("MV_SECTION", CommandFlags.Session)] public static void OpenSection() => Open(AppPage.Section);
+        [CommandMethod("MV_QUICKSECTION", CommandFlags.Session)] public static void OpenQuickSection() => Open(AppPage.QuickSection);
         [CommandMethod("MV_VOLUME", CommandFlags.Session)] public static void OpenVolume() => Open(AppPage.Volume);
         [CommandMethod("MV_GRID", CommandFlags.Session)] public static void OpenGrid() => Open(AppPage.Grid);
         [CommandMethod("MV_MINERAL", CommandFlags.Session)] public static void OpenMineral() => Open(AppPage.Mineral);
