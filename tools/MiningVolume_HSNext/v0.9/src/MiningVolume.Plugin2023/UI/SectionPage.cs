@@ -159,6 +159,7 @@ namespace MiningVolume2023.UI
             primary.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.333F));
             primary.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.334F));
             var preview = Button("Xem trước tuyến", Preview);
+            preview.Name = "btnPreviewSections";
             preview.Dock = DockStyle.Fill;
             preview.AutoSize = false;
             preview.Font = new Font("Arial", 9F, FontStyle.Bold);
