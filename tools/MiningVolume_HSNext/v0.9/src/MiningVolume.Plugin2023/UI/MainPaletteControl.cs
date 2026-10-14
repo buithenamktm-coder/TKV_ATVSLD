@@ -330,7 +330,7 @@ namespace MiningVolume2023.UI
             int groupIndex = Array.IndexOf(_groups, group);
             if (groupIndex >= 0) _compactNavigation.SelectedIndex = groupIndex;
             _updatingNav = false;
-            ShowPage(pages[0]);
+            ShowPage(group == AppPage.Model ? AppPage.Data : pages[0]);
         }
 
         public void ShowPage(AppPage page)
