@@ -26,6 +26,7 @@ namespace MiningVolume2023.UI
         private readonly DataGridView _grid;
         private readonly Label _status;
         private bool _syncing;
+        private readonly bool _quickOnly;
         private bool _compactParameters;
         private readonly TableLayoutPanel _rootLayout;
         private readonly TableLayoutPanel _parameterLayout;
@@ -37,6 +38,7 @@ namespace MiningVolume2023.UI
 
         public SectionPage(bool quickOnly)
         {
+            _quickOnly = quickOnly;
             Font = new Font("Arial", 9F);
             BackColor = Color.White;
 
@@ -263,6 +265,7 @@ namespace MiningVolume2023.UI
         private void AdjustParameterHeightToAvailableSpace()
         {
             if (_rootLayout == null) return;
+            if (_quickOnly) { _rootLayout.RowStyles[1].Height = 155F; return; }
             // Reserve usable space for the table of section results even on
             // 620px Windows palettes; the parameter panel scrolls internally.
             int visibleHeight = Math.Max(500, ClientSize.Height);
@@ -645,11 +648,7 @@ namespace MiningVolume2023.UI
                     SectionCadRenderer.DrawQuickProfiles(doc.Database, valid,
                         insertion.Value, hScale, vScale, axisStep, layoutGap);
                 watch.Stop();
-                _status.Text = "Đã vẽ " + valid.Length + "/" + selected.Count +
-                    " mặt cắt nhanh từ TIN trong " +
-                    watch.Elapsed.TotalSeconds.ToString("0.0") +
-                    " giây (layer MV_MC_NHANH_*). Hệ mặt cắt tính khối lượng " +
-                    "và kết quả đã duyệt không đổi.";
+                _status.Text = "Đã vẽ mặt cắt nhanh thành công.";
             }
             catch (Exception ex)
             {
