@@ -522,7 +522,9 @@ func executableVersion(file string) (uint32,uint32,error) {
     if ok==0 || value==nil || length<52{return 0,0,fmt.Errorf("Thiếu VS_FIXEDFILEINFO")}
     info:=(*[13]uint32)(value)
     if info[0]!=0xFEEF04BD{return 0,0,fmt.Errorf("Sai chữ ký version EXE")}
-    ms,ls:=info[2],info[3];runtime.KeepAlive(data)
+    // Autodesk acad.exe FileVersion may be 30.2 while ProductVersion is R24.2.
+    // Classify the managed API host by ProductVersion, not FileVersion.
+    ms,ls:=info[4],info[5];runtime.KeepAlive(data)
     return ms,ls,nil
 }
 
