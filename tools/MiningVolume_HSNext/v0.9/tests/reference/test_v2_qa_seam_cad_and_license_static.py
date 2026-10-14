@@ -26,7 +26,8 @@ def test_combined_v2_license_and_mineral_are_visible_in_same_palette():
     p=read("src/MiningVolume.Plugin2023/UI/MainPaletteControl.cs")
     entry=read("src/MiningVolume.Plugin2023/EntryPoint.cs")
     assert "new MineralPage()" in p
-    assert "new LicensePage()" in p
+    assert "new ContactInfoPage()" in p
+    assert "new LicensePage()" in read("src/MiningVolume.Plugin2023/UI/ContactInfoPage.cs")
     assert 'CommandMethod("MV_MINERAL"' in entry
     assert 'CommandMethod("MV_LICENSE"' in entry
     assert "LicenseService.GetStatus();" in entry
