@@ -14,7 +14,7 @@ def test_project_page_is_real_palette_page():
     assert 'AppPage { Project, Data, Model, Section, Volume, Grid, Mineral, Export, License, QuickSection }' in main
     assert 'AddNav(nav, AppPage.Project, "1", "Dự án")' in main
     assert '[AppPage.Project] = new ProjectPage()' in main
-    assert 'LƯU PROJECT VÀO DWG' in page
+    assert 'Lưu dự án vào DWG' in page
     assert 'NẠP LẠI PROJECT' in page
     assert 'XÓA PROJECT ĐÃ LƯU' in page
 
