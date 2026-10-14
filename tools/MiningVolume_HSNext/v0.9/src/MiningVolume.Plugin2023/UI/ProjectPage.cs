@@ -86,9 +86,9 @@ namespace MiningVolume2023.UI
                 Padding = new Padding(9, 9, 9, 7) };
             // Three toolbar actions stack vertically in a 360px docked Palette.
             SizeChanged += (sender, args) => buttons.Height = ClientSize.Width < 650 ? 140 : 62;
-            _save = Btn("LƯU PROJECT VÀO DWG", SaveProject); _save.Width = 190;
-            _load = Btn("NẠP LẠI PROJECT", LoadProject); _load.Width = 165;
-            _delete = Btn("XÓA PROJECT ĐÃ LƯU", DeleteProject); _delete.Width = 190;
+            _save = Btn("Lưu dự án vào DWG", SaveProject); _save.Width = 190;
+            _load = Btn("Nạp lại dự án", LoadProject); _load.Width = 165;
+            _delete = Btn("Xóa dự án đã lưu", DeleteProject); _delete.Width = 190;
             buttons.Controls.Add(_save); buttons.Controls.Add(_load); buttons.Controls.Add(_delete);
             Controls.Add(buttons); buttons.BringToFront();
 
