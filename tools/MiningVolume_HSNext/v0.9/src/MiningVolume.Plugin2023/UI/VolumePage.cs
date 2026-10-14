@@ -34,7 +34,23 @@ namespace MiningVolume2023.UI
             AddInfo(info, 0, "Phạm vi tính", _scope);
             AddInfo(info, 1, "Công thức", _formula);
             AddInfo(info, 2, "Tổng khối", _totals);
+            // Keep mathematical transparency available on demand, but do not
+            // overwhelm the default workflow with a large formula pane.
+            var formulaToggle = new CheckBox
+            {
+                Text = "Xem công thức tính", AutoSize = true,
+                Dock = DockStyle.Top, Checked = false,
+                Padding = new Padding(10, 3, 0, 3)
+            };
+            info.RowStyles[1].Height = 0;
+            info.Height = 76;
+            formulaToggle.CheckedChanged += (sender, args) =>
+            {
+                info.RowStyles[1].Height = formulaToggle.Checked ? 126 : 0;
+                info.Height = formulaToggle.Checked ? 202 : 76;
+            };
             Controls.Add(info); info.BringToFront();
+            Controls.Add(formulaToggle); formulaToggle.BringToFront();
 
             var tabs = new TabControl { Dock = DockStyle.Fill };
             _detail = Grid(new[] { "Đoạn", "MC đầu", "MC cuối", "L, m", "Fđ đầu", "Fđ giữa", "Fđ cuối", "V đào, m³", "Fđp đầu", "Fđp giữa", "Fđp cuối", "V đắp, m³", "Công thức" });
@@ -135,8 +151,8 @@ namespace MiningVolume2023.UI
                 _status.Text = !result.IsComplete
                     ? autoLevelNote+$"CHƯA ĐẦY ĐỦ: {result.ExcludedIntervals:n0} khoảng chưa xác nhận; chỉ hiển thị phần khối lượng hợp lệ."
                     : result.Warnings.Count == 0
-                        ? autoLevelNote+$"Hoàn thành: {result.Intervals.Count:n0} khoảng mặt cắt; {result.Levels.Count:n0} tầng/mức."
-                        : autoLevelNote+$"Hoàn thành, có {result.Warnings.Count:n0} cảnh báo kiểm soát.";
+                        ? "Đã tính khối lượng thành công."
+                        : "Đã tính khối lượng, cần kiểm tra cảnh báo.";
             }
             catch (Exception ex)
             {
