@@ -11,6 +11,12 @@ on:
       - 'tools/MiningVolume_HSNext/v0.9/**'
       - '.github/workflows/build-miningvolume-autocad2023.yml'
 
+# When UI code is updated repeatedly, only the latest branch revision should
+# consume the Windows build runner and publish an installable QA artifact.
+concurrency:
+  group: miningvolume-build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   compatibility:
     uses: ./.github/workflows/imsat-cad-2025-2026-compat-ci.yml
