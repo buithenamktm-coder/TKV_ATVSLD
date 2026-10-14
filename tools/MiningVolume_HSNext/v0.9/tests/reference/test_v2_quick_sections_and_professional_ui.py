@@ -106,3 +106,14 @@ def test_branding_and_discard_excel_tip_only():
     assert 'Text = "Bản quyền IMSAT VOLUME"' in license_page
     assert "Excel: Arial 12 • bảng đóng khung" not in export
     assert "ExportClicked" in export
+
+
+def test_quick_section_layout_gap_is_validated_before_cad_transaction():
+    cad = read("src/MiningVolume.Plugin2023/Services/SectionCadRenderer.cs")
+    body = cad.split("public static void DrawQuickProfiles(", 1)[1].split(
+        "// A user can set the CAD elevation-axis step", 1
+    )[0]
+    guard = "if (double.IsNaN(layoutGap) || double.IsInfinity(layoutGap) || layoutGap < 30.0)"
+    assert guard in body
+    assert body.index(guard) < body.index("db.TransactionManager.StartTransaction()")
+    assert "throw new ArgumentOutOfRangeException(nameof(layoutGap)" in body
