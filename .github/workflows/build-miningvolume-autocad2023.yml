@@ -336,6 +336,7 @@ jobs:
             tools/MiningVolume_HSNext/v0.9/dist/UI_GLASS_CHROME.json
             tools/MiningVolume_HSNext/v0.9/dist/UI_SECTION_PARAMETERS.json
             tools/MiningVolume_HSNext/v0.9/dist/UI_SECTION_LAYOUT.png
+            tools/MiningVolume_HSNext/v0.9/dist/UI_QUICK_SECTION_LAYOUT.png
             tools/MiningVolume_HSNext/v0.9/docs/V2_FINAL_QA_REPORT.md
             tools/MiningVolume_HSNext/v0.9/docs/V2_RELEASE_GATES.md
             tools/MiningVolume_HSNext/v0.9/docs/V2_AUTOCAD_ACCEPTANCE.md
