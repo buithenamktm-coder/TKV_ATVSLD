@@ -74,7 +74,9 @@ func install() {
     // Recover conservatively from an interrupted previous install before starting
     // a new transaction. An unverified target is never preferred over its backup.
     if exists(backup) {
-        os.RemoveAll(target)
+        if err := preserveBundle(target, bundleRecoveryDirectory()); err != nil {
+            msg("Không bảo toàn được bundle từ lần cài trước: "+err.Error(), 0x10); return
+        }
         if err := restoreBackup(backup, target); err != nil {
             msg("Không khôi phục được bản sao lưu từ lần cài trước: "+err.Error(), 0x10); return
         }
@@ -103,7 +105,9 @@ func install() {
         writePersistentLog("install_error", details)
         msg(fmt.Sprintf("Cài đặt chưa hoàn tất: %v. Khôi phục bundle: %v; đăng ký: %v", err, restoreErr, registryErr) + "\n\nChi tiết: " + filepath.Join(programData,"MiningVolume2023","Logs","install_error.txt"), 0x10); return
     }
-    os.RemoveAll(backup)
+    if err := preserveBundle(backup, bundleRecoveryDirectory()); err != nil {
+        msg("Đã cài bản mới; bản sao lưu vẫn được giữ tại "+backup+". Không chuyển được vào thư mục khôi phục: "+err.Error(), 0x30); return
+    }
     writePersistentLog("install", "Status=INSTALLED\r\nAutoCAD="+filepath.Join(cad,"acad.exe"))
     msg("Cài đặt IMSAT VOLUME thành công.\n\nPhần mềm đang được tiếp tục cải tiến và hoàn thiện.\nMọi ý kiến đóng góp vui lòng liên hệ:\n\nBùi Thế Nam\nĐT/Zalo: 0967280686", 0x40)
 }
@@ -223,9 +227,8 @@ func uninstall() {
     }
     programData := os.Getenv("ProgramData")
     if programData == "" { programData = `C:\ProgramData` }
-    // Remove ONLY the installed IMSAT application bundle, its transaction
-    // backup and registered launchers. Never scan/remove DWG, other .bundle,
-    // user projects, license files, saved reports or user profile folders.
+    // Retire bundles outside Autodesk's autoload tree, retaining all contents.
+    // User data can exist even inside the application bundle or its backup.
     target := filepath.Join(programData, "Autodesk", "ApplicationPlugins", "MiningVolume2023.bundle")
     if exists(target) {
         installedVersion, err := bundleVersion(target)
@@ -233,14 +236,14 @@ func uninstall() {
             msg("Bộ gỡ không khớp phiên bản đang cài. Hãy dùng mục IMSAT trong Windows Installed Apps.", 0x10); return
         }
     }
-    if err := os.RemoveAll(target); err != nil {
+    if err := preserveBundle(target, bundleRecoveryDirectory()); err != nil {
         msg("Không gỡ được bundle IMSAT; cần kiểm tra quyền tệp.\n\n"+err.Error(), 0x10)
         return
     }
     // CI V2 QA uses .v200qabak; V1 setup uses .v100bak.
     // Never touch any other Autodesk application's data.
     for _, suffix := range []string{".v200qabak", ".v100bak"} {
-        if err := os.RemoveAll(target + suffix); err != nil {
+        if err := preserveBundle(target + suffix, bundleRecoveryDirectory()); err != nil {
             msg("Đã gỡ chương trình nhưng chưa xóa được bản sao lưu: "+err.Error(), 0x30)
             return
         }
@@ -264,7 +267,7 @@ func uninstall() {
     installedDir := filepath.Join(programData, "MiningVolume2023")
     installedExe := filepath.Join(installedDir, storedSetupName)
     cleanupInstalledSetupLater(installedExe, installedDir)
-    msg("Đã gỡ IMSAT VOLUME và đăng ký tự nạp khỏi AutoCAD.\n\nBản vẽ DWG, Project, báo cáo và dữ liệu người dùng được giữ nguyên.", 0x40)
+    msg("Đã gỡ IMSAT VOLUME và đăng ký tự nạp khỏi AutoCAD.\n\nBản vẽ DWG, Project, báo cáo và dữ liệu người dùng được giữ nguyên.\nBundle cũ được lưu tại: "+bundleRecoveryDirectory(), 0x40)
 }
 
 func installedSetupCleanupTargets(currentExe, installedDir string) []string {
@@ -629,9 +632,31 @@ func writePersistentLog(kind, content string) {
 }
 func copyDir(src,dst string) error { return filepath.Walk(src,func(path string,info os.FileInfo,err error) error{ if err!=nil{return err}; rel,_:=filepath.Rel(src,path); out:=filepath.Join(dst,rel); if info.IsDir(){return os.MkdirAll(out,0755)}; return copyFile(path,out) }) }
 func copyFile(src,dst string) error { in,err:=os.Open(src);if err!=nil{return err};defer in.Close();os.MkdirAll(filepath.Dir(dst),0755);out,err:=os.Create(dst);if err!=nil{return err};_,e:=io.Copy(out,in);c:=out.Close();if e!=nil{return e};return c }
+// Keep retired bundles outside ApplicationPlugins: they must not autoload.
+// Rename (not copy/delete) preserves unknown user files and fails without
+// deleting the source if the destination is unavailable or on another volume.
+func bundleRecoveryDirectory() string {
+    root:=os.Getenv("ProgramData");if root=="" {root=`C:\ProgramData`}
+    return filepath.Join(root,"MiningVolume2023","Recovery")
+}
+func preserveBundle(source,recovery string) error {
+    info,err:=os.Lstat(source)
+    if os.IsNotExist(err) {return nil}
+    if err!=nil {return err}
+    if !info.IsDir() || info.Mode()&os.ModeSymlink!=0 {return fmt.Errorf("Bundle không phải thư mục thông thường: %s",source)}
+    if err=os.MkdirAll(recovery,0755);err!=nil{return err}
+    holder,err:=os.MkdirTemp(recovery,"retired-");if err!=nil{return err}
+    if err=os.Rename(source,filepath.Join(holder,filepath.Base(source)));err!=nil {
+        _=os.Remove(holder) // only the empty directory allocated by this call
+        return err
+    }
+    return nil
+}
 func restoreBackup(backup,target string) error {
     if !exists(backup) { return nil }
-    os.RemoveAll(target)
+    if _, err := os.Lstat(target); !os.IsNotExist(err) {
+        return fmt.Errorf("Không ghi đè thư mục đích khi khôi phục: %s", target)
+    }
     return os.Rename(backup,target)
 }
 func exists(p string) bool { _,e:=os.Stat(p);return e==nil }

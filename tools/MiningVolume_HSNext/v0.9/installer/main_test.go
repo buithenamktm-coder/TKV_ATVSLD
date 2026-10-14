@@ -206,3 +206,36 @@ func TestBuildIdentityRejectsTamperedDLL(t *testing.T) {
     os.WriteFile(filepath.Join(dir,"test.dll"),[]byte("old or modified DLL"),0644)
     if verifyBuildIdentity(dir,allowed)==nil{t.Fatal("tampered DLL accepted")}
 }
+
+func TestRetiredBundlePreservesNestedUserDataAndRepeatedVersions(t *testing.T) {
+    root:=t.TempDir();source:=filepath.Join(root,"ApplicationPlugins","MiningVolume2023.bundle")
+    recovery:=filepath.Join(root,"Recovery")
+    files:=map[string]string{"PackageContents.xml":"old loader","Contents/Windows/old.dll":"binary","Projects/mine.dwg":"drawing","Projects/report.xlsx":"report","Projects/license.key":"license"}
+    for iteration:=0;iteration<2;iteration++ {
+        for name,data:=range files {
+            p:=filepath.Join(source,filepath.FromSlash(name));if e:=os.MkdirAll(filepath.Dir(p),0755);e!=nil{t.Fatal(e)}
+            if e:=os.WriteFile(p,[]byte(data),0644);e!=nil{t.Fatal(e)}
+        }
+        if e:=preserveBundle(source,recovery);e!=nil{t.Fatal(e)}
+        if _,e:=os.Lstat(source);!os.IsNotExist(e){t.Fatal("Old bundle remains in autoload tree",e)}
+    }
+    holders,e:=os.ReadDir(recovery);if e!=nil||len(holders)!=2{t.Fatal("Recovery versions were overwritten",e)}
+    for _,holder:=range holders {for name,want:=range files {
+        got,e:=os.ReadFile(filepath.Join(recovery,holder.Name(),filepath.Base(source),filepath.FromSlash(name)))
+        if e!=nil||string(got)!=want{t.Fatal("User or program data changed",name,e)}
+    }}
+    if e:=preserveBundle(source,recovery);e!=nil{t.Fatal("Missing bundle must be harmless",e)}
+}
+
+func TestRetireFailureAndRollbackCollisionNeverDeleteSource(t *testing.T) {
+    root:=t.TempDir();source:=filepath.Join(root,"bundle");os.MkdirAll(source,0755)
+    user:=filepath.Join(source,"mine.dwg");os.WriteFile(user,[]byte("retain drawing"),0644)
+    blocked:=filepath.Join(root,"blocked");os.WriteFile(blocked,[]byte("existing file"),0644)
+    if preserveBundle(source,blocked)==nil{t.Fatal("Invalid recovery destination accepted")}
+    got,e:=os.ReadFile(user);if e!=nil||string(got)!="retain drawing"{t.Fatal("Source lost on failure",e)}
+    backup:=filepath.Join(root,"backup");os.MkdirAll(backup,0755)
+    os.WriteFile(filepath.Join(backup,"old.dll"),[]byte("old binary"),0644)
+    if restoreBackup(backup,source)==nil{t.Fatal("Rollback overwrote existing target")}
+    got,e=os.ReadFile(user);if e!=nil||string(got)!="retain drawing"{t.Fatal("Rollback deleted drawing",e)}
+    got,e=os.ReadFile(filepath.Join(backup,"old.dll"));if e!=nil||string(got)!="old binary"{t.Fatal("Rollback deleted backup",e)}
+}

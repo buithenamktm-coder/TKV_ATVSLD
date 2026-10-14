@@ -92,7 +92,10 @@ def test_setup_uninstaller_preserves_user_projects_and_removes_addin():
     inst = read("installer/main.go")
     qa = read("installer/build_v2_qa.ps1")
     assert 'if hasArg(args, "--uninstall")' in inst
-    assert "os.RemoveAll(target)" in inst
+    uninstall = inst.split("func uninstall()", 1)[1].split("func installedSetupCleanupTargets", 1)[0]
+    assert "os.RemoveAll" not in uninstall
+    assert "preserveBundle(target, bundleRecoveryDirectory())" in uninstall
+    assert "preserveBundle(target + suffix, bundleRecoveryDirectory())" in uninstall
     assert '"reg", "delete", uninstallKey' in inst
     assert "cleanupInstalledSetupLater" in inst
     assert "Gỡ IMSAT VOLUME.lnk" in inst
