@@ -173,7 +173,16 @@ namespace MiningVolume2023.UI
             quick.AutoSize = false;
             primary.Controls.Add(preview, 0, 0);
             primary.Controls.Add(draw, 1, 0);
-            primary.Controls.Add(quick, 2, 0);
+            if (_quickOnly)
+                primary.Controls.Add(quick, 2, 0);
+            else
+            {
+                // The quick section belongs to independent group 4, not volume calculation.
+                primary.ColumnStyles[0].Width = 50F;
+                primary.ColumnStyles[1].Width = 50F;
+                primary.ColumnStyles[2].Width = 0F;
+                primary.ColumnStyles[2].SizeType = SizeType.Percent;
+            }
             root.Controls.Add(primary, 0, 2);
 
             var tools = new FlowLayoutPanel
