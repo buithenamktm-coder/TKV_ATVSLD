@@ -242,6 +242,11 @@ namespace MiningVolume2023.Services
             if (elevationStep <= 0 || double.IsNaN(elevationStep) ||
                 double.IsInfinity(elevationStep))
                 throw new ArgumentOutOfRangeException(nameof(elevationStep));
+            // A corrupt/reloaded layout gap must never propagate NaN/Infinity
+            // into AutoCAD geometry. Match the official section drawing gate.
+            if (double.IsNaN(layoutGap) || double.IsInfinity(layoutGap) || layoutGap < 30.0)
+                throw new ArgumentOutOfRangeException(nameof(layoutGap),
+                    "Giãn cách mặt cắt nhanh phải từ 30 đơn vị CAD trở lên.");
             double exaggeration = horizontalScale / verticalScale;
             using (var tr = db.TransactionManager.StartTransaction())
             {
