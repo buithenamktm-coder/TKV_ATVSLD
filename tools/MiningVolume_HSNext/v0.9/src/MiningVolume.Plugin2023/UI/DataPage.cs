@@ -213,8 +213,8 @@ namespace MiningVolume2023.UI
             refresh.Margin = new Padding(5, 5, 7, 5);
             actions.Controls.Add(refresh, 0, 1);
 
-            _buildExisting = Btn("TẠO TIN HIỆN TRẠNG", async (s,e) => await BuildSingleTinAsync(ModelRole.Existing));
-            _buildDesign = Btn("TẠO TIN THIẾT KẾ", async (s,e) => await BuildSingleTinAsync(ModelRole.Design));
+            _buildExisting = Btn("Tạo TIN hiện trạng", async (s,e) => await BuildSingleTinAsync(ModelRole.Existing));
+            _buildDesign = Btn("Tạo TIN thiết kế", async (s,e) => await BuildSingleTinAsync(ModelRole.Design));
             _buildExisting.Dock = DockStyle.Fill;
             _buildDesign.Dock = DockStyle.Fill;
             _buildExisting.Margin = new Padding(5,5,7,5);
