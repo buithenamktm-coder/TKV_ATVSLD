@@ -79,7 +79,7 @@ namespace MiningVolume2023.UI
             bottom.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             bottom.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 180));
             _status = new Label { Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, ForeColor = Color.DimGray, Text = "Cần thành lập mặt cắt và tính khối lượng trước khi xuất." };
-            _export = new Button { Text = "XUẤT EXCEL / CAD", Dock = DockStyle.Top, Height = 38, Font = new Font("Arial", 10F, FontStyle.Bold) };
+            _export = new Button { Text = "Xuất Excel / CAD", Dock = DockStyle.Top, Height = 38, Font = new Font("Arial", 10F, FontStyle.Bold) };
             _export.Click += ExportClicked;
             bottom.Controls.Add(_status, 0, 0);
             bottom.Controls.Add(_export, 1, 0);
