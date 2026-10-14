@@ -156,11 +156,12 @@ $apply.Invoke($null,[object[]]@($nativeSection)) | Out-Null
 $preview=[Windows.Forms.Button]($section.Controls.Find('btnPreviewSections',$true)[0])
 $draw=[Windows.Forms.Button]($section.Controls.Find('btnDrawSections',$true)[0])
 $quickInCalculation=[Windows.Forms.Button]($section.Controls.Find('btnQuickSections',$true)[0])
-if($null -eq $preview -or $null -eq $draw -or $null -eq $quickInCalculation) {
-  throw 'Required section workflow buttons are missing.'
+if($null -eq $preview -or $null -eq $draw) {
+  throw 'Required section preview/draw buttons are missing.'
 }
-if(!$preview.Visible -or !$draw.Visible -or $quickInCalculation.Visible) {
-  throw 'Calculation section must show preview/draw and hide independent quick-section action.'
+# Quick action should not be attached at all to calculation layout.
+if(!$preview.Visible -or !$draw.Visible -or ($null -ne $quickInCalculation -and $quickInCalculation.Visible)) {
+  throw 'Calculation section must show preview/draw and exclude independent quick-section action.'
 }
 $gap=$draw.Left-$preview.Right
 if($gap -lt 6) {
