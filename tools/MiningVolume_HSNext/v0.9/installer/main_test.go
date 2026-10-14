@@ -78,9 +78,18 @@ func TestPayloadExtractsVerifiedPathsWithoutOverwritingExistingFiles(t *testing.
 
 func TestEmbeddedReleasePayloadExtractsAndMatchesLoaderAndHashes(t *testing.T) {
     // Exercise the actual CI-built payload, not just fixture DLL strings.
+    // The V2 packaging stage runs this same test after rewriting its metadata.
+    if expected:=os.Getenv("IMSAT_TEST_PAYLOAD_VERSION");expected!="" {
+        if expected!="1.0.0" && expected!="2.0.0" {t.Fatal("Unsupported test payload version",expected)}
+        previous:=version;version=expected;t.Cleanup(func(){version=previous})
+    }
     root:=t.TempDir()
     if e:=extractPayload(root);e!=nil{t.Fatal(e)}
-    if e:=validatePrebuiltBundle(filepath.Join(root,"bundle","MiningVolume2023.bundle"));e!=nil{t.Fatal(e)}
+    bundle:=filepath.Join(root,"bundle","MiningVolume2023.bundle")
+    // Never allow the legacy V1 missing-manifest exception in release CI.
+    identity,e:=os.ReadFile(filepath.Join(bundle,"Contents","Windows","BUILD_IDENTITY.txt"))
+    if e!=nil || len(identity)==0 {t.Fatal("Release payload has no build identity",e)}
+    if e:=validatePrebuiltBundle(bundle);e!=nil{t.Fatal(e)}
 }
 
 func TestCADReleaseAndRuntimeClassification(t *testing.T) {

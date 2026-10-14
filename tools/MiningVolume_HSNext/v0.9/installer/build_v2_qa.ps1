@@ -31,6 +31,7 @@ try {
 
     # One installer implementation; V1 defaults are preserved. No global source replacements.
     Copy-Item $main (Join-Path $setupDir "main.go")
+    Copy-Item (Join-Path $Root "installer/main_test.go") (Join-Path $setupDir "main_test.go")
 
     Compress-Archive -Path $stage -DestinationPath (Join-Path $setupDir 'payload.zip') -CompressionLevel Optimal
     Push-Location $setupDir
@@ -42,6 +43,15 @@ try {
         if ($LASTEXITCODE -ne 0) { throw "Không nhúng được icon IMSAT trong Setup V2." }
         go mod init imsat-v2-qa-candidate | Out-Null
         if ($LASTEXITCODE -ne 0) { throw "go mod init V2 thất bại." }
+        # Validate the rewritten V2 XML and the DLL hashes in this exact ZIP.
+        # A passing V1 payload test does not validate the V2 packaging transform.
+        $previousTestVersion = $env:IMSAT_TEST_PAYLOAD_VERSION
+        try {
+            $env:IMSAT_TEST_PAYLOAD_VERSION = '2.0.0'
+            go test -v -count=1 -run '^TestEmbeddedReleasePayloadExtractsAndMatchesLoaderAndHashes$' .
+            if ($LASTEXITCODE -ne 0) { throw "Payload V2 không vượt qua kiểm tra XML/DLL/checksum; không tạo Setup." }
+        }
+        finally { $env:IMSAT_TEST_PAYLOAD_VERSION = $previousTestVersion }
         $exe = Join-Path $dist "IMSAT_MiningVolume_V2_0_QA_CANDIDATE.exe"
         $flags = '-s -w -H=windowsgui -X main.version=2.0.0 -X main.backupSuffix=.v200qabak -X main.storedSetupName=MiningVolume_Setup_v2.0_QA.exe -X "main.productName=IMSAT VOLUME V2.0 QA Candidate (AutoCAD 2023)"'
         go build -trimpath -ldflags $flags -o $exe .

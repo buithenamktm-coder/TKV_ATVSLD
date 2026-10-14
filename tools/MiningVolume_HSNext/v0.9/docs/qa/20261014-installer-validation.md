@@ -35,6 +35,9 @@ still performed only after payload validation succeeds.
   traversal, ZIP links, valid extraction, preservation of existing files, empty
   DLL rejection, and extraction/loader/hash validation of the **actual embedded
   CI-built payload**, in addition to the existing registration rollback tests.
+- V2 packaging repeats the embedded-payload test after changing the XML version
+  to 2.0.0 and compressing the final V2 ZIP, before building the EXE. Both release
+  payload checks require a nonempty build identity even for the legacy V1 path.
 - Windows execution/build results must be taken from the Actions run for the
   commit containing this report. Source inspection is not a Windows test PASS.
 - Test fixtures use temporary directories and an isolated HKCU registry key;
