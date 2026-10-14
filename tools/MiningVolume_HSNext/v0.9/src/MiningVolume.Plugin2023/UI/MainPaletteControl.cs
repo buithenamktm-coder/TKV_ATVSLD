@@ -86,12 +86,13 @@ namespace MiningVolume2023.UI
             Controls.Add(_sidebar);
             Controls.Add(header);
 
+            var modelWorkflow = new ModelWorkflowPage();
             _pages = new Dictionary<AppPage, Control>
             {
                 [AppPage.Project] = new ProjectPage(),
-                [AppPage.Data] = new DataPage(),
-                [AppPage.Model] = new ModelPage(),
-                [AppPage.Section] = new SectionPage(),
+                [AppPage.Data] = modelWorkflow,
+                [AppPage.Model] = modelWorkflow,
+                [AppPage.Section] = new SectionPage(false, ShowPage),
                 [AppPage.QuickSection] = new SectionPage(true),
                 [AppPage.Volume] = new VolumePage(),
                 [AppPage.Grid] = new GridPage(),
@@ -100,7 +101,7 @@ namespace MiningVolume2023.UI
                 [AppPage.License] = new ContactInfoPage()
             };
 
-            foreach (var page in _pages.Values)
+            foreach (var page in new HashSet<Control>(_pages.Values))
                 UiTheme.ApplyPage(page);
 
             AddNav(nav, AppPage.Project, "1", "Dự án");
@@ -288,7 +289,7 @@ namespace MiningVolume2023.UI
         {
             switch (group)
             {
-                case AppPage.Model: return new[] { AppPage.Data, AppPage.Model };
+                case AppPage.Model: return new[] { AppPage.Model };
                 case AppPage.Volume: return new[] { AppPage.Section, AppPage.Grid };
                 default: return new[] { group };
             }
@@ -363,6 +364,11 @@ namespace MiningVolume2023.UI
                 _updatingNav = false;
             }
 
+            if (control is ModelWorkflowPage workflow)
+            {
+                if (page == AppPage.Data) workflow.ShowInput();
+                else workflow.ShowModel();
+            }
             _currentPage = page;
             _content.SuspendLayout();
             _content.Controls.Clear();
