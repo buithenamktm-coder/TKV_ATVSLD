@@ -15,8 +15,8 @@ def test_project_page_is_real_palette_page():
     assert 'AddNav(nav, AppPage.Project, "1", "Dự án")' in main
     assert '[AppPage.Project] = new ProjectPage()' in main
     assert 'Lưu dự án vào DWG' in page
-    assert 'NẠP LẠI PROJECT' in page
-    assert 'XÓA PROJECT ĐÃ LƯU' in page
+    assert 'Nạp lại dự án' in page
+    assert 'Xóa dự án đã lưu' in page
 
 
 def test_project_stored_inside_dwg_nod_xrecord():
