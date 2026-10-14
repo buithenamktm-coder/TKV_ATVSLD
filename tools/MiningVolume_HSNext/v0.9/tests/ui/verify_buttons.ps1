@@ -148,28 +148,57 @@ if($horizontal.Enabled -or $vertical.Enabled -or
    [Math]::Abs([double]$state.VerticalScale-1000.0) -gt 1e-9) {
   throw "TT34 preset did not lock and restore both 1:1000 scales."
 }
-# Check the user's crowded three-button toolbar in a REAL WinForms layout.
+# Check the approved TWO separate workflows in REAL WinForms layouts.
+# Calculation sections must not show the independent quick-section action.
 $nativeSection=[System.Windows.Forms.Control]$section.PSObject.BaseObject
 $apply.Invoke($null,[object[]]@($nativeSection)) | Out-Null
 [Windows.Forms.Application]::DoEvents()
-$quick=[Windows.Forms.Button]($section.Controls.Find('btnQuickSections',$true)[0])
+$preview=[Windows.Forms.Button]($section.Controls.Find('btnPreviewSections',$true)[0])
 $draw=[Windows.Forms.Button]($section.Controls.Find('btnDrawSections',$true)[0])
-if($null -eq $quick -or $null -eq $draw -or !$quick.Visible -or !$draw.Visible) {
-  throw 'Section draw / quick-section buttons missing or hidden.'
+$quickInCalculation=[Windows.Forms.Button]($section.Controls.Find('btnQuickSections',$true)[0])
+if($null -eq $preview -or $null -eq $draw -or $null -eq $quickInCalculation) {
+  throw 'Required section workflow buttons are missing.'
 }
-if($quick.Left-$draw.Right -lt 6) {
-  throw "Three section buttons are touching/overlapping: gap=$($quick.Left-$draw.Right)px"
+if(!$preview.Visible -or !$draw.Visible -or $quickInCalculation.Visible) {
+  throw 'Calculation section must show preview/draw and hide independent quick-section action.'
+}
+$gap=$draw.Left-$preview.Right
+if($gap -lt 6) {
+  throw "Two calculation section buttons are touching/overlapping: gap=$($gap)px"
 }
 $sectionImage=New-Object Drawing.Bitmap(590,620)
-$sectionForm.DrawToBitmap($sectionImage,
-  (New-Object Drawing.Rectangle(0,0,590,620)))
-$sectionImage.Save((Join-Path $out 'UI_SECTION_LAYOUT.png'),
-  [Drawing.Imaging.ImageFormat]::Png)
+$sectionForm.DrawToBitmap($sectionImage,(New-Object Drawing.Rectangle(0,0,590,620)))
+$sectionImage.Save((Join-Path $out 'UI_SECTION_LAYOUT.png'),[Drawing.Imaging.ImageFormat]::Png)
 $sectionImage.Dispose()
 $sectionForm.Close();$sectionForm.Dispose()
-@{scope='Real WinForms SectionPage event; no AutoCAD host';change_station='20 to 10m invalidates old geometry';
-  z_axis_ticks='15m without station change';tt34_preset='20m';section_axes='custom 2000/500; TT34 1000/1000';button_gap_min_px=6;status='PASS';
-  source_sha=$env:SOURCE_SHA;autocad_runtime='NOT TESTED'} |
+
+# Quick sections are a separate top-level workflow, not a third calculation button.
+$quickPage=[Windows.Forms.Control][Activator]::CreateInstance($sectionType,[object[]]@($true))
+$quickForm=New-Object Windows.Forms.Form
+$quickForm.ClientSize=New-Object Drawing.Size(590,620)
+$quickPage.Dock=[Windows.Forms.DockStyle]::Fill
+$quickForm.Controls.Add($quickPage)
+$quickForm.StartPosition=[Windows.Forms.FormStartPosition]::Manual
+$quickForm.Location=New-Object Drawing.Point(-1800,-1800)
+$quickForm.ShowInTaskbar=$false
+$quickForm.Show()
+$apply.Invoke($null,[object[]]@($quickPage)) | Out-Null
+[Windows.Forms.Application]::DoEvents()
+$quickAction=[Windows.Forms.Button]($quickPage.Controls.Find('btnQuickSections',$true)[0])
+$drawInQuick=[Windows.Forms.Button]($quickPage.Controls.Find('btnDrawSections',$true)[0])
+if($null -eq $quickAction -or $null -eq $drawInQuick -or !$quickAction.Visible -or $drawInQuick.Visible) {
+  throw 'Independent quick-section page must show quick action and hide calculation section draw.'
+}
+$quickImage=New-Object Drawing.Bitmap(590,620)
+$quickForm.DrawToBitmap($quickImage,(New-Object Drawing.Rectangle(0,0,590,620)))
+$quickImage.Save((Join-Path $out 'UI_QUICK_SECTION_LAYOUT.png'),[Drawing.Imaging.ImageFormat]::Png)
+$quickImage.Dispose()
+$quickForm.Close();$quickForm.Dispose()
+@{scope='Real WinForms SectionPage and QuickSectionPage; no AutoCAD host';
+  change_station='20 to 10m invalidates old geometry';z_axis_ticks='15m without station change';
+  tt34_preset='20m';section_axes='custom 2000/500; TT34 1000/1000';
+  calculation_buttons='preview and draw; quick hidden';quick_page='quick visible; calculation draw hidden';
+  button_gap_px=$gap;status='PASS';source_sha=$env:SOURCE_SHA;autocad_runtime='NOT TESTED'} |
   ConvertTo-Json -Depth 4 | Set-Content -Encoding UTF8 (Join-Path $out 'UI_SECTION_PARAMETERS.json')
-Write-Host 'PASS: real SectionPage 20m preset, editable Custom 2000/500, TT34 1:1000 and action gaps'
+Write-Host 'PASS: separate real Windows calculation section and quick-section action layouts'
 Write-Host 'PASS: actual Windows WinForms buttons, text contrast >=4.5; AutoCAD runtime NOT TESTED'
