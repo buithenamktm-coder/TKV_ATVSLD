@@ -260,8 +260,12 @@ namespace MiningVolume2023.UI
             if (quickOnly)
             {
                 title.Text = "Vẽ nhanh mặt cắt";
-                preview.Visible = false;
-                draw.Visible = false;
+                // The quick-only workflow must occupy the full action row.
+                // Remove standard section controls instead of hiding them in
+                // cells 0/1: spanning three columns from cell 2 clips the button.
+                primary.Controls.Remove(preview);
+                primary.Controls.Remove(draw);
+                primary.SetCellPosition(quick, new TableLayoutPanelCellPosition(0, 0));
                 primary.SetColumnSpan(quick, 3);
                 tools.Visible = false;
                 _grid.Visible = false;
