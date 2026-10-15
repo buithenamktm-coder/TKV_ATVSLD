@@ -31,7 +31,13 @@ try {
 
     # One installer implementation; V1 defaults are preserved. No global source replacements.
     Copy-Item $main (Join-Path $setupDir "main.go")
-    Copy-Item (Join-Path $Root "installer/main_test.go") (Join-Path $setupDir "main_test.go")
+    # Copy the full Windows installer package, not only main.go: otherwise
+    # new compatibility planning code and its tests are silently left out.
+    foreach ($file in @("main_test.go", "host_install_plan.go", "host_install_plan_test.go")) {
+        $source = Join-Path $Root ("installer/" + $file)
+        if (!(Test-Path $source)) { throw "Thiếu mã nguồn hoặc kiểm thử Setup: $file" }
+        Copy-Item $source (Join-Path $setupDir $file)
+    }
 
     Compress-Archive -Path $stage -DestinationPath (Join-Path $setupDir 'payload.zip') -CompressionLevel Optimal
     Push-Location $setupDir
@@ -48,8 +54,8 @@ try {
         $previousTestVersion = $env:IMSAT_TEST_PAYLOAD_VERSION
         try {
             $env:IMSAT_TEST_PAYLOAD_VERSION = '2.0.0'
-            go test -v -count=1 -run '^TestEmbeddedReleasePayloadExtractsAndMatchesLoaderAndHashes$' .
-            if ($LASTEXITCODE -ne 0) { throw "Payload V2 không vượt qua kiểm tra XML/DLL/checksum; không tạo Setup." }
+            go test -v -count=1 .
+            if ($LASTEXITCODE -ne 0) { throw "Kiểm thử bộ cài V2 (XML/DLL/checksum/host compatibility/rollback) thất bại; không tạo Setup." }
         }
         finally { $env:IMSAT_TEST_PAYLOAD_VERSION = $previousTestVersion }
         $exe = Join-Path $dist "IMSAT_MiningVolume_V2_0_QA_CANDIDATE.exe"
