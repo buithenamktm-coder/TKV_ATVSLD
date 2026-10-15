@@ -530,6 +530,7 @@ namespace MiningVolume2023.UI
                 var drawWatch = Stopwatch.StartNew();
                 _status.Text = $"Đang vẽ mặt cắt 0/{profiles.Count:n0} xuống AutoCAD...";
                 _status.Refresh();
+                long lastDrawUiTick = 0;
                 SectionWorkflowService.DrawProfiles(
                     ins.Value,
                     (double)_hScale.Value,
@@ -537,11 +538,16 @@ namespace MiningVolume2023.UI
                     (double)_axisStep.Value,
                     (done, total) =>
                     {
+                        // Refreshing WinForms on each CAD entity batch forces
+                        // expensive synchronous repaints during a locked drawing
+                        // transaction. Display progress at most four times/sec.
+                        // Never pump DoEvents in a document transaction.
+                        long now = Stopwatch.GetTimestamp();
+                        if (done != total && (now - lastDrawUiTick) < Stopwatch.Frequency / 4)
+                            return;
+                        lastDrawUiTick = now;
                         _status.Text = $"Đang vẽ mặt cắt {done:n0}/{total:n0} xuống AutoCAD...";
                         _status.Refresh();
-                        // Do not pump WinForms events while an AutoCAD drawing
-                        // transaction is active: it permits reentrant edits or
-                        // document switches that break all-or-nothing drawing.
                     },
                     (double)_layoutGap.Value,
                     profiles);
@@ -868,12 +874,20 @@ namespace MiningVolume2023.UI
 
         private void RefreshGrid()
         {
-            _grid.Rows.Clear();
             var st = ProjectState.Current;
+            _grid.SuspendLayout();
+            try
+            {
+            _grid.Rows.Clear();
             if (st.SectionSystem == null) return;
+            var profileByName = st.SectionProfiles
+                .Where(p => p != null && p.Line != null)
+                .GroupBy(p => p.Line.Name, StringComparer.Ordinal)
+                .ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
             foreach (var line in st.SectionSystem.Lines)
             {
-                SectionProfile p = st.SectionProfiles.FirstOrDefault(x => x.Line.Name == line.Name);
+                SectionProfile p;
+                profileByName.TryGetValue(line.Name, out p);
                 _grid.Rows.Add(line.Name, line.Offset.ToString("0.###"), line.TotalLength.ToString("0.###"),
                     p == null ? "-" : p.CutArea.ToString("0.00"), p == null ? "-" : p.FillArea.ToString("0.00"),
                     p == null ? "Chưa tính" :
@@ -881,6 +895,8 @@ namespace MiningVolume2023.UI
                     p.Warnings.Any(w => w.StartsWith("MẶT ĐỨNG NHIỀU Z:", StringComparison.OrdinalIgnoreCase))
                         ? "CẦN KIỂM TRA MC" : "OK");
             }
+            }
+            finally { _grid.ResumeLayout(); }
         }
 
         private string SelectedLineName()
