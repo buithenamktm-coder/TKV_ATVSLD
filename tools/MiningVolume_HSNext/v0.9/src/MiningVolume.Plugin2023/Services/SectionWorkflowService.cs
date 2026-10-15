@@ -167,6 +167,12 @@ namespace MiningVolume2023.Services
             var drawingProfiles = profilesToDraw ?? state.SectionProfiles;
             if (drawingProfiles.Count == 0)
                 throw new InvalidOperationException("Không có mặt cắt hợp lệ để xuất.");
+            // Reject axes-only output before starting any CAD write transaction.
+            // Missing HT/TK overlap must not overwrite a previous edited drawing.
+            if (!drawingProfiles.Any(p => p != null && p.HasData))
+                throw new InvalidOperationException(
+                    "Không có đường địa hình chung giữa hai TIN để vẽ mặt cắt. " +
+                    "Kiểm tra phạm vi TIN hiện trạng/thiết kế và vị trí tuyến trên bình đồ.");
             var doc = Application.DocumentManager.MdiActiveDocument ?? throw new InvalidOperationException("Không có bản vẽ AutoCAD đang hoạt động.");
 
             const int batchSize = 20;
