@@ -10,8 +10,9 @@ def read(path):
 def test_projected_world_station_is_shifted_to_local_drawing_axes():
     cad=read("src/MiningVolume.Plugin2023/Services/SectionCadRenderer.cs")
     edit=read("src/MiningVolume.Plugin2023/Services/EditableSectionCadService.cs")
-    assert "x0 - p.Line.MinT" in cad
-    assert "x0-profile.Line.MinT" in cad
+    sampler=read("src/MiningVolume.Core/Sections/TinSectionSampler.cs")
+    assert "double s0 = t0 - globalMinT, s1 = t1 - globalMinT;" in sampler
+    assert "Do NOT subtract MinT again" in cad
     assert "x0 + segment.S0" in cad
     assert "x0 + segment.S1" in cad
     # XData still stores the origin used by the line: decode restores
