@@ -1,5 +1,7 @@
 # Package only an already compiled, hashed and correctly flavored add-in.
 # QA artifacts are NOT installation-approved until host runtime tests pass.
+# NEVER register both NET8 and NET10 variants for the same R25 series;
+# PackageContents series gating alone cannot distinguish CLR host updates.
 param(
     [Parameter(Mandatory=$true)][ValidateSet('ACAD2020_NET47','ACAD2021_NET48','ACAD2022_NET48','ACAD2023_NET48','ACAD2024_NET48','ACAD2025_NET8','ACAD2025_NET10','ACAD2026_NET8','ACAD2026_NET10')][string]$Flavor,
     [Parameter(Mandatory=$true)][string]$CompiledDirectory,
