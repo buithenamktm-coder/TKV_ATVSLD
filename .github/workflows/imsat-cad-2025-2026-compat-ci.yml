@@ -37,6 +37,17 @@ jobs:
         shell: pwsh
         run: |
           ./compat/build_compat.ps1 -Flavor '${{ matrix.flavor }}' -NuGetReferences
+      - name: Package flavor-scoped QA bundle (NOT INSTALLATION APPROVED)
+        shell: pwsh
+        run: |
+          ./compat/package_qa_bundle.ps1 -Flavor '${{ matrix.flavor }}' -CompiledDirectory "dist/compat/${{ matrix.flavor }}" -OutputDirectory 'dist/qa-bundles'
+      - name: Upload QA bundle for compatibility review
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: IMSAT-${{ matrix.flavor }}-QA-BUNDLE-NOT-RELEASE
+          path: tools/MiningVolume_HSNext/v0.9/dist/qa-bundles/**
+          retention-days: 7
       - name: Upload compile-only diagnostics (never a signed installer)
         if: success()
         uses: actions/upload-artifact@v4
