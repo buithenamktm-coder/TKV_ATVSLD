@@ -30,7 +30,7 @@ namespace MiningVolume.Core.Surface
         public List<ConflictSource> Sources { get; } = new List<ConflictSource>();
         internal HashSet<string> SourceKeys { get; } = new HashSet<string>(StringComparer.Ordinal);
         public double DeltaZ => Sources.Count==0?0:Sources.Max(s=>s.Z)-Sources.Min(s=>s.Z);
-        public string Status => "Chưa xử lý — cần kiểm tra nguồn; TIN 2.5D chỉ có một Z tại mỗi XY";
+        public string Status => "Giữ nguyên mọi Z nguồn; cảnh báo kiểm tra mặt đứng 3D và mặt cắt";
     }
 
     public sealed class ConflictReport
@@ -110,16 +110,41 @@ namespace MiningVolume.Core.Surface
                     if(!groupCells.TryGetValue(cell,out var list))groupCells[cell]=list=new List<ConflictGroup>();list.Add(group);}
                 foreach(var source in sources)if(group.SourceKeys.Add(source.Key))group.Sources.Add(source);
             }
-            // Only duplicate buckets allocate a list of contributing vertices.
-            var pointCells=new Dictionary<Cell,List<int>>();var duplicates=new Dictionary<int,List<int>>();
+            // Sparse CAD surveys contain millions of unique XY positions. Retain
+            // one index per occupied cell; only allocate a list when a cell has
+            // multiple DISTINCT XY roots. Previously List<int> per site could
+            // allocate millions of small managed objects before triangulation.
+            // Do not collapse the roots merely because they share a cell:
+            // diagonal positions in a square of side xy may be farther apart
+            // than the Euclidean matching tolerance.
+            var firstPointInCell=new Dictionary<Cell,int>();
+            var extraPointsInCell=new Dictionary<Cell,List<int>>();
+            var duplicates=new Dictionary<int,List<int>>();
             for(int i=0;i<points.Count;i++){
                 token.ThrowIfCancellationRequested();Pulse("Quét trùng XY",i,points.Count);
                 var p=points[i].P;var cell=At(p.XY);int match=-1;
-                for(long dx=-1;dx<=1&&match<0;dx++)for(long dy=-1;dy<=1&&match<0;dy++)
-                    if(pointCells.TryGetValue(new Cell(cell.X+dx,cell.Y+dy),out var ids))
-                        foreach(int id in ids)if(points[id].P.XY.DistanceTo(p.XY)<=xy){match=id;break;}
-                if(match<0){if(!pointCells.TryGetValue(cell,out var ids))pointCells[cell]=ids=new List<int>();ids.Add(i);}
-                else{if(!duplicates.TryGetValue(match,out var ids))duplicates[match]=ids=new List<int>{match};ids.Add(i);}
+                for(long dx=-1;dx<=1&&match<0;dx++)
+                    for(long dy=-1;dy<=1&&match<0;dy++){
+                        var neighbor=new Cell(cell.X+dx,cell.Y+dy);
+                        if(!firstPointInCell.TryGetValue(neighbor,out int first))continue;
+                        if(points[first].P.XY.DistanceTo(p.XY)<=xy){match=first;break;}
+                        if(!extraPointsInCell.TryGetValue(neighbor,out var more))continue;
+                        foreach(int id in more)
+                            if(points[id].P.XY.DistanceTo(p.XY)<=xy){match=id;break;}
+                    }
+                if(match<0){
+                    if(!firstPointInCell.ContainsKey(cell))firstPointInCell.Add(cell,i);
+                    else{
+                        if(!extraPointsInCell.TryGetValue(cell,out var more))
+                            extraPointsInCell.Add(cell,more=new List<int>(2));
+                        more.Add(i);
+                    }
+                }
+                else{
+                    if(!duplicates.TryGetValue(match,out var members))
+                        duplicates[match]=members=new List<int>{match};
+                    members.Add(i);
+                }
             }
             foreach(var pair in duplicates){
                 token.ThrowIfCancellationRequested();var ids=pair.Value;
@@ -161,7 +186,7 @@ namespace MiningVolume.Core.Surface
             }
             report.Groups.Sort((a,b)=>{int c=a.Position.X.CompareTo(b.Position.X);return c!=0?c:a.Position.Y.CompareTo(b.Position.Y);});
             for(int i=0;i<report.Groups.Count;i++)report.Groups[i].Id="XY-"+(i+1).ToString("000");
-            progress?.Invoke($"Kiểm tra xong: {report.Groups.Count:n0} nhóm chặn • {report.SourceRecordCount:n0} bản ghi nguồn.");
+            progress?.Invoke($"Đã thống kê: {report.Groups.Count:n0} nhóm XY nhiều Z • {report.SourceRecordCount:n0} bản ghi nguồn; tiếp tục dựng TIN tự động.");
             return report;
         }
         private static bool Finite(double value)=>!double.IsNaN(value)&&!double.IsInfinity(value);

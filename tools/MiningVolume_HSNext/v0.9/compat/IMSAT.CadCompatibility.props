@@ -1,0 +1,61 @@
+<Project>
+  <!--
+    Source- and API-accurate build flavor. NEVER load a 2023 net48 DLL in
+    AutoCAD 2025/2026. Unsupported generations are deliberately rejected.
+    This file is imported by all four existing IMSAT projects, not a new app.
+  -->
+  <PropertyGroup>
+    <IMSATCadFlavor Condition="'$(IMSATCadFlavor)' == ''">ACAD2023_NET48</IMSATCadFlavor>
+    <IMSATCadFramework Condition="'$(IMSATCadFlavor)' == 'ACAD2015_NET45'">net45</IMSATCadFramework>
+    <IMSATCadFramework Condition="'$(IMSATCadFlavor)' == 'ACAD2016_NET45'">net45</IMSATCadFramework>
+    <IMSATCadFramework Condition="'$(IMSATCadFlavor)' == 'ACAD2017_NET46'">net46</IMSATCadFramework>
+    <IMSATCadFramework Condition="'$(IMSATCadFlavor)' == 'ACAD2018_NET46'">net46</IMSATCadFramework>
+    <IMSATCadFramework Condition="'$(IMSATCadFlavor)' == 'ACAD2019_NET47'">net47</IMSATCadFramework>
+    <IMSATCadFramework Condition="'$(IMSATCadFlavor)' == 'ACAD2020_NET47'">net47</IMSATCadFramework>
+    <IMSATCadFramework Condition="'$(IMSATCadFlavor)' == 'ACAD2021_NET48'">net48</IMSATCadFramework>
+    <IMSATCadFramework Condition="'$(IMSATCadFlavor)' == 'ACAD2022_NET48'">net48</IMSATCadFramework>
+    <IMSATCadFramework Condition="'$(IMSATCadFlavor)' == 'ACAD2023_NET48'">net48</IMSATCadFramework>
+    <IMSATCadFramework Condition="'$(IMSATCadFlavor)' == 'ACAD2024_NET48'">net48</IMSATCadFramework>
+    <IMSATCadFramework Condition="'$(IMSATCadFlavor)' == 'ACAD2025_NET8'">net8.0-windows</IMSATCadFramework>
+    <IMSATCadFramework Condition="'$(IMSATCadFlavor)' == 'ACAD2025_NET10'">net10.0-windows</IMSATCadFramework>
+    <IMSATCadFramework Condition="'$(IMSATCadFlavor)' == 'ACAD2026_NET8'">net8.0-windows</IMSATCadFramework>
+    <IMSATCadFramework Condition="'$(IMSATCadFlavor)' == 'ACAD2026_NET10'">net10.0-windows</IMSATCadFramework>
+    <IMSATCadPackageVersion Condition="'$(IMSATCadFlavor)' == 'ACAD2015_NET45'">20.0.1</IMSATCadPackageVersion>
+    <IMSATCadPackageVersion Condition="'$(IMSATCadFlavor)' == 'ACAD2016_NET45'">20.1.0</IMSATCadPackageVersion>
+    <IMSATCadPackageVersion Condition="'$(IMSATCadFlavor)' == 'ACAD2017_NET46'">21.0.0</IMSATCadPackageVersion>
+    <IMSATCadPackageVersion Condition="'$(IMSATCadFlavor)' == 'ACAD2018_NET46'">22.0.0</IMSATCadPackageVersion>
+    <IMSATCadPackageVersion Condition="'$(IMSATCadFlavor)' == 'ACAD2019_NET47'">23.0.0</IMSATCadPackageVersion>
+    <IMSATCadPackageVersion Condition="'$(IMSATCadFlavor)' == 'ACAD2020_NET47'">23.1.0</IMSATCadPackageVersion>
+    <IMSATCadPackageVersion Condition="'$(IMSATCadFlavor)' == 'ACAD2021_NET48'">24.0.0</IMSATCadPackageVersion>
+    <IMSATCadPackageVersion Condition="'$(IMSATCadFlavor)' == 'ACAD2022_NET48'">24.1.51000</IMSATCadPackageVersion>
+    <IMSATCadPackageVersion Condition="'$(IMSATCadFlavor)' == 'ACAD2023_NET48'">24.2.0</IMSATCadPackageVersion>
+    <IMSATCadPackageVersion Condition="'$(IMSATCadFlavor)' == 'ACAD2024_NET48'">24.3.0</IMSATCadPackageVersion>
+    <IMSATCadPackageVersion Condition="'$(IMSATCadFlavor)' == 'ACAD2025_NET8'">25.0.1</IMSATCadPackageVersion>
+    <IMSATCadPackageVersion Condition="'$(IMSATCadFlavor)' == 'ACAD2025_NET10'">25.0.2</IMSATCadPackageVersion>
+    <IMSATCadPackageVersion Condition="'$(IMSATCadFlavor)' == 'ACAD2026_NET8'">25.1.0</IMSATCadPackageVersion>
+    <IMSATCadPackageVersion Condition="'$(IMSATCadFlavor)' == 'ACAD2026_NET10'">25.1.1</IMSATCadPackageVersion>
+    <IMSATCadHostYear Condition="'$(IMSATCadFlavor)' == 'ACAD2015_NET45'">2015</IMSATCadHostYear>
+    <IMSATCadHostYear Condition="'$(IMSATCadFlavor)' == 'ACAD2016_NET45'">2016</IMSATCadHostYear>
+    <IMSATCadHostYear Condition="'$(IMSATCadFlavor)' == 'ACAD2017_NET46'">2017</IMSATCadHostYear>
+    <IMSATCadHostYear Condition="'$(IMSATCadFlavor)' == 'ACAD2018_NET46'">2018</IMSATCadHostYear>
+    <IMSATCadHostYear Condition="'$(IMSATCadFlavor)' == 'ACAD2019_NET47'">2019</IMSATCadHostYear>
+    <IMSATCadHostYear Condition="'$(IMSATCadFlavor)' == 'ACAD2020_NET47'">2020</IMSATCadHostYear>
+    <IMSATCadHostYear Condition="'$(IMSATCadFlavor)' == 'ACAD2021_NET48'">2021</IMSATCadHostYear>
+    <IMSATCadHostYear Condition="'$(IMSATCadFlavor)' == 'ACAD2022_NET48'">2022</IMSATCadHostYear>
+    <IMSATCadHostYear Condition="'$(IMSATCadFlavor)' == 'ACAD2023_NET48'">2023</IMSATCadHostYear>
+    <IMSATCadHostYear Condition="'$(IMSATCadFlavor)' == 'ACAD2024_NET48'">2024</IMSATCadHostYear>
+    <IMSATCadHostYear Condition="'$(IMSATCadFlavor)' == 'ACAD2025_NET8' Or '$(IMSATCadFlavor)' == 'ACAD2025_NET10'">2025</IMSATCadHostYear>
+    <IMSATCadHostYear Condition="'$(IMSATCadFlavor)' == 'ACAD2026_NET8' Or '$(IMSATCadFlavor)' == 'ACAD2026_NET10'">2026</IMSATCadHostYear>
+    <IMSATCadHostDir Condition="'$(IMSATCadHostDir)' == ''">C:\Program Files\Autodesk\AutoCAD $(IMSATCadHostYear)</IMSATCadHostDir>
+    <IMSATCadIsModern Condition="'$(IMSATCadFramework)' == 'net8.0-windows' Or '$(IMSATCadFramework)' == 'net10.0-windows'">true</IMSATCadIsModern>
+    <UseWindowsForms Condition="'$(IMSATCadIsModern)' == 'true' And '$(MSBuildProjectName)' == 'MiningVolume.Plugin2023'">true</UseWindowsForms>
+    <UseWPF Condition="'$(IMSATCadIsModern)' == 'true' And '$(MSBuildProjectName)' == 'MiningVolume.Plugin2023'">true</UseWPF>
+  </PropertyGroup>
+  <!-- Fail at project evaluation, NOT after creating an inaccurately labeled DLL. -->
+  <Target Name="IMSATValidateCadFlavor" BeforeTargets="PrepareForBuild">
+    <Error Condition="'$(IMSATCadFramework)' == ''"
+           Text="IMSAT: unsupported CAD flavor '$(IMSATCadFlavor)'. Legacy 2012-2020 requires dedicated compatible build; NEVER relabel a net48 2023 binary." />
+    <Error Condition="'$(UseAutoCADNuGet)' != 'true' And !Exists('$(IMSATCadHostDir)\AcMgd.dll') And '$(MSBuildProjectName)' == 'MiningVolume.Plugin2023'"
+           Text="IMSAT: AutoCAD host SDK not found at $(IMSATCadHostDir); use -p:UseAutoCADNuGet=true for compile-only, or install the exact host SDK." />
+  </Target>
+</Project>

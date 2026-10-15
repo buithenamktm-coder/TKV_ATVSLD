@@ -25,9 +25,36 @@ namespace MiningVolume.Core.Volumes
             if (existing == null) throw new ArgumentNullException(nameof(existing));
             if (design == null) throw new ArgumentNullException(nameof(design));
             options = options ?? new VolumeCalculationOptions();
+            // A nonoverlapping level range previously produced "valid" zero
+            // volumes on every section. Fail with the true TIN Z extent.
+            // The UI can offer the user a computed range; never publish fake
+            // 0.00 m3 for surveyed elevations outside requested bands.
+            var supportedProfiles = endProfiles.Where(p=>p!=null && p.HasData).ToArray();
+            if (supportedProfiles.Length > 0)
+            {
+                var minZ = supportedProfiles.Min(p=>p.MinZ);
+                var maxZ = supportedProfiles.Max(p=>p.MaxZ);
+                double lower = Math.Min(options.FromLevel,options.ToLevel);
+                double upper = Math.Max(options.FromLevel,options.ToLevel);
+                if (upper < minZ-options.Tolerance || lower > maxZ+options.Tolerance)
+                {
+                    double suggestedFrom=Math.Floor(minZ/options.LevelStep)*options.LevelStep;
+                    double suggestedTo=Math.Ceiling(maxZ/options.LevelStep)*options.LevelStep;
+                    if(suggestedTo<=suggestedFrom)suggestedTo=suggestedFrom+options.LevelStep;
+                    throw new InvalidOperationException(
+                        $"Dải mức tính {options.FromLevel:0.###} đến {options.ToLevel:0.###} không chứa cao độ TIN " +
+                        $"({minZ:0.###} đến {maxZ:0.###} m). Đề nghị tính từ {suggestedFrom:0.###} " +
+                        $"đến {suggestedTo:0.###} m, hoặc nhập dải mức phù hợp. Không trả khối lượng 0 giả.");
+                }
+            }
             var bands = BuildBands(options.FromLevel, options.ToLevel, options.LevelStep, options.Tolerance);
             if (bands.Count == 0) throw new InvalidOperationException("Không tạo được dải cao độ tính khối lượng.");
 
+            // The planar TIN has already been accepted by surface integrity
+            // checks. A vertical curtain is a zero-plan-area feature: a
+            // section may cross a step, and it must NOT cause us to discard
+            // entire otherwise valid profiles/intervals. The segment sampler
+            // remains authoritative for coverage and elevation continuity.
             var warnings = new List<string>();
             var profileByName = endProfiles.Where(p => p != null).GroupBy(p => p.Line.Name)
                 .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
@@ -43,11 +70,20 @@ namespace MiningVolume.Core.Volumes
                     warnings.Add(line.Name + ": chưa có mặt cắt hợp lệ, không dùng để tính khối lượng.");
                     continue;
                 }
+                if (!p.IsUserEdited && p.Warnings.Any(message =>
+                    message.Contains("thiếu giao TIN") ||
+                    message.Contains("bỏ qua một đoạn không xác định đủ cao độ TIN")))
+                {
+                    warnings.Add(line.Name +
+                        ": thiếu dữ liệu cao độ trên một phần tuyến; diện tích mặt cắt chưa đầy đủ.");
+                    continue;
+                }
                 var ba = areaCalc.Calculate(p, bands, options.Tolerance);
                 sectionAreas.Add(ba); areaByName[line.Name] = ba;
             }
 
             var intervalRows = new List<SectionIntervalVolume>();
+            int skippedIntervals = 0;
             var levelCut = new double[bands.Count];
             var levelFill = new double[bands.Count];
             var builder = new SectionSystemBuilder();
@@ -64,14 +100,16 @@ namespace MiningVolume.Core.Volumes
                     !areaByName.TryGetValue(b.Name, out SectionBandAreas ab))
                 {
                     warnings.Add($"{a.Name}-{b.Name}: thiếu dữ liệu mặt cắt đầu/cuối; không tính khoảng này.");
+                    skippedIntervals++;
                     continue;
                 }
+
 
                 SectionProfile pm = null;
                 SectionBandAreas am = null;
                 double midOffset = (a.Offset + b.Offset) * 0.5;
                 var midLine = builder.BuildLineAtOffset(system.Boundary, system.Direction, midOffset, -(i + 1), "MID-", options.Tolerance);
-                if (midLine != null)
+                if (midLine != null && !pa.IsUserEdited && !pb.IsUserEdited)
                 {
                     pm = sampler.BuildProfile(midLine, existing, design, options.Tolerance);
                     if (pm.HasData) am = areaCalc.Calculate(pm, bands, options.Tolerance);
@@ -100,7 +138,8 @@ namespace MiningVolume.Core.Volumes
                     FillAreaEnd = ab.FillArea,
                     CutFormula = cutFormula,
                     FillFormula = fillFormula,
-                    Note = $"V1.0 tự chọn công thức theo chênh diện tích hai mặt cắt; ngưỡng {options.AreaDifferenceThreshold:P0}."
+                    HasMidArea=am!=null,
+                    Note = $"Tổng các dải cao độ; từng dải tự chọn công thức theo hai diện tích, ngưỡng {options.AreaDifferenceThreshold:P0}."
                 };
 
                 row.CutVolume = VolumeByFormula(
@@ -117,9 +156,15 @@ namespace MiningVolume.Core.Volumes
                         c1, c2, options.AreaDifferenceThreshold, options.Tolerance);
                     var fFormula = SelectFormula(
                         f1, f2, options.AreaDifferenceThreshold, options.Tolerance);
-                    levelCut[k] += VolumeByFormula(c1, c2, distance, cFormula);
-                    levelFill[k] += VolumeByFormula(f1, f2, distance, fFormula);
+                    double cut=VolumeByFormula(c1,c2,distance,cFormula),fill=VolumeByFormula(f1,f2,distance,fFormula);
+                    row.BandVolumes.Add(new SectionIntervalVolume {Index=bands[k].Index,StartSection=a.Name,EndSection=b.Name,
+                        Distance=distance,CutAreaStart=c1,CutAreaEnd=c2,FillAreaStart=f1,FillAreaEnd=f2,
+                        CutFormula=cFormula,FillFormula=fFormula,CutVolume=cut,FillVolume=fill});
+                    levelCut[k] += cut;
+                    levelFill[k] += fill;
                 }
+                row.CutVolume=row.BandVolumes.Sum(x=>x.CutVolume);
+                row.FillVolume=row.BandVolumes.Sum(x=>x.FillVolume);
             }
 
             var levels = new List<LevelVolumeSummary>();
@@ -127,18 +172,30 @@ namespace MiningVolume.Core.Volumes
                 levels.Add(new LevelVolumeSummary { Band = bands[k], CutVolume = levelCut[k], FillVolume = levelFill[k] });
 
             // Tính lại tổng hàng chi tiết bằng đúng tổng các tầng để không phát sinh sai số do hai đường tính khác nhau.
-            // Phân bổ theo từng khoảng được xây dựng từ tổng area trong phạm vi mức, vì vậy tổng hai bảng chỉ lệch do làm tròn hiển thị.
+            // Cộng cùng một tập đóng góp (khoảng, tầng); không phân bổ hay hiệu chỉnh tổng sau tính.
             double detailCut = intervalRows.Sum(x => x.CutVolume), detailFill = intervalRows.Sum(x => x.FillVolume);
             double levelCutTotal = levels.Sum(x => x.CutVolume), levelFillTotal = levels.Sum(x => x.FillVolume);
             if (Math.Abs(detailCut - levelCutTotal) > Math.Max(1e-6, Math.Abs(detailCut) * 1e-9) ||
                 Math.Abs(detailFill - levelFillTotal) > Math.Max(1e-6, Math.Abs(detailFill) * 1e-9))
                 warnings.Add("Cảnh báo kiểm soát: tổng chi tiết và tổng theo tầng có sai khác vượt dung sai số học.");
 
-            return new VolumeResult(bands, intervalRows, levels, sectionAreas, warnings);
+            if (skippedIntervals > 0)
+                warnings.Add($"CHƯA ĐẦY ĐỦ: {skippedIntervals:n0} khoảng chưa có khối lượng xác nhận. Tổng hiện có chỉ gồm các khoảng đã tính hợp lệ.");
+            if (intervalRows.Count == 0)
+                throw new InvalidOperationException("Không có khoảng mặt cắt đủ điều kiện tính. Các tuyến trong phạm vi này đi qua vùng mặt đứng nhiều Z hoặc chưa đủ dữ liệu; không thể thay số chưa xác nhận bằng 0.");
+            return new VolumeResult(bands, intervalRows, levels, sectionAreas, warnings,
+                skippedIntervals);
         }
 
         public static IReadOnlyList<LevelBand> BuildBands(double fromLevel, double toLevel, double step, double tol = 1e-9)
         {
+            if (double.IsNaN(fromLevel) || double.IsInfinity(fromLevel) ||
+                double.IsNaN(toLevel) || double.IsInfinity(toLevel) ||
+                double.IsNaN(step) || double.IsInfinity(step) ||
+                double.IsNaN(tol) || double.IsInfinity(tol) || tol <= 0)
+                throw new ArgumentException("Mức, bước và dung sai phải là số hữu hạn hợp lệ.");
+            if (Math.Abs(toLevel-fromLevel)/step > 100000)
+                throw new ArgumentException("Số dải cao độ vượt 100.000; hãy tăng bước chia tầng.");
             if (step <= tol) throw new ArgumentOutOfRangeException(nameof(step), "Bước chia tầng phải lớn hơn 0.");
             if (Math.Abs(toLevel - fromLevel) <= tol) throw new ArgumentException("Mức bắt đầu và mức kết thúc phải khác nhau.");
             var r = new List<LevelBand>();
@@ -150,6 +207,7 @@ namespace MiningVolume.Core.Volumes
                 double next = cur + sign * step;
                 if (sign > 0 && next > toLevel) next = toLevel;
                 if (sign < 0 && next < toLevel) next = toLevel;
+                if(next==cur)throw new ArgumentException("Bước chia tầng quá nhỏ so với độ lớn cao độ.");
                 r.Add(new LevelBand(index++, cur, next));
                 cur = next;
             }

@@ -26,7 +26,7 @@ namespace MiningVolume.Core.Sections
             Offset = offset;
             Direction = direction;
             Normal = normal;
-            Spans = spans ?? Array.Empty<SectionSpan>();
+            Spans = spans ?? MiningVolume.Core.Compatibility.EmptyArray<SectionSpan>.Value;
         }
         public int Index { get; }
         public string Name { get; }
@@ -54,9 +54,9 @@ namespace MiningVolume.Core.Sections
         {
             Direction = direction;
             Normal = normal;
-            Boundary = boundary ?? Array.Empty<Vec2>();
-            Lines = lines ?? Array.Empty<SectionLine>();
-            Warnings = warnings ?? Array.Empty<string>();
+            Boundary = boundary ?? MiningVolume.Core.Compatibility.EmptyArray<Vec2>.Value;
+            Lines = lines ?? MiningVolume.Core.Compatibility.EmptyArray<SectionLine>.Value;
+            Warnings = warnings ?? MiningVolume.Core.Compatibility.EmptyArray<string>.Value;
         }
         public Vec2 Direction { get; }
         public Vec2 Normal { get; }
@@ -96,13 +96,14 @@ namespace MiningVolume.Core.Sections
 
     public sealed class SectionProfile
     {
-        public SectionProfile(SectionLine line, IReadOnlyList<SectionProfileSegment> segments, double cutArea, double fillArea, IReadOnlyList<string> warnings)
+        public SectionProfile(SectionLine line, IReadOnlyList<SectionProfileSegment> segments, double cutArea, double fillArea, IReadOnlyList<string> warnings, bool isUserEdited=false)
         {
+            IsUserEdited=isUserEdited;
             Line = line;
-            Segments = segments ?? Array.Empty<SectionProfileSegment>();
+            Segments = segments ?? MiningVolume.Core.Compatibility.EmptyArray<SectionProfileSegment>.Value;
             CutArea = cutArea;
             FillArea = fillArea;
-            Warnings = warnings ?? Array.Empty<string>();
+            Warnings = warnings ?? MiningVolume.Core.Compatibility.EmptyArray<string>.Value;
             MinZ = double.PositiveInfinity;
             MaxZ = double.NegativeInfinity;
             foreach (var s in Segments)
@@ -112,6 +113,7 @@ namespace MiningVolume.Core.Sections
             }
             if (double.IsInfinity(MinZ)) { MinZ = 0; MaxZ = 0; }
         }
+        public bool IsUserEdited { get; }
         public SectionLine Line { get; }
         public IReadOnlyList<SectionProfileSegment> Segments { get; }
         public double CutArea { get; }

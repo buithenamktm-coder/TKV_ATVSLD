@@ -37,7 +37,7 @@ namespace MiningVolume2023.UI
 
             panel.Controls.Add(new Label
             {
-                Text = "BẢN QUYỀN IMSAT MININGVOLUME",
+                Text = "Bản quyền IMSAT VOLUME",
                 Dock = DockStyle.Fill, Font = new Font("Arial", 11F, FontStyle.Bold),
                 TextAlign = ContentAlignment.MiddleLeft
             }, 0, 0);

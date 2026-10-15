@@ -8,11 +8,11 @@ def read(p):
 
 def test_v2_grid_page_exposes_calculate_draw_excel_cancel():
     s=read("src/MiningVolume.Plugin2023/UI/GridPage.cs")
-    assert "CHỌN TRÊN CAD" in s
-    assert "TÍNH LƯỚI" in s
-    assert "HỦY TÍNH" in s
-    assert "VẼ LƯỚI CAD" in s
-    assert "XUẤT EXCEL" in s
+    assert "Chọn trên CAD" in s
+    assert "Tính khối lượng" in s
+    assert "Hủy tính" in s
+    assert "Vẽ lưới CAD" in s
+    assert "Xuất Excel" in s
     assert "GridVolumeCalculator().Calculate" in s
     assert "GridWorkflowService.Commit" in s
     assert "GridCadRenderer.Draw" in s

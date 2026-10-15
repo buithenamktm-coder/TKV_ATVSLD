@@ -1,0 +1,43 @@
+[
+  {
+    "fixture": "via4-scoped-ht",
+    "host": "NOT_TESTED",
+    "phase": "complete",
+    "oldCadRejected": 4,
+    "smallestArea": 4.3741865598384555e-15,
+    "coverage": 7410262.19450689,
+    "verticalFaces": 20615,
+    "issues": {
+      "VERTICAL_XY_SOURCE_REVIEW": 1,
+      "RELAXED_CONFLICTING_CONTOUR_CONSTRAINTS": 1,
+      "AUTO_NODE_BREAKLINE_CROSSINGS": 1,
+      "AUTO_NORMALIZE_BREAKLINE_OVERLAPS": 1,
+      "AUTO_REMOVE_DUPLICATE_BREAKLINES": 1,
+      "LOCALLY_RELAXED_UNRESOLVED_TOPOLOGY": 1,
+      "RETAIN_SMALL_TRIANGLES": 1
+    },
+    "triangles": 455152,
+    "ms": 96441,
+    "managedBytes": 1080019120
+  },
+  {
+    "fixture": "via4-scoped-tk",
+    "host": "NOT_TESTED",
+    "phase": "complete",
+    "oldCadRejected": 6,
+    "smallestArea": 1.8072837063703995e-15,
+    "coverage": 7410262.194506741,
+    "verticalFaces": 28214,
+    "issues": {
+      "VERTICAL_XY_SOURCE_REVIEW": 1,
+      "RELAXED_CONFLICTING_CONTOUR_CONSTRAINTS": 1,
+      "AUTO_NODE_BREAKLINE_CROSSINGS": 1,
+      "AUTO_NORMALIZE_BREAKLINE_OVERLAPS": 1,
+      "AUTO_REMOVE_DUPLICATE_BREAKLINES": 1,
+      "RETAIN_SMALL_TRIANGLES": 1
+    },
+    "triangles": 518321,
+    "ms": 81130,
+    "managedBytes": 1747341792
+  }
+]

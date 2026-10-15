@@ -7,6 +7,23 @@ namespace MiningVolume.Core.Sections
 {
     public sealed class SectionSystemBuilder
     {
+        /// <summary>
+        /// Converts the baseline selected by two CAD points into the actual
+        /// section direction. A picked east-west baseline gives north-south
+        /// sections; the builder still receives the line direction, never the
+        /// offset normal. Persist the converted vector for stable DWG reopen.
+        /// </summary>
+        public static Vec2 PerpendicularToSelectedDirection(Vec2 selected)
+        {
+            double length = Math.Sqrt(selected.X * selected.X +
+                selected.Y * selected.Y);
+            if (double.IsNaN(length) || double.IsInfinity(length) || length <= 1e-9)
+                throw new ArgumentException(
+                    "Hai điểm xác định phương chuẩn phải khác nhau và hợp lệ.",
+                    nameof(selected));
+            return new Vec2(-selected.Y / length, selected.X / length);
+        }
+
         public SectionSystem Build(IReadOnlyList<Vec2> boundary, Vec2 directionInput, SectionGenerationOptions options)
         {
             if (boundary == null || boundary.Count < 3) throw new ArgumentException("Đường bao phải có ít nhất 3 đỉnh.", nameof(boundary));

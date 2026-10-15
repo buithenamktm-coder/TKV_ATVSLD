@@ -29,6 +29,7 @@ namespace MiningVolume2023.Services
             r.Sheets.Add(GridSummary(grid));
             r.Sheets.Add(Totals(grid));
             r.Sheets.Add(CalculationDetail(grid));
+            ExportWorkflowService.ApplyOrganizationHeader(r, ProjectState.Current);
             return r;
         }
 
@@ -43,9 +44,28 @@ namespace MiningVolume2023.Services
         private static ReportSheet Info(GridVolumeReport grid, GridVolumeOptions opt)
         {
             var s = Sheet("THÔNG TIN", "THÔNG TIN TÍNH KHỐI LƯỢNG LƯỚI", "Chỉ tiêu", "Giá trị");
+            s.ColumnWidths[0] = 45;
+            s.ColumnWidths[1] = 45;
             s.Notes.Add("Khối lượng hình học chính thức phải được tính lại trong AutoCAD sau thay đổi TIN/ranh lưới.");
+            var state = ProjectState.Current;
+            if (state.MiningUnitGroup != MiningUnitCatalog.OutsideTkv)
+                Row(s, "Đơn vị cấp trên", ExportWorkflowService.TkvParentHeading);
+            Row(s,"Đơn vị tính toán", string.IsNullOrWhiteSpace(state.MiningUnitName) ? "Chưa thiết lập" : state.MiningUnitName);
+            Row(s,"Loại đơn vị", state.MiningUnitGroup);
+            Row(s,"Tỷ lệ mặt cắt (ngang / đứng)",
+                "1:"+state.HorizontalScale.ToString("N0")+" / 1:"+state.VerticalScale.ToString("N0"));
+            Row(s,"Thông số mặt cắt",state.SectionParameterMode);
+            Row(s,"Bước chia trục Z, m",state.SectionAxisElevationInterval.ToString("0.###"));
+            Row(s,"Kỳ tính khối lượng", state.VolumePeriodLabel);
+            Row(s,"Thời điểm tính lưới", state.GridCalculatedUtc.HasValue
+                ? state.GridCalculatedUtc.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss")
+                : "Chưa xác nhận trong phiên hiện tại");
+            Row(s,"Thời gian thực tính lưới, giây", state.GridCalculationSeconds.HasValue
+                ? state.GridCalculationSeconds.Value.ToString("0.000")
+                : "Chưa xác nhận trong phiên hiện tại");
+            Row(s,"Thời điểm xuất Excel",DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss"));
             Row(s,"Người phát triển","Bùi Thế Nam");
-            Row(s,"Điện thoại","0967280686");
+            Row(s,"ĐT/Zalo","0967280686");
             Row(s,"Phương pháp",grid.Method);
             Row(s,"Gốc lưới X",opt.Origin.X.ToString("0.###"));
             Row(s,"Gốc lưới Y",opt.Origin.Y.ToString("0.###"));
@@ -53,6 +73,11 @@ namespace MiningVolume2023.Services
             Row(s,"Kích thước Y (m)",opt.SizeY.ToString("0.###"));
             Row(s,"Góc xoay (độ)",opt.RotationDegrees.ToString("0.###"));
             Row(s,"Số ô tính",grid.Cells.Count.ToString());
+            Row(s,"Số ô nhiều Z chưa xác nhận",grid.AmbiguousCells.ToString());
+            Row(s,"Số ô thiếu phủ hiện trạng",grid.MissingExistingCells.ToString());
+            Row(s,"Số ô thiếu phủ thiết kế",grid.MissingDesignCells.ToString());
+            Row(s,"Số ô hai TIN đều phủ nhưng không giao đúng",grid.IntersectionMismatchCells.ToString());
+            Row(s,"Diện tích nhiều Z chưa xác nhận (m²)",grid.AmbiguousArea.ToString("0.###"));
             Row(s,"Độ đầy đủ dữ liệu",grid.IsComplete?"Đủ hai TIN":"THIẾU DỮ LIỆU – CHƯA ĐƯỢC NGHIỆM THU");
             return s;
         }
@@ -61,8 +86,8 @@ namespace MiningVolume2023.Services
         {
             var s=Sheet("CAO ĐỘ NÚT LƯỚI","CAO ĐỘ CÁC NÚT LƯỚI",
                 "STT","Mã nút","I","J","X","Y","Ztn","Ztk","ΔZ","Trạng thái");
-            s.Notes.Add("ΔZ=Ztn−Ztk; nút thiếu cao độ để trống, không điền số 0.");
-            var nodes=new SortedDictionary<(int,int), (double x,double y,double? tn,double? tk)>(
+            s.Notes.Add("ΔZ=Ztn−Ztk; nút thiếu cao độ để trống, không điền số 0. Với vùng nhiều Z, cao độ mẫu không phải nghiệm thu bề mặt.");
+            var nodes=new SortedDictionary<(int,int), (double x,double y,double? tn,double? tk,bool uncertain)>(
                 Comparer<(int,int)>.Create((a,b)=>a.Item1!=b.Item1?a.Item1.CompareTo(b.Item1):a.Item2.CompareTo(b.Item2)));
             foreach(var c in grid.Cells)
             {
@@ -71,24 +96,32 @@ namespace MiningVolume2023.Services
                     int x=c.I+(k==1||k==2?1:0), y=c.J+(k>=2?1:0);
                     var key=(x,y);
                     double? tn=c.ExistingNodeHeights?[k], tk=c.DesignNodeHeights?[k];
-                    if(!nodes.ContainsKey(key) || (!nodes[key].tn.HasValue && tn.HasValue))
-                        nodes[key]=(c.Corners[k].X,c.Corners[k].Y,tn,tk);
+                    if(!nodes.ContainsKey(key))
+                        nodes[key]=(c.Corners[k].X,c.Corners[k].Y,tn,tk,c.IsVerticalConflict);
+                    else
+                    {
+                        var previous=nodes[key];
+                        nodes[key]=(previous.x,previous.y,
+                            previous.tn ?? tn,previous.tk ?? tk,
+                            previous.uncertain || c.IsVerticalConflict);
+                    }
                 }
             }
             int row=FirstDataRow, i=0;
             foreach(var item in nodes)
             {
                 var p=item.Value;
-                bool valid=p.tn.HasValue && p.tk.HasValue;
+                bool valid=!p.uncertain && p.tn.HasValue && p.tk.HasValue;
                 s.Rows.Add(new ReportCell[]
                 {
                     ReportCell.Int(++i),ReportCell.Text("N-"+item.Key.Item1+"-"+item.Key.Item2),
                     ReportCell.Int(item.Key.Item1),ReportCell.Int(item.Key.Item2),
                     ReportCell.N3(p.x),ReportCell.N3(p.y),
-                    p.tn.HasValue?ReportCell.N3(p.tn.Value):ReportCell.Text(""),
-                    p.tk.HasValue?ReportCell.N3(p.tk.Value):ReportCell.Text(""),
+                    valid?ReportCell.N3(p.tn.Value):ReportCell.Text(""),
+                    valid?ReportCell.N3(p.tk.Value):ReportCell.Text(""),
                     valid?ReportCell.Formula3("G"+row+"-H"+row):ReportCell.Text(""),
-                    ReportCell.Text(valid?"Đủ":"THIẾU Z")
+                    ReportCell.Text(p.uncertain?"NHIỀU Z - CHƯA XÁC NHẬN":
+                        valid?"Đủ":"THIẾU Z")
                 });
                 row++;
             }
@@ -108,9 +141,14 @@ namespace MiningVolume2023.Services
                 {
                     ReportCell.Int(++i),ReportCell.Text(c.CellCode),ReportCell.Int(c.I),ReportCell.Int(c.J),
                     ReportCell.N3(c.Volume.CalculationArea),ReportCell.N3(c.Volume.CoveredArea),
-                    ReportCell.N3(c.Volume.NoDataArea),ReportCell.N3(c.Volume.CutVolume),
-                    ReportCell.N3(c.Volume.FillVolume),ReportCell.Formula3("H"+row+"-I"+row),
-                    ReportCell.Text(c.Volume.IsComplete?"Đủ":"THIẾU DỮ LIỆU")
+                    ReportCell.N3(c.Volume.NoDataArea),
+                    c.IsVerticalConflict || c.Volume.CoveredArea<=1e-9
+                        ? ReportCell.Text("") : ReportCell.N3(c.Volume.CutVolume),
+                    c.IsVerticalConflict || c.Volume.CoveredArea<=1e-9
+                        ? ReportCell.Text("") : ReportCell.N3(c.Volume.FillVolume),
+                    c.IsVerticalConflict || c.Volume.CoveredArea<=1e-9
+                        ? ReportCell.Text("") : ReportCell.Formula3("H"+row+"-I"+row),
+                    ReportCell.Text(c.CoverageStatus)
                 });
                 row++;
             }
@@ -121,7 +159,7 @@ namespace MiningVolume2023.Services
         {
             var s=Sheet("BẢNG LƯỚI TỔNG HỢP","BẢNG LƯỚI TỔNG HỢP LIÊN KẾT",
                 "Mã ô","Diện tích (m²)","V đào (m³)","V đắp (m³)","V thuần (m³)");
-            s.Notes.Add("Dữ liệu lấy qua công thức liên kết với CHI TIẾT Ô LƯỚI.");
+            s.Notes.Add("Dữ liệu liên kết với CHI TIẾT Ô LƯỚI; ô có trạng thái chưa xác nhận giữ trống khối lượng.");
             foreach(var c in grid.Cells.Select((v,i)=>new{v,i}))
             {
                 int n=FirstDataRow+c.i;
@@ -130,9 +168,12 @@ namespace MiningVolume2023.Services
                 {
                     ReportCell.Text(c.v.CellCode),
                     ReportCell.Formula3(pre+"E"+n),
-                    ReportCell.Formula3(pre+"H"+n),
-                    ReportCell.Formula3(pre+"I"+n),
-                    ReportCell.Formula3("C"+n+"-D"+n)
+                    c.v.IsVerticalConflict || c.v.Volume.CoveredArea<=1e-9
+                        ? ReportCell.Text("") : ReportCell.Formula3(pre+"H"+n),
+                    c.v.IsVerticalConflict || c.v.Volume.CoveredArea<=1e-9
+                        ? ReportCell.Text("") : ReportCell.Formula3(pre+"I"+n),
+                    c.v.IsVerticalConflict || c.v.Volume.CoveredArea<=1e-9
+                        ? ReportCell.Text("") : ReportCell.Formula3("C"+n+"-D"+n)
                 });
             }
             return s;
@@ -142,7 +183,14 @@ namespace MiningVolume2023.Services
         {
             var s=Sheet("TỔNG HỢP KHỐI LƯỢNG","KHỐI LƯỢNG TỔNG HỢP LƯỚI Ô VUÔNG",
                 "Chỉ tiêu","Giá trị","Đơn vị");
-            s.Notes.Add("Không phát hành kết quả chính thức khi còn diện tích thiếu dữ liệu.");
+            s.ColumnWidths[0] = 43;
+            s.ColumnWidths[1] = 22;
+            s.ColumnWidths[2] = 34;
+            s.AutoFilter = false;
+            s.HasSignatures = true;
+            s.Notes.Add(grid.IsComplete
+                ? "Các ô có đầy đủ TIN hiện trạng và thiết kế."
+                : "CHƯA ĐẦY ĐỦ: chỉ là tổng phần hợp lệ; ô nhiều Z/thiếu TIN chưa xác nhận, không phải thể tích bằng 0.");
             int end=FirstDataRow+grid.Cells.Count-1;
             string from="'CHI TIẾT Ô LƯỚI'!";
             s.Rows.Add(new ReportCell[]{ReportCell.Text("Tổng thể tích đào"),
@@ -151,8 +199,30 @@ namespace MiningVolume2023.Services
                 ReportCell.Formula3("SUM("+from+"I"+FirstDataRow+":I"+end+")"),ReportCell.Text("m³")});
             s.Rows.Add(new ReportCell[]{ReportCell.Text("Chênh lệch đào – đắp"),
                 ReportCell.Formula3("B4-B5"),ReportCell.Text("m³")});
-            s.Rows.Add(new ReportCell[]{ReportCell.Text("Diện tích thiếu TIN"),
+            s.Rows.Add(new ReportCell[]{ReportCell.Text("Diện tích chưa xác nhận (thiếu TIN/nhiều Z)"),
                 ReportCell.Formula3("SUM("+from+"G"+FirstDataRow+":G"+end+")"),ReportCell.Text("m²")});
+            s.Rows.Add(new ReportCell[]{ReportCell.Text("Tình trạng nghiệm thu"),
+                ReportCell.Text(grid.IsComplete ? "ĐỦ DỮ LIỆU ĐỂ RÀ SOÁT" :
+                    "CHƯA ĐẦY ĐỦ – TỔNG CHỈ LÀ PHẦN CÓ DỮ LIỆU"),
+                ReportCell.Text("")});
+            // Sign-off area belongs to the same volume-summary worksheet.
+            // Keep all formula row numbers intact by appending after totals.
+            var state = ProjectState.Current;
+            s.Rows.Add(new ReportCell[]{ReportCell.Text(""), ReportCell.Text(""), ReportCell.Text("")});
+            if (state.MiningUnitGroup != MiningUnitCatalog.OutsideTkv)
+                s.Rows.Add(new ReportCell[]{ReportCell.Text("Đơn vị cấp trên",true),
+                    ReportCell.Text(""),ReportCell.Text(ExportWorkflowService.TkvParentHeading)});
+            s.Rows.Add(new ReportCell[]{ReportCell.Text("Đơn vị tính toán",true),
+                ReportCell.Text(""),ReportCell.Text(state.MiningUnitName ?? "")});
+            s.Rows.Add(new ReportCell[]{ReportCell.Text("Kỳ tính khối lượng",true),
+                ReportCell.Text(""),ReportCell.Text(state.VolumePeriodLabel)});
+            s.Rows.Add(new ReportCell[]{ReportCell.Text(""),ReportCell.Text(""),ReportCell.Text("")});
+            s.Rows.Add(new ReportCell[]{ReportCell.Text("NGƯỜI TÍNH TOÁN",true),
+                ReportCell.Text(""),ReportCell.Text("NGƯỜI KIỂM TRA",true)});
+            s.Rows.Add(new ReportCell[]{ReportCell.Text("(Ký, ghi rõ họ tên)"),
+                ReportCell.Text(""),ReportCell.Text("(Ký, ghi rõ họ tên)")});
+            s.Rows.Add(new ReportCell[]{ReportCell.Text(""),ReportCell.Text(""),ReportCell.Text("")});
+            s.Rows.Add(new ReportCell[]{ReportCell.Text(""),ReportCell.Text(""),ReportCell.Text("")});
             return s;
         }
 
@@ -170,9 +240,11 @@ namespace MiningVolume2023.Services
                 {
                     ReportCell.Text(c.CellCode),ReportCell.Text("TIN overlay exact"),
                     ReportCell.Formula3(prefix+"F"+row),
-                    ReportCell.Formula3(prefix+"H"+row),
-                    ReportCell.Formula3(prefix+"I"+row),
-                    ReportCell.Text(c.Volume.IsComplete?"Đã phủ":"Chưa đủ hai TIN")
+                    c.IsVerticalConflict || c.Volume.CoveredArea<=1e-9
+                        ? ReportCell.Text("") : ReportCell.Formula3(prefix+"H"+row),
+                    c.IsVerticalConflict || c.Volume.CoveredArea<=1e-9
+                        ? ReportCell.Text("") : ReportCell.Formula3(prefix+"I"+row),
+                    ReportCell.Text(c.CoverageStatus)
                 });
             }
             return s;

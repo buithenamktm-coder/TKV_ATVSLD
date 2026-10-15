@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using Autodesk.AutoCAD.Colors;
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.Geometry;
@@ -16,12 +17,18 @@ namespace MiningVolume2023.Services
         private const string EmptyLayer = "MV_LUOI_O";
         private const string LabelLayer = "MV_LUOI_NHAN";
 
-        public static void Draw(Database database, GridVolumeReport report, bool labels)
+        public static void Draw(Database database, GridVolumeReport report, bool labels,
+            Action<int, int> progress = null, CancellationToken cancellationToken = default(CancellationToken))
         {
             if (database == null) throw new ArgumentNullException(nameof(database));
             if (report == null || report.Cells == null) throw new InvalidOperationException("Chưa có kết quả lưới.");
-            if (report.Cells.Count > 5000)
-                throw new InvalidOperationException("Hệ lưới trên 5.000 ô: hãy thu nhỏ phạm vi hoặc xuất Excel để tránh tạo quá nhiều đối tượng CAD.");
+            // Matching the calculator's existing 100,000-cell safety budget.
+            // Each grid cell is ONE native editable closed polyline; do not
+            // arbitrarily reject usable 5,001+ cell CAD drawings.
+            if (report.Cells.Count > 100000)
+                throw new InvalidOperationException(
+                    "Hệ lưới vượt 100.000 ô; hãy tăng kích thước ô hoặc chia vùng tính.");
+            cancellationToken.ThrowIfCancellationRequested();
             using (var tr = database.TransactionManager.StartTransaction())
             {
                 var bt = (BlockTable)tr.GetObject(database.BlockTableId, OpenMode.ForRead);
@@ -33,10 +40,16 @@ namespace MiningVolume2023.Services
                 var empty=EnsureLayer(database,tr,EmptyLayer,7);
                 var text=EnsureLayer(database,tr,LabelLayer,7);
 
+                int completed = 0;
+                int total = report.Cells.Count;
                 foreach(var cell in report.Cells)
                 {
+                    if ((completed & 511) == 0)
+                        cancellationToken.ThrowIfCancellationRequested();
+                    if (cell == null || cell.Corners == null || cell.Corners.Count < 3)
+                        throw new InvalidOperationException("Ô lưới có đường bao không hợp lệ.");
                     var v=cell.Volume;
-                    ObjectId layer = !v.IsComplete ? noData :
+                    ObjectId layer = cell.IsVerticalConflict ? noData : !v.IsComplete ? noData :
                         v.CutVolume > 1e-8 && v.FillVolume > 1e-8 ? mixed :
                         v.CutVolume > 1e-8 ? cut : v.FillVolume > 1e-8 ? fill : empty;
                     var poly = new Polyline(cell.Corners.Count) { LayerId=layer, Closed=true };
@@ -59,15 +72,28 @@ namespace MiningVolume2023.Services
                             LayerId=text,
                             Position=new Point3d(x,y,0),
                             Height=height,
-                            TextString= !v.IsComplete
-                                ? cell.CellCode + " THIEU TIN"
+                            TextString= cell.IsVerticalConflict
+                                ? cell.CellCode + " NHIEU Z - CHUA XAC NHAN"
+                                : !v.IsComplete
+                                ? cell.CellCode + (cell.CoverageStatus == "Thiếu phủ TIN hiện trạng"
+                                    ? " THIEU HT"
+                                    : cell.CoverageStatus == "Thiếu phủ TIN thiết kế"
+                                        ? " THIEU TK"
+                                        : cell.CoverageStatus == "Thiếu cả TIN HT/TK"
+                                            ? " THIEU HT+TK"
+                                            : " LOI GIAO TIN")
                                 : cell.CellCode + " D" + v.CutVolume.ToString("0.0") +
                                     " / P" + v.FillVolume.ToString("0.0")
                         };
                         model.AppendEntity(label);
                         tr.AddNewlyCreatedDBObject(label,true);
                     }
+                    completed++;
+                    if ((completed & 1023) == 0 || completed == total)
+                        progress?.Invoke(completed, total);
                 }
+                cancellationToken.ThrowIfCancellationRequested();
+                // Commit once only: any failure leaves no partial CAD grid.
                 tr.Commit();
             }
         }

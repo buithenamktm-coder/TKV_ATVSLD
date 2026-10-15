@@ -28,6 +28,26 @@ namespace MiningVolume.Core.Grid
         public IReadOnlyList<double?> ExistingNodeHeights { get; internal set; }
         public IReadOnlyList<double?> DesignNodeHeights { get; internal set; }
         public GridCellVolume Volume { get; internal set; }
+        public double ExistingCoveredArea { get; internal set; }
+        public double DesignCoveredArea { get; internal set; }
+        public string CoverageStatus
+        {
+            get
+            {
+                if (IsVerticalConflict) return "Nhiều Z - chưa xác nhận";
+                if (Volume == null) return "Chưa tính";
+                double tol = Math.Max(1e-7, Volume.CalculationArea * 1e-7);
+                if (Volume.IsComplete) return "Đủ";
+                bool ht = ExistingCoveredArea + tol >= Volume.CalculationArea;
+                bool tk = DesignCoveredArea + tol >= Volume.CalculationArea;
+                if (!ht && !tk) return "Thiếu cả TIN HT/TK";
+                if (!ht) return "Thiếu phủ TIN hiện trạng";
+                if (!tk) return "Thiếu phủ TIN thiết kế";
+                return "Lỗi giao hai TIN - cần đối chiếu";
+            }
+        }
+        // A zero-volume grid cell with this flag is NOT certified zero.
+        public bool IsVerticalConflict { get; internal set; }
     }
 
     public sealed class GridVolumeReport
@@ -36,7 +56,21 @@ namespace MiningVolume.Core.Grid
         public double TotalCutVolume => Cells.Sum(x => x.Volume.CutVolume);
         public double TotalFillVolume => Cells.Sum(x => x.Volume.FillVolume);
         public double TotalNoDataArea => Cells.Sum(x => x.Volume.NoDataArea);
-        public bool IsComplete => Cells.All(x => x.Volume.IsComplete);
+        public bool IsComplete => Cells.All(x => x.Volume.IsComplete) && AmbiguousCells == 0;
+        public int AmbiguousCells => Cells.Count(x => x.IsVerticalConflict);
+        public double AmbiguousArea => Cells.Where(x => x.IsVerticalConflict).Sum(x => x.Volume.CalculationArea);
+        public int MissingExistingCells => Cells.Count(c=>!c.IsVerticalConflict &&
+            c.Volume.CalculationArea-c.ExistingCoveredArea >
+            Math.Max(1e-7,c.Volume.CalculationArea*1e-7));
+        public int MissingDesignCells => Cells.Count(c=>!c.IsVerticalConflict &&
+            c.Volume.CalculationArea-c.DesignCoveredArea >
+            Math.Max(1e-7,c.Volume.CalculationArea*1e-7));
+        public int IntersectionMismatchCells => Cells.Count(c=>!c.IsVerticalConflict &&
+            !c.Volume.IsComplete &&
+            c.ExistingCoveredArea >= c.Volume.CalculationArea -
+                Math.Max(1e-7,c.Volume.CalculationArea*1e-7) &&
+            c.DesignCoveredArea >= c.Volume.CalculationArea -
+                Math.Max(1e-7,c.Volume.CalculationArea*1e-7));
         public string Method => "TIN overlay – exact signed integration";
     }
 
@@ -53,10 +87,19 @@ namespace MiningVolume.Core.Grid
             Action<int, int> progress = null,
             CancellationToken cancellationToken = default(CancellationToken))
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (existing == null || existing.Triangles == null || existing.Triangles.Count == 0)
                 throw new ArgumentException("TIN hiện trạng chưa hợp lệ.", nameof(existing));
             if (design == null || design.Triangles == null || design.Triangles.Count == 0)
                 throw new ArgumentException("TIN thiết kế chưa hợp lệ.", nameof(design));
+            // A 3D vertical face has zero planimetric area and contributes
+            // zero to the integral of (Zexisting - Zdesign) over the XY grid.
+            // Both accepted TINs already contain the piecewise-planar support
+            // triangles, which MUST remain in the calculation even when
+            // duplicate-XY heights formed an upright curtain. Safety is
+            // enforced by the exact overlap/coverage check in the kernel:
+            // a true double-sheet/overlapping planar support is rejected.
+            // No source Z is deleted, averaged or chosen at runtime.
             if (options == null || options.Boundary == null || options.Boundary.Count < 3)
                 throw new ArgumentException("Cần đường bao khép kín có ít nhất ba đỉnh.", nameof(options));
             if (!Finite(options.SizeX) || !Finite(options.SizeY) ||
@@ -74,6 +117,8 @@ namespace MiningVolume.Core.Grid
             double minV = double.PositiveInfinity, maxV = double.NegativeInfinity;
             foreach (var p in options.Boundary)
             {
+                if (!Finite(p.X) || !Finite(p.Y))
+                    throw new ArgumentException("Đường bao chứa tọa độ không hữu hạn.");
                 double dx = p.X - options.Origin.X, dy = p.Y - options.Origin.Y;
                 double u = cos * dx + sin * dy, v = -sin * dx + cos * dy;
                 minU = Math.Min(minU, u); maxU = Math.Max(maxU, u);
@@ -90,8 +135,13 @@ namespace MiningVolume.Core.Grid
                 ni * nj > options.MaxCells)
                 throw new InvalidOperationException("Số ô lưới vượt giới hạn thiết lập; hãy tăng kích thước ô hoặc thu nhỏ đường bao.");
 
-            using (var existingIndex = new TriangleGridIndex(existing.Triangles, options, cos, sin))
-            using (var designIndex = new TriangleGridIndex(design.Triangles, options, cos, sin))
+            // No cell-specific dependence in polygon triangulation. Reusing
+            // this immutable clip context removes thousands of redundant
+            // O(vertices^2) ear-clipping passes for large mine boundaries.
+            var clipBoundary = ExactGridCellCalculator.PrepareBoundary(
+                options.Boundary, options.Holes);
+            using (var existingIndex = new TriangleGridIndex(existing.Triangles, options, cos, sin, cancellationToken))
+            using (var designIndex = new TriangleGridIndex(design.Triangles, options, cos, sin, cancellationToken))
             {
                 var cells = new List<GridVolumeCell>();
                 int total = checked((int)(ni * nj)), processed = 0;
@@ -107,18 +157,29 @@ namespace MiningVolume.Core.Grid
                             World(u0 + options.SizeX, v0 + options.SizeY, options.Origin, cos, sin),
                             World(u0, v0 + options.SizeY, options.Origin, cos, sin)
                         };
+                        // Integrate exactly over the XY support triangles.
+                        // The additional vertical 3DFACEs have ZERO XY area;
+                        // excluding entire incident cells invented "missing TIN"
+                        // over otherwise fully covered mine surfaces (KL mb.dxf).
                         var tn = existingIndex.Candidates((int)i, (int)j, cell);
                         var tk = designIndex.Candidates((int)i, (int)j, cell);
-                        var volume = ExactGridCellCalculator.Calculate(tn, tk, cell, options.Boundary, options.Holes);
+                        var volume = ExactGridCellCalculator.CalculatePrepared(tn, tk, cell, clipBoundary, cancellationToken);
                         if (volume.CalculationArea > 1e-9)
+                        {
+                            double htArea=volume.ExistingSurfaceArea;
+                            double tkArea=volume.DesignSurfaceArea;
                             cells.Add(new GridVolumeCell
                             {
                                 I = checked((int)i), J = checked((int)j),
                                 Corners = cell,
                                 ExistingNodeHeights = cell.Select(p => SampleZ(tn, p)).ToArray(),
                                 DesignNodeHeights = cell.Select(p => SampleZ(tk, p)).ToArray(),
-                                Volume = volume
+                                Volume = volume,
+                                ExistingCoveredArea=htArea,
+                                DesignCoveredArea=tkArea,
+                                IsVerticalConflict = false
                             });
+                        }
                         processed++;
                         if (processed == total || processed % 100 == 0) progress?.Invoke(processed, total);
                     }
@@ -163,9 +224,13 @@ namespace MiningVolume.Core.Grid
             private readonly Dictionary<int,IReadOnlyList<Triangle3>> _tileCache = new Dictionary<int,IReadOnlyList<Triangle3>>();
             private readonly Queue<int> _cacheOrder = new Queue<int>();
             private const int MaxCacheTiles = 8;
+            private readonly CancellationToken _cancellationToken;
 
-            public TriangleGridIndex(IReadOnlyList<Triangle3> triangles, GridVolumeOptions options, double cos, double sin)
+            public TriangleGridIndex(IReadOnlyList<Triangle3> triangles, GridVolumeOptions options, double cos, double sin,
+                CancellationToken cancellationToken)
             {
+                _cancellationToken = cancellationToken;
+                cancellationToken.ThrowIfCancellationRequested();
                 _triangles = triangles;
                 _tiles = triangles as ITiledTriangleSource;
                 _opt = options; _c = cos; _s = sin;
@@ -175,6 +240,7 @@ namespace MiningVolume.Core.Grid
                     _large = new List<int>();
                     for (int index = 0; index < triangles.Count; index++)
                     {
+                        cancellationToken.ThrowIfCancellationRequested();
                         var t = triangles[index];
                         GetLocalLimits(t, out double u0, out double u1, out double v0, out double v1);
                         int loI = checked((int)Math.Floor(u0 / options.SizeX));
@@ -187,10 +253,11 @@ namespace MiningVolume.Core.Grid
                             _large.Add(index);
                             continue;
                         }
-                        for (int i = loI; i <= hiI; i++)
-                            for (int j = loJ; j <= hiJ; j++)
+                        // long counters prevent wraparound at Int32.MaxValue.
+                        for (long i = loI; i <= hiI; i++)
+                            for (long j = loJ; j <= hiJ; j++)
                             {
-                                var key = (i, j);
+                                var key = ((int)i, (int)j);
                                 if (!_bins.TryGetValue(key, out var entries))
                                 {
                                     entries = new List<int>();
@@ -204,6 +271,7 @@ namespace MiningVolume.Core.Grid
 
             public IReadOnlyList<Triangle3> Candidates(int i, int j, IReadOnlyList<Vec2> cell)
             {
+                _cancellationToken.ThrowIfCancellationRequested();
                 double minX=double.PositiveInfinity, minY=double.PositiveInfinity;
                 double maxX=double.NegativeInfinity, maxY=double.NegativeInfinity;
                 foreach (var p in cell)
@@ -216,6 +284,7 @@ namespace MiningVolume.Core.Grid
                 {
                     foreach (int tile in _tiles.QueryTiles(minX, minY, maxX, maxY))
                     {
+                        _cancellationToken.ThrowIfCancellationRequested();
                         var candidates = ReadCachedTile(tile);
                         foreach (var t in candidates)
                             if (Touch(t,minX,minY,maxX,maxY)) result.Add(t);
@@ -231,6 +300,7 @@ namespace MiningVolume.Core.Grid
                         }
                     foreach (int index in _large)
                     {
+                        _cancellationToken.ThrowIfCancellationRequested();
                         var t = _triangles[index];
                         if (Touch(t,minX,minY,maxX,maxY)) result.Add(t);
                     }

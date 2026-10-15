@@ -86,7 +86,7 @@ def test_developer_identity_is_fixed_and_readonly():
     service = read(EXPORT_SERVICE)
     ui = read(EXPORT_UI)
     assert 'FixedDeveloperName = "Bùi Thế Nam"' in service
-    assert 'FixedDeveloperContact = "Điện thoại: 0967280686"' in service
+    assert 'FixedDeveloperContact = "ĐT/Zalo: 0967280686"' in service
     assert 'ReadOnly = true' in ui
     assert 'Text = ExportOptions.FixedDeveloperName' in ui
     assert 'Text = ExportOptions.FixedDeveloperContact' in ui

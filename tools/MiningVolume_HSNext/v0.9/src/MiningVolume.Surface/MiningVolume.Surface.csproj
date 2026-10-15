@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="../../compat/IMSAT.CadCompatibility.props" />
   <PropertyGroup>
-    <TargetFramework>net48</TargetFramework>
+    <TargetFramework>$(IMSATCadFramework)</TargetFramework>
     <LangVersion>latest</LangVersion>
     <Nullable>disable</Nullable>
     <AssemblyName>MiningVolume.Surface</AssemblyName>
@@ -10,7 +11,11 @@
     <ProjectReference Include="..\MiningVolume.Core\MiningVolume.Core.csproj" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies.net48" Version="1.0.3" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies.net45" Version="1.0.3" PrivateAssets="all" Condition="'$(IMSATCadFramework)' == 'net45'" />
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies.net46" Version="1.0.3" PrivateAssets="all" Condition="'$(IMSATCadFramework)' == 'net46'" />
+    <PackageReference Include="System.ValueTuple" Version="4.5.0" Condition="'$(IMSATCadFramework)' == 'net45' Or '$(IMSATCadFramework)' == 'net46'" />
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies.net47" Version="1.0.3" PrivateAssets="all" Condition="'$(IMSATCadFramework)' == 'net47'" />
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies.net48" Version="1.0.3" PrivateAssets="all" Condition="'$(IMSATCadFramework)' == 'net48'" />
   </ItemGroup>
   <Target Name="BuildNativeCdt" AfterTargets="Build" Condition="'$(OS)' == 'Windows_NT'">
     <Exec Command="python &quot;$(MSBuildProjectDirectory)/Native/build_native.py&quot; --output &quot;$(TargetDir)MiningVolume.Cdt.Native.dll&quot;" />

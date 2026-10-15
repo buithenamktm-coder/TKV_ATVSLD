@@ -47,6 +47,9 @@ namespace MiningVolume.Core.Reporting
     {
         public string Name { get; set; }
         public string Title { get; set; }
+        // Captures the unprefixed title so changing selected mining unit before
+        // a second export replaces the heading rather than stacking old names.
+        public string OrganizationBaseTitle { get; set; }
         public List<string> Notes { get; } = new List<string>();
         public List<string> Headers { get; } = new List<string>();
         public List<IReadOnlyList<ReportCell>> Rows { get; } = new List<IReadOnlyList<ReportCell>>();
@@ -54,12 +57,17 @@ namespace MiningVolume.Core.Reporting
         public bool FreezeHeader { get; set; } = true;
         public bool AutoFilter { get; set; } = true;
         public bool Landscape { get; set; } = true;
+        /// <summary>Reserve readable vertical space for two handwritten signatures.</summary>
+        public bool HasSignatures { get; set; }
     }
 
     public sealed class SpreadsheetReport
     {
         public string Title { get; set; } = "MiningVolume 2023";
         public string Creator { get; set; } = "MiningVolume 2023";
+        // A report is immutable for asynchronous export: logo policy is
+        // captured when the report is built, not read from live ProjectState.
+        public bool IncludeImsatLogo { get; set; } = true;
         public DateTime CreatedAt { get; set; } = DateTime.Now;
         public List<ReportSheet> Sheets { get; } = new List<ReportSheet>();
     }
@@ -85,6 +93,17 @@ namespace MiningVolume.Core.Reporting
         private const int StyleBodyNumber3Bold = 12;
 
         public static void Write(string filePath, SpreadsheetReport report)
+        {
+            if(string.IsNullOrWhiteSpace(filePath))throw new ArgumentException("Đường dẫn không hợp lệ.",nameof(filePath));
+            var target=Path.GetFullPath(filePath);var directory=Path.GetDirectoryName(target);
+            Directory.CreateDirectory(directory);
+            var staging=Path.Combine(directory,"."+Path.GetFileName(target)+"."+Guid.NewGuid().ToString("N")+".tmp");
+            try {
+                WriteCore(staging,report);
+                if(File.Exists(target))File.Replace(staging,target,null);else File.Move(staging,target);
+            } finally {if(File.Exists(staging))File.Delete(staging);}
+        }
+        private static void WriteCore(string filePath, SpreadsheetReport report)
         {
             if (string.IsNullOrWhiteSpace(filePath)) throw new ArgumentException("Đường dẫn file Excel không hợp lệ.", nameof(filePath));
             if (report == null) throw new ArgumentNullException(nameof(report));
@@ -356,7 +375,13 @@ namespace MiningVolume.Core.Reporting
                 int row = 1;
                 if (!string.IsNullOrWhiteSpace(sheet.Title))
                 {
-                    WriteRowStart(x, row, 24); WriteCell(x, 1, row, ReportCell.Text(sheet.Title, true), StyleTitle); x.WriteEndElement(); row++;
+                    // The organization hierarchy occupies the EXISTING
+                    // merged title row. Increase height for each visible line,
+                    // while leaving all row indices and formula references fixed.
+                    int titleLines = sheet.Title.Split('\n').Length;
+                    WriteRowStart(x, row, Math.Min(409, Math.Max(24, titleLines * 19 + 6)));
+                    WriteCell(x, 1, row, ReportCell.Text(sheet.Title, true), StyleTitle);
+                    x.WriteEndElement(); row++;
                 }
                 foreach (var note in sheet.Notes)
                 {
@@ -364,13 +389,48 @@ namespace MiningVolume.Core.Reporting
                 }
                 if (sheet.Headers.Count > 0)
                 {
-                    WriteRowStart(x, row, 30);
-                    for (int c = 0; c < sheet.Headers.Count; c++) WriteCell(x, c + 1, row, ReportCell.Text(sheet.Headers[c], true), StyleHeader);
+                    // A fixed 30-point row clips wrapped Vietnamese headers
+                    // such as "Khối lượng đào (m³)". Size only the visual
+                    // header height; DO NOT insert rows or shift formulas.
+                    int headerHeight = 34;
+                    for (int c = 0; c < sheet.Headers.Count; c++)
+                    {
+                        string caption = sheet.Headers[c] ?? string.Empty;
+                        double width = c < sheet.ColumnWidths.Count ? sheet.ColumnWidths[c] : 15.0;
+                        int charsPerLine = Math.Max(6, (int)(Math.Max(6.0,
+                            Math.Min(45.0, width)) * 0.72));
+                        int lines = Math.Max(1, (caption.Length + charsPerLine - 1) / charsPerLine);
+                        headerHeight = Math.Max(headerHeight, Math.Min(120, lines * 20 + 8));
+                    }
+                    WriteRowStart(x, row, headerHeight);
+                    for (int c = 0; c < sheet.Headers.Count; c++)
+                        WriteCell(x, c + 1, row, ReportCell.Text(sheet.Headers[c], true), StyleHeader);
                     x.WriteEndElement(); row++;
                 }
+                bool signatureStarted = false;
                 foreach (var dataRow in sheet.Rows)
                 {
-                    WriteRowStart(x, row, 20);
+                    bool signatureTitle = sheet.HasSignatures && dataRow != null &&
+                        dataRow.Any(c => c != null && string.Equals(Convert.ToString(c.Value),
+                            "NGƯỜI TÍNH TOÁN", StringComparison.Ordinal));
+                    if (signatureTitle) signatureStarted = true;
+                    bool blank = dataRow == null || dataRow.All(c => c == null ||
+                        string.IsNullOrWhiteSpace(Convert.ToString(c.Value)));
+                    int rowHeight = signatureStarted ? (signatureTitle ? 30 : blank ? 38 : 26) : 20;
+                    // Wrapped text needs explicit height; fixed 20 pt clipped metadata/contact.
+                    if (!signatureStarted && dataRow != null)
+                        for (int c = 0; c < dataRow.Count; c++)
+                        {
+                            var cell = dataRow[c];
+                            if (cell?.Value is string text && cell.Kind == ReportCellKind.Text)
+                            {
+                                double width = c < sheet.ColumnWidths.Count ? sheet.ColumnWidths[c] : 15.0;
+                                int capacity = Math.Max(1, (int)(Math.Max(6, Math.Min(45, width)) * 0.85));
+                                int lines = text.Split('\n').Sum(line => Math.Max(1, (line.Length + capacity - 1) / capacity));
+                                rowHeight = Math.Max(rowHeight, Math.Min(409, lines * 16 + 4));
+                            }
+                        }
+                    WriteRowStart(x, row, rowHeight);
                     if (dataRow != null) for (int c = 0; c < dataRow.Count; c++) WriteCell(x, c + 1, row, dataRow[c] ?? ReportCell.Text(string.Empty), StyleFor(dataRow[c]));
                     x.WriteEndElement(); row++;
                 }

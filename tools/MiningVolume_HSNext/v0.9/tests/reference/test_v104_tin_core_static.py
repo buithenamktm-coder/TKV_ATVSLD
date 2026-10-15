@@ -14,7 +14,8 @@ def test_official_tin_layers_are_fixed_and_separate():
 
 def test_loading_source_prepares_output_layer_and_invalidates_old_tin():
     s = read("src/MiningVolume.Plugin2023/Services/SurfaceWorkflowService.cs")
-    assert "InvalidateTin(role, clearCadLayer: true, notify: false)" in s
+    assert "InvalidateTin(role, clearCadLayer: clearPreviousCadTin, notify: false)" in s
+    assert "bool clearPreviousCadTin = true" in s
     assert "EnsureOutputLayer(role)" in s
     assert "OutputTinLayer = session.TinLayer" in s
     assert "Không được dùng layer TIN đầu ra làm dữ liệu nguồn" in s
@@ -23,17 +24,18 @@ def test_model_page_has_explicit_existing_design_and_pair_tin_actions():
     s = read("src/MiningVolume.Plugin2023/UI/ModelPage.cs")
     assert "TẠO / CẬP NHẬT TIN HIỆN TRẠNG" in s
     assert "TẠO / CẬP NHẬT TIN THIẾT KẾ" in s
-    assert "TẠO / CẬP NHẬT CẢ HAI TIN" in s
-    assert "BuildPairCoreDetailed" in s
-    assert "DrawTinPair" in s
+    assert "TẠO / CẬP NHẬT CẢ HAI TIN" not in s
+    assert "BuildCoreDetailed" in s
+    assert "DrawTin(" in s
 
 def test_data_page_can_build_validated_tin_pair_in_one_click():
     s = read("src/MiningVolume.Plugin2023/UI/DataPage.cs")
-    assert "TẠO CẶP TIN" in s
+    assert "TẠO CẶP TIN" not in s
+    assert "Tạo TIN hiện trạng" in s and "Tạo TIN thiết kế" in s
     assert "BuildCoreDetailed(" in s and "ModelRole.Existing" in s
     assert "BuildCoreDetailed(" in s and "ModelRole.Design" in s
-    assert "DrawTinPair" in s
-    assert "Cặp TIN hợp lệ" in s
+    assert "DrawTin(" in s
+    assert "TIN còn lại được giữ nguyên" in s
 
 def test_renderer_replaces_verifies_and_locks_tin_faces():
     s = read("src/MiningVolume.Plugin2023/Services/TinCadRenderer.cs")
@@ -54,7 +56,10 @@ def test_surface_workflow_keeps_face_count_by_atomic_replace_and_runtime_verific
 
 def test_source_edits_invalidate_old_tin():
     s = read("src/MiningVolume.Plugin2023/UI/ModelPage.cs")
-    assert s.count("SurfaceWorkflowService.InvalidateTin(CurrentRole, clearCadLayer: true)") >= 5
+    assert s.count("InvalidateTin(CurrentRole, clearCadLayer: true)") >= 4
+    assert "SurfaceWorkflowService.InvalidateTin(role, clearCadLayer: true)" in s
+    # Full operation-by-operation ordering and failure cleanup are enforced by
+    # test_v2_survey_edit_integrity.py, not by counting matching text alone.
 
 def test_sections_and_volume_require_verified_tin_pair():
     sec = read("src/MiningVolume.Plugin2023/Services/SectionWorkflowService.cs")

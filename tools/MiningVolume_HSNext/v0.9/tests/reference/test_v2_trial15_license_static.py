@@ -36,7 +36,8 @@ def test_license_page_entry_and_calculation_gates():
     p=read("src/MiningVolume.Plugin2023/UI/LicensePage.cs")
     assert 'CommandMethod("MV_LICENSE"' in e
     assert "LicenseService.GetStatus()" in e
-    assert "new LicensePage()" in n
+    assert "new ContactInfoPage()" in n
+    assert "new LicensePage" in read("src/MiningVolume.Plugin2023/UI/ContactInfoPage.cs")
     assert "SAO CHÉP MÃ MÁY" in p
     assert "KÍCH HOẠT" in p
     for file in ["UI/ModelPage.cs","UI/SectionPage.cs","UI/VolumePage.cs",

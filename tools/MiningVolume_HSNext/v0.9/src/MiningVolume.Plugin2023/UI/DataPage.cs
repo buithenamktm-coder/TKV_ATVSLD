@@ -18,10 +18,17 @@ namespace MiningVolume2023.UI
         private readonly CheckedListBox _types;
         private readonly Label _status;
         private readonly Label _tinRegionStatus;
-        private readonly Button _buildPair;
+        private readonly Button _buildExisting;
+        private readonly Button _buildDesign;
         private readonly Button _cancelBuild;
         private readonly Button _via4Preset;
         private CancellationTokenSource _buildCts;
+        private readonly GroupBox _sourceBox;
+        private readonly TableLayoutPanel _sourceTable;
+        private readonly Control[] _sourceLabels = new Control[2];
+        private readonly Control[] _sourceLoad = new Control[2];
+        private readonly Control[] _sourceChoose = new Control[2];
+        private bool _compactSourceLayout;
 
         public DataPage()
         {
@@ -57,14 +64,14 @@ namespace MiningVolume2023.UI
                 BackColor = UiTheme.Canvas
             };
 
-            var sourceBox = new GroupBox
+            var sourceBox = _sourceBox = new GroupBox
             {
                 Text = "Nguồn dữ liệu",
                 Width = 520,
-                Height = 148,
+                Height = 173,
                 Margin = new Padding(0, 0, 0, 8)
             };
-            var source = new TableLayoutPanel
+            var source = _sourceTable = new TableLayoutPanel
             {
                 Dock = DockStyle.Fill,
                 ColumnCount = 4,
@@ -73,11 +80,11 @@ namespace MiningVolume2023.UI
             };
             source.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 76));
             source.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            source.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 92));
-            source.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 112));
-            source.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
-            source.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
-            source.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
+            source.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 132));
+            source.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 168));
+            source.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
+            source.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
+            source.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
 
             _existingLayer = new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList, Margin = new Padding(3, 5, 6, 5) };
             _designLayer = new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList, Margin = new Padding(3, 5, 6, 5) };
@@ -89,12 +96,20 @@ namespace MiningVolume2023.UI
                 source, 1, "Thiết kế", _designLayer,
                 Btn("Nạp layer", (s, e) => LoadModel(ModelRole.Design)),
                 Btn("Chọn trên CAD", (s, e) => SelectModel(ModelRole.Design)));
+            for (int row=0; row<2; row++)
+            {
+                _sourceLabels[row] = source.GetControlFromPosition(0,row);
+                _sourceLoad[row] = source.GetControlFromPosition(2,row);
+                _sourceChoose[row] = source.GetControlFromPosition(3,row);
+            }
             _via4Preset = Btn("Nạp mẫu Vỉa 4: ht / - nam4 / LO_TINHKL", (s, e) => LoadVia4Preset());
             source.Controls.Add(_via4Preset, 0, 2);
             source.SetColumnSpan(_via4Preset, 4);
             sourceBox.Controls.Add(source);
             body.Controls.Add(sourceBox);
-            var review = Btn("Điểm trùng tọa độ — kiểm tra nguồn TIN", (s, e) =>
+            // Optional diagnostic only: a user never has to delete duplicate
+            // survey points to use the default automatic TIN workflow.
+            var review = Btn("Thống kê điểm trùng (kiểm tra tùy chọn)", (s, e) =>
                 DuplicateXYConflictUi.Show(ProjectState.Current.ActiveRole));
             review.Width = 520;
             body.Controls.Add(review);
@@ -103,7 +118,7 @@ namespace MiningVolume2023.UI
             {
                 Text = "Loại dữ liệu tham gia TIN",
                 Width = 520,
-                Height = 96,
+                Height = 106,
                 Margin = new Padding(0, 0, 0, 8)
             };
             _types = new CheckedListBox
@@ -112,14 +127,16 @@ namespace MiningVolume2023.UI
                 CheckOnClick = true,
                 IntegralHeight = false,
                 MultiColumn = true,
-                ColumnWidth = 165,
+                ColumnWidth = 148, // compact, three columns fit without horizontal scrolling
+                HorizontalScrollbar = false,
                 BorderStyle = BorderStyle.None,
                 Margin = new Padding(0),
                 BackColor = UiTheme.Surface
             };
             foreach (var x in new[] { "POINT", "LINE", "LWPOLYLINE", "2D POLYLINE", "3D POLYLINE", "Đường đồng mức" })
                 _types.Items.Add(x, true);
-            var typePanel = new Panel { Dock = DockStyle.Fill, Padding = new Padding(10, 6, 10, 8) };
+            var typePanel = new Panel { Dock = DockStyle.Fill,
+                Padding = new Padding(12, 8, 12, 8) };
             typePanel.Controls.Add(_types);
             typeBox.Controls.Add(typePanel);
             body.Controls.Add(typeBox);
@@ -180,28 +197,30 @@ namespace MiningVolume2023.UI
             var actions = new TableLayoutPanel
             {
                 Width = 520,
-                Height = 44,
-                ColumnCount = 3,
-                RowCount = 1,
+                Height = 104,
+                ColumnCount = 2,
+                RowCount = 2,
                 Margin = new Padding(0),
                 Padding = new Padding(0)
             };
-            actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 27));
-            actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 46));
-            actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 27));
+            actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+            actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+            actions.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
+            actions.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
 
             var refresh = Btn("Làm mới layer", (s, e) => RefreshLayers());
             refresh.Dock = DockStyle.Fill;
-            refresh.Margin = new Padding(0, 0, 6, 0);
-            actions.Controls.Add(refresh, 0, 0);
+            refresh.Margin = new Padding(5, 5, 7, 5);
+            actions.Controls.Add(refresh, 0, 1);
 
-            _buildPair = Btn("TẠO CẶP TIN", async (s, e) => await BuildPairTinAsync());
-            _buildPair.Font = new Font("Arial", 9F, FontStyle.Bold);
-            _buildPair.Dock = DockStyle.Fill;
-            _buildPair.Margin = new Padding(0);
-            _buildPair.Enabled = false;
-            actions.Controls.Add(_buildPair, 1, 0);
-
+            _buildExisting = Btn("Tạo TIN hiện trạng", async (s,e) => await BuildSingleTinAsync(ModelRole.Existing));
+            _buildDesign = Btn("Tạo TIN thiết kế", async (s,e) => await BuildSingleTinAsync(ModelRole.Design));
+            _buildExisting.Dock = DockStyle.Fill;
+            _buildDesign.Dock = DockStyle.Fill;
+            _buildExisting.Margin = new Padding(5,5,7,5);
+            _buildDesign.Margin = new Padding(7,5,5,5);
+            actions.Controls.Add(_buildExisting,0,0);
+            actions.Controls.Add(_buildDesign,1,0);
             _cancelBuild = Btn("Hủy", (s, e) =>
             {
                 if (_buildCts == null || _buildCts.IsCancellationRequested) return;
@@ -209,9 +228,9 @@ namespace MiningVolume2023.UI
                 _buildCts.Cancel();
             });
             _cancelBuild.Dock = DockStyle.Fill;
-            _cancelBuild.Margin = new Padding(6, 0, 0, 0);
+            _cancelBuild.Margin = new Padding(7, 5, 5, 5);
             _cancelBuild.Enabled = false;
-            actions.Controls.Add(_cancelBuild, 2, 0);
+            actions.Controls.Add(_cancelBuild, 1, 1);
 
             body.Controls.Add(actions);
 
@@ -240,13 +259,71 @@ namespace MiningVolume2023.UI
                     SystemInformation.VerticalScrollBarWidth - body.Padding.Horizontal - 2);
                 foreach (Control card in body.Controls) card.Width = width;
                 _types.ColumnWidth = Math.Max(120, (_types.ClientSize.Width - 4) / 2);
+                ApplyResponsiveSourceLayout(width);
             };
             viewport.SizeChanged += (s, e) => resizeCards();
             Load += (s, e) => resizeCards();
 
             RefreshLayers();
             RefreshTinRegionStatus();
-            RefreshPairButton();
+            RefreshBuildButtons();
+        }
+
+        private void ApplyResponsiveSourceLayout(int width)
+        {
+            // Keep action labels in full, single-line buttons even when the
+            // palette is wide enough for the source layer combo alone.
+            bool compact = width < 820;
+            if (_compactSourceLayout == compact) return;
+            _compactSourceLayout = compact;
+            _sourceTable.SuspendLayout();
+            try
+            {
+                _sourceTable.Controls.Clear();
+                _sourceTable.RowStyles.Clear();
+                _sourceTable.ColumnStyles.Clear();
+                _sourceTable.ColumnCount = compact ? 2 : 4;
+                _sourceTable.RowCount = compact ? 5 : 3;
+                if (compact)
+                {
+                    _sourceBox.Height = 278;
+                    _sourceTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 47));
+                    _sourceTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 53));
+                    for (int k=0;k<5;k++)
+                        _sourceTable.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
+                    _sourceTable.Controls.Add(_sourceLabels[0],0,0);
+                    _sourceTable.Controls.Add(_existingLayer,1,0);
+                    _sourceTable.Controls.Add(_sourceLoad[0],0,1);
+                    _sourceTable.Controls.Add(_sourceChoose[0],1,1);
+                    _sourceTable.Controls.Add(_sourceLabels[1],0,2);
+                    _sourceTable.Controls.Add(_designLayer,1,2);
+                    _sourceTable.Controls.Add(_sourceLoad[1],0,3);
+                    _sourceTable.Controls.Add(_sourceChoose[1],1,3);
+                    _sourceTable.SetColumnSpan(_via4Preset,2);
+                    _sourceTable.Controls.Add(_via4Preset,0,4);
+                }
+                else
+                {
+                    _sourceBox.Height = 148;
+                    _sourceTable.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 76));
+                    _sourceTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+                    _sourceTable.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 132));
+                    _sourceTable.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 168));
+                    _sourceTable.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
+                    _sourceTable.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
+                    _sourceTable.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
+                    for (int row=0;row<2;row++)
+                    {
+                        _sourceTable.Controls.Add(_sourceLabels[row],0,row);
+                        _sourceTable.Controls.Add(row==0 ? (Control)_existingLayer : _designLayer,1,row);
+                        _sourceTable.Controls.Add(_sourceLoad[row],2,row);
+                        _sourceTable.Controls.Add(_sourceChoose[row],3,row);
+                    }
+                    _sourceTable.SetColumnSpan(_via4Preset,4);
+                    _sourceTable.Controls.Add(_via4Preset,0,2);
+                }
+            }
+            finally { _sourceTable.ResumeLayout(true); }
         }
 
         private static Button Btn(string text, EventHandler h)
@@ -306,8 +383,12 @@ namespace MiningVolume2023.UI
                 var loaded = SurfaceWorkflowService.LoadVia4Preset(AllowedTypes());
                 RefreshLayers();
                 RefreshTinRegionStatus();
-                RefreshPairButton();
-                _status.Text = $"Vỉa 4 đã nạp • Hiện trạng: {loaded[0].Summary} • Thiết kế: {loaded[1].Summary}. Phạm vi: LO_TINHKL.";
+                RefreshBuildButtons();
+                _status.Text = loaded[0].ReusedExistingTin && loaded[1].ReusedExistingTin
+                    ? "Vỉa 4 không thay đổi: GIỮ NGUYÊN TIN hiện trạng, thiết kế và kết quả " +
+                      "khối lượng đã duyệt. Có thể chuyển ngay sang LƯỚI Ô VUÔNG để tính."
+                    : $"Vỉa 4 đã nạp • Hiện trạng: {loaded[0].Summary} • Thiết kế: {loaded[1].Summary}. " +
+                      "Chỉ các TIN có dữ liệu thay đổi mới cần dựng lại.";
             }
             catch (Exception ex) { _status.Text = "Không nạp được mẫu Vỉa 4: " + ex.Message; }
             finally { _via4Preset.Enabled = true; }
@@ -343,108 +424,65 @@ namespace MiningVolume2023.UI
             return set;
         }
 
-        private void RefreshPairButton()
+        private void RefreshBuildButtons()
         {
-            var st = ProjectState.Current;
-            _buildPair.Enabled =
-                st.Existing.Source != null && st.Existing.Source.Entities.Count > 0 &&
-                st.Design.Source != null && st.Design.Source.Entities.Count > 0;
+            var st=ProjectState.Current;
+            _buildExisting.Enabled=_buildCts==null && st.Existing.Source!=null && st.Existing.Source.Entities.Count>0;
+            _buildDesign.Enabled=_buildCts==null && st.Design.Source!=null && st.Design.Source.Entities.Count>0;
         }
 
-        private async Task BuildPairTinAsync()
+        private async Task BuildSingleTinAsync(ModelRole role)
         {
-            var st = ProjectState.Current;
-            if (st.Existing.Source == null || st.Existing.Source.Entities.Count == 0 ||
-                st.Design.Source == null || st.Design.Source.Entities.Count == 0)
-            {
-                MessageBox.Show(
-                    "Phải nạp đủ dữ liệu Hiện trạng và Thiết kế trước khi tạo cặp TIN.",
-                    "IMSAT VOLUME - TIN",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Warning);
-                return;
-            }
-
-            _buildCts?.Dispose();
-            _buildCts = new CancellationTokenSource();
-            var token = _buildCts.Token;
-
+            if(_buildCts!=null || !LicenseUiGuard.Check())return;
+            var st=ProjectState.Current;
+            var activeDoc=Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument;
+            if(activeDoc==null)return;
+            SurfaceBuildResult build=null;
+            IDisposable operation=null;
+            _buildCts=new CancellationTokenSource();
+            var token=_buildCts.Token;
             try
             {
-                _buildPair.Enabled = false;
-                _cancelBuild.Enabled = true;
-                UseWaitCursor = true;
-                var totalWatch = Stopwatch.StartNew();
-
-                SetBuildStatus(
-                    st.HasTinRegion
-                        ? $"Đang dựng TIN hiện trạng trong vùng chọn ({st.TinRegionPolygon.Count:n0} đỉnh biên)..."
-                        : $"Đang dựng TIN hiện trạng từ {st.Existing.ActiveVertexCount:n0} đỉnh...");
-                var existing = await BuildRoleWithConflictChoiceAsync(ModelRole.Existing, token);
-
-                SetBuildStatus(
-                    $"Hiện trạng xong ({existing.TriangleCount:n0} tam giác, {existing.CoreMilliseconds / 1000.0:0.00}s). " +
-                    $"Đang dựng TIN thiết kế từ {st.Design.ActiveVertexCount:n0} đỉnh...");
-                var design = await BuildRoleWithConflictChoiceAsync(ModelRole.Design, token);
-
+                operation=SurfaceWorkflowService.EnterInteractiveBuild();
+                RefreshBuildButtons();_cancelBuild.Enabled=true;
+                _sourceBox.Enabled=false;_types.Enabled=false;
+                var totalWatch=Stopwatch.StartNew();
+                SetBuildStatus($"Đang dựng TIN {st.Get(role).Name}...");
+                build=await BuildRoleWithConflictChoiceAsync(role,token);
                 token.ThrowIfCancellationRequested();
-                var builds = new[] { existing, design };
-                var cadWatch = Stopwatch.StartNew();
-                SurfaceWorkflowService.DrawTinPair(builds, message => SetBuildStatus(message));
-                cadWatch.Stop();
-                totalWatch.Stop();
-
-                SetBuildStatus(
-                    $"Cặp TIN hợp lệ: {st.Existing.TinLayer} = {existing.TriangleCount:n0}; " +
-                    $"{st.Design.TinLayer} = {design.TriangleCount:n0} tam giác. " +
-                    $"Ghi CAD {cadWatch.Elapsed.TotalSeconds:0.00}s; tổng {totalWatch.Elapsed.TotalSeconds:0.00}s.");
-
-                MessageBox.Show(
-                    "ĐÃ TẠO ĐỦ 2 TIN DÙNG CHO TÍNH KHỐI LƯỢNG\r\n\r\n" +
-                    $"Hiện trạng → {st.Existing.TinLayer}: {builds[0].Summary}\r\n" +
-                    $"Thiết kế → {st.Design.TinLayer}: {builds[1].Summary}",
-                    "IMSAT VOLUME - Cặp TIN hợp lệ",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Information);
+                if(!ReferenceEquals(activeDoc,Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument))
+                    throw new InvalidOperationException("Đã đổi DWG; không ghi TIN sang bản vẽ khác.");
+                SetBuildStatus($"Đang ghi TIN {st.Get(role).Name} xuống AutoCAD; Esc để hủy...");
+                var cadWatch=Stopwatch.StartNew();
+                SurfaceWorkflowService.DrawTin(role,build);
+                cadWatch.Stop();totalWatch.Stop();
+                SetBuildStatus($"{st.Get(role).Name}: {build.TriangleCount:n0} tam giác. Ghi CAD {cadWatch.Elapsed.TotalSeconds:0.00}s; tổng {totalWatch.Elapsed.TotalSeconds:0.00}s.");
+                int duplicateGroups = build.DuplicateXYGroupCount;
+                int duplicateVertices = build.DuplicateXYSourceVertices;
+                int sameXYZ = build.SameXYZDuplicateVertices;
+                string review = duplicateGroups > 0 || sameXYZ > 0
+                    ? $"\r\n{duplicateGroups:n0} nhóm XY nhiều Z / {duplicateVertices:n0} đỉnh nguồn; {sameXYZ:n0} đỉnh trùng XYZ. " +
+                      "Không cần loại từng điểm thủ công. Đề nghị kiểm tra hệ thống điểm và đường đồng mức; " +
+                      "xem/chỉnh mặt cắt rồi bấm CẬP NHẬT MẶT CẮT trước khi chốt khối lượng."
+                    : string.Empty;
+                MessageBox.Show(build.Summary + review + "\r\n\r\nTIN còn lại được giữ nguyên.",
+                    "IMSAT VOLUME — TIN " + st.Get(role).Name,MessageBoxButtons.OK,
+                    build.WarningCount>0?MessageBoxIcon.Warning:MessageBoxIcon.Information);
             }
-            catch (OperationCanceledException)
-            {
-                _status.Text = "Đã hủy dựng TIN theo yêu cầu. Dữ liệu nguồn không bị thay đổi.";
+            catch(OperationCanceledException) { _status.Text="Đã hủy. Giữ TIN trước thao tác và dữ liệu CAD gốc."; }
+            catch(DuplicateXYConflictException ex) {
+                MessageBox.Show("Không thể dựng topology TIN an toàn. Không yêu cầu loại từng điểm trùng thủ công.\r\n"+ex.Message,
+                    "Kiểm tra topology nguồn",MessageBoxButtons.OK,MessageBoxIcon.Warning);
             }
-            catch (SurfaceValidationException ex)
-            {
-                var lines = new List<string>();
-                foreach (var issue in ex.Issues)
-                    lines.Add($"[{issue.Severity}] {issue.Code}: {issue.Message}");
-                MessageBox.Show(
-                    $"Không dựng được TIN {ex.ModelName}.\r\n\r\n" +
-                    string.Join("\r\n", lines.GetRange(0, Math.Min(20, lines.Count))),
-                    "Kiểm tra dữ liệu TIN",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Warning);
-                _status.Text = $"TIN {ex.ModelName} chưa hợp lệ.";
-            }
-            catch (Exception ex)
-            {
-                string detail = ex.Message;
-                if (ex.InnerException != null && !string.IsNullOrWhiteSpace(ex.InnerException.Message) &&
-                    !detail.Contains(ex.InnerException.Message))
-                    detail += "\r\n\r\nChi tiết: " + ex.InnerException.Message;
-
-                MessageBox.Show(
-                    detail,
-                    "IMSAT VOLUME - Không tạo được cặp TIN",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Error);
-                _status.Text = "Chưa tạo được cặp TIN. Xem thông báo để biết lỗi dữ liệu hoặc phép dựng.";
-            }
+            catch(Exception ex) { MessageBox.Show(ex.Message,"Không tạo được TIN",MessageBoxButtons.OK,MessageBoxIcon.Warning); }
             finally
             {
-                UseWaitCursor = false;
-                _cancelBuild.Enabled = false;
-                _buildCts.Dispose();
-                _buildCts = null;
-                RefreshPairButton();
+                if(build!=null && !ReferenceEquals(build.Tin,st.Get(role).Tin))
+                    (build.Tin.Triangles as IDisposable)?.Dispose();
+                operation?.Dispose();
+                _buildCts.Dispose();_buildCts=null;
+                _cancelBuild.Enabled=false;_sourceBox.Enabled=true;_types.Enabled=true;
+                RefreshBuildButtons();
             }
         }
 
@@ -453,14 +491,12 @@ namespace MiningVolume2023.UI
             CancellationToken token)
         {
             token.ThrowIfCancellationRequested();
-            try {
-                return await Task.Run(() => SurfaceWorkflowService.BuildCoreDetailed(
-                    role, message => SetBuildStatus(message), token), token);
-            } catch (DuplicateXYConflictException ex) {
-                token.ThrowIfCancellationRequested();
-                DuplicateXYConflictUi.Show(role, ex.Report);
-                throw new OperationCanceledException("Cần xử lý nguồn xung đột và quét lại trước khi tạo TIN.", token);
-            }
+            // Duplicate XY with differing Z is an automatic 3D vertical-face
+            // input, not a condition to interrupt work for manual deletions.
+            // A true unsupported crossing still propagates as a validation
+            // exception; never create plausible but incorrect CAD geometry.
+            return await Task.Run(() => SurfaceWorkflowService.BuildCoreDetailed(
+                role, message => SetBuildStatus(message), token), token);
         }
 
         private void SetBuildStatus(string message)
@@ -491,9 +527,28 @@ namespace MiningVolume2023.UI
                     throw new InvalidOperationException("Vùng tạo TIN không có đủ đỉnh hợp lệ.");
 
                 var state = ProjectState.Current;
+                bool sameRegion = state.HasTinRegion &&
+                    string.Equals(state.TinRegionHandle, handle, StringComparison.OrdinalIgnoreCase) &&
+                    state.TinRegionPolygon.Count == polygon.Count;
+                if (sameRegion)
+                    for (int i = 0; i < polygon.Count; i++)
+                        if (Math.Abs(state.TinRegionPolygon[i].X - polygon[i].X) > 1e-7 ||
+                            Math.Abs(state.TinRegionPolygon[i].Y - polygon[i].Y) > 1e-7)
+                        {
+                            sameRegion = false;
+                            break;
+                        }
+                if (sameRegion)
+                {
+                    RefreshTinRegionStatus();
+                    _status.Text = "Vùng tạo TIN không thay đổi. GIỮ NGUYÊN hai TIN hiện có; " +
+                        "tiếp tục tính mặt cắt hoặc lưới ô vuông mà không phải dựng lại.";
+                    return;
+                }
                 state.TinRegionHandle = handle;
                 state.TinRegionPolygon.Clear();
                 state.TinRegionPolygon.AddRange(polygon);
+                state.MarkTinRegionChanged();
 
                 // Thay đổi phạm vi tạo TIN làm cả hai TIN cũ mất hiệu lực.
                 SurfaceWorkflowService.InvalidateTin(
@@ -523,8 +578,18 @@ namespace MiningVolume2023.UI
         {
             var state = ProjectState.Current;
             bool hadRegion = state.HasTinRegion;
+            // No-op when there is no selected TIN clip. Previously merely
+            // pressing "Bỏ vùng" incremented TinRegionRevision, instantly
+            // making both unchanged, valid TINs appear stale to GridPage.
+            if (!hadRegion && string.IsNullOrWhiteSpace(state.TinRegionHandle))
+            {
+                RefreshTinRegionStatus();
+                _status.Text = "Chưa giới hạn vùng TIN; hai mô hình hiện có được giữ nguyên.";
+                return;
+            }
             state.TinRegionHandle = null;
             state.TinRegionPolygon.Clear();
+            if (hadRegion) state.MarkTinRegionChanged();
 
             if (hadRegion)
             {
@@ -574,8 +639,10 @@ namespace MiningVolume2023.UI
                 ProjectState.Current.ActiveRole = role;
                 _status.Text =
                     $"Đã nạp {session.Name} bằng chọn trực tiếp: {result.Summary}. " +
-                    $"Nguồn có thể nằm trên nhiều layer. Đã chuẩn bị layer TIN: {result.OutputTinLayer}.";
-                RefreshPairButton();
+                    (result.ReusedExistingTin
+                        ? "TIN đã dựng được giữ nguyên; không cần tạo lại để tính lưới ô vuông."
+                        : $"Nguồn có thể nằm trên nhiều layer. Đã chuẩn bị layer TIN: {result.OutputTinLayer}.");
+                RefreshBuildButtons();
             }
             catch (Exception ex)
             {
@@ -608,8 +675,10 @@ namespace MiningVolume2023.UI
                 ProjectState.Current.ActiveRole = role;
                 _status.Text =
                     $"Đã nạp {ProjectState.Current.Get(role).Name}: {r.Summary}. " +
-                    $"Đã chuẩn bị layer TIN: {r.OutputTinLayer}.";
-                RefreshPairButton();
+                    (r.ReusedExistingTin
+                        ? "Dữ liệu không đổi → GIỮ NGUYÊN TIN đã dựng, dùng chung cho Mặt cắt/Lưới ô vuông."
+                        : $"Đã chuẩn bị layer TIN: {r.OutputTinLayer}.");
+                RefreshBuildButtons();
             }
             catch (Exception ex)
             {

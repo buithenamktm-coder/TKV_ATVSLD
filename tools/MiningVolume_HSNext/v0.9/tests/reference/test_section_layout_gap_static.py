@@ -9,8 +9,8 @@ def read(rel):
 def test_export_gap_is_distinct_from_survey_section_spacing():
     ui = read("src/MiningVolume.Plugin2023/UI/SectionPage.cs")
     state = read("src/MiningVolume.Plugin2023/Services/ProjectState.cs")
-    assert 'Add(top, 2, "Khoảng cách mặt cắt, m", _spacing' in ui
-    assert 'Add(top, 8, "Giãn cách khi xuất CAD", _layoutGap' in ui
+    assert 'Add(top, 3, "Khoảng cách mặt cắt, m", _spacing' in ui
+    assert 'Add(top, 10, "Giãn cách khi xuất CAD", _layoutGap' in ui
     assert '_layoutGap = Num(90, 30, 10000);' in ui
     assert 'SectionLayoutGap { get; set; } = 90.0' in state
     assert 'SectionSpacing { get; set; } = 20.0' in state
@@ -25,7 +25,9 @@ def test_renderer_uses_same_gap_for_prior_batched_and_current_profiles():
     assert 'currentY -= height + 45.0;' not in renderer
     assert 'double layoutGap = 90.0' in renderer
     assert 'start == 0,\n                        layoutGap);' in workflow
-    assert '(double)_layoutGap.Value);' in ui
+    # The newly drawn profiles are passed explicitly so an insertion cancel
+    # does not replace the previously approved section/volume state.
+    assert '(double)_layoutGap.Value,\n                    profiles);' in ui
     assert 'double.IsNaN(layoutGap)' in renderer
     assert 'double.IsInfinity(layoutGap)' in renderer
 

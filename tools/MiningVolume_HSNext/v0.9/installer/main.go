@@ -6,12 +6,18 @@ import (
     "archive/zip"
     "bytes"
     "embed"
+    "encoding/xml"
+    "encoding/json"
+    "debug/pe"
+    "crypto/sha256"
+    "encoding/hex"
     "fmt"
     "io"
     "os"
     "os/exec"
     "path/filepath"
     "runtime"
+    "regexp"
     "strings"
     "syscall"
     "time"
@@ -23,9 +29,11 @@ import (
 //go:embed payload.zip
 var payloadFS embed.FS
 
-const (
+var (
     productName = "IMSAT VOLUME for AutoCAD 2023"
     version = "1.0.0"
+    backupSuffix = ".v100bak"
+    storedSetupName = "MiningVolume_Setup_v1.0.exe"
     uninstallKey = `HKLM\Software\Microsoft\Windows\CurrentVersion\Uninstall\MiningVolume2023`
 )
 
@@ -47,9 +55,8 @@ func install() {
     cad, err := findAutoCAD2023()
     if err != nil { msg(err.Error(), 0x10); return }
 
-    temp := filepath.Join(os.TempDir(), fmt.Sprintf("MiningVolume_v100_%d", os.Getpid()))
-    os.RemoveAll(temp)
-    if err := os.MkdirAll(temp, 0755); err != nil { msg(err.Error(), 0x10); return }
+    temp, err := os.MkdirTemp("", "MiningVolume_"+version+"_")
+    if err != nil { msg(err.Error(), 0x10); return }
     defer os.RemoveAll(temp)
     if err := extractPayload(temp); err != nil { msg("Không giải nén được bộ cài: "+err.Error(), 0x10); return }
 
@@ -61,13 +68,15 @@ func install() {
     programData := os.Getenv("ProgramData"); if programData == "" { programData = `C:\ProgramData` }
     appPlugins := filepath.Join(programData, "Autodesk", "ApplicationPlugins")
     target := filepath.Join(appPlugins, "MiningVolume2023.bundle")
-    backup := target + ".v100bak"
+    backup := target + backupSuffix
     os.MkdirAll(appPlugins, 0755)
 
     // Recover conservatively from an interrupted previous install before starting
     // a new transaction. An unverified target is never preferred over its backup.
     if exists(backup) {
-        os.RemoveAll(target)
+        if err := preserveBundle(target, bundleRecoveryDirectory()); err != nil {
+            msg("Không bảo toàn được bundle từ lần cài trước: "+err.Error(), 0x10); return
+        }
         if err := restoreBackup(backup, target); err != nil {
             msg("Không khôi phục được bản sao lưu từ lần cài trước: "+err.Error(), 0x10); return
         }
@@ -80,16 +89,27 @@ func install() {
         msg("Không cài được bundle: "+err.Error(), 0x10); return
     }
 
-    // Runtime verification is a release-pipeline responsibility. The end-user
-    // installer must never launch AutoCAD automatically or expose development
-    // self-test behavior. A RUNTIME-PASS artifact has already been verified on
-    // a real AutoCAD 2023 runner before this Setup is published.
-    os.RemoveAll(backup)
+    // Keep the previous bundle until registration and shortcuts also succeed.
+    // Runtime verification is a release-pipeline responsibility.
+    // QA packaging is not evidence of AutoCAD runtime acceptance.
+    undoRegistration, err := captureRegistration(programData, temp)
+    if err != nil {
+        os.RemoveAll(target); _ = restoreBackup(backup, target)
+        msg("Không sao lưu được đăng ký cài đặt: "+err.Error(), 0x10); return
+    }
     if err := registerUninstall(target, cad); err != nil {
-        msg("MiningVolume đã được chép vào AutoCAD nhưng chưa ghi được mục gỡ cài đặt: "+err.Error(), 0x30); return
+        os.RemoveAll(target)
+        restoreErr := restoreBackup(backup, target)
+        registryErr := undoRegistration()
+        details := fmt.Sprintf("Status=FAILED\\r\\nStage=registerUninstall\\r\\nError=%v\\r\\nRestoreBundle=%v\\r\\nRestoreRegistration=%v", err, restoreErr, registryErr)
+        writePersistentLog("install_error", details)
+        msg(fmt.Sprintf("Cài đặt chưa hoàn tất: %v. Khôi phục bundle: %v; đăng ký: %v", err, restoreErr, registryErr) + "\n\nChi tiết: " + filepath.Join(programData,"MiningVolume2023","Logs","install_error.txt"), 0x10); return
+    }
+    if err := preserveBundle(backup, bundleRecoveryDirectory()); err != nil {
+        msg("Đã cài bản mới; bản sao lưu vẫn được giữ tại "+backup+". Không chuyển được vào thư mục khôi phục: "+err.Error(), 0x30); return
     }
     writePersistentLog("install", "Status=INSTALLED\r\nAutoCAD="+filepath.Join(cad,"acad.exe"))
-    msg("Cài đặt IMSAT VOLUME thành công.\n\nPhần mềm đang được tiếp tục cải tiến và hoàn thiện.\nMọi ý kiến đóng góp vui lòng liên hệ:\n\nBùi Thế Nam\nĐiện thoại: 0967280686", 0x40)
+    msg("Cài đặt IMSAT VOLUME thành công.\n\nPhần mềm đang được tiếp tục cải tiến và hoàn thiện.\nMọi ý kiến đóng góp vui lòng liên hệ:\n\nBùi Thế Nam\nĐT/Zalo: 0967280686", 0x40)
 }
 
 func validatePrebuiltBundle(root string) error {
@@ -114,7 +134,10 @@ func validatePrebuiltBundle(root string) error {
         filepath.Join(windowsDir, "MiningVolume.Cad2023.dll"),
     }
     for _, p := range required {
-        if !exists(p) { return fmt.Errorf("Thiếu file Release: %s", filepath.Base(p)) }
+        info, err := os.Stat(p)
+        if err != nil || !info.Mode().IsRegular() || info.Size() == 0 {
+            return fmt.Errorf("File Release thiếu, rỗng hoặc không hợp lệ: %s", filepath.Base(p))
+        }
     }
 
     entries, err := os.ReadDir(windowsDir)
@@ -126,30 +149,159 @@ func validatePrebuiltBundle(root string) error {
         }
     }
 
+    if err:=verifyBuildIdentity(windowsDir,allowedDll);err!=nil{return err}
+
     xmlBytes, err := os.ReadFile(packageXml)
     if err != nil { return fmt.Errorf("Không đọc được PackageContents.xml: %w", err) }
-    xmlText := string(xmlBytes)
-    for _, token := range []string{
-        `AppVersion="1.0.0"`,
-        `SeriesMin="R24.2"`,
-        `SeriesMax="R24.2"`,
-        `LoadOnAutoCADStartup="True"`,
-    } {
-        if !strings.Contains(xmlText, token) {
-            return fmt.Errorf("PackageContents.xml thiếu cấu hình bắt buộc: %s", token)
+    return validatePackageXML(xmlBytes)
+}
+
+// Validate the actual loader tree, not text tokens (which can occur in comments
+// or on a different component). This payload is deliberately R24.2-only.
+func validatePackageXML(data []byte) error {
+    decoder := xml.NewDecoder(bytes.NewReader(data))
+    depth, roots := 0, 0
+    for {
+        token, err := decoder.Token()
+        if err == io.EOF { break }
+        if err != nil { return fmt.Errorf("PackageContents.xml không hợp lệ: %w", err) }
+        switch v := token.(type) {
+        case xml.StartElement:
+            if depth == 0 { roots++ }
+            depth++
+            seen := map[xml.Name]bool{}
+            for _, a := range v.Attr {
+                if seen[a.Name] { return fmt.Errorf("Thuộc tính XML bị lặp: %s", a.Name.Local) }
+                seen[a.Name] = true
+            }
+        case xml.EndElement:
+            depth--
+        case xml.Directive:
+            return fmt.Errorf("Không chấp nhận directive trong package XML")
         }
+    }
+    if roots != 1 || depth != 0 { return fmt.Errorf("Package XML phải có đúng một root") }
+    type requirements struct {
+        OS string `xml:"OS,attr"`
+        Platform string `xml:"Platform,attr"`
+        Min string `xml:"SeriesMin,attr"`
+        Max string `xml:"SeriesMax,attr"`
+    }
+    type entry struct {
+        Name string `xml:"AppName,attr"`
+        Version string `xml:"Version,attr"`
+        Module string `xml:"ModuleName,attr"`
+        Startup string `xml:"LoadOnAutoCADStartup,attr"`
+    }
+    var p struct {
+        XMLName xml.Name `xml:"ApplicationPackage"`
+        Version string `xml:"AppVersion,attr"`
+        Requirements []requirements `xml:"RuntimeRequirements"`
+        Entries []entry `xml:"ComponentEntry"`
+        Components []struct {
+            Requirements []requirements `xml:"RuntimeRequirements"`
+            Entries []entry `xml:"ComponentEntry"`
+        } `xml:"Components"`
+    }
+    if err := xml.Unmarshal(data, &p); err != nil { return err }
+    valid := func(r []requirements) bool {
+        return len(r)==1 && r[0].OS=="Win64" && r[0].Platform=="AutoCAD*" &&
+            r[0].Min=="R24.2" && r[0].Max=="R24.2"
+    }
+    if p.XMLName.Space!="" || p.Version!=version || !valid(p.Requirements) || len(p.Entries)!=0 ||
+        len(p.Components)!=1 || !valid(p.Components[0].Requirements) || len(p.Components[0].Entries)!=1 {
+        return fmt.Errorf("Package không khớp phiên bản và phạm vi AutoCAD R24.2 x64")
+    }
+    e := p.Components[0].Entries[0]
+    if e.Name!="MiningVolume2023" || e.Version!=version || e.Startup!="True" ||
+        e.Module!="./Contents/Windows/MiningVolume2023.dll" {
+        return fmt.Errorf("Module tự nạp không khớp DLL đã kiểm chứng trong bộ cài")
     }
     return nil
 }
 
 func uninstall() {
-    if processRunning("acad.exe") { msg("Hãy đóng AutoCAD trước khi gỡ IMSAT VOLUME.", 0x10); return }
-    programData := os.Getenv("ProgramData"); if programData=="" { programData=`C:\ProgramData` }
-    target := filepath.Join(programData,"Autodesk","ApplicationPlugins","MiningVolume2023.bundle")
-    os.RemoveAll(target)
-    os.Remove(filepath.Join(programData, "Microsoft", "Windows", "Start Menu", "Programs", "IMSAT VOLUME.lnk"))
-    exec.Command("reg","delete",uninstallKey,"/f").Run()
-    msg("Đã gỡ IMSAT VOLUME khỏi AutoCAD.", 0x40)
+    if processRunning("acad.exe") {
+        msg("Hãy đóng toàn bộ AutoCAD trước khi gỡ IMSAT VOLUME.", 0x10)
+        return
+    }
+    programData := os.Getenv("ProgramData")
+    if programData == "" { programData = `C:\ProgramData` }
+    // Retire bundles outside Autodesk's autoload tree, retaining all contents.
+    // User data can exist even inside the application bundle or its backup.
+    target := filepath.Join(programData, "Autodesk", "ApplicationPlugins", "MiningVolume2023.bundle")
+    if exists(target) {
+        installedVersion, err := bundleVersion(target)
+        if err != nil || installedVersion != version {
+            msg("Bộ gỡ không khớp phiên bản đang cài. Hãy dùng mục IMSAT trong Windows Installed Apps.", 0x10); return
+        }
+    }
+    if err := preserveBundle(target, bundleRecoveryDirectory()); err != nil {
+        msg("Không gỡ được bundle IMSAT; cần kiểm tra quyền tệp.\n\n"+err.Error(), 0x10)
+        return
+    }
+    // CI V2 QA uses .v200qabak; V1 setup uses .v100bak.
+    // Never touch any other Autodesk application's data.
+    for _, suffix := range []string{".v200qabak", ".v100bak"} {
+        if err := preserveBundle(target + suffix, bundleRecoveryDirectory()); err != nil {
+            msg("Đã gỡ chương trình nhưng chưa xóa được bản sao lưu: "+err.Error(), 0x30)
+            return
+        }
+    }
+    menuDir := filepath.Join(programData, "Microsoft", "Windows", "Start Menu", "Programs")
+    if err := os.Remove(filepath.Join(menuDir, "IMSAT VOLUME.lnk")); err != nil && !os.IsNotExist(err) {
+        msg("Không xóa được lối tắt IMSAT: "+err.Error(), 0x30)
+        return
+    }
+    if err := os.Remove(filepath.Join(menuDir, "Gỡ IMSAT VOLUME.lnk")); err != nil && !os.IsNotExist(err) {
+        msg("Không xóa được lối tắt gỡ cài đặt: "+err.Error(), 0x30)
+        return
+    }
+    if err := exec.Command("reg", "delete", uninstallKey, "/f").Run(); err != nil {
+        msg("Đã gỡ bundle nhưng chưa xóa được mục Uninstall trong Windows.", 0x30)
+        return
+    }
+    // Windows locks the executing Setup.exe; a separate hidden cleanup
+    // process removes the installed copy AFTER this uninstaller exits.
+    // Original downloaded Setup and user-created files are never deleted.
+    installedDir := filepath.Join(programData, "MiningVolume2023")
+    installedExe := filepath.Join(installedDir, storedSetupName)
+    cleanupInstalledSetupLater(installedExe, installedDir)
+    msg("Đã gỡ IMSAT VOLUME và đăng ký tự nạp khỏi AutoCAD.\n\nBản vẽ DWG, Project, báo cáo và dữ liệu người dùng được giữ nguyên.\nBundle cũ được lưu tại: "+bundleRecoveryDirectory(), 0x40)
+}
+
+func installedSetupCleanupTargets(currentExe, installedDir string) []string {
+    // Upgrades share the same Autodesk bundle and installation directory.
+    // Remove only known IMSAT-owned setup binaries; never recurse through user data.
+    candidates := []string{
+        currentExe,
+        filepath.Join(installedDir, "MiningVolume_Setup_v1.0.exe"),
+        filepath.Join(installedDir, "MiningVolume_Setup_v2.0_QA.exe"),
+    }
+    unique := []string{}
+    for _, candidate := range candidates {
+        if candidate == "" { continue }
+        duplicate := false
+        for _, existing := range unique {
+            if strings.EqualFold(existing, candidate) { duplicate = true; break }
+        }
+        if !duplicate { unique = append(unique, candidate) }
+    }
+    return unique
+}
+
+func cleanupInstalledSetupLater(exe, dir string) {
+    // Wait for the uninstall process to exit before deleting its own executable.
+    // V1-to-V2 upgrades may leave a verified IMSAT V1 setup in the same folder.
+    command := "$id=" + fmt.Sprint(os.Getpid()) + ";" +
+        "try { Wait-Process -Id $id -Timeout 90 -ErrorAction SilentlyContinue } catch {};"
+    for _, owned := range installedSetupCleanupTargets(exe, dir) {
+        command += "Remove-Item -LiteralPath " + psQuote(owned) + " -Force -ErrorAction SilentlyContinue;"
+    }
+    command += "Remove-Item -LiteralPath " + psQuote(dir) + " -ErrorAction SilentlyContinue"
+    cmd := exec.Command("powershell.exe", "-NoProfile", "-NonInteractive",
+        "-WindowStyle", "Hidden", "-Command", command)
+    _ = cmd.Start()
 }
 
 func runAutoCADSelfTest(cad string) (bool, string) {
@@ -203,7 +355,7 @@ func registerUninstall(bundlePath, cadDir string) error {
     programData := os.Getenv("ProgramData"); if programData=="" { programData=`C:\ProgramData` }
     dir := filepath.Join(programData, "MiningVolume2023")
     if err := os.MkdirAll(dir,0755); err != nil { return err }
-    exe, _ := os.Executable(); stored := filepath.Join(dir,"MiningVolume_Setup_v1.0.exe")
+    exe, _ := os.Executable(); stored := filepath.Join(dir,storedSetupName)
     if err := copyFile(exe,stored); err != nil { return err }
     vals := [][]string{
         {"/v","DisplayName","/t","REG_SZ","/d",productName,"/f"},
@@ -213,8 +365,19 @@ func registerUninstall(bundlePath, cadDir string) error {
         {"/v","DisplayIcon","/t","REG_SZ","/d",stored+",0","/f"},
         {"/v","UninstallString","/t","REG_SZ","/d","\""+stored+"\" --uninstall","/f"},
     }
-    for _,v := range vals { a:=append([]string{"add",uninstallKey},v...); if err:=exec.Command("reg",a...).Run(); err!=nil{return err} }
-    if err := createStartMenuShortcut(cadDir, stored); err != nil { return err }
+    for _,v := range vals {
+        a:=append([]string{"add",uninstallKey},v...)
+        output,err:=exec.Command("reg",a...).CombinedOutput()
+        if err!=nil{return fmt.Errorf("không ghi được giá trị đăng ký %s: %w; reg.exe: %s",v[1],err,strings.TrimSpace(string(output)))}
+    }
+    // Windows policies or redirected Start Menu folders may block shortcut
+    // creation even when the bundle and uninstall registry are valid.
+    // A shortcut is optional; never roll back a correctly registered plugin
+    // solely because WScript.Shell is unavailable.
+    if err := createStartMenuShortcut(cadDir, stored); err != nil {
+        writePersistentLog("installer_shortcut_warning",
+            "Status=WARNING\\r\\nStage=CreateStartMenuShortcut\\r\\nError="+err.Error())
+    }
     return nil
 }
 
@@ -230,32 +393,253 @@ func createStartMenuShortcut(cadDir, iconExe string) error {
         "$s.Description='IMSAT VOLUME - Mine Survey & Earthwork';" +
         "$s.IconLocation=" + psQuote(iconExe + ",0") + ";" +
         "$s.Save()"
-    return exec.Command("powershell.exe","-NoProfile","-WindowStyle","Hidden","-Command",ps).Run()
+    if output,err := exec.Command("powershell.exe","-NoProfile","-NonInteractive","-WindowStyle","Hidden","-Command",ps).CombinedOutput(); err != nil {
+        return fmt.Errorf("shortcut IMSAT VOLUME: %w; powershell: %s",err,strings.TrimSpace(string(output)))
+    }
+    // Give users an explicit uninstall entry in Start Menu as well as
+    // Windows Settings > Apps > Installed apps.
+    uninstallShortcut := filepath.Join(menuDir, "Gỡ IMSAT VOLUME.lnk")
+    removePs := "$s=(New-Object -ComObject WScript.Shell).CreateShortcut(" + psQuote(uninstallShortcut) + ");" +
+        "$s.TargetPath=" + psQuote(iconExe) + ";" +
+        "$s.Arguments='--uninstall';" +
+        "$s.Description='Gỡ IMSAT VOLUME khỏi AutoCAD (không xóa DWG/Project)';" +
+        "$s.IconLocation=" + psQuote(iconExe + ",0") + ";" +
+        "$s.Save()"
+    if output,err:=exec.Command("powershell.exe","-NoProfile","-NonInteractive","-WindowStyle","Hidden","-Command",removePs).CombinedOutput();err!=nil{
+        return fmt.Errorf("shortcut gỡ IMSAT VOLUME: %w; powershell: %s",err,strings.TrimSpace(string(output)))
+    }
+    return nil
 }
 
 func findAutoCAD2023() (string,error) {
-    candidates := []string{}
-    if pf:=os.Getenv("ProgramFiles"); pf!="" { candidates=append(candidates,filepath.Join(pf,"Autodesk","AutoCAD 2023")) }
-    candidates=append(candidates,`C:\Program Files\Autodesk\AutoCAD 2023`)
-    for _,p:=range candidates { if exists(filepath.Join(p,"acad.exe")) && exists(filepath.Join(p,"AcMgd.dll")) { return p,nil } }
-    out,_:=exec.Command("reg","query",`HKLM\SOFTWARE\Autodesk\AutoCAD\R24.2`,"/s","/v","AcadLocation").CombinedOutput()
-    for _,line:=range strings.Split(string(out),"\n") {
-        if !strings.Contains(line,"AcadLocation") { continue }
-        parts:=strings.Fields(line); if len(parts)>=3 { p:=strings.Join(parts[2:]," "); if exists(filepath.Join(p,"acad.exe")){return p,nil} }
+    hosts:=detectAutoCADHosts()
+    report,_:=json.MarshalIndent(hosts,"","  ")
+    writePersistentLog("autocad_inventory",string(report))
+    if strings.HasPrefix(version,"2.") {
+        lines:=[]string{"AutoCAD phát hiện trên máy (kiểm tra EXE x64 và API):"}
+        for _,host:=range hosts {
+            status:=host.Error
+            if status=="" {status="Có flavor biên dịch; chưa nghiệm thu host"}
+            if host.Year==2023 && host.Error=="" {status="Đúng đích R24.2 của bộ cài QA hiện tại"}
+            lines=append(lines,fmt.Sprintf("%d %s %s: %s\n%s",host.Year,host.Series,host.Runtime,status,host.Directory))
+        }
+        lines=append(lines,"Bộ cài hiện tại chỉ chứa module AutoCAD 2023. Không cài module cho đời khác.")
+        msg(strings.Join(lines,"\n\n"),0x40)
     }
-    return "",fmt.Errorf("Không tìm thấy AutoCAD 2023 64-bit trên máy.")
+    for _,host:=range hosts {
+        // The current payload is still R24.2 only. Detection of another
+        // release never authorizes relabeling or loading this DLL there.
+        if host.Year==2023 && host.Flavor=="ACAD2023_NET48" && host.Error=="" {return host.Directory,nil}
+    }
+    // Autodesk allows installing AutoCAD on a custom drive. Offer an explicit
+    // file picker only when registry/default discovery failed. Always validate
+    // the selected binary against the same x64/R24.2/managed API gates.
+    selected, pickErr := pickAutoCADExecutable()
+    if pickErr == nil && selected != "" {
+        host := inspectCADDirectory(filepath.Dir(selected))
+        if host.Year == 2023 && host.Flavor == "ACAD2023_NET48" && host.Error == "" {
+            writePersistentLog("autocad_inventory",string(report)+"\nManual CAD path: "+host.Directory)
+            return host.Directory,nil
+        }
+        return "",fmt.Errorf("Đường dẫn AutoCAD đã chọn không đúng bản full 2023 x64 R24.2: %s. Chi tiết: %s",selected,host.Error)
+    }
+    return "",fmt.Errorf("Không tìm thấy AutoCAD 2023 full x64 có phiên bản EXE R24.2 hợp lệ. "+
+        "Đã ghi danh sách các bản CAD phát hiện được vào log autocad_inventory. "+
+        "Bộ cài này không tự chuyển DLL 2023 sang đời CAD khác.")
+}
+
+type cadHost struct {
+    Directory string `json:"directory"`
+    Year int `json:"year"`
+    Series string `json:"series"`
+    Runtime string `json:"runtime"`
+    Flavor string `json:"flavor"`
+    FileVersion string `json:"file_version"`
+    Error string `json:"error,omitempty"`
+    HostAcceptance string `json:"host_acceptance"`
+}
+
+// Runtime is read from the installed host, never guessed from its folder name.
+// In particular R25.0/R25.1 do not distinguish .NET 8 from .NET 10 updates.
+func classifyCAD(major,minor,runtimeMajor int) (cadHost,error) {
+    releases:=[]struct{year,major,minor int;runtime,suffix string}{
+        {2012,18,2,"net35",""},{2013,19,0,"net40",""},{2014,19,1,"net40",""},
+        {2015,20,0,"net45","NET45"},{2016,20,1,"net45","NET45"},
+        {2017,21,0,"net46","NET46"},{2018,22,0,"net46","NET46"},
+        {2019,23,0,"net47","NET47"},{2020,23,1,"net47","NET47"},
+        {2021,24,0,"net48","NET48"},{2022,24,1,"net48","NET48"},
+        {2023,24,2,"net48","NET48"},{2024,24,3,"net48","NET48"},
+        {2025,25,0,"",""},{2026,25,1,"",""},
+    }
+    for _,r:=range releases {
+        if major!=r.major || minor!=r.minor {continue}
+        h:=cadHost{Year:r.year,Series:fmt.Sprintf("R%d.%d",major,minor),Runtime:r.runtime,HostAcceptance:"NOT_TESTED"}
+        if r.year>=2025 {
+            if runtimeMajor!=8 && runtimeMajor!=10 {return h,fmt.Errorf("Không xác định chắc chắn CLR 8/10 của host; không chọn DLL.")}
+            h.Runtime=fmt.Sprintf("net%d.0-windows",runtimeMajor)
+            h.Flavor=fmt.Sprintf("ACAD%d_NET%d",r.year,runtimeMajor)
+        } else if r.suffix!="" {h.Flavor=fmt.Sprintf("ACAD%d_%s",r.year,r.suffix)}
+        if h.Flavor=="" {return h,fmt.Errorf("Chưa có adapter tương thích AutoCAD %d; không dùng DLL hiện đại thay thế.",r.year)}
+        return h,nil
+    }
+    return cadHost{HostAcceptance:"NOT_TESTED"},fmt.Errorf("Release AutoCAD chưa được nhận diện: R%d.%d",major,minor)
+}
+
+func runtimeFromConfig(data []byte) (int,error) {
+    type framework struct {Name string `json:"name"`;Version string `json:"version"`;RollForward string `json:"rollForward"`}
+    var config struct {Options struct {Framework framework `json:"framework"`;Frameworks []framework `json:"frameworks"`;RollForward string `json:"rollForward"`} `json:"runtimeOptions"`}
+    if err:=json.Unmarshal(data,&config);err!=nil{return 0,err}
+    if strings.Contains(strings.ToLower(config.Options.RollForward),"major") {return 0,fmt.Errorf("Host cho phép chuyển CLR major; cần xác minh runtime đang nạp")}
+    refs:=append(config.Options.Frameworks,config.Options.Framework)
+    found:=0
+    for _,f:=range refs {
+        if f.Name!="Microsoft.NETCore.App" && f.Name!="Microsoft.WindowsDesktop.App" {continue}
+        if !regexp.MustCompile(`^(8|10)\.[0-9]+\.[0-9]+$`).MatchString(f.Version) || strings.Contains(strings.ToLower(f.RollForward),"major") {
+            return 0,fmt.Errorf("Không xác định cố định CLR từ runtime config")
+        }
+        var major,minor,patch int
+        n,err:=fmt.Sscanf(f.Version,"%d.%d.%d",&major,&minor,&patch)
+        if err!=nil || n!=3 || (major!=8 && major!=10) {return 0,fmt.Errorf("Runtime version không được hỗ trợ: %s",f.Version)}
+        if found!=0 && found!=major {return 0,fmt.Errorf("Runtime config chứa CLR không đồng nhất")}
+        found=major
+    }
+    if found==0{return 0,fmt.Errorf("Không có framework CLR được xác nhận trong runtime config")}
+    return found,nil
+}
+
+func executableVersion(file string) (uint32,uint32,error) {
+    dll:=syscall.NewLazyDLL("version.dll")
+    ptr,err:=syscall.UTF16PtrFromString(file);if err!=nil{return 0,0,err}
+    size,_,_:=dll.NewProc("GetFileVersionInfoSizeW").Call(uintptr(unsafe.Pointer(ptr)),0)
+    if size==0 || size>16*1024*1024{return 0,0,fmt.Errorf("Không đọc được version EXE")}
+    data:=make([]byte,int(size))
+    ok,_,_:=dll.NewProc("GetFileVersionInfoW").Call(uintptr(unsafe.Pointer(ptr)),0,size,uintptr(unsafe.Pointer(&data[0])))
+    if ok==0{return 0,0,fmt.Errorf("Version EXE không hợp lệ")}
+    // VerQueryValueW writes a pointer into data. Keep it as a pointer rather
+    // than storing it as uintptr and converting back outside the syscall.
+    root,_:=syscall.UTF16PtrFromString(`\`);var value unsafe.Pointer;var length uint32
+    ok,_,_ =dll.NewProc("VerQueryValueW").Call(uintptr(unsafe.Pointer(&data[0])),uintptr(unsafe.Pointer(root)),uintptr(unsafe.Pointer(&value)),uintptr(unsafe.Pointer(&length)))
+    if ok==0 || value==nil || length<52{return 0,0,fmt.Errorf("Thiếu VS_FIXEDFILEINFO")}
+    info:=(*[13]uint32)(value)
+    if info[0]!=0xFEEF04BD{return 0,0,fmt.Errorf("Sai chữ ký version EXE")}
+    // Autodesk acad.exe FileVersion may be 30.2 while ProductVersion is R24.2.
+    // Classify the managed API host by ProductVersion, not FileVersion.
+    ms,ls:=info[4],info[5];runtime.KeepAlive(data)
+    return ms,ls,nil
+}
+
+func inspectCADDirectory(dir string) cadHost {
+    h:=cadHost{Directory:dir,HostAcceptance:"NOT_TESTED"}
+    file:=filepath.Join(dir,"acad.exe")
+    image,err:=pe.Open(file)
+    if err!=nil {h.Error="Không đọc được PE acad.exe";return h}
+    machine:=image.Machine;image.Close()
+    if machine!=pe.IMAGE_FILE_MACHINE_AMD64 {h.Error="Chỉ hỗ trợ AutoCAD full x64";return h}
+    if !exists(filepath.Join(dir,"AcMgd.dll")){h.Error="Thiếu API managed của AutoCAD full";return h}
+    ms,ls,err:=executableVersion(file)
+    if err!=nil{h.Error=err.Error();return h}
+    major,minor:=int(ms>>16),int(ms&0xffff);runtimeMajor:=0
+    if major==25 {
+        // Only host-specific config filenames are accepted. An unrelated
+        // plug-in runtimeconfig in this directory is not host evidence.
+        for _,name:=range []string{"acad.runtimeconfig.json","acad.exe.runtimeconfig.json"} {
+            if data,e:=os.ReadFile(filepath.Join(dir,name));e==nil {
+                detected,e:=runtimeFromConfig(data)
+                if e!=nil || (runtimeMajor!=0 && runtimeMajor!=detected) {h.Error="Runtime config không nhất quán; không chọn DLL";return h}
+                runtimeMajor=detected
+            }
+        }
+    }
+    h,err=classifyCAD(major,minor,runtimeMajor);h.Directory=dir
+    h.FileVersion=fmt.Sprintf("%d.%d.%d.%d",major,minor,ls>>16,ls&0xffff)
+    if err!=nil{h.Error=err.Error()}
+    return h
+}
+
+// Folder layout may be nonstandard. Let the user select the real acad.exe
+// instead of misreporting AutoCAD absent; never relax host validation.
+func pickAutoCADExecutable() (string,error) {
+    script := `Add-Type -AssemblyName System.Windows.Forms; $d = New-Object System.Windows.Forms.OpenFileDialog; $d.Title='Chọn acad.exe của AutoCAD 2023'; $d.Filter='AutoCAD executable (acad.exe)|acad.exe'; $d.CheckFileExists=$true; if ($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { [Console]::Out.Write($d.FileName) }`
+    output,err:=exec.Command("powershell.exe","-NoProfile","-STA","-NonInteractive","-Command",script).Output()
+    if err!=nil {return "",err}
+    return strings.TrimSpace(string(output)),nil
+}
+
+func detectAutoCADHosts() []cadHost {
+    candidates:=[]string{}
+    for _,base:=range []string{os.Getenv("ProgramFiles"),`C:\Program Files`} {
+        if base==""{continue}
+        for year:=2012;year<=2026;year++ {candidates=append(candidates,filepath.Join(base,"Autodesk",fmt.Sprintf("AutoCAD %d",year)))}
+    }
+    // Explicit 64-bit registry view; do not mistake a WOW6432Node product
+    // or AutoCAD LT registry hive for a managed x64 host.
+    for _,key:=range []string{`HKLM\SOFTWARE\Autodesk\AutoCAD`,`HKCU\SOFTWARE\Autodesk\AutoCAD`} {
+        args:=[]string{"query",key,"/s","/v","AcadLocation"}
+        if strings.HasPrefix(key,"HKLM") {args=append(args,"/reg:64")}
+        output,_:=exec.Command("reg",args...).Output()
+        for _,line:=range strings.Split(string(output),"\n") {
+            at:=strings.Index(line,"REG_SZ")
+            if at>=0 && strings.Contains(line[:at],"AcadLocation") {
+                candidates=append(candidates,strings.TrimSpace(line[at+len("REG_SZ"):]))
+            }
+        }
+    }
+    hosts:=[]cadHost{};seen:=map[string]bool{}
+    for _,dir:=range candidates {
+        dir=filepath.Clean(dir);key:=strings.ToLower(dir)
+        if seen[key] || !exists(filepath.Join(dir,"acad.exe")){continue};seen[key]=true
+        hosts=append(hosts,inspectCADDirectory(dir))
+    }
+    return hosts
 }
 
 func extractPayload(dst string) error {
     b,err:=payloadFS.ReadFile("payload.zip"); if err!=nil{return err}
+    return extractZipPayload(b,dst)
+}
+
+func payloadRelativePath(name string) (string,error) {
+    normalized := strings.TrimSuffix(strings.ReplaceAll(name,`\`,"/"),"/")
+    // IsLocal uses Windows volume/device-name rules on the installer host.
+    // Reject aliases too, so two archive entries cannot name the same file.
+    for _,part := range strings.Split(normalized,"/") {
+        if part=="" || part=="." || part==".." || strings.TrimRight(part," .")!=part ||
+            strings.ContainsAny(part,":\x00") || !filepath.IsLocal(part) {
+            return "",fmt.Errorf("payload path không hợp lệ: %s",name)
+        }
+    }
+    clean := filepath.FromSlash(normalized)
+    if !filepath.IsLocal(clean) { return "",fmt.Errorf("payload path không nằm trong bộ cài") }
+    return clean,nil
+}
+
+func extractZipPayload(b []byte, dst string) error {
     zr,err:=zip.NewReader(bytes.NewReader(b),int64(len(b))); if err!=nil{return err}
-    for _,f:=range zr.File {
-        clean:=filepath.Clean(f.Name); if strings.HasPrefix(clean,"..") { return fmt.Errorf("payload path không hợp lệ") }
+    paths:=make([]string,len(zr.File))
+    seen:=map[string]bool{}
+    // Validate every entry before writing any bytes. ZIP symlinks and Windows
+    // path aliases must not escape or overwrite an earlier validated module.
+    for i,f:=range zr.File {
+        clean,e:=payloadRelativePath(f.Name);if e!=nil{return e}
+        if f.Mode().Type()!=0 && f.Mode().Type()!=os.ModeDir{return fmt.Errorf("payload chứa loại file không được phép")}
+        key:=strings.ToLower(clean)
+        if _,duplicate:=seen[key];duplicate{return fmt.Errorf("payload chứa đường dẫn trùng: %s",f.Name)}
+        paths[i]=clean;seen[key]=f.FileInfo().IsDir()
+    }
+    for _,clean:=range paths {
+        for parent:=filepath.Dir(clean);parent!=".";parent=filepath.Dir(parent) {
+            if directory,found:=seen[strings.ToLower(parent)];found&&!directory{return fmt.Errorf("payload dùng file làm thư mục")}
+        }
+    }
+    for i,f:=range zr.File {
+        clean:=paths[i]
         path:=filepath.Join(dst,clean)
-        if f.FileInfo().IsDir(){ os.MkdirAll(path,0755); continue }
+        if f.FileInfo().IsDir(){ if err:=os.MkdirAll(path,0755);err!=nil{return err};continue }
         if err:=os.MkdirAll(filepath.Dir(path),0755);err!=nil{return err}
-        rc,err:=f.Open(); if err!=nil{return err}; w,err:=os.Create(path); if err!=nil{rc.Close();return err}
-        _,e:=io.Copy(w,rc); w.Close(); rc.Close(); if e!=nil{return e}
+        rc,err:=f.Open(); if err!=nil{return err}
+        w,err:=os.OpenFile(path,os.O_CREATE|os.O_EXCL|os.O_WRONLY,0644); if err!=nil{rc.Close();return err}
+        _,e:=io.Copy(w,rc);closeErr:=w.Close();readErr:=rc.Close()
+        if e!=nil{return e};if closeErr!=nil{return closeErr};if readErr!=nil{return readErr}
     }
     return nil
 }
@@ -277,9 +661,31 @@ func writePersistentLog(kind, content string) {
 }
 func copyDir(src,dst string) error { return filepath.Walk(src,func(path string,info os.FileInfo,err error) error{ if err!=nil{return err}; rel,_:=filepath.Rel(src,path); out:=filepath.Join(dst,rel); if info.IsDir(){return os.MkdirAll(out,0755)}; return copyFile(path,out) }) }
 func copyFile(src,dst string) error { in,err:=os.Open(src);if err!=nil{return err};defer in.Close();os.MkdirAll(filepath.Dir(dst),0755);out,err:=os.Create(dst);if err!=nil{return err};_,e:=io.Copy(out,in);c:=out.Close();if e!=nil{return e};return c }
+// Keep retired bundles outside ApplicationPlugins: they must not autoload.
+// Rename (not copy/delete) preserves unknown user files and fails without
+// deleting the source if the destination is unavailable or on another volume.
+func bundleRecoveryDirectory() string {
+    root:=os.Getenv("ProgramData");if root=="" {root=`C:\ProgramData`}
+    return filepath.Join(root,"MiningVolume2023","Recovery")
+}
+func preserveBundle(source,recovery string) error {
+    info,err:=os.Lstat(source)
+    if os.IsNotExist(err) {return nil}
+    if err!=nil {return err}
+    if !info.IsDir() || info.Mode()&os.ModeSymlink!=0 {return fmt.Errorf("Bundle không phải thư mục thông thường: %s",source)}
+    if err=os.MkdirAll(recovery,0755);err!=nil{return err}
+    holder,err:=os.MkdirTemp(recovery,"retired-");if err!=nil{return err}
+    if err=os.Rename(source,filepath.Join(holder,filepath.Base(source)));err!=nil {
+        _=os.Remove(holder) // only the empty directory allocated by this call
+        return err
+    }
+    return nil
+}
 func restoreBackup(backup,target string) error {
     if !exists(backup) { return nil }
-    os.RemoveAll(target)
+    if _, err := os.Lstat(target); !os.IsNotExist(err) {
+        return fmt.Errorf("Không ghi đè thư mục đích khi khôi phục: %s", target)
+    }
     return os.Rename(backup,target)
 }
 func exists(p string) bool { _,e:=os.Stat(p);return e==nil }
@@ -289,3 +695,46 @@ func isAdmin() bool { return exec.Command("fltmc").Run()==nil }
 func elevate(extra string) { exe,_:=os.Executable(); ps:=fmt.Sprintf("Start-Process -FilePath %s -ArgumentList %s -Verb RunAs",psQuote(exe),psQuote(extra)); _=exec.Command("powershell.exe","-NoProfile","-WindowStyle","Hidden","-Command",ps).Start() }
 func psQuote(s string) string { return "'"+strings.ReplaceAll(s,"'","''")+"'" }
 func msg(text string, icon uintptr) { user32:=syscall.NewLazyDLL("user32.dll"); proc:=user32.NewProc("MessageBoxW"); t,_:=syscall.UTF16PtrFromString(text); c,_:=syscall.UTF16PtrFromString(productName); proc.Call(0,uintptr(unsafe.Pointer(t)),uintptr(unsafe.Pointer(c)),0x0|icon) }
+// Public bundle metadata is parsed, never guessed from a filename.
+func bundleVersion(root string) (string, error) {
+    data, err := os.ReadFile(filepath.Join(root,"PackageContents.xml")); if err != nil { return "",err }
+    var p struct { Version string `xml:"AppVersion,attr"` }
+    if err=xml.Unmarshal(data,&p); err != nil {return "",err}
+    if p.Version=="" {return "",fmt.Errorf("missing AppVersion")}; return p.Version,nil
+}
+
+// Snapshot only owned registration/files. Rollback never scans user documents or licenses.
+func captureRegistration(programData, staging string) (func() error,error) {
+    regFile:=filepath.Join(staging,"previous-registration.reg")
+    existed:=exec.Command("reg","query",uninstallKey).Run()==nil
+    if existed {if err:=exec.Command("reg","export",uninstallKey,regFile,"/y").Run();err!=nil{return nil,err}}
+    menu:=filepath.Join(programData,"Microsoft","Windows","Start Menu","Programs")
+    paths:=[]string{filepath.Join(programData,"MiningVolume2023",storedSetupName),filepath.Join(menu,"IMSAT VOLUME.lnk"),filepath.Join(menu,"Gỡ IMSAT VOLUME.lnk")}
+    saved:=map[string][]byte{}
+    for _,p:=range paths {b,err:=os.ReadFile(p);if err==nil{saved[p]=b}else if !os.IsNotExist(err){return nil,err}}
+    return func() error {
+        var first error
+        record:=func(err error){if err!=nil&&first==nil{first=err}}
+        for _,p:=range paths {if b,ok:=saved[p];ok{record(os.WriteFile(p,b,0644))}else{err:=os.Remove(p);if !os.IsNotExist(err){record(err)}}}
+        if existed {record(exec.Command("reg","import",regFile).Run())} else { _=exec.Command("reg","delete",uninstallKey,"/f").Run() }
+        return first
+    },nil
+}
+
+// Validate the exact DLL bytes embedded in Setup before replacing any installation.
+func verifyBuildIdentity(dir string, allowed map[string]bool) error {
+    b,err:=os.ReadFile(filepath.Join(dir,"BUILD_IDENTITY.txt"))
+    if os.IsNotExist(err)&&version=="1.0.0" {return nil} // legacy V1 payload compatibility
+    if err!=nil{return fmt.Errorf("missing build identity: %w",err)}
+    seen:=map[string]bool{}; source:=false
+    for _,line:=range strings.Split(string(b),"\n") {
+        line=strings.TrimSpace(line)
+        if strings.HasPrefix(line,"SOURCE_SHA=") {h:=strings.TrimPrefix(line,"SOURCE_SHA=");_,err:=hex.DecodeString(h);source=len(h)==40&&err==nil;continue}
+        if line=="" {continue}; fields:=strings.Fields(line)
+        if len(fields)!=2||len(fields[0])!=64||filepath.Base(fields[1])!=fields[1]||!allowed[strings.ToLower(fields[1])] {return fmt.Errorf("invalid build manifest")}
+        key:=strings.ToLower(fields[1]);if seen[key]{return fmt.Errorf("duplicate manifest DLL")};seen[key]=true
+        data,err:=os.ReadFile(filepath.Join(dir,fields[1]));if err!=nil{return err};sum:=sha256.Sum256(data)
+        if !strings.EqualFold(hex.EncodeToString(sum[:]),fields[0]){return fmt.Errorf("DLL checksum mismatch: %s",fields[1])}
+    }
+    if !source||len(seen)!=len(allowed){return fmt.Errorf("incomplete build identity")};return nil
+}

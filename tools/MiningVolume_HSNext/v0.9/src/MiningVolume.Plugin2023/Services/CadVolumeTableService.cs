@@ -30,48 +30,149 @@ namespace MiningVolume2023.Services
             using (var tr = database.TransactionManager.StartTransaction())
             {
                 var layer = EnsureOutputLayer(database, tr);
+                var arial = EnsureArialTextStyle(database, tr);
                 var bt = (BlockTable)tr.GetObject(database.BlockTableId, OpenMode.ForRead);
                 var model = (BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForWrite);
 
                 double x = insertion.X;
                 double y = insertion.Y;
 
-                var summary = NewTable(database, layer, 7, 2, new Point3d(x, y, 0), 54);
-                Set(summary, 0, "IMSAT VOLUME – TỔNG HỢP KHỐI LƯỢNG", "Giá trị");
-                Set(summary, 1, "Thời điểm xuất", DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss"));
-                Set(summary, 2, "Tổng khối lượng đào, m³", F(result.TotalCutVolume));
-                Set(summary, 3, "Tổng khối lượng đắp, m³", F(result.TotalFillVolume));
-                Set(summary, 4, "Chênh lệch đào − đắp, m³", F(result.NetVolume));
-                Set(summary, 5, "Số khoảng mặt cắt", result.Intervals.Count.ToString());
-                Set(summary, 6, "Phát triển", "Bùi Thế Nam · 0967280686");
+                const int summaryRows = 8;
+                var summary = NewTable(database, layer, summaryRows, 2,
+                    new Point3d(x, y, 0), 68);
+                summary.MergeCells(CellRange.Create(summary, 0, 0, 0, 1));
+                summary.Cells[0, 0].TextString = "IMSAT VOLUME – TỔNG HỢP KHỐI LƯỢNG";
+                Set(summary, 1, "Hạng mục", "Giá trị");
+                Set(summary, 2, "Thời điểm xuất", DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss"));
+                Set(summary, 3, "Tổng khối lượng đào, m³", F(result.TotalCutVolume));
+                Set(summary, 4, "Tổng khối lượng đắp, m³", F(result.TotalFillVolume));
+                Set(summary, 5, "Chênh lệch đào − đắp, m³", F(result.NetVolume));
+                Set(summary, 6, "Số khoảng mặt cắt", result.Intervals.Count.ToString());
+                Set(summary, 7, "Phát triển", "Bùi Thế Nam · 0967280686");
+                StyleSimpleTable(summary, arial, summaryRows, 2);
                 Append(model, tr, summary);
-                y -= RowHeight * 7 + TableGap;
+                y -= RowHeight * summaryRows + TableGap;
 
-                var interval = NewTable(database, layer, result.Intervals.Count + 1, 9, new Point3d(x, y, 0), 27);
-                Set(interval, 0, "STT", "MC đầu", "MC cuối", "L (m)", "F đào đầu", "F đào cuối",
-                    "V đào (m³)", "V đắp (m³)", "Ghi chú");
+                // Match the accepted CAD sample: native editable TABLE, full
+                // outer frame, merged title and grouped multi-level headers.
+                // MineVolume has earthwork F/V, not invented road-surface layers.
+                const int columns = 11;
+                const int topRows = 3;
+                int totalRow = result.Intervals.Count + topRows;
+                var interval = NewTable(database, layer, totalRow + 1, columns,
+                    new Point3d(x, y, 0), 31);
+                interval.MergeCells(CellRange.Create(interval, 0, 0, 0, columns - 1));
+                interval.MergeCells(CellRange.Create(interval, 1, 0, 1, 3));
+                interval.MergeCells(CellRange.Create(interval, 1, 4, 1, 7));
+                interval.MergeCells(CellRange.Create(interval, 1, 8, 1, 10));
+                interval.Cells[0, 0].TextString =
+                    "BẢNG TỔNG HỢP KHỐI LƯỢNG THEO MẶT CẮT";
+                interval.Cells[1, 0].TextString = "Thông tin tuyến";
+                interval.Cells[1, 4].TextString = "Diện tích (m²)";
+                interval.Cells[1, 8].TextString = "Khối lượng (m³)";
+                Set(interval, 2, "Thứ tự", "MC đầu", "MC cuối", "Khoảng cách L",
+                    "F đào đầu", "F đào cuối", "F đắp đầu", "F đắp cuối",
+                    "V đào", "V đắp", "Chênh lệch");
                 for (int i = 0; i < result.Intervals.Count; i++)
                 {
                     var v = result.Intervals[i];
-                    Validate(v.CutVolume, v.FillVolume, v.Distance, v.CutAreaStart, v.CutAreaEnd);
-                    Set(interval, i + 1, (i + 1).ToString(), v.StartSection, v.EndSection, F(v.Distance),
-                        F(v.CutAreaStart), F(v.CutAreaEnd), F(v.CutVolume), F(v.FillVolume), v.Note);
+                    Validate(v.CutVolume, v.FillVolume, v.Distance,
+                        v.CutAreaStart, v.CutAreaEnd, v.FillAreaStart, v.FillAreaEnd);
+                    Set(interval, i + topRows, (i + 1).ToString(),
+                        v.StartSection, v.EndSection, F(v.Distance),
+                        F(v.CutAreaStart), F(v.CutAreaEnd),
+                        F(v.FillAreaStart), F(v.FillAreaEnd),
+                        F(v.CutVolume), F(v.FillVolume),
+                        F(v.CutVolume - v.FillVolume));
                 }
+                interval.MergeCells(CellRange.Create(interval, totalRow, 0, totalRow, 7));
+                interval.Cells[totalRow, 0].TextString = "Tổng";
+                interval.Cells[totalRow, 8].TextString = F(result.TotalCutVolume);
+                interval.Cells[totalRow, 9].TextString = F(result.TotalFillVolume);
+                interval.Cells[totalRow, 10].TextString = F(result.NetVolume);
+                StyleTable(interval, arial, totalRow);
                 Append(model, tr, interval);
-                y -= RowHeight * (result.Intervals.Count + 1) + TableGap;
+                y -= RowHeight * (totalRow + 1) + TableGap;
 
-                var levels = NewTable(database, layer, result.Levels.Count + 1, 6, new Point3d(x, y, 0), 30);
-                Set(levels, 0, "STT", "Tầng/mức", "Cao độ dưới", "Cao độ trên", "V đào (m³)", "V đắp (m³)");
+                // Native AutoCAD TABLE style may auto-merge the very first
+                // row as its TITLE. Placing six column names in row 0 therefore
+                // rendered ONLY "STT" across the whole table in field QA.
+                // Reserve title row 0 explicitly and put all six headings in
+                // the actual header row 1, before any numerical data.
+                const int levelHeaderRows = 2;
+                int levelsTotalRow = result.Levels.Count + levelHeaderRows;
+                var levels = NewTable(database, layer, levelsTotalRow + 1, 6,
+                    new Point3d(x, y, 0), 43);
+                levels.MergeCells(CellRange.Create(levels, 0, 0, 0, 5));
+                levels.Cells[0, 0].TextString = "BẢNG KHỐI LƯỢNG ĐÀO ĐẮP THEO TẦNG";
+                Set(levels, 1, "Thứ tự", "Tầng/mức", "Cao độ dưới (m)",
+                    "Cao độ trên (m)", "Khối lượng đào (m³)", "Khối lượng đắp (m³)");
+                double cutLevels = 0, fillLevels = 0;
                 for (int i = 0; i < result.Levels.Count; i++)
                 {
                     var level = result.Levels[i];
                     Validate(level.CutVolume, level.FillVolume, level.Band.LowerZ, level.Band.UpperZ);
-                    Set(levels, i + 1, (i + 1).ToString(), level.Band.Name,
-                        F(level.Band.LowerZ), F(level.Band.UpperZ), F(level.CutVolume), F(level.FillVolume));
+                    Set(levels, i + levelHeaderRows, (i + 1).ToString(), level.Band.Name,
+                        F(level.Band.LowerZ), F(level.Band.UpperZ),
+                        F(level.CutVolume), F(level.FillVolume));
+                    cutLevels += level.CutVolume;
+                    fillLevels += level.FillVolume;
                 }
+                levels.MergeCells(CellRange.Create(levels, levelsTotalRow, 0,
+                    levelsTotalRow, 3));
+                levels.Cells[levelsTotalRow, 0].TextString = "Tổng theo các tầng";
+                levels.Cells[levelsTotalRow, 4].TextString = F(cutLevels);
+                levels.Cells[levelsTotalRow, 5].TextString = F(fillLevels);
+                StyleSimpleTable(levels, arial, levelsTotalRow + 1, 6);
                 Append(model, tr, levels);
                 tr.Commit();
             }
+        }
+
+        private static ObjectId EnsureArialTextStyle(Database db, Transaction tr)
+        {
+            const string style = "MV_ARIAL";
+            var table = (TextStyleTable)tr.GetObject(db.TextStyleTableId, OpenMode.ForRead);
+            if (table.Has(style)) return table[style];
+            table.UpgradeOpen();
+            var record = new TextStyleTableRecord { Name = style, FileName = "arial.ttf" };
+            ObjectId id = table.Add(record);
+            tr.AddNewlyCreatedDBObject(record, true);
+            return id;
+        }
+
+        private static void StyleSimpleTable(Autodesk.AutoCAD.DatabaseServices.Table table,
+            ObjectId arial, int rows, int columns)
+        {
+            for (int row = 0; row < rows; row++)
+                for (int col = 0; col < columns; col++)
+                {
+                    // Do not touch covered native TABLE cells after merge:
+                    // summary/level title spans all columns; level total
+                    // merges the first four columns.
+                    if (row == 0 && col > 0) continue;
+                    if (columns == 6 && row == rows - 1 && col >= 1 && col <= 3)
+                        continue;
+                    table.Cells[row, col].TextStyleId = arial;
+                    table.Cells[row, col].TextHeight = 2.6;
+                    table.Cells[row, col].Alignment = CellAlignment.MiddleCenter;
+                }
+        }
+
+        private static void StyleTable(Autodesk.AutoCAD.DatabaseServices.Table table,
+            ObjectId arial, int totalRow)
+        {
+            // Native TABLE cells keep merged headers, grids and text editable.
+            for (int row = 0; row <= totalRow; row++)
+                for (int col = 0; col < 11; col++)
+                {
+                    if (row == 0 && col > 0) continue;
+                    if (row == 1 && col != 0 && col != 4 && col != 8) continue;
+                    if (row == totalRow && col > 0 && col < 8) continue;
+                    table.Cells[row, col].TextStyleId = arial;
+                    table.Cells[row, col].TextHeight = row <= 2 ? 2.8 : 2.6;
+                    table.Cells[row, col].Alignment = CellAlignment.MiddleCenter;
+                }
         }
 
         private static void Validate(params double[] values)

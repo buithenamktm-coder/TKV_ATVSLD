@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Xml;
 using MiningVolume.Core.Reporting;
@@ -25,13 +26,13 @@ namespace MiningVolume2023.Services
         public static void Apply(string filePath, SpreadsheetReport report)
         {
             if (report == null) throw new ArgumentNullException(nameof(report));
-            string logoPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Assets", "imsat_logo_64.png");
-            if (!File.Exists(logoPath))
-                throw new FileNotFoundException("Thiếu logo IMSAT để đóng dấu nhận diện vào báo cáo Excel.", logoPath);
+            if (!report.IncludeImsatLogo) return; // non-TKV must have no IMSAT logo
+            byte[] logo = LoadLogoOrNull();
+            if (logo == null) return; // logo is optional, workbook must still export
 
             var targets = report.Sheets
                 .Select((sheet, index) => new { Sheet = sheet, Index = index + 1 })
-                .Where(x => string.Equals(x.Sheet.Name, "Thông tin", StringComparison.OrdinalIgnoreCase) ||
+                .Where(x => x.Sheet.HasSignatures || string.Equals(x.Sheet.Name, "Thông tin", StringComparison.OrdinalIgnoreCase) ||
                             string.Equals(x.Sheet.Name, "Tổng khối", StringComparison.OrdinalIgnoreCase))
                 .ToList();
             if (targets.Count == 0) return;
@@ -39,7 +40,7 @@ namespace MiningVolume2023.Services
             using (var fs = new FileStream(filePath, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
             using (var zip = new ZipArchive(fs, ZipArchiveMode.Update, leaveOpen: false, entryNameEncoding: Encoding.UTF8))
             {
-                ReplaceBinary(zip, "xl/media/imsat_logo.png", File.ReadAllBytes(logoPath));
+                ReplaceBinary(zip, "xl/media/imsat_logo.png", logo);
                 UpdateContentTypes(zip, targets.Select(x => x.Index));
 
                 foreach (var target in targets)
@@ -49,10 +50,41 @@ namespace MiningVolume2023.Services
                     int anchorCol = Math.Max(0, colCount - 1);
                     AddDrawingReferenceToWorksheet(zip, target.Index);
                     WriteWorksheetRelationships(zip, target.Index);
-                    WriteDrawing(zip, target.Index, anchorCol);
+                    // Keep the 32 px logo at the far right, outside the centered title text.
+                    double width = anchorCol < target.Sheet.ColumnWidths.Count
+                        ? target.Sheet.ColumnWidths[anchorCol] : 15.0;
+                    double pixels = Math.Max(6, Math.Min(45, width)) * 7 + 5;
+                    int offsetEmu = (int)Math.Max(0, pixels - 40) * 9525;
+                    WriteDrawing(zip, target.Index, anchorCol, offsetEmu);
                     WriteDrawingRelationships(zip, target.Index);
                 }
             }
+        }
+
+        private static byte[] LoadLogoOrNull()
+        {
+            // Primary source is the actual logo EMBEDDED in the plugin DLL.
+            // Installer paths / custom bundle layouts must never block Excel.
+            try
+            {
+                using (var embedded = typeof(XlsxBrandingInjector).Assembly
+                    .GetManifestResourceStream("MiningVolume2023.Assets.imsat_logo_64.png"))
+                {
+                    if (embedded != null)
+                    {
+                        using (var memory = new MemoryStream())
+                        {
+                            embedded.CopyTo(memory);
+                            if (memory.Length > 0) return memory.ToArray();
+                        }
+                    }
+                }
+                string fallback = Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
+                    "Assets", "imsat_logo_64.png");
+                return File.Exists(fallback) ? File.ReadAllBytes(fallback) : null;
+            }
+            catch (IOException) { return null; }
+            catch (UnauthorizedAccessException) { return null; }
         }
 
         private static void UpdateContentTypes(ZipArchive zip, IEnumerable<int> sheetIndexes)
@@ -116,7 +148,7 @@ namespace MiningVolume2023.Services
             SaveXml(zip, path, doc);
         }
 
-        private static void WriteDrawing(ZipArchive zip, int sheetIndex, int col)
+        private static void WriteDrawing(ZipArchive zip, int sheetIndex, int col, int offsetEmu)
         {
             string path = "xl/drawings/drawingMV" + sheetIndex + ".xml";
             var settings = new XmlWriterSettings { Encoding = new UTF8Encoding(false), Indent = false, OmitXmlDeclaration = false };
@@ -132,7 +164,7 @@ namespace MiningVolume2023.Services
                     x.WriteStartElement("xdr", "oneCellAnchor", DrawingNs);
                     x.WriteStartElement("xdr", "from", DrawingNs);
                     x.WriteElementString("xdr", "col", DrawingNs, col.ToString());
-                    x.WriteElementString("xdr", "colOff", DrawingNs, "0");
+                    x.WriteElementString("xdr", "colOff", DrawingNs, offsetEmu.ToString(System.Globalization.CultureInfo.InvariantCulture));
                     x.WriteElementString("xdr", "row", DrawingNs, "0");
                     x.WriteElementString("xdr", "rowOff", DrawingNs, "0");
                     x.WriteEndElement();

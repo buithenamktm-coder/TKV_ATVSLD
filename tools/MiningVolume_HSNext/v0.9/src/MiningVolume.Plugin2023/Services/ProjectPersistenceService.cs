@@ -40,6 +40,11 @@ namespace MiningVolume2023.Services
         {
             var doc = Application.DocumentManager.MdiActiveDocument ?? throw new InvalidOperationException("Không có bản vẽ AutoCAD đang hoạt động.");
             var snapshot = Capture(ProjectState.Current);
+            // Record the CAD evidence before persisting. If it later disappears,
+            // never silently recalculate a manually approved section from TIN.
+            snapshot.HadEditableSectionCad =
+                ProjectState.Current.SectionProfiles.Any(x => x != null && x.IsUserEdited) ||
+                EditableSectionCadService.HasEditableProfiles(doc.Database);
             snapshot.SavedUtc = DateTime.UtcNow;
             var encoded = ProjectSnapshotCodec.Encode(snapshot);
             using (doc.LockDocument())
@@ -132,6 +137,9 @@ namespace MiningVolume2023.Services
                 DirectionX = state.SectionDirection?.X ?? 0,
                 DirectionY = state.SectionDirection?.Y ?? 0,
                 SectionSpacing = state.SectionSpacing,
+                SectionParameterMode = state.SectionParameterMode,
+                SectionMapScale = state.SectionMapScale,
+                SectionAxisElevationInterval = state.SectionAxisElevationInterval,
                 SectionLayoutGap = state.SectionLayoutGap,
                 GridBoundaryHandle = state.GridBoundaryHandle,
                 GridSizeX = state.GridSizeX,
@@ -144,6 +152,15 @@ namespace MiningVolume2023.Services
                 VerticalScale = state.VerticalScale,
                 DeveloperName = state.DeveloperName,
                 DeveloperContact = state.DeveloperContact,
+                MiningUnitGroup = state.MiningUnitGroup,
+                MiningUnitName = state.MiningUnitName,
+                VolumePeriodType = state.VolumePeriodType,
+                VolumePeriodNumber = state.VolumePeriodNumber,
+                VolumePeriodYear = state.VolumePeriodYear,
+                VolumeCalculatedUtc = state.VolumeCalculatedUtc,
+                VolumeCalculationSeconds = state.VolumeCalculationSeconds,
+                GridCalculatedUtc = state.GridCalculatedUtc,
+                GridCalculationSeconds = state.GridCalculationSeconds,
                 HadProfiles = state.SectionProfiles.Count > 0,
                 HadVolumeResult = state.VolumeResult != null,
                 TinRegionHandle = state.TinRegionHandle
@@ -193,6 +210,9 @@ namespace MiningVolume2023.Services
             foreach (var handle in session.SelectedHandles) s.SelectedHandles.Add(handle);
             foreach (var t in session.AllowedTypes) s.AllowedTypes.Add((int)t);
             if (session.Source == null) return s;
+            // Validate all original HT/TK geometry after DWG reopen, not only
+            // handles that have manual point overrides.
+            s.FullSourceFingerprint = SourceFingerprint.ComputeModel(session.Source);
             s.EditHistory.AddRange(session.Source.EditHistory);
             foreach (var e in session.Source.Entities)
             {
@@ -215,6 +235,13 @@ namespace MiningVolume2023.Services
             var state = ProjectState.Current;
             state.Reset();
             state.SectionSpacing = PositiveOr(snap.SectionSpacing, 20);
+            // Legacy DWGs have no preset fields. Treat them as Custom, preserving
+            // their original numeric values rather than silently applying TT34.
+            state.SectionParameterMode = snap.SectionParameterMode == "TT34/2018/TT-BCT"
+                ? snap.SectionParameterMode : "Tùy chỉnh";
+            state.SectionMapScale = 1000;
+            state.SectionAxisElevationInterval =
+                PositiveOr(snap.SectionAxisElevationInterval, snap.SectionParameterMode == null ? PositiveOr(snap.LevelStep, 5) : 20);
             state.SectionLayoutGap = Math.Max(30.0, PositiveOr(snap.SectionLayoutGap, 90));
             state.GridBoundaryHandle = snap.GridBoundaryHandle;
             state.GridSizeX = PositiveOr(snap.GridSizeX, 20);
@@ -223,10 +250,39 @@ namespace MiningVolume2023.Services
             state.LevelStep = PositiveOr(snap.LevelStep, 5);
             state.FromLevel = snap.FromLevel;
             state.ToLevel = snap.ToLevel;
-            state.HorizontalScale = PositiveOr(snap.HorizontalScale, 1000);
-            state.VerticalScale = PositiveOr(snap.VerticalScale, 500);
-            state.DeveloperName = string.IsNullOrWhiteSpace(snap.DeveloperName) ? "Bùi Thế Nam" : snap.DeveloperName;
-            state.DeveloperContact = string.IsNullOrWhiteSpace(snap.DeveloperContact) ? "Điện thoại: 0967280686" : snap.DeveloperContact;
+            // Custom projects preserve the EXACT chosen scales across DWG reopen.
+            // TT34 keeps the default 1:1000 on both axes. A legacy project
+            // without a saved mode is treated as Custom (never silently discard).
+            state.HorizontalScale = state.SectionParameterMode == "Tùy chỉnh"
+                ? PositiveOr(snap.HorizontalScale, 1000.0) : 1000.0;
+            state.VerticalScale = state.SectionParameterMode == "Tùy chỉnh"
+                ? PositiveOr(snap.VerticalScale, 1000.0) : 1000.0;
+            if (state.SectionParameterMode != "Tùy chỉnh" &&
+                ((snap.HorizontalScale > 0 && Math.Abs(snap.HorizontalScale - 1000.0) > 1e-9) ||
+                 (snap.VerticalScale > 0 && Math.Abs(snap.VerticalScale - 1000.0) > 1e-9)))
+                warnings.Add("Bộ thông số TT34 sử dụng mặt cắt 1:1.000 trên hai trục. " +
+                    "Project cũ chứa tỷ lệ khác; kiểm tra và vẽ lại mặt cắt CAD nếu cần.");
+            state.DeveloperName = "Bùi Thế Nam";
+            state.DeveloperContact = "ĐT/Zalo: 0967280686";
+            state.MiningUnitGroup = MiningUnitCatalog.IsKnownGroup(snap.MiningUnitGroup)
+                ? snap.MiningUnitGroup : MiningUnitCatalog.Coal;
+            state.MiningUnitName = snap.MiningUnitName ?? string.Empty;
+            state.VolumePeriodType = snap.VolumePeriodType == VolumePeriodCatalog.Year
+                ? VolumePeriodCatalog.Year
+                : snap.VolumePeriodType == VolumePeriodCatalog.Quarter
+                    ? VolumePeriodCatalog.Quarter : VolumePeriodCatalog.Month;
+            state.VolumePeriodYear = snap.VolumePeriodYear >= 1900 && snap.VolumePeriodYear <= 2200
+                ? snap.VolumePeriodYear : DateTime.Now.Year;
+            int maxPeriod = state.VolumePeriodType == VolumePeriodCatalog.Quarter ? 4 : 12;
+            state.VolumePeriodNumber = snap.VolumePeriodNumber >= 1 && snap.VolumePeriodNumber <= maxPeriod
+                ? snap.VolumePeriodNumber : 1;
+            // A saved calculation timestamp is not proof that the reconstructed
+            // source TIN and resulting geometry will match. Keep its provenance
+            // only if rebuild is enabled and succeeds.
+            state.VolumeCalculatedUtc = null;
+            state.VolumeCalculationSeconds = null;
+            state.GridCalculatedUtc = null;
+            state.GridCalculationSeconds = null;
             if (snap.MineralBodies != null)
             {
                 var seenIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -255,6 +311,7 @@ namespace MiningVolume2023.Services
             if (snap.TinRegion != null)
                 foreach (var p in snap.TinRegion)
                     state.TinRegionPolygon.Add(new Vec2(p.X, p.Y));
+            state.MarkTinRegionChanged();
             if (snap.HasDirection) state.SectionDirection = new Vec2(snap.DirectionX, snap.DirectionY);
 
             RestoreModel(ModelRole.Existing, snap.Existing, warnings);
@@ -272,7 +329,7 @@ namespace MiningVolume2023.Services
                     x.Spans.Select(y => new SectionSpan(y.StartT, y.EndT)).ToList())).ToList();
                 var direction = lines[0].Direction;
                 var normal = lines[0].Normal;
-                state.SectionSystem = new SectionSystem(direction, normal, boundary, lines, Array.Empty<string>());
+                state.SectionSystem = new SectionSystem(direction, normal, boundary, lines, MiningVolume.Core.Compatibility.EmptyArray<string>.Value);
             }
 
             if (rebuildDerived)
@@ -280,15 +337,47 @@ namespace MiningVolume2023.Services
                 RebuildSavedTins(snap, warnings);
                 if (snap.HadProfiles && state.SectionSystem != null && state.Existing.Tin != null && state.Design.Tin != null)
                 {
-                    try { SectionWorkflowService.BuildProfiles(); }
-                    catch (Exception ex) { warnings.Add("Không khôi phục được mặt cắt: " + ex.Message); }
+                    try
+                    {
+                        SectionWorkflowService.BuildProfiles();
+                        var doc = Application.DocumentManager.MdiActiveDocument;
+                        bool cadSectionsAvailable = doc != null &&
+                            EditableSectionCadService.HasEditableProfiles(doc.Database);
+                        if (snap.HadEditableSectionCad && !cadSectionsAvailable)
+                            throw new InvalidOperationException(
+                                "Project đã lưu có hệ mặt cắt CAD hoặc đường đã hiệu chỉnh, nhưng hiện không tìm thấy. " +
+                                "Không được tính lại từ TIN thay cho mặt cắt người dùng đã sửa. Hãy khôi phục bản vẽ hoặc hệ mặt cắt gốc.");
+                        if (cadSectionsAvailable)
+                        {
+                            // Persisted CAD polylines are authoritative. Even when
+                            // only one tagged segment survives, reconstruction
+                            // validates completeness and fails closed.
+                            var edited = EditableSectionCadService.ReadEditedProfiles(
+                                doc.Database, state.SectionProfiles.ToArray());
+                            SectionWorkflowService.CommitProfiles(edited);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        state.SectionProfiles.Clear();
+                        state.VolumeResult = null;
+                        warnings.Add("Không khôi phục được mặt cắt đã sửa trên CAD. Chặn khối lượng cho đến khi xử lý: " + ex.Message);
+                    }
                 }
                 if (snap.HadVolumeResult && state.SectionProfiles.Count > 0 && state.SectionSystem != null && state.Existing.Tin != null && state.Design.Tin != null && state.LevelStep > 0 && Math.Abs(state.FromLevel - state.ToLevel) > 1e-9)
                 {
                     try
                     {
-                        var v = VolumeWorkflowService.CalculateCore(state.SectionSystem, state.SectionProfiles, state.Existing.Tin, state.Design.Tin, state.FromLevel, state.ToLevel, state.LevelStep);
+                        // Restored DWGs rebuild real geometry/volume: record the
+                        // actual recomputation, never mislabel the old export date.
+                        var timer = System.Diagnostics.Stopwatch.StartNew();
+                        var v = VolumeWorkflowService.CalculateCore(state.SectionSystem,
+                            state.SectionProfiles, state.Existing.Tin, state.Design.Tin,
+                            state.FromLevel, state.ToLevel, state.LevelStep);
+                        timer.Stop();
                         state.VolumeResult = v;
+                        state.VolumeCalculatedUtc = DateTime.UtcNow;
+                        state.VolumeCalculationSeconds = timer.Elapsed.TotalSeconds;
                     }
                     catch (Exception ex) { warnings.Add("Không khôi phục được kết quả khối lượng: " + ex.Message); }
                 }
@@ -309,13 +398,21 @@ namespace MiningVolume2023.Services
                     : SourceSelectionMode.Layer;
 
                 if (sourceMode == SourceSelectionMode.ManualSelection && snap.SelectedHandles != null && snap.SelectedHandles.Count > 0)
-                    SurfaceWorkflowService.LoadSelectedHandles(role, snap.SelectedHandles, types);
+                    SurfaceWorkflowService.LoadSelectedHandles(role, snap.SelectedHandles, types, clearPreviousCadTin: false);
                 else if (!string.IsNullOrWhiteSpace(snap.Layer))
-                    SurfaceWorkflowService.LoadLayer(role, snap.Layer, types);
+                    SurfaceWorkflowService.LoadLayer(role, snap.Layer, types, clearPreviousCadTin: false);
                 else
                     return;
 
                 var session = ProjectState.Current.Get(role);
+                if (!string.IsNullOrWhiteSpace(snap.FullSourceFingerprint) &&
+                    !string.Equals(SourceFingerprint.ComputeModel(session.Source),
+                        snap.FullSourceFingerprint, StringComparison.OrdinalIgnoreCase))
+                {
+                    warnings.Add(session.Name +
+                        ": nguồn CAD đã thay đổi so với lúc lưu Project; không áp sửa Z/loại điểm hoặc tính lại khối lượng từ mặt cắt đã chỉnh.");
+                    return;
+                }
                 var byHandle = session.Source.Entities.GroupBy(e => e.Handle, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
                 foreach (var edit in snap.Edits ?? new List<EntityEditSnapshot>())
                 {
@@ -346,11 +443,12 @@ namespace MiningVolume2023.Services
 
             if (hadExisting && hadDesign)
             {
+                SurfaceBuildResult[] builds = null;
                 try
                 {
                     // A saved calculation-ready project must restore the two TINs as one pair.
                     // Build both cores first, then let DrawTinPair enforce the CAD atomicity gate.
-                    var builds = SurfaceWorkflowService.BuildPairCoreDetailed();
+                    builds = SurfaceWorkflowService.BuildPairCoreDetailed();
                     SurfaceWorkflowService.DrawTinPair(builds);
                     SurfaceWorkflowService.SetTinVisible(ModelRole.Existing, snap.Existing.TinVisible);
                     SurfaceWorkflowService.SetTinVisible(ModelRole.Design, snap.Design.TinVisible);
@@ -364,6 +462,19 @@ namespace MiningVolume2023.Services
                     ProjectState.Current.NotifyChanged();
                     warnings.Add("Không dựng lại được cặp TIN hiện trạng/thiết kế: " + ex.Message);
                 }
+                finally
+                {
+                    if (builds != null)
+                        foreach (var build in builds)
+                        {
+                            // A file-backed mesh is owned by ProjectState only after
+                            // successful adoption into the live AutoCAD session.
+                            // Release all remaining temporary stores on failure.
+                            if (build?.Tin != null &&
+                                !ReferenceEquals(ProjectState.Current.Get(build.Role).Tin, build.Tin))
+                                try { (build.Tin.Triangles as IDisposable)?.Dispose(); } catch { }
+                        }
+                }
                 return;
             }
 
@@ -376,13 +487,19 @@ namespace MiningVolume2023.Services
             if (snap == null || !snap.HadTin) return;
             var session = ProjectState.Current.Get(role);
             if (session.Source == null || session.Source.Entities.Count == 0) return;
+            SurfaceBuildResult build = null;
             try
             {
-                var build = SurfaceWorkflowService.BuildCoreDetailed(role);
+                build = SurfaceWorkflowService.BuildCoreDetailed(role);
                 SurfaceWorkflowService.DrawTin(role, build);
                 SurfaceWorkflowService.SetTinVisible(role, snap.TinVisible);
             }
             catch (Exception ex) { warnings.Add($"Không dựng lại được TIN {session.Name}: {ex.Message}"); }
+            finally
+            {
+                if (build?.Tin != null && !ReferenceEquals(session.Tin, build.Tin))
+                    try { (build.Tin.Triangles as IDisposable)?.Dispose(); } catch { }
+            }
         }
 
         private static double PositiveOr(double value, double fallback) => value > 0 ? value : fallback;

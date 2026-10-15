@@ -11,11 +11,12 @@ def read(rel):
 def test_project_page_is_real_palette_page():
     main = read('src/MiningVolume.Plugin2023/UI/MainPaletteControl.cs')
     page = read('src/MiningVolume.Plugin2023/UI/ProjectPage.cs')
-    assert 'AppPage { Project, Data, Model, Section, Volume, Grid, Mineral, Export, License }' in main
+    assert 'AppPage { Project, Data, Model, Section, Volume, Grid, Mineral, Export, License, QuickSection }' in main
+    assert 'AddNav(nav, AppPage.Project, "1", "Dự án")' in main
     assert '[AppPage.Project] = new ProjectPage()' in main
-    assert 'LƯU PROJECT VÀO DWG' in page
-    assert 'NẠP LẠI PROJECT' in page
-    assert 'XÓA PROJECT ĐÃ LƯU' in page
+    assert 'Lưu dự án vào DWG' in page
+    assert 'Nạp lại dự án' in page
+    assert 'Xóa dự án đã lưu' in page
 
 
 def test_project_stored_inside_dwg_nod_xrecord():
@@ -58,7 +59,7 @@ def test_model_edits_are_delta_not_duplicate_full_xyz():
 
 def test_restore_reloads_source_then_reapplies_user_edits():
     s = read('src/MiningVolume.Plugin2023/Services/ProjectPersistenceService.cs')
-    assert 'SurfaceWorkflowService.LoadLayer(role, snap.Layer, types)' in s
+    assert 'SurfaceWorkflowService.LoadLayer(role, snap.Layer, types, clearPreviousCadTin: false)' in s
     assert 'entity.SetEnabled(edit.Enabled)' in s
     assert 'entity.Vertices[ve.Index].SetEnabled(ve.Enabled)' in s
     assert 'entity.Vertices[ve.Index].OverrideZ(ve.Z)' in s
@@ -112,12 +113,14 @@ def test_project_scale_is_persisted_but_report_identity_is_fixed():
     service = read('src/MiningVolume.Plugin2023/Services/ExportWorkflowService.cs')
     for token in ['HorizontalScale', 'VerticalScale']:
         assert token in state
-    assert 'st.HorizontalScale = (double)_hScale.Value' in section
-    assert 'st.VerticalScale = (double)_vScale.Value' in section
+    assert 'st.HorizontalScale = (double)_hScale.Value;' in section
+    assert 'st.VerticalScale = (double)_vScale.Value;' in section
+    assert '_hScale.Enabled = custom;' in section
+    assert '_vScale.Enabled = custom;' in section
     assert 'ExportOptions.FixedDeveloperName' in export
     assert 'ExportOptions.FixedDeveloperContact' in export
     assert 'FixedDeveloperName = "Bùi Thế Nam"' in service
-    assert 'FixedDeveloperContact = "Điện thoại: 0967280686"' in service
+    assert 'FixedDeveloperContact = "ĐT/Zalo: 0967280686"' in service
 
 
 def test_runtime_serialization_references_present():

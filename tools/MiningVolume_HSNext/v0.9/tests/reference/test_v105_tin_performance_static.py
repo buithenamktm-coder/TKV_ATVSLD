@@ -34,7 +34,7 @@ def test_data_page_reports_each_heavy_phase_and_timings():
     s = read("src/MiningVolume.Plugin2023/UI/DataPage.cs")
     assert "BuildCoreDetailed(" in s and "ModelRole.Existing" in s
     assert "BuildCoreDetailed(" in s and "ModelRole.Design" in s
-    assert "Đang dựng TIN hiện trạng" in s
+    assert "Đang dựng TIN {st.Get(role).Name}" in s
     assert "Đang ghi TIN hiện trạng xuống AutoCAD" in read("src/MiningVolume.Plugin2023/Services/SurfaceWorkflowService.cs")
     assert "cadWatch.Elapsed.TotalSeconds" in s
     assert "totalWatch.Elapsed.TotalSeconds" in s
@@ -100,7 +100,10 @@ def test_section_profiles_are_parallelized_but_keep_original_order():
     s = read("src/MiningVolume.Core/Sections/TinSectionSampler.cs")
     assert "Parallel.For(0, lines.Count" in s
     assert "var result = new SectionProfile[lines.Count]" in s
-    assert "result[i] = BuildProfileIndexed" in s
+    # Each parallel iteration still writes to result[i] in input order;
+    # the wrapper adds conflict diagnostics without serializing sampling.
+    assert "result[i] = AnnotateVerticalConflicts(" in s
+    assert "BuildProfileIndexed(lines[i], existingIndex, designIndex, tol)" in s
     assert "Interlocked.Increment" in s
 
 def test_section_cad_output_is_batched_to_avoid_one_giant_transaction():
@@ -128,20 +131,24 @@ def test_large_mine_uses_one_verified_mesh_then_adaptive_storage():
     assert "10 triệu đỉnh" in workflow
 
 
-def test_large_tin_is_file_backed_and_cad_render_is_bounded_preview():
+def test_large_tin_is_file_backed_and_cad_render_uses_complete_mesh():
     store = read("src/MiningVolume.Surface/FileBackedTiledTriangleList.cs")
     tiled = read("src/MiningVolume.Surface/TiledConformingTinBuilder.cs")
     workflow = read("src/MiningVolume.Plugin2023/Services/SurfaceWorkflowService.cs")
-    state = read("src/MiningVolume.Plugin2023/Services/ProjectState.cs")
+    renderer = read("src/MiningVolume.Plugin2023/Services/TinCadRenderer.cs")
     assert "ITiledTriangleSource" in store
     assert "FileOptions.SequentialScan" in store
     assert "cacheTiles:6" in read("src/MiningVolume.Surface/AdaptiveTinStore.cs")
-    assert "PreviewTriangles" in tiled
-    assert "Math.Min(200000,tiles.Count)" in tiled
-    assert "tiles.Count/200000.0" in tiled
-    assert "TinCadIsPreview" in state
-    assert "cadPreview" in workflow
-    assert "BuildCadPreview" in workflow
+    assert "PreviewTriangles=MiningVolume.Core.Compatibility.EmptyArray<Triangle3>.Value" in tiled
+    assert "Math.Min(200000,tiles.Count)" not in tiled
+    assert "var ht = existing.Tin;" in workflow
+    assert "var tk = design.Tin;" in workflow
+    assert "var cadTin = tin;" in workflow
+    assert "bool cadPreview = false;" in workflow
+    assert "BuildCadPreview" not in workflow
+    assert "foreach (var t in tin.Triangles)" in renderer
+    assert "foreach (var t in tin.VerticalFaces)" in renderer
+    assert "if((written&1023)==0)progress.Poll(written,true);" in renderer
 
 
 def test_large_tin_ui_has_progress_and_user_cancel():

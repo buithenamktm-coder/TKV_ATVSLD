@@ -1,6 +1,7 @@
 using System;
 using System.Drawing;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using MiningVolume.Core.Reporting;
@@ -66,15 +67,6 @@ namespace MiningVolume2023.UI
             Controls.Add(box);
             box.BringToFront();
 
-            Controls.Add(new Label
-            {
-                Text = "Excel: Arial 12 • bảng đóng khung • công thức liên kết thật • logo IMSAT ở sheet báo cáo chính.",
-                Dock = DockStyle.Top,
-                Height = 42,
-                ForeColor = Color.DimGray,
-                Padding = new Padding(4, 6, 4, 4)
-            });
-
             var targets = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 35, WrapContents = false, Padding = new Padding(7, 4, 4, 0) };
             _toCad = new CheckBox { Text = "Xuất bảng lên CAD", AutoSize = true, Checked = false, Margin = new Padding(4, 4, 20, 4) };
             _toExcel = new CheckBox { Text = "Xuất file Excel", AutoSize = true, Checked = true, Margin = new Padding(4, 4, 20, 4) };
@@ -87,7 +79,7 @@ namespace MiningVolume2023.UI
             bottom.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             bottom.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 180));
             _status = new Label { Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, ForeColor = Color.DimGray, Text = "Cần thành lập mặt cắt và tính khối lượng trước khi xuất." };
-            _export = new Button { Text = "XUẤT EXCEL / CAD", Dock = DockStyle.Top, Height = 38, Font = new Font("Arial", 10F, FontStyle.Bold) };
+            _export = new Button { Text = "Xuất Excel / CAD", Dock = DockStyle.Top, Height = 38, Font = new Font("Arial", 10F, FontStyle.Bold) };
             _export.Click += ExportClicked;
             bottom.Controls.Add(_status, 0, 0);
             bottom.Controls.Add(_export, 1, 0);
@@ -120,6 +112,18 @@ namespace MiningVolume2023.UI
             {
                 MessageBox.Show("Chưa có đủ mặt cắt và kết quả khối lượng để xuất.", "IMSAT VOLUME",
                     MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            if (!st.VolumeResult.IsComplete)
+            {
+                MessageBox.Show(
+                    "Còn " + st.VolumeResult.ExcludedIntervals.ToString("n0") +
+                    " khoảng mặt cắt chưa có khối lượng xác nhận (mặt đứng nhiều Z hoặc thiếu dữ liệu). " +
+                    "Bảng hiện tại mới gồm các khoảng hợp lệ; không được xuất như tổng khối lượng chính thức. " +
+                    "Hãy rà soát/chỉnh mặt cắt tại các khoảng được cảnh báo rồi tính lại.",
+                    "Khối lượng chưa đủ điều kiện xuất",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
@@ -164,6 +168,16 @@ namespace MiningVolume2023.UI
                 DeveloperContact = ExportOptions.FixedDeveloperContact
             };
             var currentResult = st.VolumeResult;
+            var approvedProfiles = st.SectionProfiles.ToArray();
+            var existingTin = st.Existing.Tin;
+            var designTin = st.Design.Tin;
+            long existingRevision = st.Existing.Source.Revision;
+            long designRevision = st.Design.Source.Revision;
+            // Keep the approved reporting identity in lockstep with the
+            // original volume result during asynchronous Excel creation.
+            string selectedUnitGroup = st.MiningUnitGroup;
+            string selectedUnitName = st.MiningUnitName;
+            string selectedPeriod = st.VolumePeriodLabel;
             bool excelWritten = false;
             try
             {
@@ -171,21 +185,26 @@ namespace MiningVolume2023.UI
                 UseWaitCursor = true;
                 if (exportCad)
                     SurfaceWorkflowService.EnsureBothTinsReady(synchronizeCadLayers: true);
+                EnsureExportInputsCurrent(doc, st, currentResult, approvedProfiles,
+                    existingTin, designTin, existingRevision, designRevision,
+                    selectedUnitGroup, selectedUnitName, selectedPeriod);
 
                 if (exportExcel)
                 {
                     _status.Text = "Đang lập workbook và ghi file Excel...";
                     var report = await Task.Run(() => ExportWorkflowService.BuildReport(st, opt));
+                    EnsureExportInputsCurrent(doc, st, currentResult, approvedProfiles,
+                        existingTin, designTin, existingRevision, designRevision,
+                    selectedUnitGroup, selectedUnitName, selectedPeriod);
                     await Task.Run(() => ExportWorkflowService.WriteXlsx(excelPath, report));
                     excelWritten = true;
                 }
 
                 if (exportCad)
                 {
-                    if (!ReferenceEquals(doc, Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument))
-                        throw new InvalidOperationException("Bản vẽ AutoCAD đã thay đổi trong lúc xuất; không chèn bảng vào bản vẽ khác.");
-                    if (!ReferenceEquals(currentResult, st.VolumeResult))
-                        throw new InvalidOperationException("Khối lượng đã thay đổi trong lúc xuất; hãy xuất lại để tránh dùng bảng cũ.");
+                    EnsureExportInputsCurrent(doc, st, currentResult, approvedProfiles,
+                        existingTin, designTin, existingRevision, designRevision,
+                    selectedUnitGroup, selectedUnitName, selectedPeriod);
                     _status.Text = "Đang chèn bảng khối lượng TABLE vào AutoCAD...";
                     using (doc.LockDocument())
                         CadVolumeTableService.Insert(doc.Database, currentResult, cadInsertion.Value);
@@ -211,6 +230,39 @@ namespace MiningVolume2023.UI
             }
         }
 
+        private static void EnsureExportInputsCurrent(
+            Autodesk.AutoCAD.ApplicationServices.Document doc,
+            ProjectState state,
+            MiningVolume.Core.Volumes.VolumeResult expectedVolume,
+            MiningVolume.Core.Sections.SectionProfile[] expectedProfiles,
+            MiningVolume.Core.Surface.TinSurface existing,
+            MiningVolume.Core.Surface.TinSurface design,
+            long existingRevision, long designRevision,
+            string selectedUnitGroup, string selectedUnitName, string selectedPeriod)
+        {
+            // Excel-only exports must obey the same clipping-region validity
+            // gate as CAD exports. A grip-edited TIN boundary otherwise leaves
+            // the stored volume linked to the previous (unseen) region.
+            SurfaceWorkflowService.EnsureBothTinsReady(synchronizeCadLayers: false);
+            if (doc == null ||
+                !ReferenceEquals(doc, Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument) ||
+                !ReferenceEquals(expectedVolume, state.VolumeResult) ||
+                !ReferenceEquals(existing, state.Existing.Tin) ||
+                !ReferenceEquals(design, state.Design.Tin) ||
+                !state.Existing.IsTinCurrent || !state.Design.IsTinCurrent ||
+                state.Existing.Source.Revision != existingRevision ||
+                state.Design.Source.Revision != designRevision ||
+                !string.Equals(state.MiningUnitGroup, selectedUnitGroup, StringComparison.Ordinal) ||
+                !string.Equals(state.MiningUnitName, selectedUnitName, StringComparison.Ordinal) ||
+                !string.Equals(state.VolumePeriodLabel, selectedPeriod, StringComparison.Ordinal) ||
+                expectedProfiles.Length != state.SectionProfiles.Count ||
+                expectedProfiles.Where((p, index) => !ReferenceEquals(p, state.SectionProfiles[index])).Any())
+                throw new InvalidOperationException(
+                    "DWG, TIN, mặt cắt hoặc kết quả khối lượng đã thay đổi trong khi xuất. " +
+                    "Không sử dụng báo cáo cũ; hãy tính lại.");
+            EditableSectionCadService.EnsureProfilesMatch(doc.Database, expectedProfiles);
+        }
+
         private void StateChanged(object sender, EventArgs e)
         {
             if (!IsHandleCreated) return;
@@ -222,12 +274,17 @@ namespace MiningVolume2023.UI
             var st = ProjectState.Current;
             _developer.Text = ExportOptions.FixedDeveloperName;
             _contact.Text = ExportOptions.FixedDeveloperContact;
-            bool ready = st.VolumeResult != null && st.SectionProfiles.Count > 0;
+            bool ready = st.VolumeResult != null && st.VolumeResult.IsComplete &&
+                st.SectionProfiles.Count > 0;
             _export.Enabled = ready;
             if (ready)
                 _status.Text = $"Sẵn sàng xuất: {st.SectionProfiles.Count:n0} mặt cắt; {st.VolumeResult.Intervals.Count:n0} khoảng; {st.VolumeResult.Levels.Count:n0} tầng/mức.";
             else
-                _status.Text = "Cần thành lập mặt cắt và tính khối lượng trước khi xuất.";
+                _status.Text = st.VolumeResult != null && !st.VolumeResult.IsComplete
+                    ? "Chưa thể xuất tổng chính thức: còn " +
+                      st.VolumeResult.ExcludedIntervals.ToString("n0") +
+                      " khoảng chưa xác nhận. Kiểm tra và Cập nhật mặt cắt."
+                    : "Cần thành lập mặt cắt và tính khối lượng trước khi xuất.";
         }
 
         private static CheckBox AddCheck(Control parent, string text)
