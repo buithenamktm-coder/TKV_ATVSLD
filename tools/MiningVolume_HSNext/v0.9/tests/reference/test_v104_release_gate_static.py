@@ -8,7 +8,7 @@ def read(rel):
 def test_installer_vet_failure_cannot_be_masked_by_following_test_command():
     workflow = read("../../../.github/workflows/build-miningvolume-autocad2023.yml")
     commands = [line.strip() for line in workflow.splitlines() if line.strip()]
-    index = commands.index("go vet main.go")
+    index = commands.index("go vet main.go host_install_plan.go")
     assert commands[index + 1] == 'if ($LASTEXITCODE -ne 0) { throw "Installer go vet failed." }'
 
 def test_project_restore_rebuilds_saved_tin_pair_atomically():
@@ -40,7 +40,7 @@ def test_runtime_selftest_verifies_tin_color_lock_and_visibility():
 
 def test_release_pipeline_emits_build_verification_and_vets_installer():
     s = read("../../../.github/workflows/build-miningvolume-autocad2023.yml")
-    assert "go vet main.go" in s
+    assert "go vet main.go host_install_plan.go" in s
     assert "BUILD_VERIFICATION.txt" in s
     assert "Source commit: $env:SOURCE_SHA" in s
     assert "Compile errors: 0" in s
