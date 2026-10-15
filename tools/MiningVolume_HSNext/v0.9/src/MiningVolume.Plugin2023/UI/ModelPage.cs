@@ -74,6 +74,9 @@ namespace MiningVolume2023.UI
             _view3D = Button("VIEW TIN 3D", (s, e) => ViewTin3D());
             _view3D.Width = 115;
             second.Controls.Add(_build);
+            var deleteTin = Button("Xóa TIN đã tạo", (s, e) => DeleteCurrentTin());
+            deleteTin.Width = 140;
+            second.Controls.Add(deleteTin);
             second.Controls.Add(_toggleTin);
             second.Controls.Add(_view3D);
             _meanZBuild = Button("TIN Z TRUNG BÌNH – THỬ", async (s,e) => await BuildMeanZPreviewAsync());
@@ -305,6 +308,46 @@ namespace MiningVolume2023.UI
         {
             var row = SelectedRows().FirstOrDefault();
             if (row != null) CadViewService.ZoomToHandle(row.Entity.Handle);
+        }
+
+        private void DeleteCurrentTin()
+        {
+            if (_busy) return;
+            var state = ProjectState.Current;
+            var role = CurrentRole;
+            var session = state.Get(role);
+            if (session.Tin == null && session.TinCadFaceCount == 0) {
+                MessageBox.Show(this, "Mô hình TIN đang chọn chưa được tạo.",
+                    "IMSAT VOLUME", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            var document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument;
+            if (document == null) {
+                MessageBox.Show(this, "Không có bản vẽ AutoCAD đang hoạt động.",
+                    "IMSAT VOLUME", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            string modelName = role == ModelRole.Existing ? "hiện trạng" : "thiết kế";
+            if (MessageBox.Show(this,
+                "Xóa TIN " + modelName + " đã tạo khỏi bản vẽ và mô hình đang lưu?\r\n\r\n" +
+                "Các mặt cắt và kết quả khối lượng phụ thuộc sẽ không còn hợp lệ và bị xóa khỏi phiên tính.\r\n" +
+                "Điểm, đường đồng mức, đường bao và đối tượng CAD nguồn vẫn được giữ nguyên.\r\n\r\n" +
+                "Tiếp tục xóa?",
+                "Xác nhận xóa TIN " + modelName,
+                MessageBoxButtons.YesNo, MessageBoxIcon.Warning,
+                MessageBoxDefaultButton.Button2) != DialogResult.Yes) return;
+            if (!ReferenceEquals(document, Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument)
+                || !ReferenceEquals(state, ProjectState.Current)
+                || role != CurrentRole) return;
+            try {
+                SurfaceWorkflowService.InvalidateTin(role, clearCadLayer: true);
+                _info.Text = "Đã xóa TIN " + modelName +
+                    ". Dữ liệu địa hình nguồn được giữ nguyên.";
+            }
+            catch (Exception ex) {
+                MessageBox.Show(this, "Không thể xóa TIN. Mô hình được giữ lại nếu thao tác CAD thất bại.\r\n" + ex.Message,
+                    "IMSAT VOLUME", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
 
         private async Task BuildTinAsync()
