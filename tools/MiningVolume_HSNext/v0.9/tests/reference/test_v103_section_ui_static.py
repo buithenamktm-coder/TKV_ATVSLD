@@ -15,7 +15,7 @@ def test_section_page_has_explicit_draw_sections_button():
     s = read("src/MiningVolume.Plugin2023/UI/SectionPage.cs")
     assert 'Button("Xuất / Vẽ mặt cắt", BuildProfiles)' in s
     assert 'draw.Name = "btnDrawSections";' in s
-    assert 'Button("Xem trước tuyến", Preview)' in s
+    assert 'Button("Xem trước tuyến trên bình đồ", Preview)' in s
 
 def test_section_layout_is_single_explicit_vertical_grid_not_overlapping_top_docks():
     ctor = section_ctor()
