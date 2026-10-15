@@ -160,9 +160,9 @@ jobs:
           $env:GOOS='windows'
           $env:GOARCH='amd64'
           $env:CGO_ENABLED='0'
-          go vet main.go
+          go vet main.go host_install_plan.go
           if ($LASTEXITCODE -ne 0) { throw "Installer go vet failed." }
-          go test -v main.go main_test.go
+          go test -v main.go host_install_plan.go main_test.go host_install_plan_test.go
           if ($LASTEXITCODE -ne 0) { throw "Installer regression tests failed." }
 
       - name: Build native Windows installer
