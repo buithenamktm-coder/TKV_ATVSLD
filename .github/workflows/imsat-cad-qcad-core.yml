@@ -44,7 +44,7 @@ jobs:
       - name: Build QCAD core
         shell: pwsh
         run: |
-          cmake -S native/qcad -B native/qcad -G Ninja -DBUILD_QT6=ON -DCMAKE_BUILD_TYPE=Release
+          cmake -S native/qcad -B native/qcad -G Ninja -DBUILD_QT6=ON -DCMAKE_BUILD_TYPE=Release "-DCMAKE_CXX_FLAGS_RELEASE=/Od /DNDEBUG /MD" "-DCMAKE_C_FLAGS_RELEASE=/Od /DNDEBUG /MD"
           cmake --build native/qcad --parallel 4
       - name: Build Qt JavaScript integration
         shell: pwsh
