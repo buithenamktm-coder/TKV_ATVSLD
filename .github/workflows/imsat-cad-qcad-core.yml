@@ -32,6 +32,15 @@ jobs:
           git -C native/qcad rev-parse HEAD | Out-File -Append native-commit-report.txt
           git -C native/qtjsapi rev-parse HEAD | Out-File -Append native-commit-report.txt
           git -C native/qcadjsapi rev-parse HEAD | Out-File -Append native-commit-report.txt
+      - name: Work around MSVC OpenNURBS optimizer ICE (C1001)
+        shell: pwsh
+        run: |
+          $cm = 'native/qcad/src/3rdparty/opennurbs/CMakeLists.txt'
+          Add-Content -Path $cm -Value ''
+          Add-Content -Path $cm -Value '# IMSAT CI-only workaround: MSVC /O2 ICE in opennurbs_lookup.cpp'
+          Add-Content -Path $cm -Value 'if(MSVC)'
+          Add-Content -Path $cm -Value '  set_source_files_properties(opennurbs_lookup.cpp PROPERTIES COMPILE_OPTIONS "/Od")'
+          Add-Content -Path $cm -Value 'endif()'
       - name: Build QCAD core
         shell: pwsh
         run: |
