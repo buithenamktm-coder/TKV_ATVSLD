@@ -7,7 +7,7 @@
 - Nhánh phát triển: `imsat-cad-foundation`. Không ảnh hưởng nhánh IMSAT VOLUME.
 - **Lõi CAD mục tiêu:** Qt/C++ với QCAD Community Edition (cùng `qtjsapi`, `qcadjsapi`) chỉ khi Windows build, khởi động và kiểm tra lệnh thực tế đạt.
 - Ứng dụng Tkinter + ezdxf hiện tại là **Preview / POC**, không được dán nhãn "V1.0 đã đạt" hay dùng làm nền tảng lâu dài cho CAD chuyên nghiệp.
-- **Giấy phép:** QCAD CE GPLv3 và các thư viện thành phần; nếu phân phối bản sửa từ lõi GPL phải thực hiện đầy đủ nghĩa vụ về mã nguồn/giấy phép. Muốn phân phối mã lõi riêng độc quyền cần đánh giá phương án cấp phép khác.
+- **Kiến trúc & giấy phép ĐÃ CHỐT:** xem [ADR-001](ADR_001_LICENSING_ARCHITECTURE.md). Dùng QCAD CE GPLv3 + ngoại lệ cho plugin độc lập; giữ mã nghiệp vụ IMSAT độc quyền trong private repo; công bố bản sửa lõi QCAD khi phân phối; chỉ bán kèm chức năng DWG khi có quyền resale/OEM với nhà cung cấp. Không chọn SDK ODA ở giai đoạn đầu.
 - **DWG:** không đồng nghĩa DXF; chỉ triển khai qua công nghệ có giấy phép hợp lệ. Chưa được tuyên bố DWG tương thích khi chưa có dữ liệu kiểm thử.
 - Tất cả nội dung giới thiệu là tính năng đã kiểm thử, không dùng nhãn "đã xong" cho mục chưa nghiệm thu.
 
