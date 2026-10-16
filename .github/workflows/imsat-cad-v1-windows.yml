@@ -1,6 +1,10 @@
 name: IMSAT CAD V1 Preview Windows Installer
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - 'tools/IMSAT_CAD_V1/**'
+      - '.github/workflows/imsat-cad-v1-windows.yml'
   push:
     branches: [imsat-cad-foundation]
     paths:
