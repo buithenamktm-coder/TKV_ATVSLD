@@ -14,6 +14,9 @@ from tkinter import filedialog, messagebox, ttk
 
 import ezdxf
 from PIL import Image, ImageTk
+from imsatcad.autocad_commands import (
+    resolve_alias, execute as execute_cad_command, CommandError, DRAW_COMMANDS, EDIT_COMMANDS
+)
 
 ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 PALETTE = {'bg':'#101d2d','panel':'#182a40','line':'#2b445e','text':'#e8f3fc','muted':'#9db0c2','accent':'#24a0d8','canvas':'#091421'}
@@ -34,6 +37,8 @@ TRANS = {
     'limit':'Bản vẽ có nhiều đối tượng; chỉ hiển thị một phần để tránh treo giao diện.',
     'about_text':'IMSAT CAD V1.0 Preview\nNền tảng DXF 2D độc lập\nViệt / Anh · Win64\nChưa hỗ trợ DWG, chưa có dựng TIN.',
     'entity':'Đối tượng','coord':'Tọa độ','units':'Đơn vị','layer_prompt':'Nhập tên lớp',
+    'command':'Dòng lệnh', 'command_hint':'Nhập lệnh AutoCAD: L, PL, C, REC, M, CO, TR…',
+    'command_error':'Lệnh chưa hỗ trợ hoặc chưa đúng tham số: ',
     'replace_confirm':'Tệp {name} đã tồn tại. Anh có muốn thay thế không?',
     'no_selection':'Chưa chọn đối tượng.','invalid_layer':'Tên lớp không hợp lệ.', 'new_doc':'Bản vẽ mới',
  },
@@ -53,6 +58,8 @@ TRANS = {
     'limit':'Large drawing: preview has been limited to keep the interface responsive.',
     'about_text':'IMSAT CAD V1.0 Preview\nStandalone 2D DXF drafting\nVietnamese / English · Win64\nDWG and TIN triangulation are not supported.',
     'entity':'Entities','coord':'Coordinates','units':'Units','layer_prompt':'Enter layer name',
+    'command':'Command line', 'command_hint':'Enter AutoCAD command: L, PL, C, REC, M, CO, TR…',
+    'command_error':'Unsupported command or invalid arguments: ',
     'replace_confirm':'File {name} already exists. Replace it?',
     'no_selection':'No selected entity.','invalid_layer':'Invalid layer name.', 'new_doc':'New drawing',
  }
@@ -96,6 +103,7 @@ class CadApp(tk.Tk):
         self.bind('<Delete>', lambda _: self.delete_selected())
         self.bind('<Escape>', lambda _: self.cancel_tool())
         self.bind('<Return>', lambda _: self.finish_polyline())
+        self.bind('<Key>', self.type_command_when_canvas_focused)
         self.protocol('WM_DELETE_WINDOW', self.close_app)
         self.style = ttk.Style(self)
         self.style.theme_use('clam')
@@ -164,6 +172,20 @@ class CadApp(tk.Tk):
         self.canvas.bind('<Button-4>',lambda e:self.scale_about(1.2,e.x,e.y))
         self.canvas.bind('<Button-5>',lambda e:self.scale_about(1/1.2,e.x,e.y))
         self.canvas.bind('<Motion>',self.mouse_move)
+        self.canvas.bind('<Button-1>',lambda e:(self.canvas.focus_set(), self.click(e)))
+        command_bar = tk.Frame(self, bg=PALETTE['panel'], padx=12, pady=6)
+        command_bar.pack(fill='x')
+        tk.Label(command_bar, text=self.tr('command') + ' >', fg=PALETTE['accent'],
+                 bg=PALETTE['panel'], font=('Consolas', 10, 'bold')).pack(side='left', padx=(0,10))
+        self.command_text = tk.StringVar()
+        self.command_entry = tk.Entry(command_bar, textvariable=self.command_text,
+                                      font=('Consolas', 11), bg=PALETTE['canvas'],
+                                      fg=PALETTE['text'], insertbackground='white', bd=0,
+                                      relief='flat')
+        self.command_entry.pack(side='left', fill='x', expand=True, ipady=5)
+        self.command_entry.insert(0, '')
+        self.command_entry.bind('<Return>', self.on_command_enter)
+        self.command_entry.bind('<Escape>', lambda e: self.canvas.focus_set())
         footer = tk.Frame(self,bg=PALETTE['panel'],height=29)
         footer.pack(fill='x')
         self.message = tk.Label(footer,text=self.tr('welcome'),anchor='w',fg=PALETTE['muted'],bg=PALETTE['panel'],font=('Segoe UI',9))
@@ -171,6 +193,79 @@ class CadApp(tk.Tk):
         self.coord = tk.Label(footer,text='',fg=PALETTE['muted'],bg=PALETTE['panel'],font=('Consolas',9))
         self.coord.pack(side='right',padx=12)
         self.refresh_title()
+
+    def type_command_when_canvas_focused(self, event):
+        # Standard CAD practice: typing a command starts the command line.
+        # Avoid consuming shortcut keys or keystrokes in other input widgets.
+        focused = self.focus_get()
+        if focused not in (self.canvas, self):
+            return
+        if event.state & 0x0004 or event.state & 0x0008:
+            return
+        if len(event.char)==1 and event.char.isprintable() and not event.char.isspace():
+            self.command_entry.focus_set()
+            self.command_entry.insert('end', event.char)
+            return 'break'
+
+    def on_command_enter(self, event=None):
+        line=self.command_text.get().strip()
+        self.command_text.set('')
+        if not line:
+            self.canvas.focus_set()
+            return 'break'
+        self.execute_command(line)
+        self.canvas.focus_set()
+        return 'break'
+
+    def execute_command(self, command: str):
+        from imsatcad.autocad_commands import Result
+        from shlex import split as split_args
+        try:
+            args=split_args(command)
+            if not args:return
+            name=resolve_alias(args[0])
+            if name in ('UNDO','REDO') and len(args)==1:
+                (self.undo if name=='UNDO' else self.redo)();return
+            if name=='ZOOM' and (len(args)==1 or args[1].upper() in ('E','EXTENTS','A','ALL')):
+                self.zoom_extents();return
+            if name=='NEW' and len(args)==1:self.new_file();return
+            if name=='OPEN' and len(args)==1:self.open_file();return
+            if name in ('SAVEAS','QSAVE') and len(args)==1:
+                (self.save_as if name=='SAVEAS' else self.save_file)();return
+            if name=='LAYER' and len(args)==1:
+                self.add_layer();return
+            if name in ('LINE','PLINE','CIRCLE','RECTANG') and len(args)==1:
+                mapping={'LINE':'line','PLINE':'polyline','CIRCLE':'circle','RECTANG':'rectangle'}
+                self.set_tool(mapping[name]);return
+            if name in ('DIST','ID'):
+                result=execute_cad_command(self.doc,command,selected_handle=self.selection,
+                                           layer=self.current_layer.get())
+                self.message.config(text=result.message);return
+            if name in DRAW_COMMANDS | EDIT_COMMANDS:
+                if not self.snapshot():
+                    raise CommandError('Drawing too large for safe undo snapshot')
+                old_dirty=self.dirty
+                try:
+                    result=execute_cad_command(self.doc,command,selected_handle=self.selection,
+                                               layer=self.current_layer.get())
+                except Exception:
+                    # Transaction rollback: never leave a partial edit in modelspace.
+                    previous=self.undo_stack.pop()
+                    self.doc=ezdxf.read(io.StringIO(previous))
+                    self.dirty=old_dirty
+                    self.layer_box.config(values=self.layers())
+                    self.render();self.refresh_title()
+                    raise
+                if result.changed:
+                    self.mark_modified()
+                if result.message:
+                    self.message.config(text=result.message)
+                else:
+                    self.message.config(text='Command: '+result.name)
+                return
+            raise CommandError('No implementation for '+name)
+        except Exception as exc:
+            self.message.config(text=self.tr('command_error')+str(exc))
 
     def layers(self):
         return sorted([x.dxf.name for x in self.doc.layers])
@@ -398,7 +493,9 @@ class CadApp(tk.Tk):
         if not self.snapshot():return
         p=self.point_start
         msp=self.doc.modelspace()
-        if self.tool=='line' and math.dist(p,world)>1e-12:
+        if self.tool=='rectangle' and abs(p[0]-world[0])>1e-12 and abs(p[1]-world[1])>1e-12:
+            msp.add_lwpolyline([(p[0],p[1]),(world[0],p[1]),world,(p[0],world[1])],close=True,dxfattribs={'layer':self.current_layer.get()})
+        elif self.tool=='line' and math.dist(p,world)>1e-12:
             msp.add_line(p,world,dxfattribs={'layer':self.current_layer.get()})
         elif self.tool=='circle' and math.dist(p,world)>1e-12:
             msp.add_circle(p,math.dist(p,world),dxfattribs={'layer':self.current_layer.get()})
