@@ -40,3 +40,30 @@ Alternatively use the GitHub Actions workflow `IMSAT CAD V1 Preview Windows Inst
 - Python Tcl/Tk libraries: respective open-source licenses.
 - IMSAT emblem: user-provided image, ownership and brand use require authorization.
 - PyInstaller: GPL-2.0 with exception, Inno Setup: separate distribution license.
+
+## Command line / Dòng lệnh kiểu AutoCAD (đang phát triển)
+
+Trong thanh **Dòng lệnh**, nhập tên lệnh hoặc alias và nhấn Enter. Một số ví dụ:
+
+| Alias | Lệnh | Cú pháp thử nghiệm |
+|---|---|---|
+| `L` | LINE | `L 0,0 100,0` |
+| `PL` | PLINE | `PL 0,0 @20,0 @0,10` |
+| `C` | CIRCLE | `C 0,0 25` |
+| `REC` | RECTANG | `REC 0,0 100,50` |
+| `A` | ARC | `A 0,0 15 0 90` |
+| `M` | MOVE | Chọn đối tượng, `M 10,5` |
+| `CO` | COPY | Chọn đối tượng, `CO 10,5` |
+| `RO` | ROTATE | Chọn đối tượng, `RO 30 0,0` |
+| `SC` | SCALE | Chọn đối tượng, `SC 2 0,0` |
+| `MI` | MIRROR | Chọn đối tượng, `MI 0,0 0,10` |
+| `O` | OFFSET | Chọn LINE/CIRCLE, `O 5` |
+| `TR` | TRIM | Chọn LINE, `TR <handle-đường-cắt> 10,0` |
+| `EX` | EXTEND | Chọn LINE, `EX <handle-ranh-giới> 10,0` |
+| `DI` | DIST | `DI 0,0 3,4` |
+| `Z` | ZOOM EXTENTS | `Z E` |
+| `U` | UNDO | `U` |
+
+Gõ đơn độc `L`, `PL`, `C`, `REC` để vẽ bằng chuột. Hỗ trợ `@dx,dy` và `@length<angle` cho tọa độ nhập trên dòng lệnh. Không có tính năng trong bảng này được coi là hoàn thiện tương đương AutoCAD; đây là mô hình thử nghiệm. Đặc biệt TRIM và EXTEND chưa có thao tác chọn ranh giới bằng chuột, OFFSET hiện chỉ hỗ trợ LINE/CIRCLE.
+
+**Chú ý:** Các lệnh chưa triển khai trả về thông báo rõ ràng, không hiển thị kết quả giả. Tiêu chí để gọi bản V1.0 chính thức nằm ở [V1_RELEASE_GATES.md](V1_RELEASE_GATES.md).
