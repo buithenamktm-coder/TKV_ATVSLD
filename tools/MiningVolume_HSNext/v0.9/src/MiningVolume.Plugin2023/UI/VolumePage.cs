@@ -59,6 +59,7 @@ namespace MiningVolume2023.UI
 
         private async void CalculateClicked(object sender, EventArgs e)
         {
+            if (!LicenseUiGuard.Check()) return;
             var st = ProjectState.Current;
             try
             {
