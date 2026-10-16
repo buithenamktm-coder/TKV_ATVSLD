@@ -1,0 +1,69 @@
+name: IMSAT CAD Native QCAD Core Feasibility (GPLv3)
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/imsat-cad-qcad-core.yml"
+  push:
+    branches: [imsat-cad-foundation]
+    paths:
+      - ".github/workflows/imsat-cad-qcad-core.yml"
+jobs:
+  native-cad-core:
+    runs-on: windows-2022
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Qt 6 for MSVC
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: "6.5.3"
+          arch: win64_msvc2019_64
+          modules: "qt5compat qtpositioning qtlocation"
+          cache: true
+      - name: Initialize MSVC toolchain
+        uses: ilammy/msvc-dev-cmd@v1
+      - name: Fetch version-matched upstream CAD engine
+        shell: pwsh
+        run: |
+          git clone --depth 1 --branch v3.32.2.0 https://github.com/qcad/qcad.git native/qcad
+          git clone --depth 1 --branch v3.32.2.0 https://github.com/qcad/qtjsapi.git native/qtjsapi
+          git clone --depth 1 --branch v3.32.2.0 https://github.com/qcad/qcadjsapi.git native/qcadjsapi
+          git -C native/qcad rev-parse HEAD | Out-File -Append native-commit-report.txt
+          git -C native/qtjsapi rev-parse HEAD | Out-File -Append native-commit-report.txt
+          git -C native/qcadjsapi rev-parse HEAD | Out-File -Append native-commit-report.txt
+      - name: Build QCAD core
+        shell: pwsh
+        run: |
+          cmake -S native/qcad -B native/qcad -G Ninja -DBUILD_QT6=ON -DCMAKE_BUILD_TYPE=Release
+          cmake --build native/qcad --parallel 4
+      - name: Build Qt JavaScript integration
+        shell: pwsh
+        run: |
+          cmake -S native/qtjsapi -B native/qtjsapi -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build native/qtjsapi --parallel 4
+      - name: Build QCAD JavaScript API
+        shell: pwsh
+        run: |
+          cmake -S native/qcadjsapi -B native/qcadjsapi -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build native/qcadjsapi --parallel 4
+      - name: Verify native CAD executable and plugins
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem native/qcad/release -File -Filter "qcad*.exe" | Select-Object -First 1
+          if ($null -eq $exe) { throw "No native QCAD executable was produced" }
+          $js = Get-ChildItem native/qcad/plugins -File -Filter "*qcadjsapi*.dll" | Select-Object -First 1
+          if ($null -eq $js) { throw "Missing JavaScript CAD API plugin" }
+          Write-Host "Native CAD executable: $($exe.FullName)"
+          Write-Host "CAD JavaScript API: $($js.FullName)"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: imsat-cad-native-qcad-build-evidence
+          path: |
+            native-commit-report.txt
+            native/qcad/release/*.exe
+            native/qcad/plugins/*qcadjsapi*.dll
+          retention-days: 7
+          if-no-files-found: error
+# Prototype only: no rebranding, installer, or DWG feature is claimed.
+# Upstream QCAD remains GPLv3. Any distributed modified core must include corresponding source and notices.
