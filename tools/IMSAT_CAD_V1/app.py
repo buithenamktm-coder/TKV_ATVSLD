@@ -34,6 +34,7 @@ TRANS = {
     'limit':'Bản vẽ có nhiều đối tượng; chỉ hiển thị một phần để tránh treo giao diện.',
     'about_text':'IMSAT CAD V1.0 Preview\nNền tảng DXF 2D độc lập\nViệt / Anh · Win64\nChưa hỗ trợ DWG, chưa có dựng TIN.',
     'entity':'Đối tượng','coord':'Tọa độ','units':'Đơn vị','layer_prompt':'Nhập tên lớp',
+    'replace_confirm':'Tệp {name} đã tồn tại. Anh có muốn thay thế không?',
     'no_selection':'Chưa chọn đối tượng.','invalid_layer':'Tên lớp không hợp lệ.', 'new_doc':'Bản vẽ mới',
  },
  'en': {
@@ -52,6 +53,7 @@ TRANS = {
     'limit':'Large drawing: preview has been limited to keep the interface responsive.',
     'about_text':'IMSAT CAD V1.0 Preview\nStandalone 2D DXF drafting\nVietnamese / English · Win64\nDWG and TIN triangulation are not supported.',
     'entity':'Entities','coord':'Coordinates','units':'Units','layer_prompt':'Enter layer name',
+    'replace_confirm':'File {name} already exists. Replace it?',
     'no_selection':'No selected entity.','invalid_layer':'Invalid layer name.', 'new_doc':'New drawing',
  }
 }
@@ -113,9 +115,10 @@ class CadApp(tk.Tk):
             tk.Label(top, image=self.icon_img, bg=PALETTE['panel']).pack(side='left', padx=(12, 5), pady=6)
         tk.Label(top, text='IMSAT CAD', fg=PALETTE['text'], bg=PALETTE['panel'], font=('Segoe UI', 18, 'bold')).pack(side='left', padx=4)
         tk.Label(top, text='V1.0 PREVIEW', fg=PALETTE['accent'], bg=PALETTE['panel'], font=('Segoe UI', 9, 'bold')).pack(side='left', padx=8)
-        lang_box = ttk.Combobox(top, textvariable=self.lang, values=['vi','en'], state='readonly', width=5)
+        self.lang_label = tk.StringVar(value='Tiếng Việt' if self.lang.get()=='vi' else 'English')
+        lang_box = ttk.Combobox(top, textvariable=self.lang_label, values=['Tiếng Việt','English'], state='readonly', width=13)
         lang_box.pack(side='right', padx=18)
-        lang_box.bind('<<ComboboxSelected>>', lambda e: self.change_language())
+        lang_box.bind('<<ComboboxSelected>>', self.select_language)
         tk.Label(top, text=self.tr('language'), fg=PALETTE['muted'], bg=PALETTE['panel']).pack(side='right')
 
         menus = tk.Menu(self)
@@ -171,6 +174,10 @@ class CadApp(tk.Tk):
 
     def layers(self):
         return sorted([x.dxf.name for x in self.doc.layers])
+
+    def select_language(self, event=None):
+        self.lang.set('vi' if self.lang_label.get()=='Tiếng Việt' else 'en')
+        self.change_language()
 
     def change_language(self):
         self.build_ui()
@@ -236,7 +243,7 @@ class CadApp(tk.Tk):
         dest=Path(path).resolve()
         if self.doc_path and dest==self.doc_path.resolve():
             messagebox.showwarning(self.tr('info'),self.tr('save_as_required'));return False
-        if dest.exists() and not messagebox.askyesno(self.tr('info'),f'{dest.name} exists. Replace?'):
+        if dest.exists() and not messagebox.askyesno(self.tr('info'),self.tr('replace_confirm').format(name=dest.name)):
             return False
         try:
             from imsatcad.dxf_backend import DxfWorkspace
