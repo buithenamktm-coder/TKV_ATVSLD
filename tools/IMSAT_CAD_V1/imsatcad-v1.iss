@@ -18,7 +18,7 @@ WizardStyle=modern
 SetupIconFile=assets\imsatcad.ico
 UninstallDisplayIcon={app}\{#AppExe}
 [Languages]
-Name: "vietnamese"; MessagesFile: "compiler:Languages\Vietnamese.isl"
+Name: "vietnamese"; MessagesFile: "compiler:Default.isl,installer\vi-override.isl"
 Name: "english"; MessagesFile: "compiler:Default.isl"
 [Tasks]
 Name: "desktopicon"; Description: "Create desktop icon / Tạo biểu tượng trên màn hình"; GroupDescription: "Additional icons / Biểu tượng bổ sung"; Flags: unchecked
