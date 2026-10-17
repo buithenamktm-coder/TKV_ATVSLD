@@ -104,6 +104,30 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Qt deployment dependency inspection failed" }
           if (-not (Test-Path native-qt-dependencies.txt)) { throw "Dependency manifest missing" }
           Write-Host "Qt runtime dependency manifest generated"
+      - name: Deploy Qt runtime alongside native CAD executable
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem native/qcad/release -File -Filter "qcad*.exe" | Select-Object -First 1
+          if (-not $exe) { throw "Native QCAD executable missing" }
+          $qtBin = (Get-Command windeployqt.exe -ErrorAction Stop).Source
+          & $qtBin --release --compiler-runtime $exe.FullName
+          if ($LASTEXITCODE -ne 0) { throw "windeployqt failed" }
+          $platforms = Join-Path $exe.DirectoryName "platforms/qwindows.dll"
+          if (-not (Test-Path $platforms)) { throw "Qt Windows platform plugin missing" }
+          Write-Host "Native CAD Qt runtime deployed: $($exe.DirectoryName)"
+      - name: Verify packaged native CAD dependencies
+        shell: pwsh
+        run: |
+          $release = "native/qcad/release"
+          $exe = Get-ChildItem $release -File -Filter "qcad*.exe" | Select-Object -First 1
+          if (-not $exe) { throw "Native QCAD executable missing" }
+          foreach ($dll in @("Qt6Core.dll", "Qt6Gui.dll", "Qt6Widgets.dll")) {
+            if (-not (Test-Path (Join-Path $release $dll))) { throw "Missing packaged dependency: $dll" }
+          }
+          if (-not (Test-Path (Join-Path $release "platforms/qwindows.dll"))) {
+            throw "Missing Windows platform plugin"
+          }
+          Write-Host "Native CAD deployment dependency gate PASS (not a GUI runtime test)"
       - uses: actions/upload-artifact@v4
         with:
           name: imsat-cad-native-qcad-build-evidence
@@ -111,6 +135,8 @@ jobs:
             native-commit-report.txt
             native-qt-dependencies.txt
             native/qcad/release/*.exe
+            native/qcad/release/*.dll
+            native/qcad/release/platforms/*.dll
             native/qcad/plugins/*qcadjsapi*.dll
           retention-days: 7
           if-no-files-found: error
