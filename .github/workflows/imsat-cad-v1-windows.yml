@@ -1,0 +1,53 @@
+name: IMSAT CAD V1 Preview Windows Installer
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'tools/IMSAT_CAD_V1/**'
+      - '.github/workflows/imsat-cad-v1-windows.yml'
+  push:
+    branches: [imsat-cad-foundation]
+    paths:
+      - 'tools/IMSAT_CAD_V1/**'
+      - '.github/workflows/imsat-cad-v1-windows.yml'
+jobs:
+  build-installer:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Validate Windows Tcl/Tk runtime
+        shell: pwsh
+        run: |
+          python -c "import tkinter as tk; root=tk.Tk(); print('Tk', root.tk.call('info','patchlevel')); root.destroy()"
+      - name: Install Python dependencies
+        run: python -m pip install -r tools/IMSAT_CAD_V1/requirements.txt
+      - name: Restore IMSAT brand icons
+        working-directory: tools/IMSAT_CAD_V1
+        run: python generate-brand.py
+      - name: Unit and UI regression tests
+        shell: pwsh
+        working-directory: tools/IMSAT_CAD_V1
+        env:
+          PYTHONPATH: .
+        run: python -m pytest -q tests
+      - name: Build Windows executable
+        shell: pwsh
+        working-directory: tools/IMSAT_CAD_V1
+        run: python -m PyInstaller --noconfirm --clean --windowed --onedir --name IMSAT_CAD --icon assets/imsatcad.ico --add-data "assets/imsat_icon.png;assets" app.py
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --no-progress -y
+      - name: Build Windows Setup
+        shell: pwsh
+        working-directory: tools/IMSAT_CAD_V1
+        run: '& "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" imsatcad-v1.iss'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: IMSAT_CAD_V1_Preview_Setup_x64
+          path: tools/IMSAT_CAD_V1/installer-output/*.exe
+          if-no-files-found: error
+          retention-days: 30

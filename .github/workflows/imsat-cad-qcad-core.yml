@@ -1,0 +1,144 @@
+name: IMSAT CAD Native QCAD Core Feasibility (GPLv3)
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/imsat-cad-qcad-core.yml"
+  push:
+    branches: [imsat-cad-foundation]
+    paths:
+      - ".github/workflows/imsat-cad-qcad-core.yml"
+jobs:
+  native-cad-core:
+    runs-on: windows-2022
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Qt 6 for MSVC
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: "6.5.3"
+          arch: win64_msvc2019_64
+          modules: "qt5compat qtpositioning qtlocation"
+          cache: true
+      - name: Initialize MSVC toolchain
+        uses: ilammy/msvc-dev-cmd@v1
+      - name: Fetch version-matched upstream CAD engine
+        shell: pwsh
+        run: |
+          git clone --depth 1 --branch v3.32.2.0 https://github.com/qcad/qcad.git native/qcad
+          git clone --depth 1 --branch v3.32.2.0 https://github.com/qcad/qtjsapi.git native/qtjsapi
+          git clone --depth 1 --branch v3.32.2.0 https://github.com/qcad/qcadjsapi.git native/qcadjsapi
+          git -C native/qcad rev-parse HEAD | Out-File -Append native-commit-report.txt
+          git -C native/qtjsapi rev-parse HEAD | Out-File -Append native-commit-report.txt
+          git -C native/qcadjsapi rev-parse HEAD | Out-File -Append native-commit-report.txt
+      - name: Validate and install IMSAT CAD command aliases
+        shell: pwsh
+        run: |
+          node --check tools/IMSAT_CAD_V1/qcad_addon/IMSATCAD/IMSATCAD.js
+          Copy-Item -Recurse tools/IMSAT_CAD_V1/qcad_addon/IMSATCAD native/qcad/scripts/IMSATCAD
+      - name: Fix vendored zlib linkage for MSVC
+        shell: pwsh
+        run: |
+          # Upstream v3.32.2.0 uses a shared zlib without dllexport annotations.
+          # MSVC can build zlib.dll but produce no import .lib, causing LNK1181.
+          # Build vendored zlib AND OpenNURBS as static dependencies; drop GNU
+          # "-L/path" flags that MSVC interprets as invalid /L switches.
+          $zlib = "native/qcad/src/3rdparty/opennurbs/zlib/CMakeLists.txt"
+          $zc = [IO.File]::ReadAllText($zlib)
+          if (-not $zc.Contains("add_library(zlib SHARED")) { throw "Unexpected pinned QCAD zlib CMake contents" }
+          $zc = $zc.Replace("add_library(zlib SHARED", "add_library(zlib STATIC")
+          $zc = ($zc -split "`r?`n" | Where-Object { $_ -notmatch '^\s*target_link_libraries\(zlib PUBLIC -L' }) -join "`n"
+          [IO.File]::WriteAllText($zlib, $zc)
+          $on = "native/qcad/src/3rdparty/opennurbs/opennurbs/CMakeLists.txt"
+          $oc = [IO.File]::ReadAllText($on)
+          if (-not $oc.Contains("add_library(opennurbs SHARED")) { throw "Unexpected pinned OpenNURBS CMake contents" }
+          $oc = $oc.Replace("add_library(opennurbs SHARED", "add_library(opennurbs STATIC")
+          $oc = ($oc -split "`r?`n" | Where-Object { $_ -notmatch '^\s*target_link_libraries\(opennurbs PUBLIC -L' }) -join "`n"
+          [IO.File]::WriteAllText($on, $oc)
+          $parent = "native/qcad/src/3rdparty/opennurbs/CMakeLists.txt"
+          $cmakeRoot = (Resolve-Path "native/qcad").Path.Replace([char]92, "/")
+          $release = "$cmakeRoot/release"
+          $cmake = 'set_target_properties(zlib opennurbs PROPERTIES ARCHIVE_OUTPUT_DIRECTORY "{0}" LIBRARY_OUTPUT_DIRECTORY "{0}" RUNTIME_OUTPUT_DIRECTORY "{0}")' -f $release
+          Add-Content -Path $parent -Value $cmake
+      - name: Work around MSVC OpenNURBS optimizer ICE (C1001)
+        shell: pwsh
+        run: |
+          $cm = 'native/qcad/src/3rdparty/opennurbs/CMakeLists.txt'
+          Add-Content -Path $cm -Value ''
+          Add-Content -Path $cm -Value '# IMSAT CI-only workaround: MSVC /O2 ICE in opennurbs_lookup.cpp'
+          Add-Content -Path $cm -Value 'if(MSVC)'
+          Add-Content -Path $cm -Value '  set_source_files_properties(opennurbs_lookup.cpp PROPERTIES COMPILE_OPTIONS "/Od")'
+          Add-Content -Path $cm -Value 'endif()'
+      - name: Build QCAD core
+        shell: pwsh
+        run: |
+          cmake -S native/qcad -B native/qcad -G Ninja -DBUILD_QT6=ON -DCMAKE_BUILD_TYPE=Release "-DCMAKE_CXX_FLAGS_RELEASE=/Od /DNDEBUG /MD" "-DCMAKE_C_FLAGS_RELEASE=/Od /DNDEBUG /MD"
+          cmake --build native/qcad --parallel 4
+      - name: Build Qt JavaScript integration
+        shell: pwsh
+        run: |
+          cmake -S native/qtjsapi -B native/qtjsapi -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build native/qtjsapi --parallel 4
+      - name: Build QCAD JavaScript API
+        shell: pwsh
+        run: |
+          cmake -S native/qcadjsapi -B native/qcadjsapi -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build native/qcadjsapi --parallel 4
+      - name: Verify native CAD executable and plugins
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem native/qcad/release -File -Filter "qcad*.exe" | Select-Object -First 1
+          if ($null -eq $exe) { throw "No native QCAD executable was produced" }
+          $js = Get-ChildItem native/qcad/plugins -File -Filter "*qcadjsapi*.dll" | Select-Object -First 1
+          if ($null -eq $js) { throw "Missing JavaScript CAD API plugin" }
+          Write-Host "Native CAD executable: $($exe.FullName)"
+          Write-Host "CAD JavaScript API: $($js.FullName)"
+      - name: Verify Windows loader dependencies for native QCAD
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem native/qcad/release -File -Filter "qcad*.exe" | Select-Object -First 1
+          if (-not $exe) { throw "Native QCAD executable missing" }
+          $qtBin = (Get-Command windeployqt.exe -ErrorAction Stop).Source
+          & $qtBin --dry-run --list mapping $exe.FullName | Out-File native-qt-dependencies.txt
+          if ($LASTEXITCODE -ne 0) { throw "Qt deployment dependency inspection failed" }
+          if (-not (Test-Path native-qt-dependencies.txt)) { throw "Dependency manifest missing" }
+          Write-Host "Qt runtime dependency manifest generated"
+      - name: Deploy Qt runtime alongside native CAD executable
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem native/qcad/release -File -Filter "qcad*.exe" | Select-Object -First 1
+          if (-not $exe) { throw "Native QCAD executable missing" }
+          $qtBin = (Get-Command windeployqt.exe -ErrorAction Stop).Source
+          & $qtBin --release --compiler-runtime $exe.FullName
+          if ($LASTEXITCODE -ne 0) { throw "windeployqt failed" }
+          $platforms = Join-Path $exe.DirectoryName "platforms/qwindows.dll"
+          if (-not (Test-Path $platforms)) { throw "Qt Windows platform plugin missing" }
+          Write-Host "Native CAD Qt runtime deployed: $($exe.DirectoryName)"
+      - name: Verify packaged native CAD dependencies
+        shell: pwsh
+        run: |
+          $release = "native/qcad/release"
+          $exe = Get-ChildItem $release -File -Filter "qcad*.exe" | Select-Object -First 1
+          if (-not $exe) { throw "Native QCAD executable missing" }
+          foreach ($dll in @("Qt6Core.dll", "Qt6Gui.dll", "Qt6Widgets.dll")) {
+            if (-not (Test-Path (Join-Path $release $dll))) { throw "Missing packaged dependency: $dll" }
+          }
+          if (-not (Test-Path (Join-Path $release "platforms/qwindows.dll"))) {
+            throw "Missing Windows platform plugin"
+          }
+          Write-Host "Native CAD deployment dependency gate PASS (not a GUI runtime test)"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: imsat-cad-native-qcad-build-evidence
+          path: |
+            native-commit-report.txt
+            native-qt-dependencies.txt
+            native/qcad/release/*.exe
+            native/qcad/release/*.dll
+            native/qcad/release/platforms/*.dll
+            native/qcad/plugins/*qcadjsapi*.dll
+          retention-days: 7
+          if-no-files-found: error
+# Prototype only: no rebranding, installer, or DWG feature is claimed.
+# Upstream QCAD remains GPLv3. Any distributed modified core must include corresponding source and notices.
