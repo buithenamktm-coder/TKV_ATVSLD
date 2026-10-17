@@ -3,12 +3,26 @@ on:
   workflow_dispatch:
   pull_request:
     paths:
-      - 'tools/IMSAT_CAD_V1/**'
+      - 'tools/IMSAT_CAD_V1/app.py'
+      - 'tools/IMSAT_CAD_V1/imsatcad/**'
+      - 'tools/IMSAT_CAD_V1/tests/**'
+      - 'tools/IMSAT_CAD_V1/requirements.txt'
+      - 'tools/IMSAT_CAD_V1/generate-brand.py'
+      - 'tools/IMSAT_CAD_V1/assets/**'
+      - 'tools/IMSAT_CAD_V1/installer/**'
+      - 'tools/IMSAT_CAD_V1/imsatcad-v1.iss'
       - '.github/workflows/imsat-cad-v1-windows.yml'
   push:
     branches: [imsat-cad-foundation]
     paths:
-      - 'tools/IMSAT_CAD_V1/**'
+      - 'tools/IMSAT_CAD_V1/app.py'
+      - 'tools/IMSAT_CAD_V1/imsatcad/**'
+      - 'tools/IMSAT_CAD_V1/tests/**'
+      - 'tools/IMSAT_CAD_V1/requirements.txt'
+      - 'tools/IMSAT_CAD_V1/generate-brand.py'
+      - 'tools/IMSAT_CAD_V1/assets/**'
+      - 'tools/IMSAT_CAD_V1/installer/**'
+      - 'tools/IMSAT_CAD_V1/imsatcad-v1.iss'
       - '.github/workflows/imsat-cad-v1-windows.yml'
 jobs:
   build-installer:
