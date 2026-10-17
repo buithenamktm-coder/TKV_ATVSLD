@@ -207,6 +207,20 @@ jobs:
           New-Item -ItemType Directory -Force "$stage/scripts", "$stage/plugins" | Out-Null
           Copy-Item "native/qcad/scripts/*" "$stage/scripts" -Recurse -Force
           Copy-Item "native/qcad/plugins/*" "$stage/plugins" -Recurse -Force
+          New-Item -ItemType Directory -Force "$stage/licenses" | Out-Null
+          Copy-Item "native/qcad/LICENSE.txt" "$stage/licenses/QCAD-LICENSE.txt" -Force
+          @"
+          IMSAT CAD native prototype - QCAD Community Edition v3.32.2.0
+          Based on QCAD, licensed under GNU GPL version 3.
+          QCAD upstream source: https://github.com/qcad/qcad/tree/v3.32.2.0
+          Qt JavaScript API source: https://github.com/qcad/qtjsapi/tree/v3.32.2.0
+          QCAD JavaScript API source: https://github.com/qcad/qcadjsapi/tree/v3.32.2.0
+          IMSAT integration source: https://github.com/buithenamktm-coder/TKV_ATVSLD
+          This is a development build, NOT a tested release.
+          "@ | Set-Content "$stage/licenses/SOURCE_AND_STATUS.txt" -Encoding UTF8
+          if (-not (Test-Path "$stage/licenses/QCAD-LICENSE.txt")) {
+            throw "Native package is missing upstream QCAD license"
+          }
           if (-not (Test-Path "$stage/scripts/IMSATCAD/IMSATCAD.js")) {
             throw "IMSAT CAD add-on missing from native package"
           }
