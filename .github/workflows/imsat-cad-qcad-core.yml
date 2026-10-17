@@ -38,6 +38,7 @@ jobs:
         shell: pwsh
         run: |
           node --check tools/IMSAT_CAD_V1/qcad_addon/IMSATCAD/IMSATCAD.js
+          node tools/IMSAT_CAD_V1/qcad_addon/check-addon.js
           Copy-Item -Recurse tools/IMSAT_CAD_V1/qcad_addon/IMSATCAD native/qcad/scripts/IMSATCAD
       - name: Validate IMSAT aliases against pinned QCAD script tree
         shell: pwsh
