@@ -37,6 +37,22 @@ jobs:
         run: |
           node --check tools/IMSAT_CAD_V1/qcad_addon/IMSATCAD/IMSATCAD.js
           Copy-Item -Recurse tools/IMSAT_CAD_V1/qcad_addon/IMSATCAD native/qcad/scripts/IMSATCAD
+      - name: Normalize upstream library output paths for MSVC
+        shell: pwsh
+        run: |
+          # QCAD v3.32.2.0 has relative archive paths in vendored zlib/OpenNURBS.
+          # Override target outputs in the parent CMake directory, without touching source algorithms.
+          $parent = "native/qcad/src/3rdparty/opennurbs/CMakeLists.txt"
+          $cmakeRoot = (Resolve-Path "native/qcad").Path.Replace('\\','/')
+          $patch = @"
+          if(WIN32)
+            set_target_properties(zlib opennurbs PROPERTIES
+              ARCHIVE_OUTPUT_DIRECTORY "$cmakeRoot/release"
+              LIBRARY_OUTPUT_DIRECTORY "$cmakeRoot/release"
+              RUNTIME_OUTPUT_DIRECTORY "$cmakeRoot/release")
+          endif()
+          "@
+          Add-Content -Path $parent -Value $patch
       - name: Work around MSVC OpenNURBS optimizer ICE (C1001)
         shell: pwsh
         run: |
