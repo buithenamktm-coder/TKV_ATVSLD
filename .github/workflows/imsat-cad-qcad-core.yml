@@ -4,10 +4,12 @@ on:
   pull_request:
     paths:
       - ".github/workflows/imsat-cad-qcad-core.yml"
+      - "tools/IMSAT_CAD_V1/qcad_addon/**"
   push:
     branches: [imsat-cad-foundation]
     paths:
       - ".github/workflows/imsat-cad-qcad-core.yml"
+      - "tools/IMSAT_CAD_V1/qcad_addon/**"
 jobs:
   native-cad-core:
     runs-on: windows-2022
