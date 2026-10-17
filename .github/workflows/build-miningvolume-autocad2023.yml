@@ -4,11 +4,11 @@ on:
   workflow_dispatch:
   pull_request:
     paths:
-      - 'tools/MiningVolume_HSNext/v0.9/**'
+      - 'IMSAT-VOLUME/source/v0.9/**'
       - '.github/workflows/build-miningvolume-autocad2023.yml'
   push:
     paths:
-      - 'tools/MiningVolume_HSNext/v0.9/**'
+      - 'IMSAT-VOLUME/source/v0.9/**'
       - '.github/workflows/build-miningvolume-autocad2023.yml'
 
 jobs:
@@ -18,7 +18,7 @@ jobs:
       contents: read
 
     env:
-      MV_ROOT: tools/MiningVolume_HSNext/v0.9
+      MV_ROOT: IMSAT-VOLUME/source/v0.9
       SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
 
     steps:
@@ -163,7 +163,7 @@ jobs:
           Remove-Item $sourceZip -Force -ErrorAction SilentlyContinue
           Push-Location $env:GITHUB_WORKSPACE
           try {
-            git archive --format=zip --prefix=MiningVolume_HSNext_v0.10.4/ -o $sourceZip HEAD tools/MiningVolume_HSNext/v0.9
+            git archive --format=zip --prefix=MiningVolume_HSNext_v0.10.4/ -o $sourceZip HEAD IMSAT-VOLUME/source/v0.9
             if ($LASTEXITCODE -ne 0 -or -not (Test-Path $sourceZip)) {
               throw 'Không tạo được source archive sạch từ Git HEAD.'
             }
@@ -205,10 +205,10 @@ jobs:
           name: MiningVolume-HSNext-AutoCAD2023-v0.10.4-PRE-RELEASE
           if-no-files-found: error
           path: |
-            tools/MiningVolume_HSNext/v0.9/dist/MiningVolume_HSNext_AutoCAD2023_Setup_v0.10.4_PRE_RELEASE.exe
-            tools/MiningVolume_HSNext/v0.9/dist/MiningVolume_HSNext_Source_v0.10.4.zip
-            tools/MiningVolume_HSNext/v0.9/dist/PRE_RELEASE_NOTICE.txt
-            tools/MiningVolume_HSNext/v0.9/dist/SHA256SUMS.txt
-            tools/MiningVolume_HSNext/v0.9/dist/BUILD_VERIFICATION.txt
-            tools/MiningVolume_HSNext/v0.9/QA_REPORT.md
-            tools/MiningVolume_HSNext/v0.9/bundle/MiningVolume2023.bundle/**
+            IMSAT-VOLUME/source/v0.9/dist/MiningVolume_HSNext_AutoCAD2023_Setup_v0.10.4_PRE_RELEASE.exe
+            IMSAT-VOLUME/source/v0.9/dist/MiningVolume_HSNext_Source_v0.10.4.zip
+            IMSAT-VOLUME/source/v0.9/dist/PRE_RELEASE_NOTICE.txt
+            IMSAT-VOLUME/source/v0.9/dist/SHA256SUMS.txt
+            IMSAT-VOLUME/source/v0.9/dist/BUILD_VERIFICATION.txt
+            IMSAT-VOLUME/source/v0.9/QA_REPORT.md
+            IMSAT-VOLUME/source/v0.9/bundle/MiningVolume2023.bundle/**
