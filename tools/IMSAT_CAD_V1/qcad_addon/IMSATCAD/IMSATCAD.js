@@ -26,6 +26,12 @@ IMSATCAD.getAnnotationToolBar = function() {
 IMSATCAD.getLayerToolBar = function() {
     return EAction.getToolBar(qsTr("IMSAT CAD - Layers"), "IMSATCADLayerToolBar", Qt.TopToolBarArea);
 };
+IMSATCAD.getBlocksToolBar = function() {
+    return EAction.getToolBar(qsTr("IMSAT CAD - Blocks"), "IMSATCADBlocksToolBar", Qt.TopToolBarArea);
+};
+IMSATCAD.getSelectionToolBar = function() {
+    return EAction.getToolBar(qsTr("IMSAT CAD - Selection"), "IMSATCADSelectionToolBar", Qt.TopToolBarArea);
+};
 IMSATCAD.getUtilitiesToolBar = function() {
     return EAction.getToolBar(qsTr("IMSAT CAD - Utilities"), "IMSATCADUtilitiesToolBar", Qt.TopToolBarArea);
 };
@@ -36,6 +42,8 @@ IMSATCAD.init = function() {
     IMSATCAD.getAnnotationToolBar();
     IMSATCAD.getLayerToolBar();
     IMSATCAD.getUtilitiesToolBar();
+    IMSATCAD.getBlocksToolBar();
+    IMSATCAD.getSelectionToolBar();
 };
 // Reuse QCAD actions without duplicating geometry algorithms.
 IMSATCAD._drawScripts = [
@@ -87,6 +95,18 @@ IMSATCAD._utilityScripts = [
     "scripts/View/Zoom/WindowZoom/WindowZoom.js",
     "scripts/View/Zoom/PanZoom/PanZoom.js",
     "scripts/File/Print/Print.js"
+];
+IMSATCAD._blockScripts = [
+    "scripts/Block/CreateBlock/CreateBlock.js",
+    "scripts/Block/InsertBlock/InsertBlock.js",
+    "scripts/Block/EditBlock/EditBlock.js",
+    "scripts/Block/RemoveBlock/RemoveBlock.js"
+];
+IMSATCAD._selectionScripts = [
+    "scripts/Select/SelectAll/SelectAll.js",
+    "scripts/Select/DeselectAll/DeselectAll.js",
+    "scripts/Select/InvertSelection/InvertSelection.js",
+    "scripts/Select/SelectRectangle/SelectRectangle.js"
 ];
 IMSATCAD.populateToolBar = function(toolbar, scripts) {
     if (isNull(toolbar)) {
@@ -161,9 +181,11 @@ IMSATCAD.postInit = function() {
     var annotationCount = IMSATCAD.populateToolBar(IMSATCAD.getAnnotationToolBar(), IMSATCAD._annotationScripts);
     var layerCount = IMSATCAD.populateToolBar(IMSATCAD.getLayerToolBar(), IMSATCAD._layerScripts);
     var utilityCount = IMSATCAD.populateToolBar(IMSATCAD.getUtilitiesToolBar(), IMSATCAD._utilityScripts);
+    var blockCount = IMSATCAD.populateToolBar(IMSATCAD.getBlocksToolBar(), IMSATCAD._blockScripts);
+    var selectionCount = IMSATCAD.populateToolBar(IMSATCAD.getSelectionToolBar(), IMSATCAD._selectionScripts);
     if (!isNull(win)) {
         win.handleUserMessage("IMSAT CAD: " + success + "/" + IMSATCAD._aliases.length +
-                              " aliases, " + drawCount + " draw tools, " + modifyCount + " modify tools, " + annotationCount + " annotation, " + layerCount + " layer, " + utilityCount + " utilities");
+                              " aliases, " + drawCount + " draw tools, " + modifyCount + " modify tools, " + annotationCount + " annotation, " + layerCount + " layer, " + utilityCount + " utilities, " + blockCount + " blocks, " + selectionCount + " selection");
     }
 };
 // COPY and EXTEND aliases are intentionally withheld: QCAD Translate and Trim
