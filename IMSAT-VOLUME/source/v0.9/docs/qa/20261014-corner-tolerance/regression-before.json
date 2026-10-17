@@ -1,0 +1,8 @@
+[
+  {
+    "name": "tin_region_corner_tolerance_uses_distance_not_segment_length",
+    "status": "FAIL",
+    "ms": 0,
+    "error": "Sub-tolerance corner rejected"
+  }
+]

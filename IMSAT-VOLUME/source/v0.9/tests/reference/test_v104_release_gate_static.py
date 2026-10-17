@@ -1,0 +1,293 @@
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+
+def read(rel):
+    return (ROOT / rel).read_text(encoding="utf-8")
+
+def test_installer_vet_failure_cannot_be_masked_by_following_test_command():
+    workflow = read("../../../.github/workflows/build-miningvolume-autocad2023.yml")
+    commands = [line.strip() for line in workflow.splitlines() if line.strip()]
+    index = commands.index("go vet main.go host_install_plan.go")
+    assert commands[index + 1] == 'if ($LASTEXITCODE -ne 0) { throw "Installer go vet failed." }'
+
+def test_project_restore_rebuilds_saved_tin_pair_atomically():
+    s = read("src/MiningVolume.Plugin2023/Services/ProjectPersistenceService.cs")
+    assert "RebuildSavedTins" in s
+    assert "BuildPairCoreDetailed" in s
+    assert "DrawTinPair" in s
+    assert "Không dựng lại được cặp TIN hiện trạng/thiết kế" in s
+
+def test_tin_sync_rejects_foreign_entities_even_when_face_count_matches():
+    renderer = read("src/MiningVolume.Plugin2023/Services/TinCadRenderer.cs")
+    workflow = read("src/MiningVolume.Plugin2023/Services/SurfaceWorkflowService.cs")
+    assert "CountUnexpectedEntities" in renderer
+    assert "unexpected > 0" in workflow
+    assert "không phải 3DFACE" in workflow
+
+def test_runtime_selftest_verifies_tin_color_lock_and_visibility():
+    s = read("src/MiningVolume.Plugin2023/Services/SelfTestService.cs")
+    for token in [
+        "GetLayerColorIndex",
+        "IsLayerLocked",
+        "IsLayerVisible",
+        "SetVisible",
+        "Layer TIN đúng màu quy ước",
+        "Có thể ẩn cả hai TIN",
+        "Có thể hiện lại cả hai TIN",
+    ]:
+        assert token in s
+
+def test_release_pipeline_emits_build_verification_and_vets_installer():
+    s = read("../../../.github/workflows/build-miningvolume-autocad2023.yml")
+    assert "go vet main.go host_install_plan.go" in s
+    assert "BUILD_VERIFICATION.txt" in s
+    assert "Source commit: $env:SOURCE_SHA" in s
+    assert "Compile errors: 0" in s
+    assert "AutoCAD 2023 host runtime self-test: NOT EXECUTED ON GITHUB-HOSTED RUNNER" in s
+    assert "Runtime gate: final Setup is published only after the self-hosted AutoCAD 2023 workflow PASS." in s
+
+
+def test_installer_does_not_launch_autocad_selftest_for_end_users():
+    s = read("installer/main.go")
+    install_block = s[s.index("func install()"):s.index("func validatePrebuiltBundle")]
+    assert "runAutoCADSelfTest(cad)" not in install_block
+    assert "Phần mềm đang được tiếp tục cải tiến và hoàn thiện." in install_block
+    assert "Bùi Thế Nam" in install_block and "0967280686" in install_block
+    assert "runtime verification is a release-pipeline responsibility".lower() in install_block.lower()
+
+
+def test_runtime_gate_has_real_autocad_self_hosted_workflow_and_proof():
+    ps = read("release/verify_autocad2023_runtime.ps1")
+    wf = read("../../../.github/workflows/verify-miningvolume-autocad2023-runtime.yml")
+    assert "Status=PASS" in ps
+    assert "AutoCADFileVersion" in ps
+    assert "RUNTIME_VERIFICATION.txt" in ps
+    assert "MVSELFTEST_RUNTIME.txt" in ps
+    assert "Layer TIN đúng màu quy ước" in ps
+    assert "runs-on: [self-hosted, Windows, X64, autocad2023]" in wf
+    assert "Run MVSELFTEST in AutoCAD 2023" in wf
+    assert "MiningVolume-HSNext-AutoCAD2023-v1.0-RUNTIME-PASS" in wf
+    assert "MiningVolume_HSNext_AutoCAD2023_Setup_v1.0_RUNTIME_PASS.exe" in wf
+    assert "RUNTIME_RELEASE_VERIFICATION.txt" in wf
+
+def test_hosted_ci_parses_runtime_verifier_script():
+    s = read("../../../.github/workflows/build-miningvolume-autocad2023.yml")
+    assert "Parse AutoCAD runtime verifier" in s
+    assert "verify_autocad2023_runtime.ps1" in s
+    assert "Parser]::ParseFile" in s
+
+
+def test_installer_and_runtime_verifier_recover_interrupted_backups_safely():
+    installer = read("installer/main.go")
+    runtime = read("release/verify_autocad2023_runtime.ps1")
+    assert "Recover conservatively from an interrupted previous install" in installer
+    assert "if exists(backup)" in installer
+    assert "func restoreBackup(backup,target string) error" in installer
+    assert "Recover from an interrupted earlier runtime verification" in runtime
+    assert "Move-Item $backup $target -Force" in runtime
+
+def test_runtime_pass_requires_critical_tin_checks_and_interactive_admin_session():
+    installer = read("installer/main.go")
+    runtime = read("release/verify_autocad2023_runtime.ps1")
+    for token in [
+        "PASS | Khởi tạo đầy đủ giao diện MiningVolume",
+        "PASS | Bật/tắt palette MiningVolume hoạt động",
+        "PASS | Layer TIN đúng màu quy ước: hiện trạng ACI 1, thiết kế ACI 3",
+        "PASS | Có thể hiện lại cả hai TIN và layer vẫn khóa",
+    ]:
+        assert token in installer
+        assert token in runtime
+    assert "WindowsBuiltInRole]::Administrator" in runtime
+    assert "[Environment]::UserInteractive" in runtime
+
+
+def test_palette_auto_open_is_user_controlled_and_defaults_off():
+    settings = read("src/MiningVolume.Plugin2023/Services/UserSettingsService.cs")
+    entry = read("src/MiningVolume.Plugin2023/EntryPoint.cs")
+    project = read("src/MiningVolume.Plugin2023/UI/ProjectPage.cs")
+    assert 'AutoOpenPalette' in settings
+    assert 'return false;' in settings
+    assert 'Registry.CurrentUser' in settings
+    assert 'if (autoOpen)' in entry
+    assert 'Startup palette auto-open is OFF' in entry
+    assert 'Tự động mở bảng IMSAT VOLUME khi khởi động AutoCAD' in project
+    assert 'UserSettingsService.AutoOpenPalette = _autoOpen.Checked' in project
+
+
+def test_runtime_runner_bootstrap_requires_interactive_autocad2023_host():
+    s = read("release/setup_autocad2023_runner.ps1")
+    assert "WindowsBuiltInRole]::Administrator" in s
+    assert "[Environment]::UserInteractive" in s
+    assert "AutoCAD 2023 R24.2" in s
+    assert "--labels 'autocad2023'" in s
+    assert "run.cmd" in s
+    assert "Start-Process -FilePath" in s
+    assert "-Verb RunAs" in s
+    assert ">nul 2>&1 fltmc" in s
+    assert "net session" not in s
+    assert "Không cài runner dưới dạng Windows Service" in s
+
+
+def test_palette_has_direct_show_hide_toggle_and_startup_default_off():
+    entry = read("src/MiningVolume.Plugin2023/EntryPoint.cs")
+    ribbon = read("src/MiningVolume.Plugin2023/RibbonBuilder.cs")
+    project = read("src/MiningVolume.Plugin2023/UI/ProjectPage.cs")
+    settings = read("src/MiningVolume.Plugin2023/Services/UserSettingsService.cs")
+    assert "internal static void TogglePalette()" in entry
+    # Showing an existing palette must reload the active DWG before making
+    # controls interactive; hiding is direct and preserves the saved preference.
+    toggle = entry.split("internal static void TogglePalette()", 1)[1].split(
+        '[CommandMethod("TKL"', 1)[0]
+    assert "if (Palette == null || !Palette.Visible)" in toggle
+    assert "Open(AppPage.Project);" in toggle
+    assert "Palette.Visible = false;" in toggle
+    assert 'CommandMethod("MV_TOGGLE"' in entry
+    assert 'Btn("Ẩn / Hiện bảng", RibbonAction.TogglePalette)' in ribbon
+    assert "EntryPoint.TogglePalette();" in ribbon
+    selftest = read("src/MiningVolume.Plugin2023/Services/SelfTestService.cs")
+    assert "Bật/tắt palette MiningVolume hoạt động" in selftest
+    assert "EntryPoint.TogglePalette();" in selftest
+    assert "Tự động mở bảng IMSAT VOLUME khi khởi động AutoCAD" in project
+    assert "if (key == null) return false;" in settings
+
+
+def test_hosted_artifact_is_explicitly_pre_release_and_final_requires_runtime_pass():
+    hosted = read("../../../.github/workflows/build-miningvolume-autocad2023.yml")
+    runtime = read("../../../.github/workflows/verify-miningvolume-autocad2023-runtime.yml")
+    assert "MiningVolume-HSNext-AutoCAD2023-v1.0-PRE-RELEASE" in hosted
+    assert "MiningVolume_HSNext_AutoCAD2023_Setup_v1.0_PRE_RELEASE.exe" in hosted
+    assert "PRE_RELEASE_NOTICE.txt" in hosted
+    assert "Release status: PRE-RELEASE ONLY" in hosted
+    assert "MiningVolume-HSNext-AutoCAD2023-v1.0-RUNTIME-PASS" in runtime
+    assert "MiningVolume_HSNext_AutoCAD2023_Setup_v1.0_RUNTIME_PASS.exe" in runtime
+    assert "if ($runtimeProof -notmatch 'Status=PASS')" in runtime
+    assert "RUNTIME_RELEASE_VERIFICATION.txt" in runtime
+
+
+def test_source_archive_contains_installer_and_regression_tests():
+    hosted = read("../../../.github/workflows/build-miningvolume-autocad2023.yml")
+    assert "git archive --format=zip" in hosted
+    assert "'/installer/main.go'" in hosted
+    assert "'/tests/reference/test_v104_release_gate_static.py'" in hosted
+    assert "EndsWith($suffix" in hosted
+
+
+def test_hosted_ci_builds_exact_head_and_clean_git_source_archive():
+    hosted = read("../../../.github/workflows/build-miningvolume-autocad2023.yml")
+    assert "ref: ${{ github.event.pull_request.head.sha || github.sha }}" in hosted
+    assert "Verify exact source checkout" in hosted
+    assert "Checkout/source mismatch" in hosted
+    assert "Checked out commit: $env:CHECKED_OUT_SHA" in hosted
+    assert "git archive --format=zip" in hosted
+    assert "-o $sourceZip HEAD tools/MiningVolume_HSNext/v0.9" in hosted
+    assert "Push-Location $env:GITHUB_WORKSPACE" in hosted
+    assert "/(?:bin|obj)/" in hosted
+    assert "/installer/payload\\.zip$" in hosted
+
+
+def test_installer_admin_check_and_success_message_match_palette_policy():
+    installer = read("installer/main.go")
+    assert 'exec.Command("fltmc").Run()==nil' in installer
+    assert 'exec.Command("net","session")' not in installer
+    assert "Phần mềm đang được tiếp tục cải tiến và hoàn thiện." in installer
+    assert "ĐT/Zalo: 0967280686" in installer
+    assert "Setup không tự mở AutoCAD" not in installer
+
+
+def test_installer_rejects_foreign_dlls_and_wrong_package_metadata():
+    installer = read("installer/main.go")
+    assert "allowedDll := map[string]bool" in installer
+    for dll in [
+        "miningvolume2023.dll",
+        "miningvolume.core.dll",
+        "miningvolume.surface.dll",
+        "miningvolume.cad2023.dll",
+    ]:
+        assert dll in installer
+    assert "Bundle chứa DLL ngoài danh sách cho phép" in installer
+    # Validate the parsed loader tree; text tokens may occur in XML comments.
+    assert 'return validatePackageXML(xmlBytes)' in installer
+    assert 'xml.Unmarshal(data, &p)' in installer
+    assert 'p.Version!=version' in installer
+    assert 'r[0].Min=="R24.2"' in installer
+    assert 'r[0].Max=="R24.2"' in installer
+    assert 'e.Startup!="True"' in installer
+
+
+def test_autocad2023_version_accepts_autodesk_r24_2_prefix():
+    runtime = read("release/verify_autocad2023_runtime.ps1")
+    runner = read("release/setup_autocad2023_runner.ps1")
+    workflow = read("../../../.github/workflows/verify-miningvolume-autocad2023-runtime.yml")
+    assert "'^R?24\\.2'" in runtime
+    assert "'^R?24\\.2'" in runner
+    assert "'^R?24\\.2'" in workflow
+
+
+def test_runtime_verifier_explicitly_netloads_plugin_and_clears_stale_startup_log():
+    runtime = read("release/verify_autocad2023_runtime.ps1")
+    assert "'_.NETLOAD'" in runtime
+    assert "MiningVolume2023.dll" in runtime
+    assert "Remove-Item $startupLog -Force" in runtime
+    assert "không có startup.log mới từ lần chạy này" in runtime
+
+
+def test_palette_primary_command_is_tkl_with_legacy_alias():
+    entry = read("src/MiningVolume.Plugin2023/EntryPoint.cs")
+    assert '[CommandMethod("TKL", CommandFlags.Session)]' in entry
+    assert '[CommandMethod("MV_TOGGLE", CommandFlags.Session)]' in entry
+
+
+def test_main_palette_shows_fixed_developer_name():
+    ui = read("src/MiningVolume.Plugin2023/UI/MainPaletteControl.cs")
+    assert 'Phát triển: Bùi Thế Nam' in ui
+    assert 'ĐT/Zalo: 0967280686' in ui
+    assert 'Height = 76' in ui
+    assert 'UiTheme.ChromeText' in ui
+
+
+def test_palette_uses_shared_professional_ui_theme():
+    ui = read("src/MiningVolume.Plugin2023/UI/MainPaletteControl.cs")
+    theme = read("src/MiningVolume.Plugin2023/UI/UiTheme.cs")
+    assert "UiTheme.ApplyPage(page)" in ui
+    assert 'Text = "QUY TRÌNH"' in ui
+    assert 'TKL  •  Hiện / ẩn IMSAT VOLUME' in ui
+    assert "UiTheme.Accent" in ui
+    assert "StyleGrid(DataGridView grid)" in theme
+    assert "StyleButton(Button button)" in theme
+    assert "EnableHeadersVisualStyles = false" in theme
+
+
+def test_classic_menu_bar_exposes_main_miningvolume_workflow():
+    entry = read("src/MiningVolume.Plugin2023/EntryPoint.cs")
+    menu = read("src/MiningVolume.Plugin2023/MenuBarBuilder.cs")
+    assert "MenuBarBuilder.EnsureMenu();" in entry
+    assert 'MenuName = "IMSAT VOLUME"' in menu
+    for token in [
+        "Hiện / Ẩn IMSAT VOLUME",
+        "Dữ liệu đầu vào",
+        "TIN / Mô hình",
+        "Mặt cắt",
+        "Tính khối lượng",
+        "Xuất Excel",
+        'CommandMacro("TKL")',
+    ]:
+        assert token in menu
+
+
+def test_imsat_branding_is_packaged_for_ribbon_excel_and_setup():
+    project = read("src/MiningVolume.Plugin2023/MiningVolume.Plugin2023.csproj")
+    ribbon = read("src/MiningVolume.Plugin2023/RibbonBuilder.cs")
+    export_ui = read("src/MiningVolume.Plugin2023/UI/ExportPage.cs")
+    branding = read("src/MiningVolume.Plugin2023/Services/XlsxBrandingInjector.cs")
+    installer = read("installer/main.go")
+    hosted = read("../../../.github/workflows/build-miningvolume-autocad2023.yml")
+    assert "imsat_logo_64.png" in project
+    assert "imsat_logo_64.png" in ribbon
+    assert "imsat_logo.png" in branding
+    assert "Thông tin" in branding and "Tổng khối" in branding
+    assert "logo IMSAT" not in export_ui
+    assert "ExportClicked" in export_ui  # export formatting and logo still handled in writer
+    assert "DisplayIcon" in installer
+    assert "IMSAT VOLUME.lnk" in installer
+    assert "rsrc -ico imsat.ico" in hosted

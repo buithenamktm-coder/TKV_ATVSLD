@@ -1,0 +1,77 @@
+{
+  "status": "PASS",
+  "models": [
+    {
+      "file": "MC 20-20.gsz",
+      "regions": 2,
+      "materials": 2,
+      "terrain_points": 120,
+      "surfaces": 726,
+      "critical_fs": 1.4235603,
+      "geometry_errors": 0
+    },
+    {
+      "file": "MC B1-B2.gsz",
+      "regions": 2,
+      "materials": 2,
+      "terrain_points": 93,
+      "surfaces": 1331,
+      "critical_fs": 1.89615675157299,
+      "geometry_errors": 0
+    },
+    {
+      "file": "MC C1-C2.gsz",
+      "regions": 2,
+      "materials": 2,
+      "terrain_points": 42,
+      "surfaces": 1331,
+      "critical_fs": 1.8522714,
+      "geometry_errors": 0
+    },
+    {
+      "file": "MC D1-D2.gsz",
+      "regions": 2,
+      "materials": 2,
+      "terrain_points": 19,
+      "surfaces": 1331,
+      "critical_fs": 2.1647582,
+      "geometry_errors": 0
+    },
+    {
+      "file": "MC E1-E2.gsz",
+      "regions": 2,
+      "materials": 2,
+      "terrain_points": 150,
+      "surfaces": 726,
+      "critical_fs": 1.6153324,
+      "geometry_errors": 0
+    },
+    {
+      "file": "MC F1-F2.gsz",
+      "regions": 2,
+      "materials": 2,
+      "terrain_points": 89,
+      "surfaces": 1331,
+      "critical_fs": 1.6680645,
+      "geometry_errors": 0
+    },
+    {
+      "file": "MC TIII.gsz",
+      "regions": 12,
+      "materials": 4,
+      "terrain_points": 137,
+      "surfaces": 1331,
+      "critical_fs": 1.5279493,
+      "geometry_errors": 0
+    },
+    {
+      "file": "MC TV.gsz",
+      "regions": 9,
+      "materials": 3,
+      "terrain_points": 122,
+      "surfaces": 1331,
+      "critical_fs": 1.5257912,
+      "geometry_errors": 0
+    }
+  ]
+}
