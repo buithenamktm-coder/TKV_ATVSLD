@@ -253,11 +253,30 @@ jobs:
             throw "Native CAD ZIP staging failed"
           }
           Write-Host "Native CAD staged with IMSAT scripts (runtime not yet validated)"
+      - name: Build experimental native Windows installer
+        shell: pwsh
+        run: |
+          $compiler = "${env:ProgramFiles(x86)}/Inno Setup 6/ISCC.exe"
+          if (-not (Test-Path $compiler)) {
+            choco install innosetup -y --no-progress
+          }
+          if (-not (Test-Path $compiler)) { throw "Inno Setup compiler missing" }
+          if (-not (Test-Path "native-cad-stage/qcad.exe")) { throw "Native CAD entry executable missing" }
+          & $compiler "tools/IMSAT_CAD_V1/imsatcad-native-v1.iss"
+          if ($LASTEXITCODE -ne 0) { throw "Native Inno Setup compilation failed" }
+          if (-not (Test-Path "IMSAT-CAD-Native-Development-Setup.exe")) {
+            throw "Native Windows setup was not generated"
+          }
+          Get-FileHash "IMSAT-CAD-Native-Development-Setup.exe" -Algorithm SHA256 |
+            Format-List | Out-String | Set-Content "native-installer-sha256.txt"
+          Write-Host "Native development installer compiled; installation and GUI not yet tested"
       - uses: actions/upload-artifact@v4
         with:
           name: imsat-cad-native-qcad-build-evidence
           path: |
             imsat-cad-native-windows-build.zip
+            IMSAT-CAD-Native-Development-Setup.exe
+            native-installer-sha256.txt
             native-commit-report.txt
             native-qt-dependencies.txt
             native-headless-smoke.txt
