@@ -51,8 +51,24 @@ IMSATCAD._modifyScripts = [
     "scripts/Edit/Delete/Delete.js"
 ];
 // These QCAD categories expose the upstream annotation and layer actions.
-IMSATCAD._annotationScripts = ["scripts/Draw/Dimension/Dimension.js"];
-IMSATCAD._layerScripts = ["scripts/Layer/Layer.js"];
+IMSATCAD._annotationScripts = [
+    "scripts/Draw/Dimension/DimHorizontal/DimHorizontal.js",
+    "scripts/Draw/Dimension/DimVertical/DimVertical.js",
+    "scripts/Draw/Dimension/DimAligned/DimAligned.js",
+    "scripts/Draw/Dimension/DimAngular/DimAngular.js",
+    "scripts/Draw/Dimension/DimRadial/DimRadial.js",
+    "scripts/Draw/Dimension/DimDiametric/DimDiametric.js",
+    "scripts/Draw/Dimension/Leader/Leader.js"
+];
+IMSATCAD._layerScripts = [
+    "scripts/Layer/AddLayer/AddLayer.js",
+    "scripts/Layer/EditLayer/EditLayer.js",
+    "scripts/Layer/RemoveLayer/RemoveLayer.js",
+    "scripts/Layer/ShowAllLayers/ShowAllLayers.js",
+    "scripts/Layer/HideAllLayers/HideAllLayers.js",
+    "scripts/Layer/LockAllLayers/LockAllLayers.js",
+    "scripts/Layer/UnlockAllLayers/UnlockAllLayers.js"
+];
 IMSATCAD.populateToolBar = function(toolbar, scripts) {
     var installed = 0;
     for (var i = 0; i < scripts.length; ++i) {
