@@ -26,6 +26,7 @@ IMSATCAD._aliases = [
     ["scripts/Modify/Trim/Trim.js", ["trim", "extend", "tr", "ex"]],
     ["scripts/Modify/Offset/Offset.js", ["offset", "o"]],
     ["scripts/Modify/Translate/Translate.js", ["move", "m", "mv"]],
+    ["scripts/Modify/Translate/Translate.js", ["copy", "co", "cp"]],
     ["scripts/Modify/Rotate/Rotate.js", ["rotate", "ro"]],
     ["scripts/Modify/Scale/Scale.js", ["scale", "sc"]],
     ["scripts/Modify/Mirror/Mirror.js", ["mirror", "mi"]],
