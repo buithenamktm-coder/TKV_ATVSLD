@@ -1,0 +1,27 @@
+name: IMSAT ROAD Core
+on:
+  push:
+    branches: [main, reorg-imsat-project-folders-20261017]
+    paths:
+      - "IMSAT-ROAD/source/**"
+      - ".github/workflows/imsat-road-core.yml"
+      - "IMSAT-VOLUME/source/v0.9/src/MiningVolume.Core/**"
+  pull_request:
+    paths:
+      - 'IMSAT-ROAD/source/**'
+      - 'IMSAT-VOLUME/source/**'
+      - '.github/workflows/imsat-road-core.yml'
+  workflow_dispatch:
+
+jobs:
+  core-smoke:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - name: Restore road smoke project
+        run: dotnet restore IMSAT-ROAD/source/tests/IMSAT.Road.Smoke/IMSAT.Road.Smoke.csproj
+      - name: Run road core smoke (Windows .NET Framework 4.8)
+        run: dotnet run --project IMSAT-ROAD/source/tests/IMSAT.Road.Smoke/IMSAT.Road.Smoke.csproj --configuration Release --no-restore
