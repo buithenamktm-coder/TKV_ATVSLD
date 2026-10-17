@@ -24,6 +24,7 @@ IMSATCAD.init = function() {
     IMSATCAD.getMenu();
     IMSATCAD.getDrawToolBar();
     IMSATCAD.getModifyToolBar();
+    IMSATCAD.getMenu().addAction(qsTr("IMSAT CAD tools are available on the Draw and Modify toolbars"));
 };
 // Reuse QCAD actions without duplicating geometry algorithms.
 IMSATCAD._drawScripts = [
@@ -50,6 +51,7 @@ IMSATCAD.populateToolBar = function(toolbar, scripts) {
             qWarning("IMSAT CAD: toolbar action not found: " + scripts[i]);
             continue;
         }
+        // RGuiAction is registered with QCAD; reuse its QAction in our toolbar.
         toolbar.addAction(action);
         installed++;
     }
