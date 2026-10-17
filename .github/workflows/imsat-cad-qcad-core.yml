@@ -37,11 +37,23 @@ jobs:
         run: |
           node --check tools/IMSAT_CAD_V1/qcad_addon/IMSATCAD/IMSATCAD.js
           Copy-Item -Recurse tools/IMSAT_CAD_V1/qcad_addon/IMSATCAD native/qcad/scripts/IMSATCAD
-      - name: Normalize upstream library output paths for MSVC
+      - name: Fix vendored zlib linkage for MSVC
         shell: pwsh
         run: |
-          # QCAD v3.32.2.0 has relative archive paths in vendored zlib/OpenNURBS.
-          # Override target outputs in the parent CMake directory, without touching source algorithms.
+          # Upstream v3.32.2.0 uses a shared zlib without dllexport annotations.
+          # MSVC can build zlib.dll but produce no import .lib, causing LNK1181.
+          # Use a static zlib (no ABI change to QCAD's other DLLs); drop GNU
+          # "-L/path" flags that MSVC interprets as invalid /L switches.
+          $zlib = "native/qcad/src/3rdparty/opennurbs/zlib/CMakeLists.txt"
+          $zc = [IO.File]::ReadAllText($zlib)
+          if (-not $zc.Contains("add_library(zlib SHARED")) { throw "Unexpected pinned QCAD zlib CMake contents" }
+          $zc = $zc.Replace("add_library(zlib SHARED", "add_library(zlib STATIC")
+          $zc = ($zc -split "`r?`n" | Where-Object { $_ -notmatch '^\s*target_link_libraries\(zlib PUBLIC -L' }) -join "`n"
+          [IO.File]::WriteAllText($zlib, $zc)
+          $on = "native/qcad/src/3rdparty/opennurbs/opennurbs/CMakeLists.txt"
+          $oc = [IO.File]::ReadAllText($on)
+          $oc = ($oc -split "`r?`n" | Where-Object { $_ -notmatch '^\s*target_link_libraries\(opennurbs PUBLIC -L' }) -join "`n"
+          [IO.File]::WriteAllText($on, $oc)
           $parent = "native/qcad/src/3rdparty/opennurbs/CMakeLists.txt"
           $cmakeRoot = (Resolve-Path "native/qcad").Path.Replace([char]92, "/")
           $release = "$cmakeRoot/release"
