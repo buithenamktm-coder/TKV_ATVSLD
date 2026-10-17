@@ -5,7 +5,7 @@ on:
     paths:
       - ".github/workflows/imsat-cad-qcad-core.yml"
   push:
-    branches: [imsat-cad-foundation]
+    branches: [main, imsat-cad-foundation]
     paths:
       - ".github/workflows/imsat-cad-qcad-core.yml"
 jobs:
@@ -35,8 +35,8 @@ jobs:
       - name: Validate and install IMSAT CAD command aliases
         shell: pwsh
         run: |
-          node --check tools/IMSAT_CAD_V1/qcad_addon/IMSATCAD/IMSATCAD.js
-          Copy-Item -Recurse tools/IMSAT_CAD_V1/qcad_addon/IMSATCAD native/qcad/scripts/IMSATCAD
+          node --check IMSAT-CAD/v1/qcad_addon/IMSATCAD/IMSATCAD.js
+          Copy-Item -Recurse IMSAT-CAD/v1/qcad_addon/IMSATCAD native/qcad/scripts/IMSATCAD
       - name: Fix vendored zlib linkage for MSVC
         shell: pwsh
         run: |
