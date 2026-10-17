@@ -14,8 +14,46 @@ IMSATCAD.getMenu = function() {
     return EAction.getMenu("IMSAT CAD", "IMSATCADMenu");
 };
 
+IMSATCAD.getDrawToolBar = function() {
+    return EAction.getToolBar(qsTr("IMSAT CAD - Draw"), "IMSATCADDrawToolBar", Qt.TopToolBarArea);
+};
+IMSATCAD.getModifyToolBar = function() {
+    return EAction.getToolBar(qsTr("IMSAT CAD - Modify"), "IMSATCADModifyToolBar", Qt.TopToolBarArea);
+};
 IMSATCAD.init = function() {
     IMSATCAD.getMenu();
+    IMSATCAD.getDrawToolBar();
+    IMSATCAD.getModifyToolBar();
+};
+// Reuse QCAD actions without duplicating geometry algorithms.
+IMSATCAD._drawScripts = [
+    "scripts/Draw/Line/Line2P/Line2P.js",
+    "scripts/Draw/Polyline/DrawPolyline/DrawPolyline.js",
+    "scripts/Draw/Circle/CircleCR/CircleCR.js",
+    "scripts/Draw/Shape/ShapeRectanglePP/ShapeRectanglePP.js"
+];
+IMSATCAD._modifyScripts = [
+    "scripts/Modify/Trim/Trim.js",
+    "scripts/Modify/Offset/Offset.js",
+    "scripts/Modify/Translate/Translate.js",
+    "scripts/Modify/Rotate/Rotate.js",
+    "scripts/Modify/Scale/Scale.js",
+    "scripts/Modify/Mirror/Mirror.js",
+    "scripts/Modify/Explode/Explode.js",
+    "scripts/Edit/Delete/Delete.js"
+];
+IMSATCAD.populateToolBar = function(toolbar, scripts) {
+    var installed = 0;
+    for (var i = 0; i < scripts.length; ++i) {
+        var action = RGuiAction.getByScriptFile(scripts[i]);
+        if (isNull(action)) {
+            qWarning("IMSAT CAD: toolbar action not found: " + scripts[i]);
+            continue;
+        }
+        toolbar.addAction(action);
+        installed++;
+    }
+    return installed;
 };
 
 IMSATCAD._aliases = [
@@ -46,8 +84,11 @@ IMSATCAD.postInit = function() {
         action.setDefaultCommands(mapping[1]);
         success++;
     }
+    var drawCount = IMSATCAD.populateToolBar(IMSATCAD.getDrawToolBar(), IMSATCAD._drawScripts);
+    var modifyCount = IMSATCAD.populateToolBar(IMSATCAD.getModifyToolBar(), IMSATCAD._modifyScripts);
     if (!isNull(win)) {
-        win.handleUserMessage("IMSAT CAD aliases: " + success + "/" + IMSATCAD._aliases.length);
+        win.handleUserMessage("IMSAT CAD: " + success + "/" + IMSATCAD._aliases.length +
+                              " aliases, " + drawCount + " draw tools, " + modifyCount + " modify tools");
     }
 };
 // COPY/CO/CP invoke QCAD Translate; select its copy mode in the tool options.
