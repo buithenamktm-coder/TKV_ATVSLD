@@ -230,6 +230,24 @@ jobs:
           if (-not (Get-ChildItem $stage -Filter "qcad*.exe" -File)) {
             throw "QCAD executable missing from native package"
           }
+          $required = @(
+            "scripts/IMSATCAD/IMSATCAD.js",
+            "licenses/QCAD-LICENSE.txt",
+            "licenses/SOURCE_AND_STATUS.txt",
+            "platforms/qwindows.dll"
+          )
+          foreach ($item in $required) {
+            if (-not (Test-Path (Join-Path $stage $item))) { throw "Native package missing: $item" }
+          }
+          Get-ChildItem $stage -Recurse -File |
+            ForEach-Object {
+              [pscustomobject]@{
+                Path = $_.FullName.Substring((Resolve-Path $stage).Path.Length + 1).Replace([char]92, "/")
+                Size = $_.Length
+                SHA256 = (Get-FileHash -Path $_.FullName -Algorithm SHA256).Hash
+              }
+            } | Sort-Object Path | Export-Csv "native-package-manifest.csv" -NoTypeInformation -Encoding UTF8
+          if (-not (Test-Path "native-package-manifest.csv")) { throw "Native package manifest missing" }
           Compress-Archive -Path "$stage/*" -DestinationPath "imsat-cad-native-windows-build.zip" -Force
           if (-not (Test-Path "imsat-cad-native-windows-build.zip")) {
             throw "Native CAD ZIP staging failed"
@@ -243,6 +261,7 @@ jobs:
             native-commit-report.txt
             native-qt-dependencies.txt
             native-headless-smoke.txt
+            native-package-manifest.csv
             native/qcad/release/*.exe
             native/qcad/release/*.dll
             native/qcad/release/platforms/*.dll
