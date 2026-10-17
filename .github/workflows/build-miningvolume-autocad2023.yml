@@ -11,7 +11,15 @@ on:
       - 'IMSAT-VOLUME/source/v0.9/**'
       - '.github/workflows/build-miningvolume-autocad2023.yml'
 
+# When UI code is updated repeatedly, only the latest branch revision should
+# consume the Windows build runner and publish an installable QA artifact.
+concurrency:
+  group: miningvolume-build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  compatibility:
+    uses: ./.github/workflows/imsat-cad-2025-2026-compat-ci.yml
   build:
     runs-on: windows-2022
     permissions:
@@ -58,6 +66,13 @@ jobs:
           python -m pip install --disable-pip-version-check pytest shapely
           python -m pytest -q tests/reference
 
+      - name: Execute C# geometry regression tests
+        shell: pwsh
+        run: |
+          Set-Location $env:MV_ROOT
+          python tests/core/run_core.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Restore .NET Framework solution
         shell: pwsh
         run: |
@@ -68,7 +83,25 @@ jobs:
         shell: pwsh
         run: |
           Set-Location $env:MV_ROOT
-          dotnet build MiningVolume.HSNext.sln -c Release --no-restore -p:UseAutoCADNuGet=true
+          dotnet build MiningVolume.HSNext.sln -c Release --no-restore -p:UseAutoCADNuGet=true -p:SourceRevisionId=$env:SOURCE_SHA
+
+      - name: Verify actual Windows button contrast
+        shell: powershell
+        working-directory: IMSAT-VOLUME/source/v0.9
+        run: |
+          $source = Get-Content .\tests\ui\verify_buttons.ps1 -Raw -Encoding UTF8
+          & ([scriptblock]::Create($source)) -Root (Get-Location).Path
+
+      - name: Build and self-test offline license issuer (admin tool)
+        shell: pwsh
+        run: |
+          Set-Location $env:MV_ROOT
+          dotnet restore license-manager/IMSAT.LicenseManager.csproj
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet build license-manager/IMSAT.LicenseManager.csproj -c Release --no-restore
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & "license-manager/bin/Release/net48/IMSAT.LicenseManager.exe" selftest
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Assemble prebuilt bundle
         shell: pwsh
@@ -80,7 +113,18 @@ jobs:
           Copy-Item 'src/MiningVolume.Plugin2023/bin/Release/net48/MiningVolume2023.dll' $out
           Copy-Item 'src/MiningVolume.Core/bin/Release/net48/MiningVolume.Core.dll' $out
           Copy-Item 'src/MiningVolume.Surface/bin/Release/net48/MiningVolume.Surface.dll' $out
+          Copy-Item 'src/MiningVolume.Surface/bin/Release/net48/MiningVolume.Cdt.Native.dll' $out
+          Copy-Item 'src/MiningVolume.Surface/Native/LICENSE-CDT.txt' $out
+          Copy-Item 'src/MiningVolume.Surface/Native/NOTICE.txt' $out
           Copy-Item 'src/MiningVolume.Cad2023/bin/Release/net48/MiningVolume.Cad2023.dll' $out
+          New-Item -ItemType Directory -Force "$out/Assets" | Out-Null
+          Copy-Item 'src/MiningVolume.Plugin2023/Assets/imsat_logo_64.png' "$out/Assets/imsat_logo_64.png"
+          $identity = @("SOURCE_SHA=$env:SOURCE_SHA")
+          Get-ChildItem "$out/*.dll" | Sort-Object Name | ForEach-Object {
+            $identity += "$( (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant() )  $($_.Name)"
+          }
+          $identity | Set-Content -Encoding ascii "$out/BUILD_IDENTITY.txt"
+
 
       - name: Verify release bundle policy
         shell: pwsh
@@ -116,7 +160,10 @@ jobs:
           $env:GOOS='windows'
           $env:GOARCH='amd64'
           $env:CGO_ENABLED='0'
-          go vet main.go
+          go vet main.go host_install_plan.go
+          if ($LASTEXITCODE -ne 0) { throw "Installer go vet failed." }
+          go test -v main.go host_install_plan.go main_test.go host_install_plan_test.go
+          if ($LASTEXITCODE -ne 0) { throw "Installer regression tests failed." }
 
       - name: Build native Windows installer
         shell: pwsh
@@ -126,17 +173,93 @@ jobs:
           $env:GOOS='windows'
           $env:GOARCH='amd64'
           $env:CGO_ENABLED='0'
-          go build -trimpath -ldflags '-s -w -H=windowsgui' -o ../dist/MiningVolume_HSNext_AutoCAD2023_Setup_v0.10.4_PRE_RELEASE.exe main.go
+
+          # Embed the official IMSAT icon into the Setup executable.
+          go install github.com/akavel/rsrc@latest
+          $rsrc = Join-Path ((go env GOPATH).Trim()) 'bin/rsrc.exe'
+          if (-not (Test-Path $rsrc)) { throw "Không tìm thấy rsrc.exe sau khi cài." }
+          & $rsrc -ico imsat.ico -arch amd64 -o rsrc_windows_amd64.syso
+          if ($LASTEXITCODE -ne 0) { throw "Không nhúng được icon IMSAT vào Setup." }
+
+          # Build the directory package (not a single .go file) so the Windows
+          # resource .syso is linked into the executable.
+          $createdGoMod = $false
+          if (-not (Test-Path go.mod)) {
+            go mod init miningvolume-installer
+            if ($LASTEXITCODE -ne 0) { throw "Không tạo được go.mod tạm để build Setup." }
+            $createdGoMod = $true
+          }
+          try {
+            go build -trimpath -ldflags '-s -w -H=windowsgui' -o ../dist/MiningVolume_HSNext_AutoCAD2023_Setup_v1.0_PRE_RELEASE.exe .
+            if ($LASTEXITCODE -ne 0) { throw "Build Setup thất bại." }
+          }
+          finally {
+            Remove-Item rsrc_windows_amd64.syso -Force -ErrorAction SilentlyContinue
+            if ($createdGoMod) {
+              Remove-Item go.mod -Force -ErrorAction SilentlyContinue
+              Remove-Item go.sum -Force -ErrorAction SilentlyContinue
+            }
+          }
+
+      - name: Build V2.0 QA Candidate Setup (NOT RELEASE)
+        if: startsWith(github.ref_name, 'miningvolume-v2-') || startsWith(github.head_ref, 'miningvolume-v2-')
+        shell: pwsh
+        run: |
+          Set-Location $env:MV_ROOT
+          & ./installer/build_v2_qa.ps1
+          if ($LASTEXITCODE -ne 0) { throw "V2 QA Candidate packaging failed." }
+          if (-not (Test-Path "dist/IMSAT_MiningVolume_V2_0_QA_CANDIDATE.exe")) {
+            throw "Missing V2 QA Setup after build."
+          }
+          if (-not (Test-Path "dist/V2_QA_CANDIDATE_NOT_RELEASE.txt")) {
+            throw "Missing non-release warning for V2 QA Setup."
+          }
+          $v2Hash = (Get-FileHash 'dist/IMSAT_MiningVolume_V2_0_QA_CANDIDATE.exe' -Algorithm SHA256).Hash.ToLowerInvariant()
+          "SHA256  $v2Hash  IMSAT_MiningVolume_V2_0_QA_CANDIDATE.exe" | Set-Content -Encoding ascii dist/V2_SHA256SUMS.txt
+          @(
+            'IMSAT MiningVolume V2.0 QA CANDIDATE — NOT RELEASE'
+            "Source commit: $env:SOURCE_SHA"
+            "Checked out commit: $env:CHECKED_OUT_SHA"
+            "Workflow run: $env:GITHUB_RUN_ID"
+            "V2 Setup SHA256: $v2Hash"
+            'AutoCAD 2023 interactive runtime: NOT TESTED'
+            'Production license trust anchor and acceptance: NOT APPROVED'
+          ) | Set-Content -Encoding utf8 dist/V2_BUILD_VERIFICATION.txt
+          Get-Content dist/V2_BUILD_VERIFICATION.txt
+          & ./release/scan_qa_setup.ps1
+          $evidence = [ordered]@{
+            build_type = 'QA_CANDIDATE_NOT_RELEASE'
+            source_sha = $env:SOURCE_SHA
+            checked_out_sha = $env:CHECKED_OUT_SHA
+            github_run_id = $env:GITHUB_RUN_ID
+            executable = 'IMSAT_MiningVolume_V2_0_QA_CANDIDATE.exe'
+            executable_sha256 = $v2Hash
+            executable_bytes = (Get-Item dist/IMSAT_MiningVolume_V2_0_QA_CANDIDATE.exe).Length
+            security_scan = (Get-Content dist/V2_SECURITY_SCAN.txt | Select-Object -First 1)
+            windows_ui_probe = 'UI_BUTTON_CONTRAST.json'
+            windows_ui_probe_sha256 = (Get-FileHash dist/UI_BUTTON_CONTRAST.png -Algorithm SHA256).Hash.ToLowerInvariant()
+            liquid_glass_chrome = 'UI_GLASS_CHROME.json'
+            liquid_glass_chrome_sha256 = (Get-FileHash dist/UI_GLASS_CHROME.png -Algorithm SHA256).Hash.ToLowerInvariant()
+            section_parameters_ui_probe = 'UI_SECTION_PARAMETERS.json'
+            section_parameters_ui_probe_sha256 = (Get-FileHash dist/UI_SECTION_PARAMETERS.json -Algorithm SHA256).Hash.ToLowerInvariant()
+            section_layout_visual_sha256 = (Get-FileHash dist/UI_SECTION_LAYOUT.png -Algorithm SHA256).Hash.ToLowerInvariant()
+            autocad_2023_interactive = 'NOT TESTED'
+            excel_desktop_recalculation = 'NOT TESTED'
+            windows_interactive_upgrade_uninstall = 'NOT TESTED'
+            license_production_activation = 'BLOCKED'
+          }
+          $evidence | ConvertTo-Json -Depth 5 | Set-Content -Encoding utf8 dist/FINAL_BUILD_EVIDENCE.json
+          if (-not (Test-Path dist/FINAL_BUILD_EVIDENCE.json)) { throw 'Missing V2 build evidence manifest' }
 
       - name: Create checksums and source archive
         shell: pwsh
         run: |
           Set-Location $env:MV_ROOT
-          $setup = 'dist/MiningVolume_HSNext_AutoCAD2023_Setup_v0.10.4_PRE_RELEASE.exe'
+          $setup = 'dist/MiningVolume_HSNext_AutoCAD2023_Setup_v1.0_PRE_RELEASE.exe'
           $hash = (Get-FileHash $setup -Algorithm SHA256).Hash.ToLowerInvariant()
           "SHA256  $hash  $(Split-Path $setup -Leaf)" | Set-Content -Encoding ascii dist/SHA256SUMS.txt
           @(
-            'MiningVolume HS-Next v0.10.4 - BUILD VERIFICATION'
+            'MiningVolume HS-Next v1.0 - BUILD VERIFICATION'
             "Source commit: $env:SOURCE_SHA"
             "Checked out commit: $env:CHECKED_OUT_SHA"
             "Workflow commit: $env:GITHUB_SHA"
@@ -150,20 +273,20 @@ jobs:
             'Release status: PRE-RELEASE ONLY - AutoCAD 2023 runtime not verified'
             "Setup SHA256: $hash"
             'AutoCAD 2023 host runtime self-test: NOT EXECUTED ON GITHUB-HOSTED RUNNER'
-            'Runtime gate: Setup runs MVSELFTEST in AutoCAD 2023 and rolls back unless Status=PASS.'
+            'Runtime gate: final Setup is published only after the self-hosted AutoCAD 2023 workflow PASS.'
           ) | Set-Content -Encoding utf8 dist/BUILD_VERIFICATION.txt
           @(
-            'MININGVOLUME HS-NEXT v0.10.4 - PRE-RELEASE'
+            'MININGVOLUME HS-NEXT v1.0 - PRE-RELEASE'
             'This artifact was built on GitHub-hosted Windows CI.'
             'AutoCAD 2023 host runtime MVSELFTEST has NOT been executed for this artifact.'
             'Do not treat this package as the final release.'
             'The final artifact is created only by the AutoCAD 2023 runtime workflow after Status=PASS.'
           ) | Set-Content -Encoding utf8 dist/PRE_RELEASE_NOTICE.txt
-          $sourceZip = Join-Path $env:GITHUB_WORKSPACE "$env:MV_ROOT/dist/MiningVolume_HSNext_Source_v0.10.4.zip"
+          $sourceZip = Join-Path $env:GITHUB_WORKSPACE "$env:MV_ROOT/dist/MiningVolume_HSNext_Source_v1.0.zip"
           Remove-Item $sourceZip -Force -ErrorAction SilentlyContinue
           Push-Location $env:GITHUB_WORKSPACE
           try {
-            git archive --format=zip --prefix=MiningVolume_HSNext_v0.10.4/ -o $sourceZip HEAD IMSAT-VOLUME/source/v0.9
+            git archive --format=zip --prefix=MiningVolume_HSNext_v1.0/ -o $sourceZip HEAD IMSAT-VOLUME/source/v0.9
             if ($LASTEXITCODE -ne 0 -or -not (Test-Path $sourceZip)) {
               throw 'Không tạo được source archive sạch từ Git HEAD.'
             }
@@ -199,14 +322,39 @@ jobs:
           }
           Get-Content dist/BUILD_VERIFICATION.txt
 
+      - name: Upload V2.0 QA-only installer (not release)
+        if: startsWith(github.ref_name, 'miningvolume-v2-') || startsWith(github.head_ref, 'miningvolume-v2-')
+        uses: actions/upload-artifact@v4
+        with:
+          name: IMSAT-MiningVolume-V2.0-QA-CANDIDATE-NOT-RELEASE
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            IMSAT-VOLUME/source/v0.9/dist/IMSAT_MiningVolume_V2_0_QA_CANDIDATE.exe
+            IMSAT-VOLUME/source/v0.9/dist/V2_QA_CANDIDATE_NOT_RELEASE.txt
+            IMSAT-VOLUME/source/v0.9/dist/V2_SHA256SUMS.txt
+            IMSAT-VOLUME/source/v0.9/dist/V2_BUILD_VERIFICATION.txt
+            IMSAT-VOLUME/source/v0.9/dist/V2_SECURITY_SCAN.txt
+            IMSAT-VOLUME/source/v0.9/dist/FINAL_BUILD_EVIDENCE.json
+            IMSAT-VOLUME/source/v0.9/dist/UI_BUTTON_CONTRAST.png
+            IMSAT-VOLUME/source/v0.9/dist/UI_BUTTON_CONTRAST.json
+            IMSAT-VOLUME/source/v0.9/dist/UI_GLASS_CHROME.png
+            IMSAT-VOLUME/source/v0.9/dist/UI_GLASS_CHROME.json
+            IMSAT-VOLUME/source/v0.9/dist/UI_SECTION_PARAMETERS.json
+            IMSAT-VOLUME/source/v0.9/dist/UI_SECTION_LAYOUT.png
+            IMSAT-VOLUME/source/v0.9/dist/UI_QUICK_SECTION_LAYOUT.png
+            IMSAT-VOLUME/source/v0.9/docs/V2_FINAL_QA_REPORT.md
+            IMSAT-VOLUME/source/v0.9/docs/V2_RELEASE_GATES.md
+            IMSAT-VOLUME/source/v0.9/docs/V2_AUTOCAD_ACCEPTANCE.md
+
       - name: Upload pre-release candidate
         uses: actions/upload-artifact@v4
         with:
-          name: MiningVolume-HSNext-AutoCAD2023-v0.10.4-PRE-RELEASE
+          name: MiningVolume-HSNext-AutoCAD2023-v1.0-PRE-RELEASE
           if-no-files-found: error
           path: |
-            IMSAT-VOLUME/source/v0.9/dist/MiningVolume_HSNext_AutoCAD2023_Setup_v0.10.4_PRE_RELEASE.exe
-            IMSAT-VOLUME/source/v0.9/dist/MiningVolume_HSNext_Source_v0.10.4.zip
+            IMSAT-VOLUME/source/v0.9/dist/MiningVolume_HSNext_AutoCAD2023_Setup_v1.0_PRE_RELEASE.exe
+            IMSAT-VOLUME/source/v0.9/dist/MiningVolume_HSNext_Source_v1.0.zip
             IMSAT-VOLUME/source/v0.9/dist/PRE_RELEASE_NOTICE.txt
             IMSAT-VOLUME/source/v0.9/dist/SHA256SUMS.txt
             IMSAT-VOLUME/source/v0.9/dist/BUILD_VERIFICATION.txt
