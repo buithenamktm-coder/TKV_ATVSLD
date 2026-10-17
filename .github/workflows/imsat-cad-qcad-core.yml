@@ -94,11 +94,22 @@ jobs:
           if ($null -eq $js) { throw "Missing JavaScript CAD API plugin" }
           Write-Host "Native CAD executable: $($exe.FullName)"
           Write-Host "CAD JavaScript API: $($js.FullName)"
+      - name: Verify Windows loader dependencies for native QCAD
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem native/qcad/release -File -Filter "qcad*.exe" | Select-Object -First 1
+          if (-not $exe) { throw "Native QCAD executable missing" }
+          $qtBin = (Get-Command windeployqt.exe -ErrorAction Stop).Source
+          & $qtBin --dry-run --list mapping $exe.FullName | Out-File native-qt-dependencies.txt
+          if ($LASTEXITCODE -ne 0) { throw "Qt deployment dependency inspection failed" }
+          if (-not (Test-Path native-qt-dependencies.txt)) { throw "Dependency manifest missing" }
+          Write-Host "Qt runtime dependency manifest generated"
       - uses: actions/upload-artifact@v4
         with:
           name: imsat-cad-native-qcad-build-evidence
           path: |
             native-commit-report.txt
+            native-qt-dependencies.txt
             native/qcad/release/*.exe
             native/qcad/plugins/*qcadjsapi*.dll
           retention-days: 7
