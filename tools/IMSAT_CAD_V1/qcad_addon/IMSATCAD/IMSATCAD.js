@@ -89,6 +89,10 @@ IMSATCAD._utilityScripts = [
     "scripts/File/Print/Print.js"
 ];
 IMSATCAD.populateToolBar = function(toolbar, scripts) {
+    if (isNull(toolbar)) {
+        qWarning("IMSAT CAD: toolbar unavailable");
+        return 0;
+    }
     var installed = 0;
     for (var i = 0; i < scripts.length; ++i) {
         var action = RGuiAction.getByScriptFile(scripts[i]);
@@ -154,6 +158,7 @@ IMSATCAD.postInit = function() {
                               " aliases, " + drawCount + " draw tools, " + modifyCount + " modify tools, " + annotationCount + " annotation, " + layerCount + " layer, " + utilityCount + " utilities");
     }
 };
-// COPY and EXTEND aliases are intentionally withheld: QCAD Translate and Trim\n// require different options and are not drop-in AutoCAD COPY/EXTEND commands.
+// COPY and EXTEND aliases are intentionally withheld: QCAD Translate and Trim
+// require different options and are not drop-in AutoCAD COPY/EXTEND commands.
 // IMPORTANT: QCAD editing behavior differs from AutoCAD for some commands.
 // This prototype never claims command parity without interactive tests.
