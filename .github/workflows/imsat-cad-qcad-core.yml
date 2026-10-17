@@ -37,6 +37,23 @@ jobs:
         run: |
           node --check IMSAT-CAD/v1/qcad_addon/IMSATCAD/IMSATCAD.js
           Copy-Item -Recurse IMSAT-CAD/v1/qcad_addon/IMSATCAD native/qcad/scripts/IMSATCAD
+      - name: Validate IMSAT aliases against pinned QCAD script tree
+        shell: pwsh
+        run: |
+          $addon = Get-Content "IMSAT-CAD/v1/qcad_addon/IMSATCAD/IMSATCAD.js" -Raw
+          $matches = [regex]::Matches($addon, '\["(scripts/[^"]+\.js)",\s*\[')
+          if ($matches.Count -lt 10) { throw "Too few IMSAT CAD command mappings found" }
+          $missing = @()
+          foreach ($match in $matches) {
+            $script = $match.Groups[1].Value
+            if (-not (Test-Path (Join-Path "native/qcad" $script))) {
+              $missing += $script
+            }
+          }
+          if ($missing.Count -gt 0) {
+            throw ("IMSAT CAD aliases refer to missing upstream actions: " + ($missing -join ", "))
+          }
+          Write-Host "IMSAT CAD alias script existence PASS: $($matches.Count) mappings"
       - name: Fix vendored zlib linkage for MSVC
         shell: pwsh
         run: |
@@ -128,10 +145,51 @@ jobs:
             throw "Missing Windows platform plugin"
           }
           Write-Host "Native CAD deployment dependency gate PASS (not a GUI runtime test)"
+      - name: Check native CAD executable starts in headless mode
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem "native/qcad/release" -File -Filter "qcad*.exe" | Select-Object -First 1
+          if (-not $exe) { throw "Native CAD executable missing" }
+          $stdout = Join-Path $env:RUNNER_TEMP "imsat-cad-smoke-stdout.txt"
+          $stderr = Join-Path $env:RUNNER_TEMP "imsat-cad-smoke-stderr.txt"
+          $proc = Start-Process -FilePath $exe.FullName -ArgumentList @("-no-gui", "-help") -WorkingDirectory $exe.DirectoryName -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
+          if (-not $proc.WaitForExit(45000)) {
+            Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+            throw "Native CAD headless startup timed out"
+          }
+          $proc.Refresh()
+          Get-Content $stdout -ErrorAction SilentlyContinue | Select-Object -First 40
+          Get-Content $stderr -ErrorAction SilentlyContinue | Select-Object -First 40
+          if ($proc.ExitCode -ne 0) { throw "Native CAD headless startup failed with exit code $($proc.ExitCode)" }
+          Write-Host "Native CAD headless startup PASS (GUI interaction not validated)"
+      - name: Stage native CAD application with scripts and plugins
+        shell: pwsh
+        run: |
+          $stage = "native-cad-stage"
+          New-Item -ItemType Directory -Force $stage | Out-Null
+          Copy-Item "native/qcad/release/*" $stage -Recurse -Force
+          New-Item -ItemType Directory -Force "$stage/scripts", "$stage/plugins" | Out-Null
+          Copy-Item "native/qcad/scripts/*" "$stage/scripts" -Recurse -Force
+          Copy-Item "native/qcad/plugins/*" "$stage/plugins" -Recurse -Force
+          if (-not (Test-Path "$stage/scripts/IMSATCAD/IMSATCAD.js")) {
+            throw "IMSAT CAD add-on missing from native package"
+          }
+          if (-not (Get-ChildItem "$stage/plugins" -Filter "*qcadjsapi*.dll" -File)) {
+            throw "QCAD JavaScript API missing from native package"
+          }
+          if (-not (Get-ChildItem $stage -Filter "qcad*.exe" -File)) {
+            throw "QCAD executable missing from native package"
+          }
+          Compress-Archive -Path "$stage/*" -DestinationPath "imsat-cad-native-windows-build.zip" -Force
+          if (-not (Test-Path "imsat-cad-native-windows-build.zip")) {
+            throw "Native CAD ZIP staging failed"
+          }
+          Write-Host "Native CAD staged with IMSAT scripts (runtime not yet validated)"
       - uses: actions/upload-artifact@v4
         with:
           name: imsat-cad-native-qcad-build-evidence
           path: |
+            imsat-cad-native-windows-build.zip
             native-commit-report.txt
             native-qt-dependencies.txt
             native/qcad/release/*.exe
