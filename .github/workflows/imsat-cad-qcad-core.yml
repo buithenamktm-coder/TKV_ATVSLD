@@ -271,6 +271,23 @@ jobs:
           Get-FileHash "IMSAT-CAD-Native-Development-Setup.exe" -Algorithm SHA256 |
             Format-List | Out-String | Set-Content "native-installer-sha256.txt"
           Write-Host "Native development installer compiled; installation and GUI not yet tested"
+      - name: Smoke test native installer and uninstaller
+        shell: pwsh
+        run: |
+          $setup = (Resolve-Path "IMSAT-CAD-Native-Development-Setup.exe").Path
+          $destination = Join-Path $env:RUNNER_TEMP "IMSAT-CAD-Native-Install-Smoke"
+          $install = Start-Process -FilePath $setup -ArgumentList @("/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/DIR=$destination") -Wait -PassThru
+          if ($install.ExitCode -ne 0) { throw "Native installer exited with $($install.ExitCode)" }
+          foreach ($relative in @("qcad.exe", "scripts/IMSATCAD/IMSATCAD.js", "licenses/QCAD-LICENSE.txt", "platforms/qwindows.dll")) {
+            if (-not (Test-Path (Join-Path $destination $relative))) { throw "Installed native CAD missing: $relative" }
+          }
+          $uninstaller = Join-Path $destination "unins000.exe"
+          if (-not (Test-Path $uninstaller)) { throw "Native CAD uninstaller missing" }
+          $uninstall = Start-Process -FilePath $uninstaller -ArgumentList @("/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART") -Wait -PassThru
+          if ($uninstall.ExitCode -ne 0) { throw "Native uninstaller exited with $($uninstall.ExitCode)" }
+          "Native installer: PASS" | Set-Content "native-install-smoke.txt"
+          "Native uninstaller: PASS" | Add-Content "native-install-smoke.txt"
+          "GUI functional test: NOT RUN" | Add-Content "native-install-smoke.txt"
       - uses: actions/upload-artifact@v4
         with:
           name: imsat-cad-native-qcad-build-evidence
@@ -278,6 +295,7 @@ jobs:
             imsat-cad-native-windows-build.zip
             IMSAT-CAD-Native-Development-Setup.exe
             native-installer-sha256.txt
+            native-install-smoke.txt
             native-commit-report.txt
             native-qt-dependencies.txt
             native-headless-smoke.txt
