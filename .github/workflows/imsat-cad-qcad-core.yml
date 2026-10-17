@@ -56,6 +56,28 @@ jobs:
             throw ("IMSAT CAD aliases refer to missing upstream actions: " + ($missing -join ", "))
           }
           Write-Host "IMSAT CAD alias script existence PASS: $($matches.Count) mappings"
+      - name: Validate native IMSAT toolbar action paths
+        shell: pwsh
+        run: |
+          $addon = Get-Content "tools/IMSAT_CAD_V1/qcad_addon/IMSATCAD/IMSATCAD.js" -Raw
+          $sections = @("_drawScripts", "_modifyScripts", "_annotationScripts", "_layerScripts", "_utilityScripts")
+          $missing = @()
+          $total = 0
+          foreach ($section in $sections) {
+            $pattern = '(?s)IMSATCAD\\.' + [regex]::Escape($section) + '\\s*=\\s*\\[(.*?)\\];'
+            $match = [regex]::Match($addon, $pattern)
+            if (-not $match.Success) { throw "Missing toolbar section: $section" }
+            $paths = [regex]::Matches($match.Groups[1].Value, '"(scripts/[^"]+\\.js)"')
+            if ($paths.Count -eq 0) { throw "No actions configured in $section" }
+            foreach ($item in $paths) {
+              $total++
+              $script = $item.Groups[1].Value
+              if (-not (Test-Path (Join-Path "native/qcad" $script))) { $missing += "$section : $script" }
+            }
+          }
+          if ($missing.Count -gt 0) { throw ("Missing native toolbar scripts: " + ($missing -join "; ")) }
+          Write-Host "IMSAT CAD native toolbar source paths PASS: $total actions"
+
       - name: Fix vendored zlib linkage for MSVC
         shell: pwsh
         run: |
