@@ -145,6 +145,23 @@ jobs:
             throw "Missing Windows platform plugin"
           }
           Write-Host "Native CAD deployment dependency gate PASS (not a GUI runtime test)"
+      - name: Check native CAD executable starts in headless mode
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem "native/qcad/release" -File -Filter "qcad*.exe" | Select-Object -First 1
+          if (-not $exe) { throw "Native CAD executable missing" }
+          $stdout = Join-Path $env:RUNNER_TEMP "imsat-cad-smoke-stdout.txt"
+          $stderr = Join-Path $env:RUNNER_TEMP "imsat-cad-smoke-stderr.txt"
+          $proc = Start-Process -FilePath $exe.FullName -ArgumentList @("-no-gui", "-help") -WorkingDirectory $exe.DirectoryName -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
+          if (-not $proc.WaitForExit(45000)) {
+            Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+            throw "Native CAD headless startup timed out"
+          }
+          $proc.Refresh()
+          Get-Content $stdout -ErrorAction SilentlyContinue | Select-Object -First 40
+          Get-Content $stderr -ErrorAction SilentlyContinue | Select-Object -First 40
+          if ($proc.ExitCode -ne 0) { throw "Native CAD headless startup failed with exit code $($proc.ExitCode)" }
+          Write-Host "Native CAD headless startup PASS (GUI interaction not validated)"
       - name: Stage native CAD application with scripts and plugins
         shell: pwsh
         run: |
