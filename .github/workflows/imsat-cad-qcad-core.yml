@@ -64,10 +64,10 @@ jobs:
           $missing = @()
           $total = 0
           foreach ($section in $sections) {
-            $pattern = '(?s)IMSATCAD\\.' + [regex]::Escape($section) + '\\s*=\\s*\\[(.*?)\\];'
+            $pattern = '(?s)IMSATCAD\.' + [regex]::Escape($section) + '\s*=\s*\[(.*?)\];'
             $match = [regex]::Match($addon, $pattern)
             if (-not $match.Success) { throw "Missing toolbar section: $section" }
-            $paths = [regex]::Matches($match.Groups[1].Value, '"(scripts/[^"]+\\.js)"')
+            $paths = [regex]::Matches($match.Groups[1].Value, '"(scripts/[^"]+\.js)"')
             if ($paths.Count -eq 0) { throw "No actions configured in $section" }
             foreach ($item in $paths) {
               $total++
