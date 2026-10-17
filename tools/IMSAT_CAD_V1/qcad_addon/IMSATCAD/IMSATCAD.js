@@ -94,6 +94,7 @@ IMSATCAD.populateToolBar = function(toolbar, scripts) {
         return 0;
     }
     var installed = 0;
+    var menu = IMSATCAD.getMenu();
     for (var i = 0; i < scripts.length; ++i) {
         var action = RGuiAction.getByScriptFile(scripts[i]);
         if (isNull(action)) {
@@ -102,7 +103,9 @@ IMSATCAD.populateToolBar = function(toolbar, scripts) {
         }
         // RGuiAction is registered with QCAD; reuse its QAction in our toolbar.
         toolbar.addAction(action);
-        IMSATCAD.getMenu().addAction(action);
+        if (!isNull(menu)) {
+            menu.addAction(action);
+        }
         installed++;
     }
     return installed;
@@ -138,15 +141,20 @@ IMSATCAD._aliases = [
 IMSATCAD.postInit = function() {
     var win = RMainWindowQt.getMainWindow();
     var success = 0;
+    var missingAliases = [];
     for (var i=0; i<IMSATCAD._aliases.length; ++i) {
         var mapping=IMSATCAD._aliases[i];
         var action=RGuiAction.getByScriptFile(mapping[0]);
         if (isNull(action)) {
             qWarning("IMSAT CAD: native action not found: " + mapping[0]);
+            missingAliases.push(mapping[0]);
             continue;
         }
         action.setDefaultCommands(mapping[1]);
         success++;
+    }
+    if (missingAliases.length > 0) {
+        qWarning("IMSAT CAD: missing native alias actions: " + missingAliases.join(", "));
     }
     var drawCount = IMSATCAD.populateToolBar(IMSATCAD.getDrawToolBar(), IMSATCAD._drawScripts);
     var modifyCount = IMSATCAD.populateToolBar(IMSATCAD.getModifyToolBar(), IMSATCAD._modifyScripts);
