@@ -124,11 +124,13 @@ IMSATCAD.populateToolBar = function(toolbar, scripts) {
         return 0;
     }
     var installed = 0;
+    var missing = 0;
     var menu = IMSATCAD.getMenu();
     for (var i = 0; i < scripts.length; ++i) {
         var action = RGuiAction.getByScriptFile(scripts[i]);
         if (isNull(action)) {
             qWarning("IMSAT CAD: toolbar action not found: " + scripts[i]);
+            missing++;
             continue;
         }
         // RGuiAction is registered with QCAD; reuse its QAction in our toolbar.
@@ -144,6 +146,9 @@ IMSATCAD.populateToolBar = function(toolbar, scripts) {
         }
         IMSATCAD._installedActions[key] = true;
         installed++;
+    }
+    if (missing > 0) {
+        qWarning("IMSAT CAD: " + missing + " toolbar actions unavailable; check native QCAD script initialization");
     }
     return installed;
 };
