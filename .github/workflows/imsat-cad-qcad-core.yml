@@ -60,7 +60,7 @@ jobs:
         shell: pwsh
         run: |
           $addon = Get-Content "tools/IMSAT_CAD_V1/qcad_addon/IMSATCAD/IMSATCAD.js" -Raw
-          $sections = @("_drawScripts", "_modifyScripts", "_annotationScripts", "_layerScripts", "_utilityScripts")
+          $sections = @("_drawScripts", "_modifyScripts", "_annotationScripts", "_layerScripts", "_utilityScripts", "_blockScripts", "_selectionScripts")
           $missing = @()
           $total = 0
           foreach ($section in $sections) {
