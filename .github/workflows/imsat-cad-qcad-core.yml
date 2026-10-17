@@ -161,6 +161,11 @@ jobs:
           Get-Content $stdout -ErrorAction SilentlyContinue | Select-Object -First 40
           Get-Content $stderr -ErrorAction SilentlyContinue | Select-Object -First 40
           if ($proc.ExitCode -ne 0) { throw "Native CAD headless startup failed with exit code $($proc.ExitCode)" }
+          "ExitCode=$($proc.ExitCode)" | Set-Content "native-headless-smoke.txt"
+          "Executable=$($exe.Name)" | Add-Content "native-headless-smoke.txt"
+          "Arguments=-no-gui -help" | Add-Content "native-headless-smoke.txt"
+          Get-Content $stdout -ErrorAction SilentlyContinue | Select-Object -First 80 | Add-Content "native-headless-smoke.txt"
+          Get-Content $stderr -ErrorAction SilentlyContinue | Select-Object -First 80 | Add-Content "native-headless-smoke.txt"
           Write-Host "Native CAD headless startup PASS (GUI interaction not validated)"
       - name: Stage native CAD application with scripts and plugins
         shell: pwsh
@@ -192,6 +197,7 @@ jobs:
             imsat-cad-native-windows-build.zip
             native-commit-report.txt
             native-qt-dependencies.txt
+            native-headless-smoke.txt
             native/qcad/release/*.exe
             native/qcad/release/*.dll
             native/qcad/release/platforms/*.dll
