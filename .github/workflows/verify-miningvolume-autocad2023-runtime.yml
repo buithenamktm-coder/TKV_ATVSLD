@@ -85,13 +85,21 @@ jobs:
       contents: read
 
     env:
-      MV_ROOT: tools/MiningVolume_HSNext/v0.9
+      MV_ROOT: IMSAT-VOLUME/source/v0.9
       REQUESTED_SOURCE_REF: ${{ needs.prepare.outputs.source_ref }}
 
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ env.REQUESTED_SOURCE_REF }}
+
+      - name: Resolve source layout (legacy branches or new structure)
+        shell: powershell
+        run: |
+          if (Test-Path 'IMSAT-VOLUME/source/v0.9') { $root='IMSAT-VOLUME/source/v0.9' }
+          elseif (Test-Path 'tools/MiningVolume_HSNext/v0.9') { $root='tools/MiningVolume_HSNext/v0.9' }
+          else { throw 'MiningVolume source not found in requested ref' }
+          "MV_ROOT=$root" | Out-File -FilePath $env:GITHUB_ENV -Encoding ascii -Append
 
       - name: Ensure PowerShell 7
         shell: powershell
@@ -333,13 +341,13 @@ jobs:
           name: MiningVolume-HSNext-AutoCAD2023-v1.0-RUNTIME-PASS
           if-no-files-found: error
           path: |
-            tools/MiningVolume_HSNext/v0.9/dist/MiningVolume_HSNext_AutoCAD2023_Setup_v1.0_RUNTIME_PASS.exe
-            tools/MiningVolume_HSNext/v0.9/dist/RUNTIME_RELEASE_VERIFICATION.txt
-            tools/MiningVolume_HSNext/v0.9/dist/RUNTIME_RELEASE_SHA256.txt
-            tools/MiningVolume_HSNext/v0.9/dist/RUNTIME_VERIFICATION.txt
-            tools/MiningVolume_HSNext/v0.9/dist/MVSELFTEST_RUNTIME.txt
-            tools/MiningVolume_HSNext/v0.9/dist/startup_runtime.log
-            tools/MiningVolume_HSNext/v0.9/bundle/MiningVolume2023.bundle/**
+            IMSAT-VOLUME/source/v0.9/dist/MiningVolume_HSNext_AutoCAD2023_Setup_v1.0_RUNTIME_PASS.exe
+            IMSAT-VOLUME/source/v0.9/dist/RUNTIME_RELEASE_VERIFICATION.txt
+            IMSAT-VOLUME/source/v0.9/dist/RUNTIME_RELEASE_SHA256.txt
+            IMSAT-VOLUME/source/v0.9/dist/RUNTIME_VERIFICATION.txt
+            IMSAT-VOLUME/source/v0.9/dist/MVSELFTEST_RUNTIME.txt
+            IMSAT-VOLUME/source/v0.9/dist/startup_runtime.log
+            IMSAT-VOLUME/source/v0.9/bundle/MiningVolume2023.bundle/**
 
       - name: Upload runtime diagnostics
         if: always()
@@ -348,6 +356,6 @@ jobs:
           name: MiningVolume-AutoCAD2023-Runtime-Diagnostics-v1.0
           if-no-files-found: warn
           path: |
-            tools/MiningVolume_HSNext/v0.9/dist/RUNTIME_VERIFICATION.txt
-            tools/MiningVolume_HSNext/v0.9/dist/MVSELFTEST_RUNTIME.txt
-            tools/MiningVolume_HSNext/v0.9/dist/startup_runtime.log
+            IMSAT-VOLUME/source/v0.9/dist/RUNTIME_VERIFICATION.txt
+            IMSAT-VOLUME/source/v0.9/dist/MVSELFTEST_RUNTIME.txt
+            IMSAT-VOLUME/source/v0.9/dist/startup_runtime.log
