@@ -117,6 +117,7 @@ IMSATCAD._selectionScripts = [
     "scripts/Select/InvertSelection/InvertSelection.js",
     "scripts/Select/SelectRectangle/SelectRectangle.js"
 ];
+IMSATCAD._installedActions = {};
 IMSATCAD.populateToolBar = function(toolbar, scripts) {
     if (isNull(toolbar)) {
         qWarning("IMSAT CAD: toolbar unavailable");
@@ -131,10 +132,17 @@ IMSATCAD.populateToolBar = function(toolbar, scripts) {
             continue;
         }
         // RGuiAction is registered with QCAD; reuse its QAction in our toolbar.
-        toolbar.addAction(action);
-        if (!isNull(menu)) {
-            menu.addAction(action);
+        // Keep initialization idempotent if QCAD re-runs postInit.
+        var key = toolbar.objectName + "|" + scripts[i];
+        if (IMSATCAD._installedActions[key] === true) {
+            continue;
         }
+        toolbar.addAction(action);
+        if (!isNull(menu) && IMSATCAD._installedActions["menu|" + scripts[i]] !== true) {
+            menu.addAction(action);
+            IMSATCAD._installedActions["menu|" + scripts[i]] = true;
+        }
+        IMSATCAD._installedActions[key] = true;
         installed++;
     }
     return installed;
