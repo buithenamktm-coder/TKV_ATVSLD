@@ -25,7 +25,7 @@ IMSATCAD._aliases = [
     ["scripts/Draw/Shape/ShapeRectanglePP/ShapeRectanglePP.js", ["rectangle", "rectang", "rec"]],
     ["scripts/Modify/Trim/Trim.js", ["trim", "extend", "tr", "ex"]],
     ["scripts/Modify/Offset/Offset.js", ["offset", "o"]],
-    ["scripts/Modify/Translate/Translate.js", ["move", "m", "mv"]],
+    ["scripts/Modify/Translate/Translate.js", ["move", "m", "mv", "copy", "co", "cp"]],
     ["scripts/Modify/Rotate/Rotate.js", ["rotate", "ro"]],
     ["scripts/Modify/Scale/Scale.js", ["scale", "sc"]],
     ["scripts/Modify/Mirror/Mirror.js", ["mirror", "mi"]],
@@ -50,5 +50,6 @@ IMSATCAD.postInit = function() {
         win.handleUserMessage("IMSAT CAD aliases: " + success + "/" + IMSATCAD._aliases.length);
     }
 };
+// COPY/CO/CP invoke QCAD Translate; select its copy mode in the tool options.
 // IMPORTANT: QCAD editing behavior differs from AutoCAD for some commands.
 // This prototype never claims command parity without interactive tests.
