@@ -34,7 +34,36 @@ New-Item -ItemType Directory -Path $windowsDir -Force | Out-Null
 try {
     foreach($f in $m.files) {
         $name=[string]$f.name
-        if($name -notmatch '^[A-Za-z0-9_.-]+\\.dll$'){throw "Unsafe DLL path: $name"}
+        if($name -notmatch '^[A-Za-z0-9_.-]+\.dll){throw "Unsafe DLL path: $name"}
+        $source=Join-Path $CompiledDirectory $name
+        if(!(Test-Path $source -PathType Leaf)){throw "Missing $source"}
+        $actual=(Get-FileHash $source -Algorithm SHA256).Hash
+        if($actual -ine [string]$f.sha256){throw "Hash mismatch: $name"}
+        Copy-Item -LiteralPath $source -Destination $windowsDir
+    }
+    $v='2.0.0'; $r=$series[$Flavor]
+    $safe=[System.Security.SecurityElement]::Escape($Flavor)
+    $loader="./Contents/Windows/$entry"
+    $xml=@"
+<?xml version="1.0" encoding="utf-8"?>
+<ApplicationPackage SchemaVersion="1.0" AutodeskProduct="AutoCAD" ProductType="Application" Name="IMSAT VOLUME" AppVersion="$v" Description="IMSAT VOLUME V2.0 QA compatibility build - NOT RELEASE" Author="Bùi Thế Nam">
+  <CompanyDetails Name="Viện Khoa học Công nghệ Mỏ - Vinacomin" />
+  <RuntimeRequirements OS="Win64" Platform="AutoCAD*" SeriesMin="$r" SeriesMax="$r" />
+  <Components>
+    <RuntimeRequirements OS="Win64" Platform="AutoCAD*" SeriesMin="$r" SeriesMax="$r" />
+    <ComponentEntry AppName="$safe" Version="$v" ModuleName="$loader" LoadOnAutoCADStartup="True" />
+  </Components>
+</ApplicationPackage>
+"@
+    [xml]$parsed=$xml
+    if($parsed.ApplicationPackage.Components.ComponentEntry.ModuleName -ne $loader){throw 'Invalid loader XML'}
+    [IO.File]::WriteAllText((Join-Path $target 'PackageContents.xml'),$xml,[Text.UTF8Encoding]::new($false))
+    @{flavor=$Flavor;series=$r;source_sha=$m.source_sha;host_runtime='NOT_TESTED';release='BLOCKED';payload_hashes=$m.files} |
+        ConvertTo-Json -Depth 6 | Set-Content (Join-Path $target 'QA_MANIFEST.json') -Encoding UTF8
+    Write-Host "QA compatibility bundle created: $target ; AutoCAD host NOT TESTED."
+}
+catch {Remove-Item -LiteralPath $target -Recurse -Force -ErrorAction SilentlyContinue;throw}
+){throw "Unsafe DLL path: $name"}
         $source=Join-Path $CompiledDirectory $name
         if(!(Test-Path $source -PathType Leaf)){throw "Missing $source"}
         $actual=(Get-FileHash $source -Algorithm SHA256).Hash
