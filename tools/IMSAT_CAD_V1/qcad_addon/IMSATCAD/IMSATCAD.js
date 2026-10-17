@@ -20,10 +20,18 @@ IMSATCAD.getDrawToolBar = function() {
 IMSATCAD.getModifyToolBar = function() {
     return EAction.getToolBar(qsTr("IMSAT CAD - Modify"), "IMSATCADModifyToolBar", Qt.TopToolBarArea);
 };
+IMSATCAD.getAnnotationToolBar = function() {
+    return EAction.getToolBar(qsTr("IMSAT CAD - Annotation"), "IMSATCADAnnotationToolBar", Qt.TopToolBarArea);
+};
+IMSATCAD.getLayerToolBar = function() {
+    return EAction.getToolBar(qsTr("IMSAT CAD - Layers"), "IMSATCADLayerToolBar", Qt.TopToolBarArea);
+};
 IMSATCAD.init = function() {
     IMSATCAD.getMenu();
     IMSATCAD.getDrawToolBar();
     IMSATCAD.getModifyToolBar();
+    IMSATCAD.getAnnotationToolBar();
+    IMSATCAD.getLayerToolBar();
 };
 // Reuse QCAD actions without duplicating geometry algorithms.
 IMSATCAD._drawScripts = [
@@ -42,6 +50,9 @@ IMSATCAD._modifyScripts = [
     "scripts/Modify/Explode/Explode.js",
     "scripts/Edit/Delete/Delete.js"
 ];
+// These QCAD categories expose the upstream annotation and layer actions.
+IMSATCAD._annotationScripts = ["scripts/Draw/Dimension/Dimension.js"];
+IMSATCAD._layerScripts = ["scripts/Layer/Layer.js"];
 IMSATCAD.populateToolBar = function(toolbar, scripts) {
     var installed = 0;
     for (var i = 0; i < scripts.length; ++i) {
@@ -88,9 +99,11 @@ IMSATCAD.postInit = function() {
     }
     var drawCount = IMSATCAD.populateToolBar(IMSATCAD.getDrawToolBar(), IMSATCAD._drawScripts);
     var modifyCount = IMSATCAD.populateToolBar(IMSATCAD.getModifyToolBar(), IMSATCAD._modifyScripts);
+    var annotationCount = IMSATCAD.populateToolBar(IMSATCAD.getAnnotationToolBar(), IMSATCAD._annotationScripts);
+    var layerCount = IMSATCAD.populateToolBar(IMSATCAD.getLayerToolBar(), IMSATCAD._layerScripts);
     if (!isNull(win)) {
         win.handleUserMessage("IMSAT CAD: " + success + "/" + IMSATCAD._aliases.length +
-                              " aliases, " + drawCount + " draw tools, " + modifyCount + " modify tools");
+                              " aliases, " + drawCount + " draw tools, " + modifyCount + " modify tools, " + annotationCount + " annotation, " + layerCount + " layer");
     }
 };
 // COPY/CO/CP invoke QCAD Translate; select its copy mode in the tool options.
