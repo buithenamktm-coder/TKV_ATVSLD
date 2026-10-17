@@ -1,0 +1,305 @@
+using System;
+using System.Drawing;
+using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
+using System.Windows.Forms;
+using MiningVolume.Core.Reporting;
+using MiningVolume2023.Services;
+
+namespace MiningVolume2023.UI
+{
+    public sealed class ExportPage : UserControl
+    {
+        private readonly CheckBox _xyz;
+        private readonly CheckBox _sectionData;
+        private readonly CheckBox _sectionArea;
+        private readonly CheckBox _detail;
+        private readonly CheckBox _levels;
+        private readonly CheckBox _summary;
+        private readonly CheckBox _warnings;
+        private readonly TextBox _developer;
+        private readonly TextBox _contact;
+        private readonly CheckBox _toCad;
+        private readonly CheckBox _toExcel;
+        private readonly Button _export;
+        private readonly Label _status;
+
+        public ExportPage()
+        {
+            Font = new Font("Arial", 9F);
+            BackColor = Color.White;
+
+            Controls.Add(new Label
+            {
+                Text = "XUẤT BẢNG EXCEL",
+                Dock = DockStyle.Top,
+                Height = 32,
+                Font = new Font("Arial", 11F, FontStyle.Bold)
+            });
+
+            var developerBox = new GroupBox { Text = "Thông tin người phát triển / liên hệ", Dock = DockStyle.Top, Height = 108 };
+            var devTable = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 2, Padding = new Padding(6) };
+            devTable.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 190));
+            devTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            devTable.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
+            devTable.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
+            _developer = new TextBox { Dock = DockStyle.Fill, Text = ExportOptions.FixedDeveloperName, ReadOnly = true, Font = new Font("Arial", 9F) };
+            _contact = new TextBox { Dock = DockStyle.Fill, Text = ExportOptions.FixedDeveloperContact, ReadOnly = true, Font = new Font("Arial", 9F) };
+            devTable.Controls.Add(LabelCell("Người phát triển phần mềm"), 0, 0);
+            devTable.Controls.Add(_developer, 1, 0);
+            devTable.Controls.Add(LabelCell("Địa chỉ liên hệ / email / điện thoại"), 0, 1);
+            devTable.Controls.Add(_contact, 1, 1);
+            developerBox.Controls.Add(devTable);
+            Controls.Add(developerBox);
+            developerBox.BringToFront();
+
+            var box = new GroupBox { Text = "Nội dung xuất", Dock = DockStyle.Top, Height = 222 };
+            var flow = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, Padding = new Padding(7) };
+            _xyz = AddCheck(flow, "Dữ liệu X-Y-Z mô hình hiện trạng và thiết kế");
+            _sectionData = AddCheck(flow, "Dữ liệu hình học mặt cắt X-Y-Z");
+            _sectionArea = AddCheck(flow, "Thông số + diện tích đào, đắp từng mặt cắt");
+            _detail = AddCheck(flow, "Khối lượng chi tiết giữa các mặt cắt");
+            _levels = AddCheck(flow, "Tổng hợp khối lượng theo tầng / mức");
+            _summary = AddCheck(flow, "Tổng hợp toàn khu vực");
+            _warnings = AddCheck(flow, "Cảnh báo và ghi chú kiểm soát");
+            box.Controls.Add(flow);
+            Controls.Add(box);
+            box.BringToFront();
+
+            var targets = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 35, WrapContents = false, Padding = new Padding(7, 4, 4, 0) };
+            _toCad = new CheckBox { Text = "Xuất bảng lên CAD", AutoSize = true, Checked = false, Margin = new Padding(4, 4, 20, 4) };
+            _toExcel = new CheckBox { Text = "Xuất file Excel", AutoSize = true, Checked = true, Margin = new Padding(4, 4, 20, 4) };
+            targets.Controls.Add(_toCad);
+            targets.Controls.Add(_toExcel);
+            Controls.Add(targets);
+            targets.BringToFront();
+
+            var bottom = new TableLayoutPanel { Dock = DockStyle.Top, Height = 72, ColumnCount = 2, Padding = new Padding(4) };
+            bottom.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            bottom.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 180));
+            _status = new Label { Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, ForeColor = Color.DimGray, Text = "Cần thành lập mặt cắt và tính khối lượng trước khi xuất." };
+            _export = new Button { Text = "Xuất Excel / CAD", Dock = DockStyle.Top, Height = 38, Font = new Font("Arial", 10F, FontStyle.Bold) };
+            _export.Click += ExportClicked;
+            bottom.Controls.Add(_status, 0, 0);
+            bottom.Controls.Add(_export, 1, 0);
+            Controls.Add(bottom);
+            bottom.BringToFront();
+
+            ProjectState.Current.Changed += StateChanged;
+            RefreshState();
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) ProjectState.Current.Changed -= StateChanged;
+            base.Dispose(disposing);
+        }
+
+        private async void ExportClicked(object sender, EventArgs e)
+        {
+            if (!LicenseUiGuard.Check()) return;
+            var st = ProjectState.Current;
+            bool exportCad = _toCad.Checked;
+            bool exportExcel = _toExcel.Checked;
+            if (!exportCad && !exportExcel)
+            {
+                MessageBox.Show("Chọn ít nhất một hình thức xuất: CAD hoặc Excel.", "IMSAT VOLUME",
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            if (st.VolumeResult == null || st.SectionProfiles.Count == 0)
+            {
+                MessageBox.Show("Chưa có đủ mặt cắt và kết quả khối lượng để xuất.", "IMSAT VOLUME",
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            if (!st.VolumeResult.IsComplete)
+            {
+                MessageBox.Show(
+                    "Còn " + st.VolumeResult.ExcludedIntervals.ToString("n0") +
+                    " khoảng mặt cắt chưa có khối lượng xác nhận (mặt đứng nhiều Z hoặc thiếu dữ liệu). " +
+                    "Bảng hiện tại mới gồm các khoảng hợp lệ; không được xuất như tổng khối lượng chính thức. " +
+                    "Hãy rà soát/chỉnh mặt cắt tại các khoảng được cảnh báo rồi tính lại.",
+                    "Khối lượng chưa đủ điều kiện xuất",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            // Prompt CAD only if the user explicitly requests CAD output.
+            Autodesk.AutoCAD.Geometry.Point3d? cadInsertion = null;
+            var doc = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument;
+            if (exportCad)
+            {
+                if (doc == null) { MessageBox.Show("Không có bản vẽ AutoCAD đang hoạt động."); return; }
+                cadInsertion = SelectionService.PickInsertionPoint("Chọn điểm chèn bảng khối lượng lên CAD: ");
+                if (!cadInsertion.HasValue) return;
+            }
+
+            string excelPath = null;
+            if (exportExcel)
+            {
+                using (var dlg = new SaveFileDialog
+                {
+                    Title = "Xuất báo cáo IMSAT VOLUME",
+                    Filter = "Excel Workbook (*.xlsx)|*.xlsx",
+                    DefaultExt = "xlsx",
+                    AddExtension = true,
+                    OverwritePrompt = true,
+                    FileName = "IMSAT_VOLUME_KhoiLuong_" + DateTime.Now.ToString("yyyyMMdd_HHmm") + ".xlsx"
+                })
+                {
+                    if (dlg.ShowDialog(this) != DialogResult.OK) return;
+                    excelPath = dlg.FileName;
+                }
+            }
+
+            var opt = new ExportOptions
+            {
+                IncludeSourceXyz = _xyz.Checked,
+                IncludeSectionData = _sectionData.Checked,
+                IncludeSectionAreas = _sectionArea.Checked,
+                IncludeIntervals = _detail.Checked,
+                IncludeLevels = _levels.Checked,
+                IncludeSummary = _summary.Checked,
+                IncludeWarnings = _warnings.Checked,
+                DeveloperName = ExportOptions.FixedDeveloperName,
+                DeveloperContact = ExportOptions.FixedDeveloperContact
+            };
+            var currentResult = st.VolumeResult;
+            var approvedProfiles = st.SectionProfiles.ToArray();
+            var existingTin = st.Existing.Tin;
+            var designTin = st.Design.Tin;
+            long existingRevision = st.Existing.Source.Revision;
+            long designRevision = st.Design.Source.Revision;
+            // Keep the approved reporting identity in lockstep with the
+            // original volume result during asynchronous Excel creation.
+            string selectedUnitGroup = st.MiningUnitGroup;
+            string selectedUnitName = st.MiningUnitName;
+            string selectedPeriod = st.VolumePeriodLabel;
+            bool excelWritten = false;
+            try
+            {
+                _export.Enabled = false;
+                UseWaitCursor = true;
+                if (exportCad)
+                    SurfaceWorkflowService.EnsureBothTinsReady(synchronizeCadLayers: true);
+                EnsureExportInputsCurrent(doc, st, currentResult, approvedProfiles,
+                    existingTin, designTin, existingRevision, designRevision,
+                    selectedUnitGroup, selectedUnitName, selectedPeriod);
+
+                if (exportExcel)
+                {
+                    _status.Text = "Đang lập workbook và ghi file Excel...";
+                    var report = await Task.Run(() => ExportWorkflowService.BuildReport(st, opt));
+                    EnsureExportInputsCurrent(doc, st, currentResult, approvedProfiles,
+                        existingTin, designTin, existingRevision, designRevision,
+                    selectedUnitGroup, selectedUnitName, selectedPeriod);
+                    await Task.Run(() => ExportWorkflowService.WriteXlsx(excelPath, report));
+                    excelWritten = true;
+                }
+
+                if (exportCad)
+                {
+                    EnsureExportInputsCurrent(doc, st, currentResult, approvedProfiles,
+                        existingTin, designTin, existingRevision, designRevision,
+                    selectedUnitGroup, selectedUnitName, selectedPeriod);
+                    _status.Text = "Đang chèn bảng khối lượng TABLE vào AutoCAD...";
+                    using (doc.LockDocument())
+                        CadVolumeTableService.Insert(doc.Database, currentResult, cadInsertion.Value);
+                }
+
+                _status.Text = exportExcel && exportCad ? "Đã xuất bảng CAD và file Excel." :
+                    exportCad ? "Đã xuất bảng khối lượng lên AutoCAD." : "Đã xuất: " + excelPath;
+                MessageBox.Show(_status.Text, "IMSAT VOLUME", MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                _status.Text = excelWritten
+                    ? "Excel đã xuất, nhưng thao tác CAD chưa hoàn tất."
+                    : "Xuất khối lượng chưa thành công.";
+                MessageBox.Show(_status.Text + Environment.NewLine + ex.Message,
+                    "Xuất khối lượng", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally
+            {
+                UseWaitCursor = false;
+                RefreshState();
+            }
+        }
+
+        private static void EnsureExportInputsCurrent(
+            Autodesk.AutoCAD.ApplicationServices.Document doc,
+            ProjectState state,
+            MiningVolume.Core.Volumes.VolumeResult expectedVolume,
+            MiningVolume.Core.Sections.SectionProfile[] expectedProfiles,
+            MiningVolume.Core.Surface.TinSurface existing,
+            MiningVolume.Core.Surface.TinSurface design,
+            long existingRevision, long designRevision,
+            string selectedUnitGroup, string selectedUnitName, string selectedPeriod)
+        {
+            // Excel-only exports must obey the same clipping-region validity
+            // gate as CAD exports. A grip-edited TIN boundary otherwise leaves
+            // the stored volume linked to the previous (unseen) region.
+            SurfaceWorkflowService.EnsureBothTinsReady(synchronizeCadLayers: false);
+            if (doc == null ||
+                !ReferenceEquals(doc, Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument) ||
+                !ReferenceEquals(expectedVolume, state.VolumeResult) ||
+                !ReferenceEquals(existing, state.Existing.Tin) ||
+                !ReferenceEquals(design, state.Design.Tin) ||
+                !state.Existing.IsTinCurrent || !state.Design.IsTinCurrent ||
+                state.Existing.Source.Revision != existingRevision ||
+                state.Design.Source.Revision != designRevision ||
+                !string.Equals(state.MiningUnitGroup, selectedUnitGroup, StringComparison.Ordinal) ||
+                !string.Equals(state.MiningUnitName, selectedUnitName, StringComparison.Ordinal) ||
+                !string.Equals(state.VolumePeriodLabel, selectedPeriod, StringComparison.Ordinal) ||
+                expectedProfiles.Length != state.SectionProfiles.Count ||
+                expectedProfiles.Where((p, index) => !ReferenceEquals(p, state.SectionProfiles[index])).Any())
+                throw new InvalidOperationException(
+                    "DWG, TIN, mặt cắt hoặc kết quả khối lượng đã thay đổi trong khi xuất. " +
+                    "Không sử dụng báo cáo cũ; hãy tính lại.");
+            EditableSectionCadService.EnsureProfilesMatch(doc.Database, expectedProfiles);
+        }
+
+        private void StateChanged(object sender, EventArgs e)
+        {
+            if (!IsHandleCreated) return;
+            if (InvokeRequired) BeginInvoke(new Action(RefreshState)); else RefreshState();
+        }
+
+        private void RefreshState()
+        {
+            var st = ProjectState.Current;
+            _developer.Text = ExportOptions.FixedDeveloperName;
+            _contact.Text = ExportOptions.FixedDeveloperContact;
+            bool ready = st.VolumeResult != null && st.VolumeResult.IsComplete &&
+                st.SectionProfiles.Count > 0;
+            _export.Enabled = ready;
+            if (ready)
+                _status.Text = $"Sẵn sàng xuất: {st.SectionProfiles.Count:n0} mặt cắt; {st.VolumeResult.Intervals.Count:n0} khoảng; {st.VolumeResult.Levels.Count:n0} tầng/mức.";
+            else
+                _status.Text = st.VolumeResult != null && !st.VolumeResult.IsComplete
+                    ? "Chưa thể xuất tổng chính thức: còn " +
+                      st.VolumeResult.ExcludedIntervals.ToString("n0") +
+                      " khoảng chưa xác nhận. Kiểm tra và Cập nhật mặt cắt."
+                    : "Cần thành lập mặt cắt và tính khối lượng trước khi xuất.";
+        }
+
+        private static CheckBox AddCheck(Control parent, string text)
+        {
+            var c = new CheckBox { Text = text, Checked = true, AutoSize = true, Margin = new Padding(4, 3, 4, 3) };
+            parent.Controls.Add(c);
+            return c;
+        }
+
+        private static Label LabelCell(string text) => new Label
+        {
+            Text = text,
+            Dock = DockStyle.Fill,
+            TextAlign = ContentAlignment.MiddleLeft,
+            Font = new Font("Arial", 9F, FontStyle.Bold)
+        };
+    }
+}

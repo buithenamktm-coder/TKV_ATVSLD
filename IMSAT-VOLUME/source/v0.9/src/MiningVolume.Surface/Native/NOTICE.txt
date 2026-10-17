@@ -1,0 +1,9 @@
+IMSAT VOLUME native constrained triangulation
+
+Includes unmodified artem-ogre/CDT headers, MPL-2.0.
+Upstream: https://github.com/artem-ogre/CDT
+Pinned source: 3765e08ec4bbef0c6b721204d7c0e45d279084e9
+Source: https://github.com/artem-ogre/CDT/tree/3765e08ec4bbef0c6b721204d7c0e45d279084e9/CDT/include
+License: LICENSE-CDT.txt; copyright notices are retained in each header.
+The complete add-in source archive includes these headers and the IMSAT C ABI bridge.
+No fast-math, no vertex decimation, no fallback that drops constraints.

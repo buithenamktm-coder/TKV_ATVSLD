@@ -1,0 +1,171 @@
+{
+  "status": "PASS",
+  "cases": [
+    {
+      "mapping_role": "Chưa gán",
+      "method": "Bishop Simplified",
+      "regions": 1,
+      "terrain_points": 39,
+      "critical_fs": 2.245251162836117,
+      "results": 10,
+      "diagnostics": {
+        "method": "Bishop Simplified",
+        "primary_candidates": 69,
+        "fallback_candidates": 0,
+        "slice_valid": 69,
+        "method_evaluated": 69,
+        "method_converged": 69,
+        "fallback_used": false,
+        "rejected_reasons": {},
+        "stored_results": 10,
+        "critical_fs": 2.245251162836117
+      }
+    },
+    {
+      "mapping_role": "Chưa gán",
+      "method": "Morgenstern-Price",
+      "regions": 1,
+      "terrain_points": 39,
+      "critical_fs": 2.245247745040811,
+      "results": 10,
+      "diagnostics": {
+        "method": "Morgenstern-Price",
+        "primary_candidates": 69,
+        "fallback_candidates": 0,
+        "slice_valid": 69,
+        "method_evaluated": 69,
+        "method_converged": 69,
+        "fallback_used": false,
+        "rejected_reasons": {},
+        "stored_results": 10,
+        "critical_fs": 2.245247745040811
+      }
+    },
+    {
+      "mapping_role": "Địa hình",
+      "method": "Bishop Simplified",
+      "regions": 1,
+      "terrain_points": 39,
+      "critical_fs": 2.245251162836117,
+      "results": 10,
+      "diagnostics": {
+        "method": "Bishop Simplified",
+        "primary_candidates": 69,
+        "fallback_candidates": 0,
+        "slice_valid": 69,
+        "method_evaluated": 69,
+        "method_converged": 69,
+        "fallback_used": false,
+        "rejected_reasons": {},
+        "stored_results": 10,
+        "critical_fs": 2.245251162836117
+      }
+    },
+    {
+      "mapping_role": "Địa hình",
+      "method": "Morgenstern-Price",
+      "regions": 1,
+      "terrain_points": 39,
+      "critical_fs": 2.245247745040811,
+      "results": 10,
+      "diagnostics": {
+        "method": "Morgenstern-Price",
+        "primary_candidates": 69,
+        "fallback_candidates": 0,
+        "slice_valid": 69,
+        "method_evaluated": 69,
+        "method_converged": 69,
+        "fallback_used": false,
+        "rejected_reasons": {},
+        "stored_results": 10,
+        "critical_fs": 2.245247745040811
+      }
+    },
+    {
+      "mapping_role": "Mặt cắt kín (Region + địa hình)",
+      "method": "Bishop Simplified",
+      "regions": 1,
+      "terrain_points": 39,
+      "critical_fs": 2.245251162836117,
+      "results": 10,
+      "diagnostics": {
+        "method": "Bishop Simplified",
+        "primary_candidates": 69,
+        "fallback_candidates": 0,
+        "slice_valid": 69,
+        "method_evaluated": 69,
+        "method_converged": 69,
+        "fallback_used": false,
+        "rejected_reasons": {},
+        "stored_results": 10,
+        "critical_fs": 2.245251162836117
+      }
+    },
+    {
+      "mapping_role": "Mặt cắt kín (Region + địa hình)",
+      "method": "Morgenstern-Price",
+      "regions": 1,
+      "terrain_points": 39,
+      "critical_fs": 2.245247745040811,
+      "results": 10,
+      "diagnostics": {
+        "method": "Morgenstern-Price",
+        "primary_candidates": 69,
+        "fallback_candidates": 0,
+        "slice_valid": 69,
+        "method_evaluated": 69,
+        "method_converged": 69,
+        "fallback_used": false,
+        "rejected_reasons": {},
+        "stored_results": 10,
+        "critical_fs": 2.245247745040811
+      }
+    },
+    {
+      "mapping_role": "Region kín",
+      "method": "Bishop Simplified",
+      "regions": 1,
+      "terrain_points": 39,
+      "critical_fs": 2.245251162836117,
+      "results": 10,
+      "diagnostics": {
+        "method": "Bishop Simplified",
+        "primary_candidates": 69,
+        "fallback_candidates": 0,
+        "slice_valid": 69,
+        "method_evaluated": 69,
+        "method_converged": 69,
+        "fallback_used": false,
+        "rejected_reasons": {},
+        "stored_results": 10,
+        "critical_fs": 2.245251162836117
+      }
+    },
+    {
+      "mapping_role": "Region kín",
+      "method": "Morgenstern-Price",
+      "regions": 1,
+      "terrain_points": 39,
+      "critical_fs": 2.245247745040811,
+      "results": 10,
+      "diagnostics": {
+        "method": "Morgenstern-Price",
+        "primary_candidates": 69,
+        "fallback_candidates": 0,
+        "slice_valid": 69,
+        "method_evaluated": 69,
+        "method_converged": 69,
+        "fallback_used": false,
+        "rejected_reasons": {},
+        "stored_results": 10,
+        "critical_fs": 2.245247745040811
+      }
+    }
+  ],
+  "reference_bounds": [
+    244.0,
+    190.0,
+    1756.0,
+    460.0
+  ]
+}

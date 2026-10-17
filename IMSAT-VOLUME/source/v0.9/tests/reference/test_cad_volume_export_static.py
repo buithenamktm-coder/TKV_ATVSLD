@@ -1,0 +1,48 @@
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+
+def read(p):
+    return (ROOT / p).read_text(encoding="utf-8")
+
+
+def test_cad_volume_tables_are_native_and_not_images():
+    s = read("src/MiningVolume.Plugin2023/Services/CadVolumeTableService.cs")
+    assert "new Autodesk.AutoCAD.DatabaseServices.Table" in s
+    assert "table.GenerateLayout();" in s
+    assert "model.AppendEntity(table);" in s
+    assert 'internal const string OutputLayer = "MV_KL_BANG";' in s
+    assert "int totalRow = result.Intervals.Count + topRows;" in s
+    assert "interval.MergeCells(CellRange.Create(interval, 0, 0, 0, columns - 1))" in s
+    assert "interval.MergeCells(CellRange.Create(interval, 1, 4, 1, 7))" in s
+    assert "interval.MergeCells(CellRange.Create(interval, 1, 8, 1, 10))" in s
+    assert "StyleTable(interval, arial, totalRow)" in s
+    assert '"BẢNG TỔNG HỢP KHỐI LƯỢNG THEO MẶT CẮT"' in s
+    assert "interval.Cells[totalRow, 8].TextString = F(result.TotalCutVolume)" in s
+    # The old +1 row made AutoCAD treat STT as a merged TITLE and hide
+    # the other five headings. A title row + six-header row + total now exist.
+    assert "int levelsTotalRow = result.Levels.Count + levelHeaderRows;" in s
+    assert "Set(levels, 1, \"Thứ tự\"" in s
+    assert "Tổng theo các tầng" in s
+    assert "result.TotalCutVolume" in s
+    assert "result.TotalFillVolume" in s
+    assert "tr.Commit();" in s
+    assert "ent.Erase()" not in s
+
+
+def test_export_page_supports_cad_xlsx_or_both_without_forcing_xlsx():
+    s = read("src/MiningVolume.Plugin2023/UI/ExportPage.cs")
+    assert "Xuất bảng lên CAD" in s
+    assert "Xuất file Excel" in s
+    assert "bool exportCad = _toCad.Checked" in s
+    assert "bool exportExcel = _toExcel.Checked" in s
+    assert "if (!exportCad && !exportExcel)" in s
+    assert "if (exportExcel)" in s
+    assert "if (exportCad)" in s
+    assert "CadVolumeTableService.Insert" in s
+    assert "ExportWorkflowService.WriteXlsx" in s
+    # Recheck the authoritative CAD section paths and approved volume before
+    # either output; the guard also rejects a DWG/TIN switch mid-export.
+    assert "EnsureExportInputsCurrent(doc, st, currentResult, approvedProfiles," in s
+    assert "!ReferenceEquals(expectedVolume, state.VolumeResult)" in s
+    assert "EditableSectionCadService.EnsureProfilesMatch(doc.Database, expectedProfiles)" in s

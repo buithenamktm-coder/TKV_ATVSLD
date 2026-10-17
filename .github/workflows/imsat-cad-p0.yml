@@ -2,13 +2,13 @@ name: IMSAT CAD P0 DXF Regression
 
 on:
   push:
-    branches: [imsat-cad-foundation]
+    branches: [main, imsat-cad-foundation]
     paths:
-      - "tools/IMSAT_CAD/**"
+      - "IMSAT-CAD/foundation/**"
       - ".github/workflows/imsat-cad-p0.yml"
   pull_request:
     paths:
-      - "tools/IMSAT_CAD/**"
+      - "IMSAT-CAD/foundation/**"
       - ".github/workflows/imsat-cad-p0.yml"
 
 jobs:
@@ -20,8 +20,8 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install dependencies
-        working-directory: tools/IMSAT_CAD
+        working-directory: IMSAT-CAD/foundation
         run: python -m pip install -r requirements.txt
       - name: DXF regression tests
-        working-directory: tools/IMSAT_CAD
+        working-directory: IMSAT-CAD/foundation
         run: python -m pytest -q tests

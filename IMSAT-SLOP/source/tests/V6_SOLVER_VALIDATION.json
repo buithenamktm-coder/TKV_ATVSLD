@@ -1,0 +1,42 @@
+{
+  "status": "PASS",
+  "methods": [
+    {
+      "method": "Fellenius",
+      "results": 5,
+      "critical_fs": 1.7701219933631112,
+      "slices": 30,
+      "iterations": 1,
+      "lambda": null
+    },
+    {
+      "method": "Bishop Simplified",
+      "results": 5,
+      "critical_fs": 1.8678148381103519,
+      "slices": 30,
+      "iterations": 17,
+      "lambda": null
+    },
+    {
+      "method": "Janbu Simplified",
+      "results": 5,
+      "critical_fs": 1.2294184177711953,
+      "slices": 30,
+      "iterations": 17,
+      "lambda": null
+    },
+    {
+      "method": "Morgenstern-Price",
+      "results": 5,
+      "critical_fs": 1.8563847897329875,
+      "slices": 30,
+      "iterations": 6,
+      "lambda": -0.5989609073054193
+    }
+  ],
+  "reference_path": {
+    "reference_fs": 2.1647582,
+    "rebuilt_fs": 2.159876060451837,
+    "difference_percent": 0.22552816975878187
+  }
+}

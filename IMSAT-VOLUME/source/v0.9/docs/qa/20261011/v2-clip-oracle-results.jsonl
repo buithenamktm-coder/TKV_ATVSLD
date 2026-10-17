@@ -1,0 +1,4 @@
+{"case": 0, "status": "PASS", "triangles": 1886, "area": 30.380000000000006, "missing": 1.8398944269896595e-15, "outside": 0.0, "overlap": -7.105427357601002e-15, "max_plane_z_error": 7.105427357601002e-15}
+{"case": 1, "status": "PASS", "triangles": 353, "area": 0.1960000000000042, "missing": 0.0, "outside": 0.0, "overlap": 2.7755575615628914e-16, "max_plane_z_error": 5.329070518200751e-15}
+{"case": 2, "status": "PASS", "triangles": 2289, "area": 46.64, "missing": 0.0, "outside": 0.0, "overlap": 7.105427357601002e-15, "max_plane_z_error": 7.105427357601002e-15}
+{"case": 3, "status": "PASS", "triangles": 2420, "area": 50.0, "missing": 7.655697277460114e-16, "outside": 0.0, "overlap": 0.0, "max_plane_z_error": 5.329070518200751e-15}

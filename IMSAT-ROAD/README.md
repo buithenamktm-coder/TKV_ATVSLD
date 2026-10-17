@@ -1,9 +1,5 @@
-# IMSAT-ROAD
+# IMSAT ROAD
 
-Phần mềm thiết kế đường mỏ và đường giao thông.
+**Mã nguồn:** [source](./source) — được nhập từ nhánh `imsat-road-v1.0`, commit `63bb3bd5d11e416c9f6f95583d30f085534c841c`.
 
-Lưu ý: chỉ khởi tạo thư mục quản lý; chưa đưa mã nguồn hoặc bộ cài vào đây.
-
-Mục đích: tách riêng nội dung dự án, tài liệu kỹ thuật, mã nguồn và cấu hình build khi được chuyển vào một cách có kiểm soát.
-
-Trạng thái: khởi tạo cấu trúc thư mục; **chưa đồng bộ mã nguồn từ máy tính**.
+Đã điều chỉnh tham chiếu tới `IMSAT-VOLUME/source/v0.9/src/MiningVolume.Core` để giữ quan hệ giữa các dự án. Chưa xác nhận CI/Windows build thành công sau khi chuyển thư mục.

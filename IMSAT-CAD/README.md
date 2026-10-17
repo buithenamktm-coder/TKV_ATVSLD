@@ -1,9 +1,6 @@
-# IMSAT-CAD
+# IMSAT CAD
 
-Phần mềm CAD hai ngôn ngữ Việt/Anh.
+- [foundation](./foundation): mã nguồn thử nghiệm DXF trước đây ở `tools/IMSAT_CAD`.
+- [v1](./v1): mã nguồn V1, QCAD add-on, kiểm thử và trình tạo bộ cài trước đây ở `tools/IMSAT_CAD_V1`.
 
-Lưu ý: chỉ khởi tạo thư mục quản lý; chưa đưa mã nguồn hoặc bộ cài vào đây.
-
-Mục đích: tách riêng nội dung dự án, tài liệu kỹ thuật, mã nguồn và cấu hình build khi được chuyển vào một cách có kiểm soát.
-
-Trạng thái: khởi tạo cấu trúc thư mục; **chưa đồng bộ mã nguồn từ máy tính**.
+Nhánh phát triển CAD cũ vẫn được giữ nguyên. Việc sắp xếp lại thư mục không có nghĩa phần mềm CAD đã sẵn sàng thương mại hóa. Cần kiểm tra giấy phép mã nguồn và xây dựng lại bộ cài.

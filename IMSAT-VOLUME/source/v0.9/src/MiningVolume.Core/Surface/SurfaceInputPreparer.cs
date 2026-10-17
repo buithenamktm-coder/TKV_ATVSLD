@@ -1,0 +1,1098 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using MiningVolume.Core.Geometry;
+using MiningVolume.Core.Model;
+
+namespace MiningVolume.Core.Surface
+{
+    /// <summary>
+    /// Chuẩn hóa dữ liệu trước khi dựng TIN.
+    ///
+    /// Quy tắc v0.10.4:
+    /// - trùng XY khác Z: lỗi thật, không tự đoán;
+    /// - điểm nằm trên breakline: tự chia đoạn nếu Z phù hợp;
+    /// - hai breakline cắt nhau: tự tạo nút nếu Z nội suy hai tuyến trùng nhau;
+    /// - hai breakline chồng lấn: tự chia tại các đầu mút và loại đoạn trùng nếu Z phù hợp;
+    /// - chỉ chặn khi hình học cùng XY nhưng cao độ mâu thuẫn.
+    ///
+    /// Như vậy dữ liệu CAD thực tế có linework trùng/cắt nhưng cùng bề mặt không còn
+    /// bắt người dùng sửa thủ công từng đoạn trước khi dựng TIN.
+    /// </summary>
+    public sealed class SurfaceInputPreparer
+    {
+        private readonly struct XYCell : IEquatable<XYCell>
+        {
+            private readonly long _x, _y;
+            public XYCell(long x, long y) { _x=x; _y=y; }
+            public bool Equals(XYCell other) => _x==other._x && _y==other._y;
+            public override bool Equals(object obj) => obj is XYCell other && Equals(other);
+            public override int GetHashCode() { unchecked { return _x.GetHashCode()*397 ^ _y.GetHashCode(); } }
+        }
+
+        public PreparedSurfaceInput Prepare(SurfaceModel model, SurfaceBuildOptions options,
+            Action<string> progress = null, CancellationToken cancellationToken = default(CancellationToken))
+        {
+            if (model == null) throw new ArgumentNullException(nameof(model));
+            options = options ?? new SurfaceBuildOptions();
+            if (options.XyTolerance <= 0) throw new ArgumentOutOfRangeException(nameof(options.XyTolerance));
+
+            var result = new PreparedSurfaceInput();
+            cancellationToken.ThrowIfCancellationRequested();
+            result.ConflictReport = new ConflictScanner().Scan(model, options, progress, cancellationToken);
+            if (result.ConflictReport.HasBlockingConflicts)
+            {
+                if (options.PreserveDuplicateXYVerticalFaces)
+                {
+                    // Survey vertices AND breakline intersections/overlaps
+                    // can produce incompatible Z at one XY. Both must be
+                    // retained as real 3D vertical-face provenance: the old
+                    // >=2 original-vertices gate stranded large contour files.
+                    var groups = result.ConflictReport.Groups
+                        .Where(g => g.DeltaZ > options.ZConflictTolerance).ToList();
+                    result.VerticalConflictGroups.AddRange(groups);
+                    result.Issues.Add(new ValidationIssue(ValidationSeverity.Warning,
+                        "VERTICAL_XY_SOURCE_REVIEW",
+                        $"Có {groups.Count:n0} nhóm X,Y nhiều cao độ, " +
+                        $"{result.ConflictReport.SourceRecordCount:n0} bản ghi nguồn. " +
+                        "Không loại điểm thủ công; tự dựng mặt đứng 3D và " +
+                        "đề nghị kiểm tra điểm, đồng mức cùng mặt cắt trước khi chốt khối lượng."));
+                }
+                else
+                {
+                    result.Issues.AddRange(result.ConflictReport.ToException().Issues);
+                    return result;
+                }
+            }
+            if (options.LegacyElevationPolicyIgnored)
+                result.Issues.Add(new ValidationIssue(ValidationSeverity.Warning,"LEGACY_Z_POLICY_REQUIRES_REVIEW",
+                    "Chính sách cao độ cũ đã chuyển về kiểm tra thủ công; không tự chọn Z và không sửa dữ liệu nguồn."));
+            progress?.Invoke("Đang đọc điểm và breakline nguồn...");
+            var active = model.Entities.Where(e => e.IsEnabled);
+
+            foreach (var e in active)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                foreach (var v in e.ActiveVertices()) { cancellationToken.ThrowIfCancellationRequested(); result.Sites.Add(v.Position); }
+                foreach (var s in e.ActiveBreaklineSegments())
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if (s.Length2D <= options.XyTolerance)
+                    {
+                        result.Issues.Add(new ValidationIssue(
+                            ValidationSeverity.Warning,
+                            "ZERO_LENGTH_BREAKLINE",
+                            "Bỏ qua đoạn breakline có chiều dài XY gần bằng 0.",
+                            s.SourceId));
+                    }
+                    else result.Breaklines.Add(s);
+                }
+            }
+
+            if (options.PreserveDuplicateXYVerticalFaces &&
+                result.VerticalConflictGroups.Count > 0)
+            {
+                // Include *generated* intersection/overlap elevations as sites.
+                // A breakline crossing has no original vertex at that XY.
+                foreach (var group in result.VerticalConflictGroups)
+                    foreach (var z in group.Sources.Select(source => source.Z).Distinct())
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+                        result.Sites.Add(new Vec3(group.Position.X, group.Position.Y, z));
+                    }
+
+                // Native CDT requires a planar, non-crossing PSLG. Relax only
+                // constraints touching contradictory-Z coordinates, retaining
+                // unaffected contour segments. Original CAD entities remain
+                // unchanged and every Z is still carried in vertical faces.
+                RelaxConflictedBreaklines(result, options, cancellationToken);
+            }
+            return NormalizePreparedInput(result, options, progress, cancellationToken);
+        }
+
+        private static void RelaxConflictedBreaklines(
+            PreparedSurfaceInput result, SurfaceBuildOptions options,
+            CancellationToken cancellationToken)
+        {
+            if (result.Breaklines.Count == 0 || result.VerticalConflictGroups.Count == 0) return;
+            var points = result.VerticalConflictGroups.Select(g =>
+                new Vec3(g.Position.X, g.Position.Y, 0)).ToList();
+            var index = new PointGridIndex(points, options.XyTolerance, cancellationToken);
+            int removed = 0;
+            var safe = new List<Segment3>(result.Breaklines.Count);
+            foreach (var segment in result.Breaklines)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                bool incompatible = false;
+                foreach (int id in index.Query(
+                    segment.A.X, segment.A.Y, segment.B.X, segment.B.Y,
+                    options.XyTolerance))
+                {
+                    if (Geometry2D.PointOnSegment(
+                        points[id].XY, segment.A.XY, segment.B.XY,
+                        options.XyTolerance))
+                    {
+                        incompatible = true;
+                        break;
+                    }
+                }
+                if (incompatible) removed++;
+                else safe.Add(segment);
+            }
+            if (removed == 0) return;
+            result.Breaklines.Clear();
+            result.Breaklines.AddRange(safe);
+            result.RelaxedBreaklineConstraints += removed;
+            result.Issues.Add(new ValidationIssue(ValidationSeverity.Warning,
+                "RELAXED_CONFLICTING_CONTOUR_CONSTRAINTS",
+                $"Đã nới {removed:n0} đoạn ràng buộc đồng mức cắt/chồng ở Z mâu thuẫn " +
+                "chỉ trong lưới hỗ trợ 2,5D; CAD gốc và mọi Z vẫn giữ nguyên. " +
+                "TIN này cần kiểm tra/chỉnh mặt cắt trước khi dùng khối lượng."));
+        }
+
+        /// <summary>
+        /// Chuẩn hóa dữ liệu thô đã được phân vùng trước. Đường này dùng cho
+        /// large-dataset/tiled TIN để không phải dựng hàng triệu SourceEntity tạm.
+        /// </summary>
+        public PreparedSurfaceInput PrepareRaw(
+            IEnumerable<Vec3> sites,
+            IEnumerable<Segment3> breaklines,
+            SurfaceBuildOptions options,
+            Action<string> progress = null, CancellationToken cancellationToken = default(CancellationToken))
+        {
+            options = options ?? new SurfaceBuildOptions();
+            if (options.XyTolerance <= 0) throw new ArgumentOutOfRangeException(nameof(options.XyTolerance));
+
+            var result = new PreparedSurfaceInput();
+            if (sites != null) foreach (var p in sites) { cancellationToken.ThrowIfCancellationRequested(); result.Sites.Add(p); }
+
+            if (breaklines != null)
+            {
+                foreach (var s in breaklines)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if (s.Length2D <= options.XyTolerance)
+                    {
+                        result.Issues.Add(new ValidationIssue(
+                            ValidationSeverity.Warning,
+                            "ZERO_LENGTH_BREAKLINE",
+                            "Bỏ qua đoạn breakline có chiều dài XY gần bằng 0.",
+                            s.SourceId));
+                    }
+                    else result.Breaklines.Add(s);
+                }
+            }
+
+            return NormalizePreparedInput(result, options, progress, cancellationToken);
+        }
+
+        /// <summary>
+        /// Đường chuẩn hóa dành riêng cho TIN phân ô. TiledConformingTinBuilder đã
+        /// giải quyết trùng XY trước khi gọi vào đây, vì vậy không lặp lại vòng
+        /// ResolveDuplicateSites đầu tiên. Sau khi NormalizeBreaklineTopology chạy,
+        /// không quét lại toàn bộ cặp breakline lần thứ hai; nếu còn topology suy
+        /// biến, ConformingTinBuilder sẽ báo đúng ràng buộc không khôi phục được.
+        /// Điều này loại hai lượt quét lớn trên mỗi halo của dữ liệu mỏ dày.
+        /// </summary>
+        public PreparedSurfaceInput PrepareRawForTiledTin(
+            IEnumerable<Vec3> uniqueSites,
+            IEnumerable<Segment3> breaklines,
+            SurfaceBuildOptions options,
+            Action<string> progress = null, CancellationToken cancellationToken = default(CancellationToken))
+        {
+            options = options ?? new SurfaceBuildOptions();
+            if (options.XyTolerance <= 0) throw new ArgumentOutOfRangeException(nameof(options.XyTolerance));
+
+            var result = new PreparedSurfaceInput();
+            if (uniqueSites != null) foreach (var p in uniqueSites) { cancellationToken.ThrowIfCancellationRequested(); result.Sites.Add(p); }
+            if (breaklines != null)
+            {
+                foreach (var seg in breaklines)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if (seg.Length2D <= options.XyTolerance)
+                    {
+                        result.Issues.Add(new ValidationIssue(
+                            ValidationSeverity.Warning,
+                            "ZERO_LENGTH_BREAKLINE",
+                            "Bỏ qua đoạn breakline có chiều dài XY gần bằng 0.",
+                            seg.SourceId));
+                    }
+                    else result.Breaklines.Add(seg);
+                }
+            }
+
+            NormalizeBreaklineTopology(result, options, progress, cancellationToken);
+            ResolveDuplicateSites(result, options, progress, cancellationToken);
+
+            if (result.Sites.Count < 3)
+                result.Issues.Add(new ValidationIssue(
+                    ValidationSeverity.Error,
+                    "TOO_FEW_POINTS",
+                    "Mô hình cần ít nhất 3 điểm XY hợp lệ để dựng TIN."));
+
+            return result;
+        }
+
+        private static PreparedSurfaceInput NormalizePreparedInput(
+            PreparedSurfaceInput result,
+            SurfaceBuildOptions options, Action<string> progress, CancellationToken cancellationToken)
+        {
+            ResolveDuplicateSites(result, options, progress, cancellationToken);
+            // Conflicting elevations require a user decision before expensive topology work.
+            if (result.HasErrors) return result;
+            NormalizeBreaklineTopology(result, options, progress, cancellationToken);
+            RecoverConflictingContourTopology(result, options, cancellationToken);
+            if (result.HasErrors) return result;
+            ResolveDuplicateSites(result, options, progress, cancellationToken);
+            ValidateNormalizedTopology(result, options, progress, cancellationToken);
+            RecoverConflictingContourTopology(result, options, cancellationToken);
+
+            if (result.Sites.Count < 3)
+                result.Issues.Add(new ValidationIssue(
+                    ValidationSeverity.Error,
+                    "TOO_FEW_POINTS",
+                    "Mô hình cần ít nhất 3 điểm XY hợp lệ để dựng TIN."));
+
+            return result;
+        }
+
+        private static void RecoverConflictingContourTopology(
+            PreparedSurfaceInput result, SurfaceBuildOptions options, CancellationToken token)
+        {
+            // Automatic 3D support may relax only constraints directly involved in
+            // an unresolved planar conflict. Never clear all remaining breaklines
+            // just because one incompatible Z crossing was reported.
+            if (!options.PreserveDuplicateXYVerticalFaces ||
+                result.VerticalConflictGroups.Count == 0 || !result.HasErrors)
+                return;
+            var errors = result.Issues.Where(x => x.Severity == ValidationSeverity.Error).ToList();
+            var allowed = new HashSet<string>(StringComparer.Ordinal) {
+                "POINT_ON_BREAKLINE_Z_CONFLICT",
+                "BREAKLINE_CROSSING_Z_CONFLICT",
+                "BREAKLINE_OVERLAP_Z_CONFLICT",
+                "BREAKLINE_NODE_Z_CONFLICT",
+                "BREAKLINE_DUPLICATE_Z_CONFLICT",
+                "BREAKLINE_NORMALIZE_CROSSING_FAILED",
+                "BREAKLINE_NORMALIZE_OVERLAP_FAILED"
+            };
+            if (errors.Count == 0 || errors.Any(x => !allowed.Contains(x.Code))) return;
+            token.ThrowIfCancellationRequested();
+            var constraints = result.Breaklines;
+            int total = constraints.Count;
+            var unsafeEdges = new HashSet<int>();
+
+            // Only calculate the expensive site/segment incidence when point-on-
+            // breakline or conflicting node errors were actually detected.
+            bool needsSiteReview = errors.Any(x =>
+                x.Code == "POINT_ON_BREAKLINE_Z_CONFLICT" ||
+                x.Code == "BREAKLINE_NODE_Z_CONFLICT");
+            if (needsSiteReview && result.Sites.Count > 0 && total > 0)
+            {
+                var sites = new PointGridIndex(result.Sites, options.XyTolerance, token);
+                for (int i = 0; i < total; i++)
+                {
+                    token.ThrowIfCancellationRequested();
+                    var seg = constraints[i];
+                    foreach (int j in sites.Query(seg.A.X, seg.A.Y, seg.B.X, seg.B.Y,
+                        options.XyTolerance))
+                    {
+                        var site = result.Sites[j];
+                        if (!Geometry2D.PointOnSegment(
+                            site.XY, seg.A.XY, seg.B.XY, options.XyTolerance)) continue;
+                        var expected = Geometry2D.InterpolateZOnSegment(site.XY, seg);
+                        if (Math.Abs(expected - site.Z) <= options.ZConflictTolerance) continue;
+                        unsafeEdges.Add(i);
+                        break;
+                    }
+                }
+            }
+
+            // After normalization no two constrained edges may cross or overlap:
+            // both edges of a surviving conflict are unsafe for the planar CDT.
+            // Use spatial candidate indexing; never scan all N*N edge pairs.
+            if (total > 1)
+            {
+                var index = new SegmentGridIndex(constraints, options.XyTolerance, token);
+                for (int i = 0; i < total; i++)
+                {
+                    token.ThrowIfCancellationRequested();
+                    var left = constraints[i];
+                    foreach (int j in index.Query(i))
+                    {
+                        if (j <= i) continue;
+                        var right = constraints[j];
+                        if (!Geometry2D.ProperIntersection(left.A.XY, left.B.XY,
+                                right.A.XY, right.B.XY, options.XyTolerance) &&
+                            !CollinearOverlap(left, right, options.XyTolerance))
+                            continue;
+                        unsafeEdges.Add(i);
+                        unsafeEdges.Add(j);
+                    }
+                }
+            }
+
+            // A reported topology error without any identifiable offending
+            // edge is NOT proof of a safe TIN. Retain the blocking error so the
+            // caller can inspect the source, rather than silently approving a
+            // surface after removing zero constraints.
+            if (unsafeEdges.Count == 0) return;
+
+            int retained = total - unsafeEdges.Count;
+            var safe = new List<Segment3>(retained);
+            for (int i = 0; i < total; i++)
+                if (!unsafeEdges.Contains(i)) safe.Add(constraints[i]);
+            constraints.Clear();
+            constraints.AddRange(safe);
+            result.RelaxedBreaklineConstraints += unsafeEdges.Count;
+            result.Issues.RemoveAll(x => x.Severity == ValidationSeverity.Error);
+            result.Issues.Add(new ValidationIssue(ValidationSeverity.Warning,
+                "LOCALLY_RELAXED_UNRESOLVED_TOPOLOGY",
+                $"Đã kiểm tra {total:n0} ràng buộc còn lại; chỉ nới {unsafeEdges.Count:n0} " +
+                $"đoạn trực tiếp xung đột, giữ {retained:n0} đoạn khác. " +
+                $"Còn {errors.Count:n0} vấn đề Z/topology nguồn cần kiểm tra mặt cắt " +
+                "trước khi xác nhận khối lượng. CAD gốc không thay đổi."));
+        }
+
+        private sealed class SplitMark
+        {
+            public SplitMark(double t, Vec3 p) { T = t; Point = p; }
+            public double T { get; }
+            public Vec3 Point { get; set; }
+        }
+
+        private static void NormalizeBreaklineTopology(PreparedSurfaceInput result, SurfaceBuildOptions options, Action<string> progress, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            progress?.Invoke("Đang chuẩn hóa giao điểm và breakline chồng lấn...");
+            if (result.Breaklines.Count == 0) return;
+
+            var source = result.Breaklines.ToList();
+            var marks = new List<List<SplitMark>>(source.Count);
+            for (int i = 0; i < source.Count; i++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                marks.Add(new List<SplitMark>
+                {
+                    new SplitMark(0.0, source[i].A),
+                    new SplitMark(1.0, source[i].B)
+                });
+            }
+
+            // Snap endpoints BEFORE intersection discovery. Snapping only after
+            // splitting can create a new overlap that was absent in the source
+            // coordinates, leaving an unnoded constraint in the final PSLG.
+            ResolveDuplicateSites(result, options, progress, cancellationToken, marks);
+            if (result.HasErrors) return;
+            for (int i = 0; i < source.Count; i++)
+                source[i] = new Segment3(marks[i][0].Point, marks[i][1].Point, source[i].SourceId);
+
+            // 1) Split a breakline at every already-existing site lying on its interior.
+            var pointIndex = new PointGridIndex(result.Sites, options.XyTolerance, cancellationToken);
+            for (int i = 0; i < source.Count; i++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var seg = source[i];
+                foreach (int siteIndex in pointIndex.Query(
+                    seg.A.X, seg.A.Y, seg.B.X, seg.B.Y, options.XyTolerance))
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var site = result.Sites[siteIndex];
+                    if (!Geometry2D.PointOnSegment(site.XY, seg.A.XY, seg.B.XY, options.XyTolerance))
+                        continue;
+
+                    double t = ParameterOnSegment(site.XY, seg);
+                    if (t <= ParamTolerance(seg, options.XyTolerance) ||
+                        t >= 1.0 - ParamTolerance(seg, options.XyTolerance))
+                        continue;
+
+                    double expected = Geometry2D.InterpolateZOnSegment(site.XY, seg);
+                    if (Math.Abs(expected - site.Z) > options.ZConflictTolerance)
+                    {
+
+
+                        result.Issues.Add(new ValidationIssue(
+                            ValidationSeverity.Error,
+                            "POINT_ON_BREAKLINE_Z_CONFLICT",
+                            $"Điểm tại ({site.X:0.###}, {site.Y:0.###}) nằm trên breakline {seg.SourceId} " +
+                            $"nhưng Z={site.Z:0.###} khác Z nội suy {expected:0.###}.",
+                            seg.SourceId));
+                        continue;
+                    }
+
+                    AddMark(marks[i], t, new Vec3(site.X, site.Y, site.Z),
+                        options.XyTolerance);
+                }
+            }
+
+            // 2) Normalize crossings/overlaps pairwise using the spatial index.
+            var segIndex = new SegmentGridIndex(source, options.XyTolerance, cancellationToken);
+            var generatedSites = new List<Vec3>();
+            int autoCrossings = 0;
+            int overlapPairs = 0;
+
+            for (int i = 0; i < source.Count; i++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                foreach (int j in segIndex.Query(i))
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if (j <= i) continue;
+
+                    var a = source[i];
+                    var b = source[j];
+
+                    if (Geometry2D.ProperIntersection(
+                        a.A.XY, a.B.XY, b.A.XY, b.B.XY, options.XyTolerance))
+                    {
+                        Vec2 xy;
+                        if (!TryLineIntersection(a.A.XY, a.B.XY, b.A.XY, b.B.XY, out xy))
+                            continue;
+
+                        double za = Geometry2D.InterpolateZOnSegment(xy, a);
+                        double zb = Geometry2D.InterpolateZOnSegment(xy, b);
+                        if (Math.Abs(za - zb) > options.ZConflictTolerance)
+                        {
+
+
+                            result.Issues.Add(new ValidationIssue(
+                                ValidationSeverity.Error,
+                                "BREAKLINE_CROSSING_Z_CONFLICT",
+                                $"Hai breakline {a.SourceId} / {b.SourceId} cắt tại " +
+                                $"({xy.X:0.###}, {xy.Y:0.###}) nhưng cao độ nội suy mâu thuẫn " +
+                                $"Z1={za:0.###}, Z2={zb:0.###}. Đây là xung đột bề mặt thật cần kiểm tra dữ liệu."));
+                            continue;
+                        }
+
+                        var p = new Vec3(xy.X, xy.Y, za);
+                        AddMark(marks[i], ParameterOnSegment(xy, a), p, options.XyTolerance);
+                        AddMark(marks[j], ParameterOnSegment(xy, b), p, options.XyTolerance);
+                        generatedSites.Add(p);
+                        autoCrossings++;
+                        continue;
+                    }
+
+                    if (!CollinearOverlap(a, b, options.XyTolerance))
+                        continue;
+
+                    overlapPairs++;
+                    var candidates = new[] { a.A, a.B, b.A, b.B };
+                    foreach (var q in candidates)
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+                        if (!Geometry2D.PointOnSegment(q.XY, a.A.XY, a.B.XY, options.XyTolerance) ||
+                            !Geometry2D.PointOnSegment(q.XY, b.A.XY, b.B.XY, options.XyTolerance))
+                            continue;
+
+                        double za = Geometry2D.InterpolateZOnSegment(q.XY, a);
+                        double zb = Geometry2D.InterpolateZOnSegment(q.XY, b);
+                        if (Math.Abs(za - zb) > options.ZConflictTolerance)
+                        {
+
+
+                            result.Issues.Add(new ValidationIssue(
+                                ValidationSeverity.Error,
+                                "BREAKLINE_OVERLAP_Z_CONFLICT",
+                                $"Hai breakline chồng lấn {a.SourceId} / {b.SourceId} nhưng tại " +
+                                $"({q.X:0.###}, {q.Y:0.###}) có Z1={za:0.###}, Z2={zb:0.###}."));
+                            continue;
+                        }
+
+                        var p = new Vec3(q.X, q.Y, za);
+                        AddMark(marks[i], ParameterOnSegment(q.XY, a), p, options.XyTolerance);
+                        AddMark(marks[j], ParameterOnSegment(q.XY, b), p, options.XyTolerance);
+                        generatedSites.Add(p);
+                    }
+                }
+            }
+
+            if (autoCrossings > 0)
+                result.Issues.Add(new ValidationIssue(
+                    ValidationSeverity.Warning,
+                    "AUTO_NODE_BREAKLINE_CROSSINGS",
+                    $"Đã tự tạo {autoCrossings:n0} nút tại giao điểm breakline có cao độ phù hợp."));
+
+            if (overlapPairs > 0)
+                result.Issues.Add(new ValidationIssue(
+                    ValidationSeverity.Warning,
+                    "AUTO_NORMALIZE_BREAKLINE_OVERLAPS",
+                    $"Đã tự chuẩn hóa {overlapPairs:n0} cặp breakline chồng lấn có cao độ phù hợp."));
+
+            // Resolve the complete set of nodes before rebuilding/deduplicating edges.
+            // Pairwise split marks can otherwise retain an earlier/lower Z even after
+            // the user selected Upper (or vice versa), especially at shared endpoints.
+            result.Sites.AddRange(generatedSites);
+            ResolveDuplicateSites(result, options, progress, cancellationToken, marks);
+
+            // 3) Rebuild split segments.
+            var rebuilt = new List<Segment3>();
+            for (int i = 0; i < source.Count; i++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var seg = source[i];
+                var ordered = marks[i]
+                    .Where(x => x.T >= -1e-10 && x.T <= 1.0 + 1e-10)
+                    .OrderBy(x => x.T)
+                    .ToList();
+
+                var unique = new List<SplitMark>();
+                foreach (var m in ordered)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if (unique.Count == 0)
+                    {
+                        unique.Add(m);
+                        continue;
+                    }
+
+                    var last = unique[unique.Count - 1];
+                    if (Math.Abs(last.T - m.T) <= ParamTolerance(seg, options.XyTolerance) ||
+                        last.Point.XY.DistanceTo(m.Point.XY) <= options.XyTolerance)
+                    {
+                        if (Math.Abs(last.Point.Z - m.Point.Z) > options.ZConflictTolerance)
+                        {
+                            result.Issues.Add(new ValidationIssue(
+                                ValidationSeverity.Error,
+                                "BREAKLINE_NODE_Z_CONFLICT",
+                                $"Breakline {seg.SourceId} có hai nút gần trùng XY nhưng khác Z."));
+                        }
+                        continue;
+                    }
+                    unique.Add(m);
+                }
+
+                for (int k = 0; k < unique.Count - 1; k++)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var p0 = unique[k].Point;
+                    var p1 = unique[k + 1].Point;
+                    if (p0.XY.DistanceTo(p1.XY) <= options.XyTolerance) continue;
+                    rebuilt.Add(new Segment3(p0, p1, seg.SourceId));
+                }
+            }
+
+            // 4) Remove exact/near-exact duplicate subsegments created by overlaps.
+            int duplicateSegments = 0;
+            var dedup = new List<Segment3>();
+            var buckets = new Dictionary<string, List<int>>();
+            foreach (var s in rebuilt)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                string key = SegmentBucketKey(s, options.XyTolerance);
+                List<int> ids;
+                if (!buckets.TryGetValue(key, out ids))
+                {
+                    ids = new List<int>();
+                    buckets[key] = ids;
+                }
+
+                int match = -1;
+                foreach (int id in ids)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if (SameUndirectedXY(dedup[id], s, options.XyTolerance))
+                    {
+                        match = id;
+                        break;
+                    }
+                }
+
+                if (match < 0)
+                {
+                    ids.Add(dedup.Count);
+                    dedup.Add(s);
+                    continue;
+                }
+
+                var old = dedup[match];
+                if (!SameUndirectedXYZ(old, s, options.XyTolerance, options.ZConflictTolerance))
+                {
+                    result.Issues.Add(new ValidationIssue(
+                        ValidationSeverity.Error,
+                        "BREAKLINE_DUPLICATE_Z_CONFLICT",
+                        $"Hai đoạn breakline trùng XY ({old.SourceId} / {s.SourceId}) nhưng khác cao độ."));
+                    continue;
+                }
+
+                duplicateSegments++;
+            }
+
+            if (duplicateSegments > 0)
+                result.Issues.Add(new ValidationIssue(
+                    ValidationSeverity.Warning,
+                    "AUTO_REMOVE_DUPLICATE_BREAKLINES",
+                    $"Đã tự loại {duplicateSegments:n0} đoạn breakline trùng nhau sau khi chuẩn hóa."));
+
+            result.Breaklines.Clear();
+            result.Breaklines.AddRange(dedup);
+
+
+            foreach (var s in dedup)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                result.Sites.Add(s.A);
+                result.Sites.Add(s.B);
+            }
+        }
+
+        private static void ValidateNormalizedTopology(PreparedSurfaceInput result, SurfaceBuildOptions options, Action<string> progress, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            progress?.Invoke("Đang kiểm tra topology sau chuẩn hóa...");
+            int count = result.Breaklines.Count;
+            if (count < 2) return;
+
+            var index = new SegmentGridIndex(result.Breaklines, options.XyTolerance, cancellationToken);
+            for (int i = 0; i < count; i++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var a = result.Breaklines[i];
+                foreach (int j in index.Query(i))
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if (j <= i) continue;
+                    var b = result.Breaklines[j];
+
+                    if (Geometry2D.ProperIntersection(
+                        a.A.XY, a.B.XY, b.A.XY, b.B.XY, options.XyTolerance))
+                    {
+                        result.Issues.Add(new ValidationIssue(
+                            ValidationSeverity.Error,
+                            "BREAKLINE_NORMALIZE_CROSSING_FAILED",
+                            $"Sau chuẩn hóa vẫn còn breakline cắt nhau ({a.SourceId} / {b.SourceId})."));
+                    }
+                    else if (CollinearOverlap(a, b, options.XyTolerance))
+                    {
+                        result.Issues.Add(new ValidationIssue(
+                            ValidationSeverity.Error,
+                            "BREAKLINE_NORMALIZE_OVERLAP_FAILED",
+                            $"Sau chuẩn hóa vẫn còn breakline chồng lấn ({a.SourceId} / {b.SourceId})."));
+                    }
+                }
+            }
+        }
+
+        private static void ResolveDuplicateSites(PreparedSurfaceInput result, SurfaceBuildOptions options, Action<string> progress, CancellationToken cancellationToken,
+            List<List<SplitMark>> nodes = null)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            progress?.Invoke("Đang kiểm tra điểm trùng XY và cao độ...");
+            if (nodes != null)
+                foreach (var segmentNodes in nodes)
+                    foreach (var node in segmentNodes)
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+                        result.Sites.Add(node.Point);
+                    }
+            var unique = new List<Vec3>();
+            var grid = new Dictionary<XYCell, List<int>>();
+            int verticalPairs = 0;
+            // Raw/tiled sources have no ConflictScanner entity provenance.
+            // Still retain EVERY elevation in a synthetic vertical group
+            // instead of silently collapsing high-Z measurements.
+            var rawGroups = options.PreserveDuplicateXYVerticalFaces &&
+                result.VerticalConflictGroups.Count == 0
+                ? new Dictionary<int, ConflictGroup>() : null;
+
+            int processed=0;
+            var progressWatch=System.Diagnostics.Stopwatch.StartNew();
+            foreach (var p in result.Sites)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if ((++processed & 4095)==0 && progressWatch.ElapsedMilliseconds>=500) {
+                    progress?.Invoke($"Chuẩn hóa tọa độ {processed:n0}/{result.Sites.Count:n0}...");
+                    progressWatch.Restart();
+                }
+                long ix = (long)Math.Floor(p.X / options.XyTolerance);
+                long iy = (long)Math.Floor(p.Y / options.XyTolerance);
+                int match = -1;
+
+                for (long dx = -1; dx <= 1 && match < 0; dx++)
+                for (long dy = -1; dy <= 1 && match < 0; dy++)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var k = new XYCell(ix + dx, iy + dy);
+                    List<int> ids;
+                    if (!grid.TryGetValue(k, out ids)) continue;
+                    foreach (int id in ids)
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+                        if (unique[id].XY.DistanceTo(p.XY) <= options.XyTolerance)
+                        {
+                            match = id;
+                            break;
+                        }
+                    }
+                }
+
+                if (match < 0)
+                {
+                    var key = new XYCell(ix, iy);
+                    List<int> ids;
+                    if (!grid.TryGetValue(key, out ids))
+                    {
+                        ids = new List<int>();
+                        grid[key] = ids;
+                    }
+                    ids.Add(unique.Count);
+                    unique.Add(p);
+                }
+                else
+                {
+                    var old = unique[match];
+                    if (Math.Abs(old.Z - p.Z) > options.ZConflictTolerance)
+                    {
+                        if (!options.PreserveDuplicateXYVerticalFaces)
+                            result.Issues.Add(new ValidationIssue(
+                                ValidationSeverity.Error,
+                                "DUPLICATE_XY_CONFLICT_Z",
+                                $"Hai điểm trùng XY nhưng khác Z: ({p.X:0.###}, {p.Y:0.###}) " +
+                                $"có Z={old.Z:0.###} và Z={p.Z:0.###}."));
+                        else
+                        {
+                            verticalPairs++;
+                            if (rawGroups != null)
+                            {
+                                if (!rawGroups.TryGetValue(match, out var group))
+                                {
+                                    group = new ConflictGroup {
+                                        Id = "RAW-XY-" + (rawGroups.Count + 1).ToString("000"),
+                                        Position = old.XY
+                                    };
+                                    group.Sources.Add(new ConflictSource {
+                                        Z = old.Z, Generated = true, VertexIndex = -1,
+                                        Origin = "Dữ liệu tọa độ nguồn thô trước khi chuẩn hóa"
+                                    });
+                                    rawGroups.Add(match, group);
+                                }
+                                group.Sources.Add(new ConflictSource {
+                                    Z = p.Z, Generated = true, VertexIndex = -1,
+                                    Origin = "Dữ liệu tọa độ nguồn thô trước khi chuẩn hóa"
+                                });
+                            }
+                            // One CDT node is mathematically unavoidable; select
+                            // the minimum Z consistently for the 2.5D support.
+                            // Every other source Z is retained by the separate
+                            // 3D vertical faces + source conflict metadata.
+                            // Never average elevations or mutate the CAD source.
+                            if (p.Z < old.Z) unique[match] = new Vec3(old.X, old.Y, p.Z);
+                        }
+                    }
+                }
+            }
+
+            if (nodes != null)
+                foreach (var segmentNodes in nodes)
+                    foreach (var node in segmentNodes)
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+                        node.Point = FindCanonicalNode(node.Point, unique, grid, options.XyTolerance);
+                    }
+            if (rawGroups != null && rawGroups.Count > 0)
+                result.VerticalConflictGroups.AddRange(rawGroups.Values);
+            // One summary warning rather than millions of per-point records.
+            if (verticalPairs > 0 && result.ConflictReport == null)
+                result.Issues.Add(new ValidationIssue(ValidationSeverity.Warning,
+                    "VERTICAL_XY_REVIEW", "Có đỉnh trùng XY khác Z trong dữ liệu nội suy; kiểm tra mặt cắt sau khi dựng TIN."));
+            result.Sites.Clear();
+            result.Sites.AddRange(unique);
+        }
+
+        private static Vec3 FindCanonicalNode(Vec3 p, IReadOnlyList<Vec3> sites,
+            Dictionary<XYCell, List<int>> grid, double tolerance)
+        {
+            long ix = (long)Math.Floor(p.X / tolerance);
+            long iy = (long)Math.Floor(p.Y / tolerance);
+            // Use the same neighbourhood and match order as ResolveDuplicateSites.
+            for (long dx = -1; dx <= 1; dx++)
+            for (long dy = -1; dy <= 1; dy++)
+            {
+                List<int> ids;
+                if (!grid.TryGetValue(new XYCell(ix + dx, iy + dy), out ids)) continue;
+                foreach (int id in ids)
+                    if (sites[id].XY.DistanceTo(p.XY) <= tolerance) return sites[id];
+            }
+            throw new InvalidOperationException("Không ánh xạ được nút breakline đã chuẩn hóa.");
+        }
+
+        private static void AddMark(List<SplitMark> marks, double t, Vec3 p, double xyTol)
+        {
+            t = Math.Max(0.0, Math.Min(1.0, t));
+            foreach (var m in marks)
+                if (Math.Abs(m.T - t) <= 1e-12 || m.Point.XY.DistanceTo(p.XY) <= xyTol)
+                    return;
+            marks.Add(new SplitMark(t, p));
+        }
+
+        internal static double ParameterOnSegment(Vec2 p, Segment3 s)
+        {
+            double dx = s.B.X - s.A.X;
+            double dy = s.B.Y - s.A.Y;
+            double den = dx * dx + dy * dy;
+            if (den <= 1e-30) return 0.0;
+            return ((p.X - s.A.X) * dx + (p.Y - s.A.Y) * dy) / den;
+        }
+
+        private static double ParamTolerance(Segment3 s, double xyTol)
+        {
+            return Math.Min(1e-6, xyTol / Math.Max(s.Length2D, xyTol));
+        }
+
+        internal static bool TryLineIntersection(Vec2 a, Vec2 b, Vec2 c, Vec2 d, out Vec2 p)
+        {
+            double rX = b.X - a.X, rY = b.Y - a.Y;
+            double sX = d.X - c.X, sY = d.Y - c.Y;
+            double den = rX * sY - rY * sX;
+            if (Math.Abs(den) <= 1e-24)
+            {
+                p = default(Vec2);
+                return false;
+            }
+
+            double qX = c.X - a.X, qY = c.Y - a.Y;
+            double t = (qX * sY - qY * sX) / den;
+            p = new Vec2(a.X + t * rX, a.Y + t * rY);
+            return true;
+        }
+
+        internal static bool CollinearOverlap(Segment3 a, Segment3 b, double tol)
+        {
+            double la = a.Length2D;
+            if (la <= tol || b.Length2D <= tol) return false;
+            if (Math.Abs(Vec2.Cross(a.A.XY, a.B.XY, b.A.XY)) / la > tol) return false;
+            if (Math.Abs(Vec2.Cross(a.A.XY, a.B.XY, b.B.XY)) / la > tol) return false;
+
+            bool useX = Math.Abs(a.B.X - a.A.X) >= Math.Abs(a.B.Y - a.A.Y);
+            double a0 = useX ? a.A.X : a.A.Y;
+            double a1 = useX ? a.B.X : a.B.Y;
+            double b0 = useX ? b.A.X : b.A.Y;
+            double b1 = useX ? b.B.X : b.B.Y;
+            if (a0 > a1) { double t = a0; a0 = a1; a1 = t; }
+            if (b0 > b1) { double t = b0; b0 = b1; b1 = t; }
+            return Math.Min(a1, b1) - Math.Max(a0, b0) > tol;
+        }
+
+        private static bool SameUndirectedXY(Segment3 a, Segment3 b, double tol)
+        {
+            return (Geometry2D.AlmostSame(a.A.XY, b.A.XY, tol) &&
+                    Geometry2D.AlmostSame(a.B.XY, b.B.XY, tol)) ||
+                   (Geometry2D.AlmostSame(a.A.XY, b.B.XY, tol) &&
+                    Geometry2D.AlmostSame(a.B.XY, b.A.XY, tol));
+        }
+
+        private static bool SameUndirectedXYZ(Segment3 a, Segment3 b, double xyTol, double zTol)
+        {
+            if (Geometry2D.AlmostSame(a.A.XY, b.A.XY, xyTol) &&
+                Geometry2D.AlmostSame(a.B.XY, b.B.XY, xyTol))
+                return Math.Abs(a.A.Z - b.A.Z) <= zTol &&
+                       Math.Abs(a.B.Z - b.B.Z) <= zTol;
+
+            if (Geometry2D.AlmostSame(a.A.XY, b.B.XY, xyTol) &&
+                Geometry2D.AlmostSame(a.B.XY, b.A.XY, xyTol))
+                return Math.Abs(a.A.Z - b.B.Z) <= zTol &&
+                       Math.Abs(a.B.Z - b.A.Z) <= zTol;
+
+            return false;
+        }
+
+        private static string SegmentBucketKey(Segment3 s, double tol)
+        {
+            string a = PointBucketKey(s.A.X, s.A.Y, tol);
+            string b = PointBucketKey(s.B.X, s.B.Y, tol);
+            return string.CompareOrdinal(a, b) <= 0 ? a + "|" + b : b + "|" + a;
+        }
+
+        private static string PointBucketKey(double x, double y, double tol)
+        {
+            long ix = (long)Math.Round(x / tol);
+            long iy = (long)Math.Round(y / tol);
+            return ix + ":" + iy;
+        }
+
+        internal sealed class PointGridIndex
+        {
+            private readonly Dictionary<long, List<int>> _cells = new Dictionary<long, List<int>>();
+            private readonly CancellationToken _cancellationToken;
+            private readonly double _cell;
+            private readonly double _minX, _minY;
+
+            public PointGridIndex(IReadOnlyList<Vec3> points, double tol, CancellationToken cancellationToken)
+            {
+                _cancellationToken = cancellationToken;
+                double maxX, maxY;
+                Bounds(points.Select(p => p.X), points.Select(p => p.Y),
+                    out _minX, out _minY, out maxX, out maxY);
+                double span = Math.Max(maxX - _minX, maxY - _minY);
+                _cell = Math.Max(tol * 100.0,
+                    span / Math.Max(8.0, Math.Sqrt(Math.Max(1, points.Count))));
+                for (int i = 0; i < points.Count; i++) { cancellationToken.ThrowIfCancellationRequested(); Add(i, points[i].X, points[i].Y); }
+            }
+
+            public IEnumerable<int> Query(double x0, double y0, double x1, double y1, double pad)
+            {
+                int ix0 = Ix(Math.Min(x0, x1) - pad);
+                int ix1 = Ix(Math.Max(x0, x1) + pad);
+                int iy0 = Iy(Math.Min(y0, y1) - pad);
+                int iy1 = Iy(Math.Max(y0, y1) + pad);
+
+                // Mỗi site chỉ nằm trong đúng một cell, nên không cần cấp phát
+                // HashSet cho từng breakline query.
+                for (int ix = ix0; ix <= ix1; ix++)
+                for (int iy = iy0; iy <= iy1; iy++)
+                {
+                    _cancellationToken.ThrowIfCancellationRequested();
+                    List<int> ids;
+                    if (!_cells.TryGetValue(Key(ix, iy), out ids)) continue;
+                    foreach (var id in ids) yield return id;
+                }
+            }
+
+            private void Add(int i, double x, double y)
+            {
+                long key = Key(Ix(x), Iy(y));
+                List<int> ids;
+                if (!_cells.TryGetValue(key, out ids))
+                {
+                    ids = new List<int>();
+                    _cells[key] = ids;
+                }
+                ids.Add(i);
+            }
+
+            private int Ix(double x) => (int)Math.Floor((x - _minX) / _cell);
+            private int Iy(double y) => (int)Math.Floor((y - _minY) / _cell);
+            private static long Key(int x, int y) => ((long)x << 32) ^ (uint)y;
+        }
+
+        internal sealed class SegmentGridIndex
+        {
+            private readonly Dictionary<long, List<int>> _cells = new Dictionary<long, List<int>>();
+            private readonly List<List<long>> _segmentCells = new List<List<long>>();
+            // Cell sharing is only a coarse test: dense contours in one cell may
+            // be far apart. Keep padded endpoint bounds to reject only disjoint
+            // boxes before the expensive intersection/overlap predicates.
+            private readonly SegmentBounds[] _bounds;
+            private readonly struct SegmentBounds
+            {
+                public readonly double MinX, MinY, MaxX, MaxY;
+                public SegmentBounds(Segment3 s, double pad)
+                {
+                    MinX = Math.Min(s.A.X, s.B.X) - pad;
+                    MinY = Math.Min(s.A.Y, s.B.Y) - pad;
+                    MaxX = Math.Max(s.A.X, s.B.X) + pad;
+                    MaxY = Math.Max(s.A.Y, s.B.Y) + pad;
+                }
+                public bool Intersects(SegmentBounds b) =>
+                    MinX <= b.MaxX && MaxX >= b.MinX &&
+                    MinY <= b.MaxY && MaxY >= b.MinY;
+            }
+            private readonly int[] _visited;
+            private int _visitToken;
+            private readonly CancellationToken _cancellationToken;
+            private readonly double _cell, _minX, _minY;
+
+            public SegmentGridIndex(IReadOnlyList<Segment3> segments, double tol, CancellationToken cancellationToken)
+            {
+                _cancellationToken = cancellationToken;
+                double maxX, maxY;
+                Bounds(
+                    segments.SelectMany(seg => new[] { seg.A.X, seg.B.X }),
+                    segments.SelectMany(seg => new[] { seg.A.Y, seg.B.Y }),
+                    out _minX, out _minY, out maxX, out maxY);
+
+                double span = Math.Max(maxX - _minX, maxY - _minY);
+                _cell = Math.Max(tol * 100.0,
+                    span / Math.Max(8.0, Math.Sqrt(Math.Max(1, segments.Count))));
+                _bounds = new SegmentBounds[segments.Count];
+                _visited = new int[Math.Max(1, segments.Count)];
+                for (int i = 0; i < segments.Count; i++)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    _bounds[i] = new SegmentBounds(segments[i], tol);
+                    IndexSegment(i, segments[i], tol);
+                }
+            }
+
+            public IEnumerable<int> Query(int segmentIndex)
+            {
+                int token = NextVisitToken();
+                var bounds = _bounds[segmentIndex];
+                foreach (var key in _segmentCells[segmentIndex])
+                {
+                    _cancellationToken.ThrowIfCancellationRequested();
+                    List<int> ids;
+                    if (!_cells.TryGetValue(key, out ids)) continue;
+                    foreach (var id in ids)
+                    {
+                        _cancellationToken.ThrowIfCancellationRequested();
+                        if (_visited[id] == token) continue;
+                        _visited[id] = token;
+                        if (bounds.Intersects(_bounds[id])) yield return id;
+                    }
+                }
+            }
+
+            private int NextVisitToken()
+            {
+                if (_visitToken == int.MaxValue)
+                {
+                    Array.Clear(_visited, 0, _visited.Length);
+                    _visitToken = 1;
+                }
+                else _visitToken++;
+                return _visitToken;
+            }
+
+            private void IndexSegment(int i, Segment3 seg, double pad)
+            {
+                int ix0 = Ix(Math.Min(seg.A.X, seg.B.X) - pad);
+                int ix1 = Ix(Math.Max(seg.A.X, seg.B.X) + pad);
+                int iy0 = Iy(Math.Min(seg.A.Y, seg.B.Y) - pad);
+                int iy1 = Iy(Math.Max(seg.A.Y, seg.B.Y) + pad);
+                var keys = new List<long>();
+
+                for (int ix = ix0; ix <= ix1; ix++)
+                for (int iy = iy0; iy <= iy1; iy++)
+                {
+                    _cancellationToken.ThrowIfCancellationRequested();
+                    long key = Key(ix, iy);
+                    keys.Add(key);
+                    List<int> ids;
+                    if (!_cells.TryGetValue(key, out ids))
+                    {
+                        ids = new List<int>();
+                        _cells[key] = ids;
+                    }
+                    ids.Add(i);
+                }
+                _segmentCells.Add(keys);
+            }
+
+            private int Ix(double x) => (int)Math.Floor((x - _minX) / _cell);
+            private int Iy(double y) => (int)Math.Floor((y - _minY) / _cell);
+            private static long Key(int x, int y) => ((long)x << 32) ^ (uint)y;
+        }
+
+        private static void Bounds(IEnumerable<double> xs, IEnumerable<double> ys,
+            out double minX, out double minY, out double maxX, out double maxY)
+        {
+            var xa = xs.ToArray();
+            var ya = ys.ToArray();
+
+            if (xa.Length == 0 || ya.Length == 0)
+            {
+                minX = minY = 0;
+                maxX = maxY = 1;
+                return;
+            }
+
+            minX = xa.Min();
+            maxX = xa.Max();
+            minY = ya.Min();
+            maxY = ya.Max();
+            if (maxX <= minX) maxX = minX + 1.0;
+            if (maxY <= minY) maxY = minY + 1.0;
+        }
+    }
+}

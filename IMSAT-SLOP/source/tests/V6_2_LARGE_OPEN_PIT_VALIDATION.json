@@ -1,0 +1,45 @@
+{
+  "status": "PASS",
+  "cases": [
+    {
+      "method": "Bishop Simplified",
+      "critical_fs": 2.0048074600183945,
+      "results": 10,
+      "slices": 40,
+      "diagnostics": {
+        "method": "Bishop Simplified",
+        "primary_candidates": 128,
+        "fallback_candidates": 0,
+        "slice_valid": 128,
+        "method_evaluated": 128,
+        "method_converged": 128,
+        "fallback_used": false,
+        "rejected_reasons": {},
+        "stored_results": 10,
+        "critical_fs": 2.0048074600183945
+      }
+    },
+    {
+      "method": "Morgenstern-Price",
+      "critical_fs": 2.0023471965599278,
+      "results": 10,
+      "slices": 40,
+      "diagnostics": {
+        "method": "Morgenstern-Price",
+        "primary_candidates": 128,
+        "fallback_candidates": 0,
+        "slice_valid": 128,
+        "method_evaluated": 128,
+        "method_converged": 128,
+        "fallback_used": false,
+        "rejected_reasons": {},
+        "stored_results": 10,
+        "critical_fs": 2.0023471965599278
+      }
+    }
+  ],
+  "reversed_entry_exit_fs": 2.0023471965599278,
+  "adaptive_fallback_fs": 2.037556405982323,
+  "isolated_solver_fs": 2.0023471965599278,
+  "windowed_stdout_none_fs": 2.0023471965599278
+}
