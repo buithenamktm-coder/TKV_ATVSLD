@@ -10,6 +10,9 @@ on:
     paths:
       - ".github/workflows/imsat-cad-qcad-core.yml"
       - "tools/IMSAT_CAD_V1/qcad_addon/**"
+concurrency:
+  group: imsat-cad-native-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   native-cad-core:
     runs-on: windows-2022
