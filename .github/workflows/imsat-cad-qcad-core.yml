@@ -128,10 +128,34 @@ jobs:
             throw "Missing Windows platform plugin"
           }
           Write-Host "Native CAD deployment dependency gate PASS (not a GUI runtime test)"
+      - name: Stage native CAD application with scripts and plugins
+        shell: pwsh
+        run: |
+          $stage = "native-cad-stage"
+          New-Item -ItemType Directory -Force $stage | Out-Null
+          Copy-Item "native/qcad/release/*" $stage -Recurse -Force
+          New-Item -ItemType Directory -Force "$stage/scripts", "$stage/plugins" | Out-Null
+          Copy-Item "native/qcad/scripts/*" "$stage/scripts" -Recurse -Force
+          Copy-Item "native/qcad/plugins/*" "$stage/plugins" -Recurse -Force
+          if (-not (Test-Path "$stage/scripts/IMSATCAD/IMSATCAD.js")) {
+            throw "IMSAT CAD add-on missing from native package"
+          }
+          if (-not (Get-ChildItem "$stage/plugins" -Filter "*qcadjsapi*.dll" -File)) {
+            throw "QCAD JavaScript API missing from native package"
+          }
+          if (-not (Get-ChildItem $stage -Filter "qcad*.exe" -File)) {
+            throw "QCAD executable missing from native package"
+          }
+          Compress-Archive -Path "$stage/*" -DestinationPath "imsat-cad-native-windows-build.zip" -Force
+          if (-not (Test-Path "imsat-cad-native-windows-build.zip")) {
+            throw "Native CAD ZIP staging failed"
+          }
+          Write-Host "Native CAD staged with IMSAT scripts (runtime not yet validated)"
       - uses: actions/upload-artifact@v4
         with:
           name: imsat-cad-native-qcad-build-evidence
           path: |
+            imsat-cad-native-windows-build.zip
             native-commit-report.txt
             native-qt-dependencies.txt
             native/qcad/release/*.exe
