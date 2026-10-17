@@ -42,11 +42,16 @@ IMSATCAD._drawScripts = [
     "scripts/Draw/Line/Line2P/Line2P.js",
     "scripts/Draw/Polyline/DrawPolyline/DrawPolyline.js",
     "scripts/Draw/Circle/CircleCR/CircleCR.js",
-    "scripts/Draw/Shape/ShapeRectanglePP/ShapeRectanglePP.js"
+    "scripts/Draw/Shape/ShapeRectanglePP/ShapeRectanglePP.js",
+    "scripts/Draw/Arc/Arc3P/Arc3P.js",
+    "scripts/Draw/Ellipse/EllipseCPP/EllipseCPP.js",
+    "scripts/Draw/Shape/ShapePolygonCP/ShapePolygonCP.js"
 ];
 IMSATCAD._modifyScripts = [
     "scripts/Modify/Trim/Trim.js",
     "scripts/Modify/Offset/Offset.js",
+    "scripts/Modify/Round/Round.js",
+    "scripts/Modify/Bevel/Bevel.js",
     "scripts/Modify/Translate/Translate.js",
     "scripts/Modify/Rotate/Rotate.js",
     "scripts/Modify/Scale/Scale.js",
@@ -103,15 +108,27 @@ IMSATCAD._aliases = [
     ["scripts/Draw/Line/Line2P/Line2P.js", ["line", "ln", "l"]],
     ["scripts/Draw/Polyline/DrawPolyline/DrawPolyline.js", ["polyline", "pline", "pl"]],
     ["scripts/Draw/Circle/CircleCR/CircleCR.js", ["circle", "c"]],
+    ["scripts/Draw/Arc/Arc3P/Arc3P.js", ["arc", "a"]],
+    ["scripts/Draw/Ellipse/EllipseCPP/EllipseCPP.js", ["ellipse", "el"]],
+    ["scripts/Draw/Shape/ShapePolygonCP/ShapePolygonCP.js", ["polygon", "pol"]],
     ["scripts/Draw/Shape/ShapeRectanglePP/ShapeRectanglePP.js", ["rectangle", "rectang", "rec"]],
     ["scripts/Modify/Trim/Trim.js", ["trim", "extend", "tr", "ex"]],
     ["scripts/Modify/Offset/Offset.js", ["offset", "o"]],
+    ["scripts/Modify/Round/Round.js", ["fillet", "f"]],
+    ["scripts/Modify/Bevel/Bevel.js", ["chamfer", "cha"]],
     ["scripts/Modify/Translate/Translate.js", ["move", "m", "mv", "copy", "co", "cp"]],
     ["scripts/Modify/Rotate/Rotate.js", ["rotate", "ro"]],
     ["scripts/Modify/Scale/Scale.js", ["scale", "sc"]],
     ["scripts/Modify/Mirror/Mirror.js", ["mirror", "mi"]],
     ["scripts/Modify/Explode/Explode.js", ["explode", "x"]],
-    ["scripts/Edit/Delete/Delete.js", ["erase", "e"]]
+    ["scripts/Edit/Delete/Delete.js", ["erase", "e"]],
+    ["scripts/Draw/Text/Text.js", ["text", "mtext", "mt"]],
+    ["scripts/Draw/Dimension/DimHorizontal/DimHorizontal.js", ["dimlinear", "dli"]],
+    ["scripts/Draw/Dimension/DimAligned/DimAligned.js", ["dimaligned", "dal"]],
+    ["scripts/Draw/Dimension/DimAngular/DimAngular.js", ["dimangular", "dan"]],
+    ["scripts/Layer/AddLayer/AddLayer.js", ["layernew"]],
+    ["scripts/File/Save/Save.js", ["qsave"]],
+    ["scripts/File/SaveAs/SaveAs.js", ["saveas"]]
 ];
 
 IMSATCAD.postInit = function() {
