@@ -26,6 +26,9 @@ IMSATCAD.getAnnotationToolBar = function() {
 IMSATCAD.getLayerToolBar = function() {
     return EAction.getToolBar(qsTr("IMSAT CAD - Layers"), "IMSATCADLayerToolBar", Qt.TopToolBarArea);
 };
+IMSATCAD.getFileToolBar = function() {
+    return EAction.getToolBar(qsTr("IMSAT CAD - File"), "IMSATCADFileToolBar", Qt.TopToolBarArea);
+};
 IMSATCAD.getBlocksToolBar = function() {
     return EAction.getToolBar(qsTr("IMSAT CAD - Blocks"), "IMSATCADBlocksToolBar", Qt.TopToolBarArea);
 };
@@ -44,6 +47,7 @@ IMSATCAD.init = function() {
     IMSATCAD.getUtilitiesToolBar();
     IMSATCAD.getBlocksToolBar();
     IMSATCAD.getSelectionToolBar();
+    IMSATCAD.getFileToolBar();
 };
 // Reuse QCAD actions without duplicating geometry algorithms.
 IMSATCAD._drawScripts = [
@@ -94,6 +98,11 @@ IMSATCAD._utilityScripts = [
     "scripts/View/Zoom/AutoZoom/AutoZoom.js",
     "scripts/View/Zoom/WindowZoom/WindowZoom.js",
     "scripts/View/Zoom/PanZoom/PanZoom.js",
+    "scripts/File/Print/Print.js"
+];
+IMSATCAD._fileScripts = [
+    "scripts/File/Save/Save.js",
+    "scripts/File/SaveAs/SaveAs.js",
     "scripts/File/Print/Print.js"
 ];
 IMSATCAD._blockScripts = [
@@ -183,9 +192,10 @@ IMSATCAD.postInit = function() {
     var utilityCount = IMSATCAD.populateToolBar(IMSATCAD.getUtilitiesToolBar(), IMSATCAD._utilityScripts);
     var blockCount = IMSATCAD.populateToolBar(IMSATCAD.getBlocksToolBar(), IMSATCAD._blockScripts);
     var selectionCount = IMSATCAD.populateToolBar(IMSATCAD.getSelectionToolBar(), IMSATCAD._selectionScripts);
+    var fileCount = IMSATCAD.populateToolBar(IMSATCAD.getFileToolBar(), IMSATCAD._fileScripts);
     if (!isNull(win)) {
         win.handleUserMessage("IMSAT CAD: " + success + "/" + IMSATCAD._aliases.length +
-                              " aliases, " + drawCount + " draw tools, " + modifyCount + " modify tools, " + annotationCount + " annotation, " + layerCount + " layer, " + utilityCount + " utilities, " + blockCount + " blocks, " + selectionCount + " selection");
+                              " aliases, " + drawCount + " draw tools, " + modifyCount + " modify tools, " + annotationCount + " annotation, " + layerCount + " layer, " + utilityCount + " utilities, " + blockCount + " blocks, " + selectionCount + " selection, " + fileCount + " file");
     }
 };
 // COPY and EXTEND aliases are intentionally withheld: QCAD Translate and Trim
