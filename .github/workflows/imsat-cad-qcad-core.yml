@@ -347,6 +347,10 @@ jobs:
             if (-not $gui.HasExited) { Stop-Process -Id $gui.Id -Force -ErrorAction SilentlyContinue }
           }
           "Installed GUI window creation: PASS" | Set-Content "native-gui-startup.txt"
+                    $startupOutput = ((Get-Content $stdout -Raw -ErrorAction SilentlyContinue) + "`n" + (Get-Content $stderr -Raw -ErrorAction SilentlyContinue))
+          if ($startupOutput -match '(?i)Cannot load library.*qcadjsapi|No script handler found|Plugin loader reported error') {
+            throw "Installed CAD JavaScript plugin failed to load: $startupOutput"
+          }
                     "Installed executable headless launch: PASS" | Set-Content "native-installed-startup.txt"
           $uninstaller = Join-Path $destination "unins000.exe"
           if (-not (Test-Path $uninstaller)) { throw "Native CAD uninstaller missing" }
