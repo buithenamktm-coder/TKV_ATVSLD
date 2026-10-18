@@ -294,6 +294,32 @@ jobs:
           foreach ($relative in @("qcad.exe", "scripts/IMSATCAD/IMSATCAD.js", "licenses/QCAD-LICENSE.txt", "platforms/qwindows.dll", "Qt6Concurrent.dll", "Qt6PrintSupport.dll", "Qt6Qml.dll")) {
             if (-not (Test-Path (Join-Path $destination $relative))) { throw "Installed native CAD missing: $relative" }
           }
+          # Launch installed binary from its installation directory rather
+          # than the build tree; verify that Windows can resolve Qt DLLs.
+          $stdout = Join-Path $env:RUNNER_TEMP "native-installed-stdout.txt"
+          $stderr = Join-Path $env:RUNNER_TEMP "native-installed-stderr.txt"
+          $installedExe = Join-Path $destination "qcad.exe"
+          $oldPath = $env:PATH
+          try {
+            # Remove Qt installation and QCAD build folders from PATH.
+            $env:PATH = (($oldPath -split ';' | Where-Object {
+              $_ -and $_ -notmatch '(?i)[\\/]Qt[\\/]' -and
+              $_ -notmatch '(?i)native[\\/]qcad'
+            }) -join ';')
+            $proc = Start-Process -FilePath $installedExe -ArgumentList @("-no-gui", "-help") -WorkingDirectory $destination -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
+            if (-not $proc.WaitForExit(45000)) {
+              Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+              throw "Installed CAD executable timed out"
+            }
+            $proc.Refresh()
+            if ($proc.ExitCode -ne 0) {
+              Get-Content $stderr -ErrorAction SilentlyContinue | Select-Object -First 50
+              throw "Installed CAD failed to start: exit code $($proc.ExitCode)"
+            }
+          } finally {
+            $env:PATH = $oldPath
+          }
+          "Installed executable headless launch: PASS" | Set-Content "native-installed-startup.txt"
           $uninstaller = Join-Path $destination "unins000.exe"
           if (-not (Test-Path $uninstaller)) { throw "Native CAD uninstaller missing" }
           $uninstall = Start-Process -FilePath $uninstaller -ArgumentList @("/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART") -Wait -PassThru
@@ -309,6 +335,7 @@ jobs:
             IMSAT-CAD-Native-Development-Setup.exe
             native-installer-sha256.txt
             native-install-smoke.txt
+            native-installed-startup.txt
             native-commit-report.txt
             native-qt-dependencies.txt
             native-headless-smoke.txt
