@@ -186,6 +186,14 @@ jobs:
             if (-not (Test-Path $source)) { throw "Qt runtime unavailable: $source" }
             Copy-Item $source (Join-Path $exe.DirectoryName $dll) -Force
           }
+          # qcadjsapi loads Qt modules dynamically; windeployqt(qcad.exe)
+          # alone does not discover plugin-only and transitive Qt dependencies.
+          $qtModules = Get-ChildItem $qtBinDir -File -Filter "Qt6*.dll"
+          if ($qtModules.Count -lt 15) { throw "Qt deployment directory appears incomplete" }
+          foreach ($module in $qtModules) {
+            Copy-Item $module.FullName (Join-Path $exe.DirectoryName $module.Name) -Force
+          }
+          Write-Host "Bundled $($qtModules.Count) Qt6 runtime DLLs for dynamically loaded CAD plugins"
           Write-Host "Native CAD Qt runtime deployed: $($exe.DirectoryName)"
       - name: Verify packaged native CAD dependencies
         shell: pwsh
