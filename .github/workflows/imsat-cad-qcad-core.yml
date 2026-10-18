@@ -319,7 +319,26 @@ jobs:
           } finally {
             $env:PATH = $oldPath
           }
-          "Installed executable headless launch: PASS" | Set-Content "native-installed-startup.txt"
+          # Verify that a real GUI window can be created by the installed EXE.
+          # GitHub Windows runners can differ from a user's interactive desktop.
+          $gui = Start-Process -FilePath $installedExe -WorkingDirectory $destination -PassThru
+          $windowFound = $false
+          try {
+            for ($attempt = 0; $attempt -lt 30; $attempt++) {
+              Start-Sleep -Seconds 1
+              $gui.Refresh()
+              if ($gui.HasExited) { throw "Native CAD GUI exited early with code $($gui.ExitCode)" }
+              if ($gui.MainWindowHandle -ne [IntPtr]::Zero) {
+                $windowFound = $true
+                break
+              }
+            }
+            if (-not $windowFound) { throw "Native CAD did not create a main window within 30 seconds" }
+          } finally {
+            if (-not $gui.HasExited) { Stop-Process -Id $gui.Id -Force -ErrorAction SilentlyContinue }
+          }
+          "Installed GUI window creation: PASS" | Set-Content "native-gui-startup.txt"
+                    "Installed executable headless launch: PASS" | Set-Content "native-installed-startup.txt"
           $uninstaller = Join-Path $destination "unins000.exe"
           if (-not (Test-Path $uninstaller)) { throw "Native CAD uninstaller missing" }
           $uninstall = Start-Process -FilePath $uninstaller -ArgumentList @("/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART") -Wait -PassThru
@@ -336,6 +355,7 @@ jobs:
             native-installer-sha256.txt
             native-install-smoke.txt
             native-installed-startup.txt
+            native-gui-startup.txt
             native-commit-report.txt
             native-qt-dependencies.txt
             native-headless-smoke.txt
