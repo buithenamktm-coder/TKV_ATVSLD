@@ -22,7 +22,8 @@ LicenseFile=native-cad-stage\licenses\QCAD-LICENSE.txt
 [Files]
 Source: "native-cad-stage\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 [Icons]
-Name: "{group}\IMSAT CAD Native (Development)"; Filename: "{app}\qcad.exe"
+Name: "{group}\IMSAT CAD Native (Development)"; Filename: "{app}\qcad.exe"; WorkingDir: "{app}"
+Name: "{autodesktop}\IMSAT CAD Native (Development)"; Filename: "{app}\qcad.exe"; WorkingDir: "{app}"
 Name: "{group}\Uninstall IMSAT CAD Native"; Filename: "{uninstallexe}"
 [Run]
 Filename: "{app}\qcad.exe"; Description: "Launch IMSAT CAD Native (Development)"; Flags: nowait postinstall skipifsilent
