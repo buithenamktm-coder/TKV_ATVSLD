@@ -163,6 +163,15 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "windeployqt failed" }
           $platforms = Join-Path $exe.DirectoryName "platforms/qwindows.dll"
           if (-not (Test-Path $platforms)) { throw "Qt Windows platform plugin missing" }
+          # windeployqt scans the executable, but QCAD loads additional Qt
+          # modules indirectly through its CAD/JavaScript plugins.
+          $qtBinDir = Split-Path $qtBin -Parent
+          $runtime = @("Qt6Concurrent.dll", "Qt6PrintSupport.dll", "Qt6Qml.dll")
+          foreach ($dll in $runtime) {
+            $source = Join-Path $qtBinDir $dll
+            if (-not (Test-Path $source)) { throw "Qt runtime unavailable: $source" }
+            Copy-Item $source (Join-Path $exe.DirectoryName $dll) -Force
+          }
           Write-Host "Native CAD Qt runtime deployed: $($exe.DirectoryName)"
       - name: Verify packaged native CAD dependencies
         shell: pwsh
@@ -170,7 +179,7 @@ jobs:
           $release = "native/qcad/release"
           $exe = Get-ChildItem $release -File -Filter "qcad*.exe" | Select-Object -First 1
           if (-not $exe) { throw "Native QCAD executable missing" }
-          foreach ($dll in @("Qt6Core.dll", "Qt6Gui.dll", "Qt6Widgets.dll")) {
+          foreach ($dll in @("Qt6Core.dll", "Qt6Gui.dll", "Qt6Widgets.dll", "Qt6Concurrent.dll", "Qt6PrintSupport.dll", "Qt6Qml.dll")) {
             if (-not (Test-Path (Join-Path $release $dll))) { throw "Missing packaged dependency: $dll" }
           }
           if (-not (Test-Path (Join-Path $release "platforms/qwindows.dll"))) {
@@ -235,7 +244,10 @@ jobs:
             "scripts/IMSATCAD/IMSATCAD.js",
             "licenses/QCAD-LICENSE.txt",
             "licenses/SOURCE_AND_STATUS.txt",
-            "platforms/qwindows.dll"
+            "platforms/qwindows.dll",
+            "Qt6Concurrent.dll",
+            "Qt6PrintSupport.dll",
+            "Qt6Qml.dll"
           )
           foreach ($item in $required) {
             if (-not (Test-Path (Join-Path $stage $item))) { throw "Native package missing: $item" }
@@ -279,7 +291,7 @@ jobs:
           $destination = Join-Path $env:RUNNER_TEMP "IMSAT-CAD-Native-Install-Smoke"
           $install = Start-Process -FilePath $setup -ArgumentList @("/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/DIR=$destination") -Wait -PassThru
           if ($install.ExitCode -ne 0) { throw "Native installer exited with $($install.ExitCode)" }
-          foreach ($relative in @("qcad.exe", "scripts/IMSATCAD/IMSATCAD.js", "licenses/QCAD-LICENSE.txt", "platforms/qwindows.dll")) {
+          foreach ($relative in @("qcad.exe", "scripts/IMSATCAD/IMSATCAD.js", "licenses/QCAD-LICENSE.txt", "platforms/qwindows.dll", "Qt6Concurrent.dll", "Qt6PrintSupport.dll", "Qt6Qml.dll")) {
             if (-not (Test-Path (Join-Path $destination $relative))) { throw "Installed native CAD missing: $relative" }
           }
           $uninstaller = Join-Path $destination "unins000.exe"
