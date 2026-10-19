@@ -50,7 +50,7 @@ context.IMSATCAD.init();
 context.IMSATCAD.postInit();
 assert.strictEqual(toolbars.size, 9, "Expected eight legacy toolbars and IMSAT Ribbon");
 assert.strictEqual(ribbonPages.length, 6, "Missing IMSAT Ribbon tabs");
-assert.deepStrictEqual(ribbonPages.map(x => x.label), ["Home", "Insert", "Annotate", "View", "Manage"]);
+assert.deepStrictEqual(ribbonPages.map(x => x.label), ["Home", "Insert", "Annotate", "View", "Manage", "Output"]);
 assert(ribbonPages.every(x => x.page && x.page.parent), "Ribbon page not created");
 assert.strictEqual(toolbars.get("IMSATCADRibbonToolBar").widgets.length, 1, "Ribbon duplicated");
 const first = [...toolbars.values()].map(x => x.actions.length);
