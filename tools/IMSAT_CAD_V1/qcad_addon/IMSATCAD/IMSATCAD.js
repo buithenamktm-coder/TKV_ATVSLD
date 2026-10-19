@@ -178,6 +178,31 @@ IMSATCAD.populateToolBar = function(toolbar, scripts) {
     return installed;
 };
 
+// Keyboard policy used by the IMSAT command-input integration.
+// Return a semantic intent instead of synthesizing keystrokes globally:
+// global Space interception would break MText, dimensions and dialogs.
+IMSATCAD.resolveCommandKey = function(key, state) {
+    state = state || {};
+    if (state.textEditing || state.dialogOpen) {
+        return "pass";
+    }
+    if (key === "Escape" || key === "Esc") {
+        return "cancel";
+    }
+    if (key !== "Enter" && key !== "Return" && key !== "Space") {
+        return "pass";
+    }
+    if (state.commandText && state.commandText.replace(/^\\s+|\\s+$/g, "").length > 0) {
+        return "execute";
+    }
+    if (state.actionActive) {
+        return "confirm";
+    }
+    if (state.lastCommand) {
+        return "repeat";
+    }
+    return "pass";
+};
 IMSATCAD._aliases = [
     ["scripts/Draw/Line/Line2P/Line2P.js", ["line", "l", "ln"]],
     ["scripts/Draw/Polyline/DrawPolyline/DrawPolyline.js", ["pline", "pl", "polyline"]],
