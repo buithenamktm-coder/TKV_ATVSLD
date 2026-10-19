@@ -154,13 +154,13 @@ IMSATCAD.populateToolBar = function(toolbar, scripts) {
 };
 
 IMSATCAD._aliases = [
-    ["scripts/Draw/Line/Line2P/Line2P.js", ["line", "ln", "l"]],
-    ["scripts/Draw/Polyline/DrawPolyline/DrawPolyline.js", ["polyline", "pline", "pl"]],
+    ["scripts/Draw/Line/Line2P/Line2P.js", ["line", "l", "ln"]],
+    ["scripts/Draw/Polyline/DrawPolyline/DrawPolyline.js", ["pline", "pl", "polyline"]],
     ["scripts/Draw/Circle/CircleCR/CircleCR.js", ["circle", "c"]],
     ["scripts/Draw/Arc/Arc3P/Arc3P.js", ["arc", "a"]],
     ["scripts/Draw/Ellipse/EllipseCPP/EllipseCPP.js", ["ellipse", "el"]],
     ["scripts/Draw/Shape/ShapePolygonCP/ShapePolygonCP.js", ["polygon", "pol"]],
-    ["scripts/Draw/Shape/ShapeRectanglePP/ShapeRectanglePP.js", ["rectangle", "rectang", "rec"]],
+    ["scripts/Draw/Shape/ShapeRectanglePP/ShapeRectanglePP.js", ["rectang", "rec", "rectangle"]],
     ["scripts/Modify/Trim/Trim.js", ["trim", "tr"]],
     ["scripts/Modify/Offset/Offset.js", ["offset", "o"]],
     ["scripts/Modify/Round/Round.js", ["fillet", "f"]],
@@ -175,6 +175,13 @@ IMSATCAD._aliases = [
     ["scripts/Draw/Dimension/DimHorizontal/DimHorizontal.js", ["dimlinear", "dli"]],
     ["scripts/Draw/Dimension/DimAligned/DimAligned.js", ["dimaligned", "dal"]],
     ["scripts/Draw/Dimension/DimAngular/DimAngular.js", ["dimangular", "dan"]],
+    ["scripts/Draw/Dimension/DimRadial/DimRadial.js", ["dimradius", "dra"]],
+    ["scripts/Draw/Dimension/DimDiametric/DimDiametric.js", ["dimdiameter", "ddi"]],
+    ["scripts/Draw/Dimension/Leader/Leader.js", ["leader", "le"]],
+    ["scripts/View/Zoom/AutoZoom/AutoZoom.js", ["zoomextents", "ze"]],
+    ["scripts/View/Zoom/WindowZoom/WindowZoom.js", ["zoomwindow", "zw"]],
+    ["scripts/Edit/Undo/Undo.js", ["undo", "u"]],
+    ["scripts/Edit/Redo/Redo.js", ["redo"]],
     ["scripts/Layer/AddLayer/AddLayer.js", ["layernew"]],
     ["scripts/File/Save/Save.js", ["qsave"]],
     ["scripts/File/SaveAs/SaveAs.js", ["saveas"]]
@@ -211,6 +218,8 @@ IMSATCAD.postInit = function() {
                               " aliases, " + drawCount + " draw tools, " + modifyCount + " modify tools, " + annotationCount + " annotation, " + layerCount + " layer, " + utilityCount + " utilities, " + blockCount + " blocks, " + selectionCount + " selection, " + fileCount + " file");
     }
 };
+// AutoCAD-style aliases map to the closest native QCAD action; command prompts
+// and geometry behavior still require Windows interactive acceptance tests.
 // COPY and EXTEND aliases are intentionally withheld: QCAD Translate and Trim
 // require different options and are not drop-in AutoCAD COPY/EXTEND commands.
 // IMPORTANT: QCAD editing behavior differs from AutoCAD for some commands.
