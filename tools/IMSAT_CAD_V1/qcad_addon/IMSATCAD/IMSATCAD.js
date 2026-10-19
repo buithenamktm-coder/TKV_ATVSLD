@@ -187,8 +187,65 @@ IMSATCAD._aliases = [
     ["scripts/File/SaveAs/SaveAs.js", ["saveas"]]
 ];
 
+// Native Qt tabbed command surface; existing QCAD actions retain their behavior.
+// If the host Qt bridge does not expose these widgets, legacy toolbars remain usable.
+IMSATCAD._ribbonCreated = false;
+IMSATCAD._ribbonTabs = [
+    ["Home", ["_drawScripts", "_modifyScripts", "_layerScripts"]],
+    ["Insert", ["_blockScripts"]],
+    ["Annotate", ["_annotationScripts"]],
+    ["View", ["_utilityScripts"]],
+    ["Manage", ["_fileScripts", "_selectionScripts"]]
+];
+IMSATCAD.createRibbon = function() {
+    if (IMSATCAD._ribbonCreated) {
+        return true;
+    }
+    if (typeof QTabWidget === "undefined" || typeof QToolButton === "undefined" ||
+        typeof QWidget === "undefined" || typeof QHBoxLayout === "undefined") {
+        qWarning("IMSAT CAD: Qt tab widgets unavailable; retaining native toolbars");
+        return false;
+    }
+    try {
+        var host = EAction.getToolBar("IMSAT CAD", "IMSATCADRibbonToolBar", Qt.TopToolBarArea);
+        if (isNull(host)) {
+            return false;
+        }
+        var tabs = new QTabWidget(host);
+        tabs.objectName = "IMSATCADRibbonTabs";
+        for (var t = 0; t < IMSATCAD._ribbonTabs.length; ++t) {
+            var spec = IMSATCAD._ribbonTabs[t];
+            var page = new QWidget(tabs);
+            var layout = new QHBoxLayout(page);
+            var groups = spec[1];
+            for (var g = 0; g < groups.length; ++g) {
+                var scripts = IMSATCAD[groups[g]];
+                for (var a = 0; a < scripts.length; ++a) {
+                    var action = RGuiAction.getByScriptFile(scripts[a]);
+                    if (isNull(action)) {
+                        continue;
+                    }
+                    var button = new QToolButton(page);
+                    button.setDefaultAction(action);
+                    button.toolButtonStyle = Qt.ToolButtonTextUnderIcon;
+                    layout.addWidget(button);
+                }
+            }
+            layout.addStretch(1);
+            tabs.addTab(page, qsTr(spec[0]));
+        }
+        host.addWidget(tabs);
+        IMSATCAD._ribbonCreated = true;
+        return true;
+    } catch (error) {
+        qWarning("IMSAT CAD: tabbed toolbar unavailable: " + error);
+        return false;
+    }
+};
+
 IMSATCAD.postInit = function() {
     var win = RMainWindowQt.getMainWindow();
+    IMSATCAD.createRibbon();
     var success = 0;
     var missingAliases = [];
     for (var i=0; i<IMSATCAD._aliases.length; ++i) {
