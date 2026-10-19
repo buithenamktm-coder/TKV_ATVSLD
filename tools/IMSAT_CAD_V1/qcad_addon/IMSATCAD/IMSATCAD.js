@@ -48,6 +48,7 @@ IMSATCAD.init = function() {
     IMSATCAD.getBlocksToolBar();
     IMSATCAD.getSelectionToolBar();
     IMSATCAD.getFileToolBar();
+    // Group native tools consistently while retaining QCAD document handling.
 };
 // Reuse QCAD actions without duplicating geometry algorithms.
 IMSATCAD._drawScripts = [
