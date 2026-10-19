@@ -288,6 +288,17 @@ jobs:
             throw "Native CAD ZIP staging failed"
           }
           Write-Host "Native CAD staged with IMSAT scripts (runtime not yet validated)"
+      - name: Stage IMSAT CAD brand icon
+        shell: pwsh
+        run: |
+          python -m pip install --disable-pip-version-check Pillow
+          if ($LASTEXITCODE -ne 0) { throw "Pillow installation failed" }
+          python tools/IMSAT_CAD_V1/generate-brand.py
+          if ($LASTEXITCODE -ne 0) { throw "Brand icon generation failed" }
+          $icon = "tools/IMSAT_CAD_V1/assets/imsatcad.ico"
+          if (-not (Test-Path $icon)) { throw "IMSAT icon missing" }
+          New-Item -ItemType Directory -Force "native-cad-stage/branding" | Out-Null
+          Copy-Item $icon "native-cad-stage/branding/imsatcad.ico" -Force
       - name: Build experimental native Windows installer
         shell: pwsh
         run: |
