@@ -300,16 +300,16 @@ jobs:
           Copy-Item "tools/IMSAT_CAD_V1/imsatcad-native-v1.iss" "imsatcad-native-build.iss" -Force
           & $compiler "imsatcad-native-build.iss"
           if ($LASTEXITCODE -ne 0) { throw "Native Inno Setup compilation failed" }
-          if (-not (Test-Path "IMSAT-CAD-Native-Development-Setup.exe")) {
+          if (-not (Test-Path "IMSAT-CAD-V1.0-Setup.exe")) {
             throw "Native Windows setup was not generated"
           }
-          Get-FileHash "IMSAT-CAD-Native-Development-Setup.exe" -Algorithm SHA256 |
+          Get-FileHash "IMSAT-CAD-V1.0-Setup.exe" -Algorithm SHA256 |
             Format-List | Out-String | Set-Content "native-installer-sha256.txt"
           Write-Host "Native development installer compiled; installation and GUI not yet tested"
       - name: Smoke test native installer and uninstaller
         shell: pwsh
         run: |
-          $setup = (Resolve-Path "IMSAT-CAD-Native-Development-Setup.exe").Path
+          $setup = (Resolve-Path "IMSAT-CAD-V1.0-Setup.exe").Path
           $destination = Join-Path $env:RUNNER_TEMP "IMSAT-CAD-Native-Install-Smoke"
           $install = Start-Process -FilePath $setup -ArgumentList @("/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/DIR=$destination") -Wait -PassThru
           if ($install.ExitCode -ne 0) { throw "Native installer exited with $($install.ExitCode)" }
@@ -377,7 +377,7 @@ jobs:
           name: imsat-cad-native-qcad-build-evidence
           path: |
             imsat-cad-native-windows-build.zip
-            IMSAT-CAD-Native-Development-Setup.exe
+            IMSAT-CAD-V1.0-Setup.exe
             native-installer-sha256.txt
             native-install-smoke.txt
             native-installed-startup.txt
