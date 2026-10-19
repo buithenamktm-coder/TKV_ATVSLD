@@ -1,5 +1,6 @@
 ; IMSAT CAD V1.0 native installer (QCAD Community Edition GPLv3 core).
 ; Built only from native-cad-stage after successful Windows native CI.
+; The branded launcher must be staged as IMSATCAD.exe; upstream GPL notices remain intact.
 #define AppName "IMSAT CAD"
 #define AppVersion "1.0.0"
 #define AppPublisher "IMSAT"
@@ -32,12 +33,12 @@ LicenseFile=native-cad-stage\licenses\QCAD-LICENSE.txt
 Source: "native-cad-stage\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 [Icons]
 #ifexist "native-cad-stage\branding\imsatcad.ico"
-Name: "{group}\IMSAT CAD V1.0"; Filename: "{app}\qcad.exe"; WorkingDir: "{app}"; IconFilename: "{app}\branding\imsatcad.ico"
-Name: "{autodesktop}\IMSAT CAD V1.0"; Filename: "{app}\qcad.exe"; WorkingDir: "{app}"; IconFilename: "{app}\branding\imsatcad.ico"
+Name: "{group}\IMSAT CAD V1.0"; Filename: "{app}\IMSATCAD.exe"; WorkingDir: "{app}"; IconFilename: "{app}\branding\imsatcad.ico"
+Name: "{autodesktop}\IMSAT CAD V1.0"; Filename: "{app}\IMSATCAD.exe"; WorkingDir: "{app}"; IconFilename: "{app}\branding\imsatcad.ico"
 #else
-Name: "{group}\IMSAT CAD V1.0"; Filename: "{app}\qcad.exe"; WorkingDir: "{app}"
-Name: "{autodesktop}\IMSAT CAD V1.0"; Filename: "{app}\qcad.exe"; WorkingDir: "{app}"
+Name: "{group}\IMSAT CAD V1.0"; Filename: "{app}\IMSATCAD.exe"; WorkingDir: "{app}"
+Name: "{autodesktop}\IMSAT CAD V1.0"; Filename: "{app}\IMSATCAD.exe"; WorkingDir: "{app}"
 #endif
 Name: "{group}\Uninstall IMSAT CAD"; Filename: "{uninstallexe}"
 [Run]
-Filename: "{app}\qcad.exe"; Description: "Launch IMSAT CAD V1.0"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\IMSATCAD.exe"; Description: "Launch IMSAT CAD V1.0"; Flags: nowait postinstall skipifsilent
