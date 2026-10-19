@@ -38,6 +38,30 @@ IMSATCAD.getSelectionToolBar = function() {
 IMSATCAD.getUtilitiesToolBar = function() {
     return EAction.getToolBar(qsTr("IMSAT CAD - Utilities"), "IMSATCADUtilitiesToolBar", Qt.TopToolBarArea);
 };
+// IMSAT task-based workspace. Native QCAD toolbars remain dockable;
+// their captions and action groups provide a compact ribbon-like layout.
+IMSATCAD.configureWorkspace = function() {
+    var bars = [
+        IMSATCAD.getDrawToolBar(),
+        IMSATCAD.getModifyToolBar(),
+        IMSATCAD.getAnnotationToolBar(),
+        IMSATCAD.getLayerToolBar(),
+        IMSATCAD.getUtilitiesToolBar(),
+        IMSATCAD.getBlocksToolBar(),
+        IMSATCAD.getSelectionToolBar(),
+        IMSATCAD.getFileToolBar()
+    ];
+    for (var i = 0; i < bars.length; ++i) {
+        var bar = bars[i];
+        if (isNull(bar)) {
+            continue;
+        }
+        if (typeof bar.setToolButtonStyle === "function" &&
+                typeof Qt.ToolButtonTextUnderIcon !== "undefined") {
+            bar.setToolButtonStyle(Qt.ToolButtonTextUnderIcon);
+        }
+    }
+};
 IMSATCAD.init = function() {
     IMSATCAD.getMenu();
     IMSATCAD.getDrawToolBar();
@@ -48,7 +72,7 @@ IMSATCAD.init = function() {
     IMSATCAD.getBlocksToolBar();
     IMSATCAD.getSelectionToolBar();
     IMSATCAD.getFileToolBar();
-    // Group native tools consistently while retaining QCAD document handling.
+    IMSATCAD.configureWorkspace();
 };
 // Reuse QCAD actions without duplicating geometry algorithms.
 IMSATCAD._drawScripts = [
