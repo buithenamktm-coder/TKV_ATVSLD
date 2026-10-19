@@ -17,15 +17,16 @@ SolidCompression=yes
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequired=admin
-UninstallDisplayIcon={app}\qcad.exe
+UninstallDisplayIcon={app}\branding\imsatcad.ico
 AppComments=IMSAT CAD V1.0 — CAD 2D based on QCAD Community Edition (GPLv3)
 VersionInfoDescription=IMSAT CAD V1.0 Installer
+SetupIconFile=native-cad-stage\branding\imsatcad.ico
 LicenseFile=native-cad-stage\licenses\QCAD-LICENSE.txt
 [Files]
 Source: "native-cad-stage\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 [Icons]
-Name: "{group}\IMSAT CAD V1.0"; Filename: "{app}\qcad.exe"; WorkingDir: "{app}"
-Name: "{autodesktop}\IMSAT CAD V1.0"; Filename: "{app}\qcad.exe"; WorkingDir: "{app}"
+Name: "{group}\IMSAT CAD V1.0"; Filename: "{app}\qcad.exe"; WorkingDir: "{app}"; IconFilename: "{app}\branding\imsatcad.ico"
+Name: "{autodesktop}\IMSAT CAD V1.0"; Filename: "{app}\qcad.exe"; WorkingDir: "{app}"; IconFilename: "{app}\branding\imsatcad.ico"
 Name: "{group}\Uninstall IMSAT CAD"; Filename: "{uninstallexe}"
 [Run]
 Filename: "{app}\qcad.exe"; Description: "Launch IMSAT CAD V1.0"; Flags: nowait postinstall skipifsilent
