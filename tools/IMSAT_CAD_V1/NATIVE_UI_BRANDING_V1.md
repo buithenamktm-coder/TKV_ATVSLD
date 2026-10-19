@@ -54,3 +54,13 @@ Use the existing `assets/imsat_icon.b64` / `generate-brand.py` assets; do not fa
 - Any unsupported 3D/DWG feature is not represented as operational.
 - CI-only GUI window creation is insufficient: a real interactive Windows test
   is mandatory before declaring V1.0 ready.
+
+## Keyboard command acceptance — AutoCAD-style Enter / Spacebar
+- In the command input, Enter **or Spacebar** executes a recognized alias (L, PL, C, M, etc.).
+- During a CAD action, Enter or Spacebar confirms/finishes the current step only when that action permits it; never terminate an incomplete action unexpectedly.
+- At idle command prompt, Enter or Spacebar repeats the last completed repeatable CAD command.
+- Escape cancels the active CAD command without corrupting document or selection.
+- In Text/MText editors, dialogs, numeric expressions and any field accepting whitespace, Spacebar remains a literal space. Respect keyboard focus and Qt event propagation.
+- Keyboard shortcuts must not interfere with panning, selection, options toolbar or native QCAD command history.
+- Verify interactive Windows scenarios: L→Space→draw→Space; PL→Enter→vertices→Enter; C→Space; repeat with Space/Enter; Esc cancel; MText spaces; DXF save/reopen regression.
+- **Do not claim implemented** until a native Qt keyboard event integration and interactive Windows tests demonstrate the behavior. Merely assigning aliases does not implement Spacebar semantics.
