@@ -245,8 +245,11 @@ IMSATCAD._ribbonTabs = [
     ["Insert", ["_blockScripts"]],
     ["Annotate", ["_annotationScripts"]],
     ["View", ["_utilityScripts"]],
-    ["Manage", ["_fileScripts", "_selectionScripts"]]
+    ["Manage", ["_selectionScripts"]],
+    ["Output", ["_fileScripts"]]
 ];
+// Tabs list only available, implemented CAD commands. Parametric tools
+// are intentionally not advertised until real constraint actions exist.
 IMSATCAD.createRibbon = function() {
     if (IMSATCAD._ribbonCreated) {
         return true;
