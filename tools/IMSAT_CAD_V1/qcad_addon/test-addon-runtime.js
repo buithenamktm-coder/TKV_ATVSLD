@@ -14,12 +14,29 @@ function EAction() {}
 EAction.getMenu = () => menu;
 EAction.getToolBar = (label, id) => {
   if (!toolbars.has(id)) {
-    toolbars.set(id, { objectName: id, actions: [], addAction(a) { this.actions.push(a); } });
+    toolbars.set(id, { objectName: id, actions: [], widgets: [], addAction(a) { this.actions.push(a); }, addWidget(w) { this.widgets.push(w); } });
   }
   return toolbars.get(id);
 };
+const ribbonPages = [];
+function QWidget(parent) { this.parent = parent; }
+function QHBoxLayout(page) {
+  this.page = page;
+  this.widgets = [];
+  this.addWidget = button => this.widgets.push(button);
+  this.addStretch = () => {};
+}
+function QToolButton(parent) {
+  this.parent = parent;
+  this.setDefaultAction = action => { this.action = action; };
+}
+function QTabWidget(parent) {
+  this.parent = parent;
+  this.addTab = (page, label) => ribbonPages.push({ page, label });
+}
 const context = {
-  include() {}, EAction, qsTr: x => x, Qt: { TopToolBarArea: 1 },
+  include() {}, EAction, qsTr: x => x, Qt: { TopToolBarArea: 1, ToolButtonTextUnderIcon: 2 },
+  QWidget, QHBoxLayout, QToolButton, QTabWidget,
   isNull: x => x == null, qWarning: x => warnings.push(x),
   RMainWindowQt: { getMainWindow: () => ({ handleUserMessage: x => messages.push(x) }) },
   RGuiAction: { getByScriptFile(script) {
@@ -31,14 +48,19 @@ vm.runInNewContext(source, context, { filename: "IMSATCAD.js" });
 assert(context.IMSATCAD, "Add-on not loaded");
 context.IMSATCAD.init();
 context.IMSATCAD.postInit();
-assert.strictEqual(toolbars.size, 8, "Incorrect toolbar count");
+assert.strictEqual(toolbars.size, 9, "Expected eight legacy toolbars and IMSAT Ribbon");
+assert.strictEqual(ribbonPages.length, 5, "Missing IMSAT Ribbon tabs");
+assert.deepStrictEqual(ribbonPages.map(x => x.label), ["Home", "Insert", "Annotate", "View", "Manage"]);
+assert(ribbonPages.every(x => x.page && x.page.parent), "Ribbon page not created");
+assert.strictEqual(toolbars.get("IMSATCADRibbonToolBar").widgets.length, 1, "Ribbon duplicated");
 const first = [...toolbars.values()].map(x => x.actions.length);
-assert(first.every(x => x >= 2), "Empty toolbar");
+assert(first.filter(x => x >= 2).length === 8, "Legacy CAD toolbar missing");
 assert.strictEqual(menu.actions.length, new Set(menu.actions).size, "Duplicate menu actions");
 const menuCount = menu.actions.length;
 context.IMSATCAD.postInit();
 assert.deepStrictEqual([...toolbars.values()].map(x => x.actions.length), first, "Repeated init duplicated toolbar actions");
 assert.strictEqual(menu.actions.length, menuCount, "Repeated init duplicated menu actions");
+assert.strictEqual(ribbonPages.length, 5, "Repeated init duplicated ribbon tabs");
 // Verify aliases actually reach the native action objects, not only documentation.
 const expectedAliases = {
   "scripts/Draw/Line/Line2P/Line2P.js": ["line", "l", "ln"],
