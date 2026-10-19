@@ -308,6 +308,7 @@ jobs:
           }
           if (-not (Test-Path $compiler)) { throw "Inno Setup compiler missing" }
           if (-not (Test-Path "native-cad-stage/qcad.exe")) { throw "Native CAD entry executable missing" }
+          Copy-Item "native-cad-stage/qcad.exe" "native-cad-stage/IMSATCAD.exe" -Force
           Copy-Item "tools/IMSAT_CAD_V1/imsatcad-native-v1.iss" "imsatcad-native-build.iss" -Force
           & $compiler "imsatcad-native-build.iss"
           if ($LASTEXITCODE -ne 0) { throw "Native Inno Setup compilation failed" }
@@ -324,14 +325,14 @@ jobs:
           $destination = Join-Path $env:RUNNER_TEMP "IMSAT-CAD-Native-Install-Smoke"
           $install = Start-Process -FilePath $setup -ArgumentList @("/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/DIR=$destination") -Wait -PassThru
           if ($install.ExitCode -ne 0) { throw "Native installer exited with $($install.ExitCode)" }
-          foreach ($relative in @("qcad.exe", "scripts/IMSATCAD/IMSATCAD.js", "licenses/QCAD-LICENSE.txt", "platforms/qwindows.dll", "Qt6Concurrent.dll", "Qt6PrintSupport.dll", "Qt6Qml.dll")) {
+          foreach ($relative in @("IMSATCAD.exe", "scripts/IMSATCAD/IMSATCAD.js", "licenses/QCAD-LICENSE.txt", "platforms/qwindows.dll", "Qt6Concurrent.dll", "Qt6PrintSupport.dll", "Qt6Qml.dll")) {
             if (-not (Test-Path (Join-Path $destination $relative))) { throw "Installed native CAD missing: $relative" }
           }
           # Launch installed binary from its installation directory rather
           # than the build tree; verify that Windows can resolve Qt DLLs.
           $stdout = Join-Path $env:RUNNER_TEMP "native-installed-stdout.txt"
           $stderr = Join-Path $env:RUNNER_TEMP "native-installed-stderr.txt"
-          $installedExe = Join-Path $destination "qcad.exe"
+          $installedExe = Join-Path $destination "IMSATCAD.exe"
           $oldPath = $env:PATH
           try {
             # Remove Qt installation and QCAD build folders from PATH.
