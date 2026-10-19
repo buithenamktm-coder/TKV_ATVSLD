@@ -17,10 +17,16 @@ SolidCompression=yes
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequired=admin
+#ifexist "native-cad-stage\branding\imsatcad.ico"
 UninstallDisplayIcon={app}\branding\imsatcad.ico
+#else
+UninstallDisplayIcon={app}\qcad.exe
+#endif
 AppComments=IMSAT CAD V1.0 — CAD 2D based on QCAD Community Edition (GPLv3)
 VersionInfoDescription=IMSAT CAD V1.0 Installer
+#ifexist "native-cad-stage\branding\imsatcad.ico"
 SetupIconFile=native-cad-stage\branding\imsatcad.ico
+#endif
 LicenseFile=native-cad-stage\licenses\QCAD-LICENSE.txt
 [Files]
 Source: "native-cad-stage\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
