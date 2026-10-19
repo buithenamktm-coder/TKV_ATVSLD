@@ -49,7 +49,7 @@ assert(context.IMSATCAD, "Add-on not loaded");
 context.IMSATCAD.init();
 context.IMSATCAD.postInit();
 assert.strictEqual(toolbars.size, 9, "Expected eight legacy toolbars and IMSAT Ribbon");
-assert.strictEqual(ribbonPages.length, 5, "Missing IMSAT Ribbon tabs");
+assert.strictEqual(ribbonPages.length, 6, "Missing IMSAT Ribbon tabs");
 assert.deepStrictEqual(ribbonPages.map(x => x.label), ["Home", "Insert", "Annotate", "View", "Manage"]);
 assert(ribbonPages.every(x => x.page && x.page.parent), "Ribbon page not created");
 assert.strictEqual(toolbars.get("IMSATCADRibbonToolBar").widgets.length, 1, "Ribbon duplicated");
@@ -60,7 +60,7 @@ const menuCount = menu.actions.length;
 context.IMSATCAD.postInit();
 assert.deepStrictEqual([...toolbars.values()].map(x => x.actions.length), first, "Repeated init duplicated toolbar actions");
 assert.strictEqual(menu.actions.length, menuCount, "Repeated init duplicated menu actions");
-assert.strictEqual(ribbonPages.length, 5, "Repeated init duplicated ribbon tabs");
+assert.strictEqual(ribbonPages.length, 6, "Repeated init duplicated ribbon tabs");
 // Verify aliases actually reach the native action objects, not only documentation.
 const expectedAliases = {
   "scripts/Draw/Line/Line2P/Line2P.js": ["line", "l", "ln"],
