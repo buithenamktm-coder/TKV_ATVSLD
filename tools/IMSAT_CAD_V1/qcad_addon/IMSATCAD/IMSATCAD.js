@@ -363,7 +363,21 @@ IMSATCAD.postInit = function() {
     var blockCount = IMSATCAD.populateToolBar(IMSATCAD.getBlocksToolBar(), IMSATCAD._blockScripts);
     var selectionCount = IMSATCAD.populateToolBar(IMSATCAD.getSelectionToolBar(), IMSATCAD._selectionScripts);
     var fileCount = IMSATCAD.populateToolBar(IMSATCAD.getFileToolBar(), IMSATCAD._fileScripts);
-    if (ribbonReady) { IMSATCAD.hideDuplicateToolBars(); }
+    if (ribbonReady) {
+        IMSATCAD.hideDuplicateToolBars();
+        // QCAD's original toolbars remain available from View > Toolbars.
+        // Hide only on first IMSAT workspace activation; do not remove actions.
+        if (!IMSATCAD._nativeWorkspaceConfigured) {
+            IMSATCAD._nativeWorkspaceConfigured = true;
+            var nativeBars = ["DrawToolBar", "ModifyToolBar", "DimensionToolBar"];
+            for (var n = 0; n < nativeBars.length; ++n) {
+                var nativeBar = typeof win.findChild === "function" ? win.findChild("QToolBar", nativeBars[n]) : null;
+                if (!isNull(nativeBar) && typeof nativeBar.setVisible === "function") {
+                    nativeBar.setVisible(false);
+                }
+            }
+        }
+    }
     if (!isNull(win)) {
         win.handleUserMessage("IMSAT CAD: " + success + "/" + IMSATCAD._aliases.length +
                               " aliases, " + drawCount + " draw tools, " + modifyCount + " modify tools, " + annotationCount + " annotation, " + layerCount + " layer, " + utilityCount + " utilities, " + blockCount + " blocks, " + selectionCount + " selection, " + fileCount + " file");
