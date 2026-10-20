@@ -372,6 +372,23 @@ jobs:
             if (-not $gui.HasExited) { Stop-Process -Id $gui.Id -Force -ErrorAction SilentlyContinue }
           }
           "Installed GUI window creation: PASS" | Set-Content "native-gui-startup.txt"
+          # Record real installed binary identity. Copying qcad.exe under a new
+          # filename is not a completed IMSAT-branded native application.
+          $installedInfo = (Get-Item $installedExe).VersionInfo
+          $identity = @(
+            "Executable=$($installedExe)",
+            "ProductName=$($installedInfo.ProductName)",
+            "FileDescription=$($installedInfo.FileDescription)",
+            "OriginalFilename=$($installedInfo.OriginalFilename)",
+            "CompanyName=$($installedInfo.CompanyName)",
+            "GUIWindowCreated=$windowFound",
+            "RibbonTabsInteractivelyVerified=NO",
+            "NativeCommandClickTests=NOT_RUN",
+            "BrandingGate=NOT_READY"
+          )
+          $identity | Set-Content "native-branding-audit.txt" -Encoding UTF8
+          Write-Host "Native branding audit saved; GUI Ribbon and branding remain unverified"
+
                     $startupOutput = ((Get-Content $stdout -Raw -ErrorAction SilentlyContinue) + "`n" + (Get-Content $stderr -Raw -ErrorAction SilentlyContinue))
           if ($startupOutput -match '(?i)Cannot load library.*qcadjsapi|No script handler found|Plugin loader reported error') {
             throw "Installed CAD JavaScript plugin failed to load: $startupOutput"
@@ -394,6 +411,7 @@ jobs:
             native-install-smoke.txt
             native-installed-startup.txt
             native-gui-startup.txt
+            native-branding-audit.txt
             native-commit-report.txt
             native-qt-dependencies.txt
             native-plugin-dependencies.txt
