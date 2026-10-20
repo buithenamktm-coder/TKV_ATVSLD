@@ -253,7 +253,7 @@ IMSATCAD.createRibbon = function() {
     if (IMSATCAD._ribbonCreated) { return true; }
     if (typeof QTabWidget === "undefined" || typeof QToolButton === "undefined" ||
         typeof QWidget === "undefined" || typeof QHBoxLayout === "undefined" ||
-        typeof QVBoxLayout === "undefined" || typeof QLabel === "undefined") {
+        typeof QVBoxLayout === "undefined" || typeof QGridLayout === "undefined" || typeof QLabel === "undefined") {
         qWarning("IMSAT CAD RIBBON BLOCKED: required Qt widgets unavailable");
         return false;
     }
@@ -273,7 +273,7 @@ IMSATCAD.createRibbon = function() {
                 var panel = new QWidget(page);
                 var column = new QVBoxLayout(panel);
                 var buttons = new QWidget(panel);
-                var buttonRow = new QHBoxLayout(buttons);
+                var buttonGrid = new QGridLayout(buttons);
                 var scripts = IMSATCAD[panels[g][1]];
                 var groupActions = 0;
                 for (var i = 0; i < scripts.length; ++i) {
@@ -290,7 +290,7 @@ IMSATCAD.createRibbon = function() {
                     if (typeof button.setText === "function") { button.setText(label); }
                     if (typeof button.setToolTip === "function") { button.setToolTip(label); }
                     if (typeof button.setMinimumWidth === "function") { button.setMinimumWidth(84); }
-                    buttonRow.addWidget(button);
+                    buttonGrid.addWidget(button, Math.floor(groupActions / 3), groupActions % 3);
                     groupActions++;
                 }
                 if (groupActions === 0) { continue; }
