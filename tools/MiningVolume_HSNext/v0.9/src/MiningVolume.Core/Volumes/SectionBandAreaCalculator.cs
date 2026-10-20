@@ -59,8 +59,15 @@ namespace MiningVolume.Core.Volumes
             {
                 new P(s0, e0), new P(s1, e1), new P(s1, d1), new P(s0, d0)
             };
+            // Clipping cannot produce area outside this piece's elevation
+            // extent. Keep the same tolerance as the two clipping predicates:
+            // near-boundary pieces must still take the exact clipping path.
+            double minZ = Math.Min(Math.Min(e0, e1), Math.Min(d0, d1));
+            double maxZ = Math.Max(Math.Max(e0, e1), Math.Max(d0, d1));
             for (int i = 0; i < bands.Count; i++)
             {
+                if (maxZ < bands[i].LowerZ - tol || minZ > bands[i].UpperZ + tol)
+                    continue;
                 var clipped = ClipAbove(poly, bands[i].LowerZ, tol);
                 clipped = ClipBelow(clipped, bands[i].UpperZ, tol);
                 double a = Area(clipped);

@@ -31,6 +31,31 @@ internal static class FinalAuditRegression
         new SectionSystem(new Vec2(1,0),new Vec2(0,1),Boundary,p.Select(x=>x.Line).ToArray(),Array.Empty<string>()),p,Plane(5),Plane(0),
         new VolumeCalculationOptions{FromLevel=0,ToLevel=10,LevelStep=5});
     public static void Add(IDictionary<string,Action> tests) {
+        tests["section_band_extent_filter_preserves_analytic_cut_fill_and_band_order"] = () => {
+            var random = new Random(20261021);
+            var calculator = new SectionBandAreaCalculator();
+            for (int trial = 0; trial < 1000; trial++) {
+                double ht = random.NextDouble()*100-50;
+                double tk = random.NextDouble()*100-50;
+                var profile = Profile(1, ht, tk);
+                var bands = SectionVolumeCalculator.BuildBands(-100,100,5).ToArray();
+                if (trial % 2 == 0) Array.Reverse(bands);
+                var result = calculator.Calculate(profile,bands);
+                for (int i=0;i<bands.Length;i++) {
+                    double height = Math.Max(0,Math.Min(Math.Max(ht,tk),bands[i].UpperZ)-
+                        Math.Max(Math.Min(ht,tk),bands[i].LowerZ));
+                    Near(result.Bands[i].CutArea,ht>tk?height*10:0);
+                    Near(result.Bands[i].FillArea,ht<tk?height*10:0);
+                }
+                Near(result.CutArea,10*Math.Max(0,ht-tk));
+                Near(result.FillArea,10*Math.Max(0,tk-ht));
+            }
+            var line=Profile(1,1).Line;
+            var crossing=new SectionProfile(line,new[]{new SectionProfileSegment(
+                0,10,line.PointAt(0),line.PointAt(10),2,-2,0,0)},5,5,Array.Empty<string>());
+            var split=calculator.Calculate(crossing,SectionVolumeCalculator.BuildBands(10,-10,1));
+            Near(split.CutArea,5);Near(split.FillArea,5);
+        };
         tests["tin_region_corner_tolerance_uses_distance_not_segment_length"] = () => {
             const double x=470000,y=2400000,tol=1e-5;
             var ring=new[]{new Vec2(x,y),new Vec2(x+1000,y),new Vec2(x+1000,y+1000),new Vec2(x,y+1000)};
