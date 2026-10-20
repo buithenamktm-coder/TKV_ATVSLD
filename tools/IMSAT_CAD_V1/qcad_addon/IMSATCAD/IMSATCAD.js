@@ -285,7 +285,7 @@ IMSATCAD.createRibbon = function() {
                     // Avoid truncated script aliases in the native Ribbon.
                     // Native QAction text is often an abbreviated command name;
                     // use a full descriptive label derived from the action script.
-                    var filename = scripts[i].split("/").pop().replace(/\\.js$/, "");
+                    var filename = scripts[i].split("/").pop().replace(/\.js$/, "");
                     var label = filename.replace(/([a-z])([A-Z])/g, "$1 $2");
                     if (typeof button.setText === "function") { button.setText(label); }
                     if (typeof button.setToolTip === "function") { button.setToolTip(label); }
