@@ -26,6 +26,8 @@ function QHBoxLayout(page) {
   this.addWidget = button => this.widgets.push(button);
   this.addStretch = () => {};
 }
+function QVBoxLayout(page) { QHBoxLayout.call(this, page); }
+function QLabel(label, parent) { this.label = label; this.parent = parent; }
 function QToolButton(parent) {
   this.parent = parent;
   this.setDefaultAction = action => { this.action = action; };
@@ -33,10 +35,11 @@ function QToolButton(parent) {
 function QTabWidget(parent) {
   this.parent = parent;
   this.addTab = (page, label) => ribbonPages.push({ page, label });
+  Object.defineProperty(this, 'count', { get: () => ribbonPages.length });
 }
 const context = {
   include() {}, EAction, qsTr: x => x, Qt: { TopToolBarArea: 1, ToolButtonTextUnderIcon: 2 },
-  QWidget, QHBoxLayout, QToolButton, QTabWidget,
+  QWidget, QHBoxLayout, QVBoxLayout, QLabel, QToolButton, QTabWidget,
   isNull: x => x == null, qWarning: x => warnings.push(x),
   RMainWindowQt: { getMainWindow: () => ({ handleUserMessage: x => messages.push(x) }) },
   RGuiAction: { getByScriptFile(script) {
@@ -52,6 +55,8 @@ assert.strictEqual(toolbars.size, 9, "Expected eight legacy toolbars and IMSAT R
 assert.strictEqual(ribbonPages.length, 6, "Missing IMSAT Ribbon tabs");
 assert.deepStrictEqual(ribbonPages.map(x => x.label), ["Home", "Insert", "Annotate", "View", "Manage", "Output"]);
 assert(ribbonPages.every(x => x.page && x.page.parent), "Ribbon page not created");
+assert(context.IMSATCAD._ribbonCreated, "Native ribbon creation flag missing");
+assert(context.IMSATCAD._ribbonHost, "Native ribbon host not retained");
 assert.strictEqual(toolbars.get("IMSATCADRibbonToolBar").widgets.length, 1, "Ribbon duplicated");
 const first = [...toolbars.values()].map(x => x.actions.length);
 assert(first.filter(x => x >= 2).length === 8, "Legacy CAD toolbar missing");
@@ -81,6 +86,11 @@ assert.strictEqual(new Set(allAliases).size, allAliases.length, "Ambiguous dupli
 for (const unsafe of ["copy", "co", "cp", "extend", "ex"]) {
   assert(!allAliases.includes(unsafe), "Unsupported AutoCAD command incorrectly advertised: " + unsafe);
 }
-assert.strictEqual(warnings.length, 0, "Unexpected runtime warning: " + warnings.join("; "));
+assert(warnings.every(x => !x.includes("BLOCKED") && !x.includes("FAIL")), "Native Ribbon failure: " + warnings.join("; "));
 assert(messages.length >= 1, "Missing initialization status");
+// A missing native Qt widget must be surfaced as a blocker, never silently passed.
+const blockedContext = Object.assign({}, context, { QVBoxLayout: undefined });
+vm.runInNewContext(source, blockedContext, { filename: "IMSATCAD.js" });
+assert.strictEqual(blockedContext.IMSATCAD.createRibbon(), false, "Missing Qt widget must fail Ribbon creation");
+assert(warnings.some(x => x.includes("RIBBON BLOCKED")), "Missing explicit Ribbon blocker diagnostic");
 console.log("IMSAT CAD mocked runtime PASS:", toolbars.size, "toolbars,", menuCount, "unique menu actions");
