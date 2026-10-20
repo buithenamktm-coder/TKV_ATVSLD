@@ -62,7 +62,7 @@ assert.strictEqual(toolbars.size, 9, "Expected eight legacy toolbars and IMSAT R
 assert.strictEqual(ribbonPages.length, 6, "Missing IMSAT Ribbon tabs");
 assert(ribbonButtons.length > 30, "Expected actual Ribbon buttons");
 assert.strictEqual(gridPositions.length, ribbonButtons.length, "Ribbon grid must contain all command buttons");
-assert(gridPositions.every(p => p.col >= 0 && p.col < 3 && p.row >= 0), "Ribbon command grid exceeded three columns");
+assert(gridPositions.every(p => p.row >= 0 && p.row < 3 && p.col >= 0), "Ribbon command grid exceeded three rows");
 assert(ribbonButtons.every(b => b.text && !b.text.endsWith(".js")), "Ribbon button label must not expose script filename");
 assert(ribbonButtons.every(b => b.minimumWidth >= 84), "Ribbon button minimum width missing");
 assert(ribbonButtons.every(b => b.action), "Ribbon button missing native action");
