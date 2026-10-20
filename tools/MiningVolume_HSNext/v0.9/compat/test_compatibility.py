@@ -3,12 +3,56 @@ import unittest
 from pathlib import Path
 import xml.etree.ElementTree as ET
 import importlib.util
+import hashlib
+import json
+import shutil
+import subprocess
+import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 PROPS = ROOT / "compat" / "IMSAT.CadCompatibility.props"
 
 
 class CompatibilityBuildContracts(unittest.TestCase):
+    @unittest.skipUnless(shutil.which('pwsh'), 'PowerShell required for executable packaging test')
+    def test_package_accepts_dll_names_and_rolls_back_unsafe_names(self):
+        # Exercise the actual PowerShell validator, hashes and XML writer.
+        # Synthetic payloads test packaging only, never AutoCAD compatibility.
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            compiled = root / 'compiled'
+            compiled.mkdir()
+            names = ['MiningVolume2023.dll', 'MiningVolume.Core.dll',
+                     'MiningVolume.Surface.dll', 'MiningVolume.Cdt.Native.dll',
+                     'MiningVolume.Cad2023.dll']
+            files = []
+            for name in names:
+                data = ('packaging fixture ' + name).encode()
+                (compiled / name).write_bytes(data)
+                files.append({'name': name, 'sha256': hashlib.sha256(data).hexdigest()})
+            manifest = dict(flavor='ACAD2023_NET48', compile='PASS', host='NOT_TESTED',
+                            release='BLOCKED', source_sha='a'*40, files=files)
+            def run(output):
+                (compiled / 'COMPILE_MANIFEST.json').write_text(json.dumps(manifest))
+                return subprocess.run(['pwsh', '-NoProfile', '-File',
+                    str(ROOT/'compat/package_qa_bundle.ps1'), '-Flavor', 'ACAD2023_NET48',
+                    '-CompiledDirectory', str(compiled), '-OutputDirectory', str(output)],
+                    capture_output=True, text=True)
+            result = run(root/'valid')
+            self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
+            bundle = root/'valid/IMSATVolume_ACAD2023_NET48.bundle'
+            self.assertEqual(len(list((bundle/'Contents/Windows').glob('*.dll'))), 5)
+            self.assertEqual(ET.parse(bundle/'PackageContents.xml').getroot().find(
+                'Components/ComponentEntry').get('ModuleName'),
+                './Contents/Windows/MiningVolume2023.dll')
+            for index, name in enumerate(['../escape.dll', 'evil.dll.exe', 'folder/evil.dll']):
+                manifest['files'] = files + [{'name': name, 'sha256': '0'*64}]
+                output = root/('invalid'+str(index))
+                result = run(output)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn('Unsafe DLL path', result.stdout+result.stderr)
+                self.assertFalse((output/'IMSATVolume_ACAD2023_NET48.bundle').exists())
+
     def test_missing_or_green_ci_never_becomes_host_acceptance(self):
         spec=importlib.util.spec_from_file_location('qa_data', ROOT/'compat/make_qa_data.py')
         module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)

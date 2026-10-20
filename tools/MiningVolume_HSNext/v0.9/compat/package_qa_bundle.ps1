@@ -34,7 +34,7 @@ New-Item -ItemType Directory -Path $windowsDir -Force | Out-Null
 try {
     foreach($f in $m.files) {
         $name=[string]$f.name
-        if($name -notmatch '^[A-Za-z0-9_.-]+\\.dll$'){throw "Unsafe DLL path: $name"}
+        if($name -notmatch '^[A-Za-z0-9_.-]+\.dll$'){throw "Unsafe DLL path: $name"}
         $source=Join-Path $CompiledDirectory $name
         if(!(Test-Path $source -PathType Leaf)){throw "Missing $source"}
         $actual=(Get-FileHash $source -Algorithm SHA256).Hash
