@@ -19,6 +19,7 @@ EAction.getToolBar = (label, id) => {
   return toolbars.get(id);
 };
 const ribbonPages = [];
+const ribbonButtons = [];
 function QWidget(parent) { this.parent = parent; }
 function QHBoxLayout(page) {
   this.page = page;
@@ -31,6 +32,10 @@ function QLabel(label, parent) { this.label = label; this.parent = parent; }
 function QToolButton(parent) {
   this.parent = parent;
   this.setDefaultAction = action => { this.action = action; };
+  this.setText = label => { this.text = label; };
+  this.setToolTip = tooltip => { this.tooltip = tooltip; };
+  this.setMinimumWidth = width => { this.minimumWidth = width; };
+  ribbonButtons.push(this);
 }
 function QTabWidget(parent) {
   this.parent = parent;
@@ -53,6 +58,10 @@ context.IMSATCAD.init();
 context.IMSATCAD.postInit();
 assert.strictEqual(toolbars.size, 9, "Expected eight legacy toolbars and IMSAT Ribbon");
 assert.strictEqual(ribbonPages.length, 6, "Missing IMSAT Ribbon tabs");
+assert(ribbonButtons.length > 30, "Expected actual Ribbon buttons");
+assert(ribbonButtons.every(b => b.text && !b.text.endsWith(".js")), "Ribbon button label must not expose script filename");
+assert(ribbonButtons.every(b => b.minimumWidth >= 84), "Ribbon button minimum width missing");
+assert(ribbonButtons.every(b => b.action), "Ribbon button missing native action");
 assert.deepStrictEqual(ribbonPages.map(x => x.label), ["Home", "Insert", "Annotate", "View", "Manage", "Output"]);
 assert(ribbonPages.every(x => x.page && x.page.parent), "Ribbon page not created");
 assert(context.IMSATCAD._ribbonCreated, "Native ribbon creation flag missing");
