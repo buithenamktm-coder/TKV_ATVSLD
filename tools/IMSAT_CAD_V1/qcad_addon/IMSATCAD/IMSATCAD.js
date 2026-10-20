@@ -311,6 +311,22 @@ IMSATCAD.createRibbon = function() {
     }
 };
 
+// Keep native actions available but hide duplicated IMSAT legacy toolbars
+// only after the Ribbon has been constructed successfully.
+IMSATCAD.hideDuplicateToolBars = function() {
+    var bars = [
+        IMSATCAD.getDrawToolBar(), IMSATCAD.getModifyToolBar(),
+        IMSATCAD.getAnnotationToolBar(), IMSATCAD.getLayerToolBar(),
+        IMSATCAD.getUtilitiesToolBar(), IMSATCAD.getBlocksToolBar(),
+        IMSATCAD.getSelectionToolBar(), IMSATCAD.getFileToolBar()
+    ];
+    for (var i = 0; i < bars.length; ++i) {
+        if (!isNull(bars[i]) && typeof bars[i].setVisible === "function") {
+            bars[i].setVisible(false);
+        }
+    }
+};
+
 IMSATCAD.postInit = function() {
     var win = RMainWindowQt.getMainWindow();
     var success = 0;
@@ -339,6 +355,7 @@ IMSATCAD.postInit = function() {
     var blockCount = IMSATCAD.populateToolBar(IMSATCAD.getBlocksToolBar(), IMSATCAD._blockScripts);
     var selectionCount = IMSATCAD.populateToolBar(IMSATCAD.getSelectionToolBar(), IMSATCAD._selectionScripts);
     var fileCount = IMSATCAD.populateToolBar(IMSATCAD.getFileToolBar(), IMSATCAD._fileScripts);
+    if (ribbonReady) { IMSATCAD.hideDuplicateToolBars(); }
     if (!isNull(win)) {
         win.handleUserMessage("IMSAT CAD: " + success + "/" + IMSATCAD._aliases.length +
                               " aliases, " + drawCount + " draw tools, " + modifyCount + " modify tools, " + annotationCount + " annotation, " + layerCount + " layer, " + utilityCount + " utilities, " + blockCount + " blocks, " + selectionCount + " selection, " + fileCount + " file");
