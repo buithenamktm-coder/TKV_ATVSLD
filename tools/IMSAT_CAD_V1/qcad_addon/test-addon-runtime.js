@@ -28,6 +28,8 @@ function QHBoxLayout(page) {
   this.addStretch = () => {};
 }
 function QVBoxLayout(page) { QHBoxLayout.call(this, page); }
+const gridPositions = [];
+function QGridLayout(page) { this.page = page; this.addWidget = (button, row, col) => gridPositions.push({ button, row, col }); }
 function QLabel(label, parent) { this.label = label; this.parent = parent; }
 function QToolButton(parent) {
   this.parent = parent;
@@ -44,7 +46,7 @@ function QTabWidget(parent) {
 }
 const context = {
   include() {}, EAction, qsTr: x => x, Qt: { TopToolBarArea: 1, ToolButtonTextUnderIcon: 2 },
-  QWidget, QHBoxLayout, QVBoxLayout, QLabel, QToolButton, QTabWidget,
+  QWidget, QHBoxLayout, QVBoxLayout, QGridLayout, QLabel, QToolButton, QTabWidget,
   isNull: x => x == null, qWarning: x => warnings.push(x),
   RMainWindowQt: { getMainWindow: () => ({ handleUserMessage: x => messages.push(x) }) },
   RGuiAction: { getByScriptFile(script) {
@@ -59,6 +61,8 @@ context.IMSATCAD.postInit();
 assert.strictEqual(toolbars.size, 9, "Expected eight legacy toolbars and IMSAT Ribbon");
 assert.strictEqual(ribbonPages.length, 6, "Missing IMSAT Ribbon tabs");
 assert(ribbonButtons.length > 30, "Expected actual Ribbon buttons");
+assert.strictEqual(gridPositions.length, ribbonButtons.length, "Ribbon grid must contain all command buttons");
+assert(gridPositions.every(p => p.col >= 0 && p.col < 3 && p.row >= 0), "Ribbon command grid exceeded three columns");
 assert(ribbonButtons.every(b => b.text && !b.text.endsWith(".js")), "Ribbon button label must not expose script filename");
 assert(ribbonButtons.every(b => b.minimumWidth >= 84), "Ribbon button minimum width missing");
 assert(ribbonButtons.every(b => b.action), "Ribbon button missing native action");
