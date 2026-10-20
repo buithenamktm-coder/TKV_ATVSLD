@@ -371,7 +371,7 @@ IMSATCAD.postInit = function() {
             IMSATCAD._nativeWorkspaceConfigured = true;
             var nativeBars = ["DrawToolBar", "ModifyToolBar", "DimensionToolBar"];
             for (var n = 0; n < nativeBars.length; ++n) {
-                var nativeBar = typeof win.findChild === "function" ? win.findChild("QToolBar", nativeBars[n]) : null;
+                var nativeBar = !isNull(win) && typeof win.findChild === "function" ? win.findChild("QToolBar", nativeBars[n]) : null;
                 if (!isNull(nativeBar) && typeof nativeBar.setVisible === "function") {
                     nativeBar.setVisible(false);
                 }
