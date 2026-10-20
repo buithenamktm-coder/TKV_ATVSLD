@@ -290,7 +290,9 @@ IMSATCAD.createRibbon = function() {
                     if (typeof button.setText === "function") { button.setText(label); }
                     if (typeof button.setToolTip === "function") { button.setToolTip(label); }
                     if (typeof button.setMinimumWidth === "function") { button.setMinimumWidth(84); }
-                    buttonGrid.addWidget(button, Math.floor(groupActions / 3), groupActions % 3);
+                    // Ribbon groups use three compact rows, expanding horizontally as needed.
+                    // This avoids very tall panels when a group has many actions.
+                    buttonGrid.addWidget(button, groupActions % 3, Math.floor(groupActions / 3));
                     groupActions++;
                 }
                 if (groupActions === 0) { continue; }
