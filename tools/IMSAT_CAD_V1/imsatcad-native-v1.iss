@@ -24,6 +24,10 @@ UninstallDisplayIcon={app}\branding\imsatcad.ico
 UninstallDisplayIcon={app}\qcad.exe
 #endif
 AppComments=IMSAT CAD V1.0 — CAD 2D based on QCAD Community Edition (GPLv3)
+AppCopyright=IMSAT CAD integration; QCAD Community Edition copyright belongs to its respective authors
+VersionInfoProductName=IMSAT CAD
+VersionInfoProductVersion=1.0.0
+VersionInfoCompany=IMSAT
 VersionInfoDescription=IMSAT CAD V1.0 Installer
 #ifexist "native-cad-stage\branding\imsatcad.ico"
 SetupIconFile=native-cad-stage\branding\imsatcad.ico
