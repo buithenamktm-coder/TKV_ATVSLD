@@ -45,6 +45,29 @@ internal static class FinalAuditRegression
         Check(canceled,"Canceled operation returned a result");
     }
     public static void Add(IDictionary<string,Action> tests) {
+        tests["section_band_search_matches_individual_clipping_for_order_gaps_overlap_and_tolerance"] = () => {
+            var random=new Random(20261022);
+            var calc=new SectionBandAreaCalculator();
+            for(int trial=0;trial<400;trial++) {
+                var line=Profile(1,1).Line;
+                double e0=random.NextDouble()*40-20,e1=random.NextDouble()*40-20;
+                double d0=random.NextDouble()*40-20,d1=random.NextDouble()*40-20;
+                if(trial%5==0) { e0=5+5e-10;e1=5-5e-10;d0=4;d1=4; }
+                var p=new SectionProfile(line,new[]{new SectionProfileSegment(
+                    0,10,line.PointAt(0),line.PointAt(10),e0,e1,d0,d1)},0,0,Array.Empty<string>());
+                var bands=Enumerable.Range(0,24).Select(i=>new LevelBand(i,i*2-24,
+                    i*2-24+(trial%3==0?3:trial%3==1?1:2))).ToArray();
+                if(trial%4==0)Array.Reverse(bands);
+                if(trial%4==1) { var swap=bands[3];bands[3]=bands[18];bands[18]=swap; }
+                if(trial%4==2)bands[12]=new LevelBand(12,-50,50); // nested: fallback
+                var all=calc.Calculate(p,bands);
+                for(int i=0;i<bands.Length;i++) {
+                    var individual=calc.Calculate(p,new[]{bands[i]});
+                    Check(all.Bands[i].CutArea==individual.CutArea && all.Bands[i].FillArea==individual.FillArea,
+                        "Band search changed exact clipping output at trial "+trial+", band "+i);
+                }
+            }
+        };
         tests["section_band_buffers_preserve_sloped_strip_areas_and_parallel_isolation"] = () => {
             // e(x)=2-0.4x, d(x)=0. Each half is a triangle of area 5.
             // Its unit-height strips have areas 3.75 and 1.25 analytically.

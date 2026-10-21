@@ -32,6 +32,7 @@ namespace MiningVolume.Core.Volumes
             var poly = new List<P>(4);
             var above = new List<P>(8);
             var clipped = new List<P>(8);
+            int bandOrder = MonotoneOrder(bands, tol, cancellationToken);
             foreach (var seg in profile.Segments)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -43,10 +44,10 @@ namespace MiningVolume.Core.Volumes
                 {
                     double u = d0 / (d0 - d1);
                     u = Math.Max(0, Math.Min(1, u));
-                    AddPiece(seg, 0, u, bands, cut, fill, tol, cancellationToken, poly, above, clipped);
-                    AddPiece(seg, u, 1, bands, cut, fill, tol, cancellationToken, poly, above, clipped);
+                    AddPiece(seg, 0, u, bands, cut, fill, tol, cancellationToken, poly, above, clipped, bandOrder);
+                    AddPiece(seg, u, 1, bands, cut, fill, tol, cancellationToken, poly, above, clipped, bandOrder);
                 }
-                else AddPiece(seg, 0, 1, bands, cut, fill, tol, cancellationToken, poly, above, clipped);
+                else AddPiece(seg, 0, 1, bands, cut, fill, tol, cancellationToken, poly, above, clipped, bandOrder);
             }
 
             var list = new List<BandArea>(bands.Count);
@@ -57,7 +58,7 @@ namespace MiningVolume.Core.Volumes
 
         private static void AddPiece(SectionProfileSegment seg, double u0, double u1,
             IReadOnlyList<LevelBand> bands, double[] cut, double[] fill, double tol, CancellationToken cancellationToken,
-            List<P> poly, List<P> above, List<P> clipped)
+            List<P> poly, List<P> above, List<P> clipped, int bandOrder)
         {
             if (u1 - u0 <= tol) return;
             double s0 = Lerp(seg.S0, seg.S1, u0), s1 = Lerp(seg.S0, seg.S1, u1);
@@ -74,7 +75,33 @@ namespace MiningVolume.Core.Volumes
             // near-boundary pieces must still take the exact clipping path.
             double minZ = Math.Min(Math.Min(e0, e1), Math.Min(d0, d1));
             double maxZ = Math.Max(Math.Max(e0, e1), Math.Max(d0, d1));
-            for (int i = 0; i < bands.Count; i++)
+            int first = 0, end = bands.Count;
+            if (bandOrder != 0 && !double.IsNaN(minZ) && !double.IsNaN(maxZ))
+            {
+                // Search a virtual ascending sequence; never reorder output or
+                // per-band accumulation. Use the exact original padded bounds.
+                int lo = 0, hi = bands.Count;
+                while (lo < hi)
+                {
+                    int mid = lo + (hi - lo) / 2;
+                    int index = bandOrder > 0 ? mid : bands.Count - 1 - mid;
+                    if (minZ > bands[index].UpperZ + tol) lo = mid + 1;
+                    else hi = mid;
+                }
+                int lower = lo;
+                lo = 0; hi = bands.Count;
+                while (lo < hi)
+                {
+                    int mid = lo + (hi - lo) / 2;
+                    int index = bandOrder > 0 ? mid : bands.Count - 1 - mid;
+                    if (maxZ < bands[index].LowerZ - tol) hi = mid;
+                    else lo = mid + 1;
+                }
+                first = bandOrder > 0 ? lower : bands.Count - lo;
+                end = bandOrder > 0 ? lo : bands.Count - lower;
+            }
+            cancellationToken.ThrowIfCancellationRequested();
+            for (int i = first; i < end; i++)
             {
                 if ((i & 255) == 0) cancellationToken.ThrowIfCancellationRequested();
                 if (maxZ < bands[i].LowerZ - tol || minZ > bands[i].UpperZ + tol)
@@ -85,6 +112,27 @@ namespace MiningVolume.Core.Volumes
                 if (a <= tol) continue;
                 if (dm > 0) cut[i] += a; else fill[i] += a;
             }
+        }
+
+        private static int MonotoneOrder(IReadOnlyList<LevelBand> bands, double tol, CancellationToken token)
+        {
+            if (bands.Count < 8 || double.IsNaN(tol) || double.IsInfinity(tol)) return 0;
+            bool ascending = true, descending = true;
+            double previousLow = 0, previousHigh = 0;
+            for (int i = 0; i < bands.Count; i++)
+            {
+                if ((i & 255) == 0) token.ThrowIfCancellationRequested();
+                double low = bands[i].LowerZ - tol, high = bands[i].UpperZ + tol;
+                if (double.IsNaN(low) || double.IsNaN(high)) return 0;
+                if (i > 0)
+                {
+                    ascending &= low >= previousLow && high >= previousHigh;
+                    descending &= low <= previousLow && high <= previousHigh;
+                    if (!ascending && !descending) return 0;
+                }
+                previousLow = low; previousHigh = high;
+            }
+            return ascending ? 1 : -1;
         }
 
         private static void ClipAbove(List<P> input, double z, double tol, List<P> output)
