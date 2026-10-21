@@ -112,6 +112,24 @@ for (const unsafe of ["copy", "co", "cp", "extend", "ex"]) {
 }
 assert(warnings.every(x => !x.includes("BLOCKED") && !x.includes("FAIL")), "Native Ribbon failure: " + warnings.join("; "));
 assert(messages.length >= 1, "Missing initialization status");
+// A missing registered CAD command must prevent any partial Ribbon from being mounted.
+const missingScript = "scripts/Draw/Line/Line2P/Line2P.js";
+const missingWarnings = [];
+const missingHostWidgets = [];
+const missingContext = Object.assign({}, context, {
+  qWarning: x => missingWarnings.push(x),
+  RGuiAction: { getByScriptFile(script) { return script === missingScript ? null : actions.get(script); } }
+});
+// A distinct toolbar host lets us prove that failure happens before Qt construction.
+function MissingEAction() {}
+MissingEAction.getMenu = EAction.getMenu;
+MissingEAction.getToolBar = (label, id) => ({ addWidget(widget) { missingHostWidgets.push(widget); } });
+missingContext.EAction = MissingEAction;
+vm.runInNewContext(source, missingContext, { filename: "IMSATCAD.js" });
+assert.strictEqual(missingContext.IMSATCAD.createRibbon(), false, "Missing CAD action must block Ribbon");
+assert.strictEqual(missingHostWidgets.length, 0, "Incomplete Ribbon must not mount Qt widgets");
+assert(missingWarnings.some(x => x.includes("RIBBON BLOCKED") && x.includes(missingScript)),
+  "Missing CAD action must produce actionable diagnostic");
 // A missing native Qt widget must be surfaced as a blocker, never silently passed.
 const blockedContext = Object.assign({}, context, { QVBoxLayout: undefined });
 vm.runInNewContext(source, blockedContext, { filename: "IMSATCAD.js" });
