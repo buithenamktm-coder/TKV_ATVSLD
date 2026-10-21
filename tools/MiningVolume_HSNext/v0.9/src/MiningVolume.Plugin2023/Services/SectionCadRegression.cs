@@ -66,7 +66,7 @@ namespace MiningVolume2023.Services
             Func<double,TinSurface> plane = z => new TinSurface("QA", new[] {
                 new Triangle3(new Vec3(0,0,z),new Vec3(10,0,z),new Vec3(10,10,z)),
                 new Triangle3(new Vec3(0,0,z),new Vec3(10,10,z),new Vec3(0,10,z)) }, new ValidationIssue[0]);
-            var options = new GridVolumeOptions { Boundary = boundary, SizeX = 5, SizeY = 5 };
+            var options = new GridVolumeOptions { Boundary = boundary, SizeX = 1, SizeY = 1 };
             var calc = new GridVolumeCalculator();
             var first = calc.Calculate(plane(5), plane(0), options);
             var second = calc.Calculate(plane(6), plane(0), options);
@@ -74,6 +74,21 @@ namespace MiningVolume2023.Services
             {
                 GridCadRenderer.Draw(db, first, false);
                 GridCadRenderer.Draw(db, second, false);
+                // Cancel before mutation, after 64 cells, and just before commit.
+                foreach (int cancelAt in new[] { 1, 3, 4 })
+                {
+                    int polls = 0;
+                    bool canceled = false;
+                    try
+                    {
+                        GridCadRenderer.Draw(db, first, true, pollCancellation: () =>
+                        {
+                            if (++polls == cancelAt) throw new OperationCanceledException();
+                        });
+                    }
+                    catch (OperationCanceledException) { canceled = true; }
+                    if (!canceled) throw new InvalidOperationException("Grid cancellation did not run.");
+                }
                 using (var tr = db.TransactionManager.StartTransaction())
                 {
                     var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);

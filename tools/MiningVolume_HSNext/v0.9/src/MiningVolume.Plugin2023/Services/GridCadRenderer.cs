@@ -19,7 +19,8 @@ namespace MiningVolume2023.Services
         internal const string CalculationIdApp = "IMSAT_GRID_CALCULATION";
 
         public static void Draw(Database database, GridVolumeReport report, bool labels,
-            Action<int, int> progress = null, CancellationToken cancellationToken = default(CancellationToken))
+            Action<int, int> progress = null, CancellationToken cancellationToken = default(CancellationToken),
+            Action pollCancellation = null)
         {
             if (database == null) throw new ArgumentNullException(nameof(database));
             if (report == null || report.Cells == null) throw new InvalidOperationException("Chưa có kết quả lưới.");
@@ -30,6 +31,7 @@ namespace MiningVolume2023.Services
                 throw new InvalidOperationException(
                     "Hệ lưới vượt 100.000 ô; hãy tăng kích thước ô hoặc chia vùng tính.");
             cancellationToken.ThrowIfCancellationRequested();
+            pollCancellation?.Invoke();
             using (var tr = database.TransactionManager.StartTransaction())
             using (var identity = new ResultBuffer(
                 new TypedValue((int)DxfCode.ExtendedDataRegAppName, CalculationIdApp),
@@ -56,8 +58,11 @@ namespace MiningVolume2023.Services
                 int total = report.Cells.Count;
                 foreach(var cell in report.Cells)
                 {
-                    if ((completed & 511) == 0)
+                    if ((completed & 63) == 0)
+                    {
                         cancellationToken.ThrowIfCancellationRequested();
+                        pollCancellation?.Invoke();
+                    }
                     if (cell == null || cell.Corners == null || cell.Corners.Count < 3)
                         throw new InvalidOperationException("Ô lưới có đường bao không hợp lệ.");
                     var v=cell.Volume;
@@ -108,6 +113,7 @@ namespace MiningVolume2023.Services
                         progress?.Invoke(completed, total);
                 }
                 cancellationToken.ThrowIfCancellationRequested();
+                pollCancellation?.Invoke();
                 // Commit once only: any failure leaves no partial CAD grid.
                 tr.Commit();
             }
