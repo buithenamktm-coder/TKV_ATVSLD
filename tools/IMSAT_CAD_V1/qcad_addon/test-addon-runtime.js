@@ -66,7 +66,7 @@ assert(gridPositions.every(p => p.row >= 0 && p.row < 3 && p.col >= 0), "Ribbon 
 assert(ribbonButtons.every(b => b.text && !b.text.endsWith(".js")), "Ribbon button label must not expose script filename");
 assert(ribbonButtons.every(b => b.minimumWidth >= 84), "Ribbon button minimum width missing");
 assert(ribbonButtons.every(b => b.action), "Ribbon button missing native action");
-assert.deepStrictEqual(ribbonPages.map(x => x.label), ["Home", "Insert", "Annotate", "View", "Manage", "Output"]);
+assert.deepStrictEqual(ribbonPages.map(x => x.label), ["Home / Trang chủ", "Insert / Chèn", "Annotate / Ghi chú", "View / Hiển thị", "Manage / Quản lý", "Output / Xuất bản"]);
 assert(ribbonPages.every(x => x.page && x.page.parent), "Ribbon page not created");
 assert(context.IMSATCAD._ribbonCreated, "Native ribbon creation flag missing");
 assert(context.IMSATCAD._ribbonHost, "Native ribbon host not retained");
