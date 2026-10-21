@@ -20,6 +20,7 @@ EAction.getToolBar = (label, id) => {
 };
 const ribbonPages = [];
 const ribbonButtons = [];
+const ribbonCaptions = [];
 function QWidget(parent) { this.parent = parent; }
 function QHBoxLayout(page) {
   this.page = page;
@@ -30,7 +31,7 @@ function QHBoxLayout(page) {
 function QVBoxLayout(page) { QHBoxLayout.call(this, page); }
 const gridPositions = [];
 function QGridLayout(page) { this.page = page; this.addWidget = (button, row, col) => gridPositions.push({ button, row, col }); }
-function QLabel(label, parent) { this.label = label; this.parent = parent; }
+function QLabel(label, parent) { this.label = label; this.parent = parent; ribbonCaptions.push(label); }
 function QToolButton(parent) {
   this.parent = parent;
   this.setDefaultAction = action => { this.action = action; };
@@ -68,6 +69,16 @@ assert(ribbonButtons.every(b => b.minimumWidth >= 84), "Ribbon button minimum wi
 assert(ribbonButtons.every(b => b.action), "Ribbon button missing native action");
 assert.deepStrictEqual(ribbonPages.map(x => x.label), ["Home / Trang chủ", "Insert / Chèn", "Annotate / Ghi chú", "View / Hiển thị", "Manage / Quản lý", "Output / Xuất bản"]);
 assert(ribbonPages.every(x => x.page && x.page.parent), "Ribbon page not created");
+const expectedGroupCaptions = [
+  "Draw / Vẽ", "Modify / Hiệu chỉnh", "Layers / Lớp",
+  "Blocks / Khối", "Dimensions / Kích thước",
+  "View & tools / Hiển thị và công cụ", "Selection / Lựa chọn",
+  "File & plot / Tệp và in"
+];
+assert.deepStrictEqual(ribbonCaptions, expectedGroupCaptions,
+  "Ribbon panel captions must retain bilingual labels");
+assert.strictEqual(new Set(ribbonCaptions).size, ribbonCaptions.length,
+  "Duplicate Ribbon panel captions");
 assert(context.IMSATCAD._ribbonCreated, "Native ribbon creation flag missing");
 assert(context.IMSATCAD._ribbonHost, "Native ribbon host not retained");
 assert.strictEqual(toolbars.get("IMSATCADRibbonToolBar").widgets.length, 1, "Ribbon duplicated");
