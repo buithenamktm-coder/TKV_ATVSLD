@@ -3,6 +3,7 @@ using System.Drawing;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Threading;
 using System.Windows.Forms;
 using MiningVolume.Core.Volumes;
 using MiningVolume2023.Services;
@@ -18,6 +19,7 @@ namespace MiningVolume2023.UI
         private readonly DataGridView _detail;
         private readonly DataGridView _levels;
         private readonly Button _calculate;
+        private CancellationTokenSource _calculationCts;
 
         public VolumePage()
         {
@@ -76,17 +78,21 @@ namespace MiningVolume2023.UI
 
         protected override void Dispose(bool disposing)
         {
-            if (disposing) ProjectState.Current.Changed -= OnStateChanged;
+            if (disposing) { _calculationCts?.Cancel(); ProjectState.Current.Changed -= OnStateChanged; }
             base.Dispose(disposing);
         }
 
         private async void CalculateClicked(object sender, EventArgs e)
         {
+            if (_calculationCts != null) { _calculationCts.Cancel(); return; }
             if (!LicenseUiGuard.Check()) return;
+            var cts = new CancellationTokenSource();
+            _calculationCts = cts;
+            var token = cts.Token;
             var st = ProjectState.Current;
             try
             {
-                _calculate.Enabled = false;
+                _calculate.Text = "Hủy tính khối lượng";
                 UseWaitCursor = true;
                 _status.Text = "Đang tính diện tích theo tầng và khối lượng giữa các mặt cắt...";
                 // Hard gate: calculation is allowed only when BOTH TINs are current
@@ -128,7 +134,8 @@ namespace MiningVolume2023.UI
                 long revisionExisting = st.Existing.Source.Revision;
                 long revisionDesign = st.Design.Source.Revision;
                 var watch = Stopwatch.StartNew();
-                var result = await Task.Run(() => VolumeWorkflowService.CalculateCore(system, profiles, existing, design, from, to, step));
+                var result = await Task.Run(() => VolumeWorkflowService.CalculateCore(system, profiles, existing, design, from, to, step, token));
+                token.ThrowIfCancellationRequested();
                 // Never commit an asynchronous volume result to a different DWG,
                 // TIN revision, section geometry or level parameter set.
                 if (!ReferenceEquals(doc, Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument) ||
@@ -154,12 +161,27 @@ namespace MiningVolume2023.UI
                         ? "Đã tính khối lượng thành công."
                         : "Đã tính khối lượng, cần kiểm tra cảnh báo.";
             }
+            catch (OperationCanceledException)
+            {
+                if (!IsDisposed) _status.Text = "Đã hủy; không ghi kết quả tính dở.";
+            }
             catch (Exception ex)
             {
+                if (IsDisposed) return;
                 _status.Text = "Chưa tính được khối lượng.";
                 MessageBox.Show(ex.Message, "Tính khối lượng", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
-            finally { UseWaitCursor = false; _calculate.Enabled = true; }
+            finally
+            {
+                _calculationCts = null;
+                cts.Dispose();
+                if (!IsDisposed)
+                {
+                    UseWaitCursor = false;
+                    _calculate.Text = "Tính / cập nhật khối lượng";
+                    _calculate.Enabled = true;
+                }
+            }
         }
 
         private void OnStateChanged(object sender, EventArgs e)
