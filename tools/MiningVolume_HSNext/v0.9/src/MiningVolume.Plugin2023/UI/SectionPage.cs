@@ -498,6 +498,9 @@ namespace MiningVolume2023.UI
                 var system = state.SectionSystem;
                 var existing = state.Existing.Tin;
                 var design = state.Design.Tin;
+                long existingRevision = state.Existing.Source.Revision;
+                long designRevision = state.Design.Source.Revision;
+                long regionRevision = state.TinRegionRevision;
                 var watch = Stopwatch.StartNew();
                 bool sampling = true;
                 IProgress<string> progress = new Progress<string>(message =>
@@ -521,7 +524,11 @@ namespace MiningVolume2023.UI
                 if (!ReferenceEquals(activeDoc, Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument) ||
                     !ReferenceEquals(system, state.SectionSystem) ||
                     !ReferenceEquals(existing, state.Existing.Tin) ||
-                    !ReferenceEquals(design, state.Design.Tin))
+                    !ReferenceEquals(design, state.Design.Tin) ||
+                    !state.Existing.IsTinCurrent || !state.Design.IsTinCurrent ||
+                    existingRevision != state.Existing.Source.Revision ||
+                    designRevision != state.Design.Source.Revision ||
+                    regionRevision != state.TinRegionRevision)
                     throw new InvalidOperationException(
                         "Bản vẽ, hệ mặt cắt hoặc TIN đã đổi trong khi tính. Không xuất kết quả cũ sang bản vẽ khác.");
                 int valid = profiles.Count(x => x.HasData);
@@ -535,7 +542,11 @@ namespace MiningVolume2023.UI
                 if (!ReferenceEquals(activeDoc, Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument) ||
                     !ReferenceEquals(system, state.SectionSystem) ||
                     !ReferenceEquals(existing, state.Existing.Tin) ||
-                    !ReferenceEquals(design, state.Design.Tin))
+                    !ReferenceEquals(design, state.Design.Tin) ||
+                    !state.Existing.IsTinCurrent || !state.Design.IsTinCurrent ||
+                    existingRevision != state.Existing.Source.Revision ||
+                    designRevision != state.Design.Source.Revision ||
+                    regionRevision != state.TinRegionRevision)
                     throw new InvalidOperationException(
                         "Bản vẽ hoặc mô hình đã đổi trong khi chọn điểm chèn. Đã giữ nguyên kết quả cũ.");
 
@@ -730,6 +741,9 @@ namespace MiningVolume2023.UI
                 var sectionSystem = state.SectionSystem;
                 var existing = state.Existing.Tin;
                 var design = state.Design.Tin;
+                long existingRevision = state.Existing.Source.Revision;
+                long designRevision = state.Design.Source.Revision;
+                long regionRevision = state.TinRegionRevision;
                 double from = state.FromLevel, to = state.ToLevel, step = state.LevelStep;
                 var watch = Stopwatch.StartNew();
                 _status.Text = "Đang tính lại diện tích đào/đắp và khối lượng từ mặt cắt đã sửa trên CAD...";
@@ -739,6 +753,10 @@ namespace MiningVolume2023.UI
                     !ReferenceEquals(sectionSystem, state.SectionSystem) ||
                     !ReferenceEquals(existing, state.Existing.Tin) ||
                     !ReferenceEquals(design, state.Design.Tin) ||
+                    !state.Existing.IsTinCurrent || !state.Design.IsTinCurrent ||
+                    existingRevision != state.Existing.Source.Revision ||
+                    designRevision != state.Design.Source.Revision ||
+                    regionRevision != state.TinRegionRevision ||
                     from != state.FromLevel || to != state.ToLevel || step != state.LevelStep ||
                     oldProfiles.Length != state.SectionProfiles.Count ||
                     oldProfiles.Where((v, i) => !ReferenceEquals(v, state.SectionProfiles[i])).Any())
