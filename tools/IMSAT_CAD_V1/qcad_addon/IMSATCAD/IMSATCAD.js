@@ -241,6 +241,10 @@ IMSATCAD._aliases = [
 // a missing Qt bridge is a release blocker, not evidence of a working Ribbon.
 IMSATCAD._ribbonCreated = false;
 IMSATCAD._ribbonHost = null;
+IMSATCAD._ribbonLanguage = "vi";
+IMSATCAD._ribbonTabsWidget = null;
+IMSATCAD._ribbonCaptions = [];
+IMSATCAD._ribbonLanguageButton = null;
 // Bilingual IMSAT Ribbon captions (does not replace upstream QCAD translations).
 IMSATCAD._ribbonVietnamese = {
     "Home": "Trang chủ", "Insert": "Chèn", "Annotate": "Ghi chú",
@@ -258,6 +262,29 @@ IMSATCAD._ribbonTabs = [
     ["Manage", [["Selection", "_selectionScripts"]]],
     ["Output", [["File & plot", "_fileScripts"]]]
 ];
+// Localize IMSAT tabs and panels without altering upstream CAD translations.
+IMSATCAD.ribbonLabel = function(name) {
+    return IMSATCAD._ribbonLanguage === "vi" && IMSATCAD._ribbonVietnamese[name] ?
+        IMSATCAD._ribbonVietnamese[name] : name;
+};
+IMSATCAD.setRibbonLanguage = function(language) {
+    if (language !== "vi" && language !== "en") { return false; }
+    IMSATCAD._ribbonLanguage = language;
+    var tabs = IMSATCAD._ribbonTabsWidget;
+    if (!isNull(tabs)) {
+        for (var t = 0; t < IMSATCAD._ribbonTabs.length; ++t) {
+            tabs.setTabText(t, IMSATCAD.ribbonLabel(IMSATCAD._ribbonTabs[t][0]));
+        }
+    }
+    for (var c = 0; c < IMSATCAD._ribbonCaptions.length; ++c) {
+        var caption = IMSATCAD._ribbonCaptions[c];
+        caption.widget.setText(IMSATCAD.ribbonLabel(caption.name));
+    }
+    if (!isNull(IMSATCAD._ribbonLanguageButton)) {
+        IMSATCAD._ribbonLanguageButton.setText(language === "vi" ? "English" : "Tiếng Việt");
+    }
+    return true;
+};
 IMSATCAD.createRibbon = function() {
     if (IMSATCAD._ribbonCreated) { return true; }
     if (typeof QTabWidget === "undefined" || typeof QToolButton === "undefined" ||
@@ -296,6 +323,7 @@ IMSATCAD.createRibbon = function() {
         var tabs = new QTabWidget(host);
         tabs.objectName = "IMSATCADRibbonTabs";
         var totalActions = 0;
+        var panelCaptions = [];
         for (var t = 0; t < IMSATCAD._ribbonTabs.length; ++t) {
             var spec = IMSATCAD._ribbonTabs[t];
             var page = new QWidget(tabs);
@@ -331,8 +359,8 @@ IMSATCAD.createRibbon = function() {
                 if (groupActions === 0) { continue; }
                 column.addWidget(buttons);
                 var groupName = panels[g][0];
-                var groupVi = IMSATCAD._ribbonVietnamese[groupName];
-                var caption = new QLabel(groupVi ? groupName + " / " + groupVi : groupName, panel);
+                var caption = new QLabel(IMSATCAD.ribbonLabel(groupName), panel);
+                panelCaptions.push({ widget: caption, name: groupName });
                 column.addWidget(caption);
                 row.addWidget(panel);
                 tabActions += groupActions;
@@ -342,11 +370,26 @@ IMSATCAD.createRibbon = function() {
                 qWarning("IMSAT CAD RIBBON BLOCKED: no registered actions in tab " + spec[0]);
                 return false;
             }
-            var tabVi = IMSATCAD._ribbonVietnamese[spec[0]];
-            tabs.addTab(page, tabVi ? spec[0] + " / " + tabVi : spec[0]);
+            tabs.addTab(page, IMSATCAD.ribbonLabel(spec[0]));
             totalActions += tabActions;
         }
+        // Reject a decorative selector with no native Qt signal.
+        var languageButton = new QToolButton(host);
+        if (isNull(languageButton.clicked) ||
+                typeof languageButton.clicked.connect !== "function") {
+            qWarning("IMSAT CAD RIBBON BLOCKED: language button has no Qt click signal");
+            return false;
+        }
+        languageButton.setText(IMSATCAD._ribbonLanguage === "vi" ? "English" : "Tiếng Việt");
+        languageButton.setToolTip("Change Ribbon language / Đổi ngôn ngữ Ribbon");
+        languageButton.clicked.connect(function() {
+            IMSATCAD.setRibbonLanguage(IMSATCAD._ribbonLanguage === "vi" ? "en" : "vi");
+        });
         host.addWidget(tabs);
+        host.addWidget(languageButton);
+        IMSATCAD._ribbonTabsWidget = tabs;
+        IMSATCAD._ribbonCaptions = panelCaptions;
+        IMSATCAD._ribbonLanguageButton = languageButton;
         IMSATCAD._ribbonHost = host;
         IMSATCAD._ribbonCreated = true;
         qWarning("IMSAT CAD Ribbon initialized: " + tabs.count + " tabs, " + totalActions + " actions");

@@ -31,18 +31,25 @@ function QHBoxLayout(page) {
 function QVBoxLayout(page) { QHBoxLayout.call(this, page); }
 const gridPositions = [];
 function QGridLayout(page) { this.page = page; this.addWidget = (button, row, col) => gridPositions.push({ button, row, col }); }
-function QLabel(label, parent) { this.label = label; this.parent = parent; ribbonCaptions.push(label); }
+function QLabel(label, parent) {
+  this.label = label; this.parent = parent;
+  this.setText = text => { this.label = text; };
+  ribbonCaptions.push(this);
+}
 function QToolButton(parent) {
   this.parent = parent;
   this.setDefaultAction = action => { this.action = action; };
   this.setText = label => { this.text = label; };
   this.setToolTip = tooltip => { this.tooltip = tooltip; };
   this.setMinimumWidth = width => { this.minimumWidth = width; };
+  this.clicked = { connect: callback => { this.onClick = callback; } };
+  this.click = () => { if (this.onClick) this.onClick(); };
   ribbonButtons.push(this);
 }
 function QTabWidget(parent) {
   this.parent = parent;
   this.addTab = (page, label) => ribbonPages.push({ page, label });
+  this.setTabText = (index, label) => { ribbonPages[index].label = label; };
   Object.defineProperty(this, 'count', { get: () => ribbonPages.length });
 }
 const context = {
@@ -61,27 +68,40 @@ context.IMSATCAD.init();
 context.IMSATCAD.postInit();
 assert.strictEqual(toolbars.size, 9, "Expected eight legacy toolbars and IMSAT Ribbon");
 assert.strictEqual(ribbonPages.length, 6, "Missing IMSAT Ribbon tabs");
-assert(ribbonButtons.length > 30, "Expected actual Ribbon buttons");
-assert.strictEqual(gridPositions.length, ribbonButtons.length, "Ribbon grid must contain all command buttons");
+const actionButtons = ribbonButtons.filter(b => b.action);
+assert(actionButtons.length > 30, "Expected actual Ribbon command buttons");
+assert.strictEqual(gridPositions.length, actionButtons.length, "Ribbon grid must contain all command buttons");
 assert(gridPositions.every(p => p.row >= 0 && p.row < 3 && p.col >= 0), "Ribbon command grid exceeded three rows");
-assert(ribbonButtons.every(b => b.text && !b.text.endsWith(".js")), "Ribbon button label must not expose script filename");
-assert(ribbonButtons.every(b => b.minimumWidth >= 84), "Ribbon button minimum width missing");
-assert(ribbonButtons.every(b => b.action), "Ribbon button missing native action");
-assert.deepStrictEqual(ribbonPages.map(x => x.label), ["Home / Trang chủ", "Insert / Chèn", "Annotate / Ghi chú", "View / Hiển thị", "Manage / Quản lý", "Output / Xuất bản"]);
+assert(actionButtons.every(b => b.text && !b.text.endsWith(".js")), "Ribbon button label must not expose script filename");
+assert(actionButtons.every(b => b.minimumWidth >= 84), "Ribbon button minimum width missing");
+assert(actionButtons.every(b => b.action), "Ribbon button missing native action");
+assert.deepStrictEqual(ribbonPages.map(x => x.label), ["Trang chủ", "Chèn", "Ghi chú", "Hiển thị", "Quản lý", "Xuất bản"]);
 assert(ribbonPages.every(x => x.page && x.page.parent), "Ribbon page not created");
 const expectedGroupCaptions = [
-  "Draw / Vẽ", "Modify / Hiệu chỉnh", "Layers / Lớp",
-  "Blocks / Khối", "Dimensions / Kích thước",
-  "View & tools / Hiển thị và công cụ", "Selection / Lựa chọn",
-  "File & plot / Tệp và in"
+  "Vẽ", "Hiệu chỉnh", "Lớp", "Khối", "Kích thước",
+  "Hiển thị và công cụ", "Lựa chọn", "Tệp và in"
 ];
-assert.deepStrictEqual(ribbonCaptions, expectedGroupCaptions,
+assert.deepStrictEqual(ribbonCaptions.map(x => x.label), expectedGroupCaptions,
   "Ribbon panel captions must retain bilingual labels");
-assert.strictEqual(new Set(ribbonCaptions).size, ribbonCaptions.length,
+assert.strictEqual(new Set(ribbonCaptions.map(x => x.label)).size, ribbonCaptions.length,
   "Duplicate Ribbon panel captions");
 assert(context.IMSATCAD._ribbonCreated, "Native ribbon creation flag missing");
 assert(context.IMSATCAD._ribbonHost, "Native ribbon host not retained");
-assert.strictEqual(toolbars.get("IMSATCADRibbonToolBar").widgets.length, 1, "Ribbon duplicated");
+assert.strictEqual(toolbars.get("IMSATCADRibbonToolBar").widgets.length, 2, "Ribbon or language selector duplicated");
+// The visible Qt selector must switch both tabs and panel labels, twice.
+const languageButton = context.IMSATCAD._ribbonLanguageButton;
+assert(languageButton && languageButton.onClick, "Ribbon language selector must be interactive");
+assert.strictEqual(languageButton.text, "English", "Vietnamese must be the initial Ribbon language");
+languageButton.click();
+assert.strictEqual(context.IMSATCAD._ribbonLanguage, "en");
+assert.deepStrictEqual(ribbonPages.map(x => x.label), ["Home", "Insert", "Annotate", "View", "Manage", "Output"]);
+assert.deepStrictEqual(ribbonCaptions.map(x => x.label), ["Draw", "Modify", "Layers", "Blocks", "Dimensions", "View & tools", "Selection", "File & plot"]);
+assert.strictEqual(languageButton.text, "Tiếng Việt");
+assert.strictEqual(context.IMSATCAD.setRibbonLanguage("xx"), false, "Unsupported locale must be rejected");
+languageButton.click();
+assert.deepStrictEqual(ribbonPages.map(x => x.label), ["Trang chủ", "Chèn", "Ghi chú", "Hiển thị", "Quản lý", "Xuất bản"]);
+assert.deepStrictEqual(ribbonCaptions.map(x => x.label), expectedGroupCaptions);
+assert.strictEqual(languageButton.text, "English");
 const first = [...toolbars.values()].map(x => x.actions.length);
 assert(first.filter(x => x >= 2).length === 8, "Legacy CAD toolbar missing");
 assert.strictEqual(menu.actions.length, new Set(menu.actions).size, "Duplicate menu actions");
