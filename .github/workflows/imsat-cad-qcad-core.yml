@@ -309,6 +309,22 @@ jobs:
           if (-not (Test-Path $compiler)) { throw "Inno Setup compiler missing" }
           if (-not (Test-Path "native-cad-stage/qcad.exe")) { throw "Native CAD entry executable missing" }
           Copy-Item "native-cad-stage/qcad.exe" "native-cad-stage/IMSATCAD.exe" -Force
+          # Ensure the Windows installer includes the actual IMSAT add-on and
+          # preserves upstream QCAD GPLv3 license and source information.
+          $stageRequired = @(
+            "native-cad-stage/IMSATCAD.exe",
+            "native-cad-stage/scripts/IMSATCAD/IMSATCAD.js",
+            "native-cad-stage/licenses/QCAD-LICENSE.txt",
+            "native-cad-stage/licenses/SOURCE_AND_STATUS.txt",
+            "native-cad-stage/branding/imsatcad.ico"
+          )
+          foreach ($item in $stageRequired) {
+            if (-not (Test-Path $item)) { throw "IMSAT CAD installer prerequisite missing: $item" }
+          }
+          $stagedExeHash = (Get-FileHash "native-cad-stage/IMSATCAD.exe" -Algorithm SHA256).Hash
+          $upstreamExeHash = (Get-FileHash "native-cad-stage/qcad.exe" -Algorithm SHA256).Hash
+          "ExecutableIsUpstreamCopy=$($stagedExeHash -eq $upstreamExeHash)" | Set-Content "native-executable-origin.txt"
+          "NativeBrandingRequiresSourceChanges=YES" | Add-Content "native-executable-origin.txt"
           Copy-Item "tools/IMSAT_CAD_V1/imsatcad-native-v1.iss" "imsatcad-native-build.iss" -Force
           & $compiler "imsatcad-native-build.iss"
           if ($LASTEXITCODE -ne 0) { throw "Native Inno Setup compilation failed" }
@@ -451,6 +467,7 @@ jobs:
             native-installed-startup.txt
             native-gui-startup.txt
             native-branding-audit.txt
+            native-executable-origin.txt
             native-ribbon-diagnostics.txt
             native-ribbon-acceptance.txt
             native-startup-output.txt
