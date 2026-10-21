@@ -595,6 +595,10 @@ namespace MiningVolume2023.UI
                     $"Tính {watch.Elapsed.TotalSeconds:0.0}s; vẽ {drawWatch.Elapsed.TotalSeconds:0.0}s." + autoRangeNote;
                 RefreshGrid();
             }
+            catch (OperationCanceledException)
+            {
+                _status.Text = "Đã hủy xuất mặt cắt; giữ nguyên mặt cắt và kết quả trước thao tác.";
+            }
             catch (Exception ex)
             {
                 _status.Text = "Không thành lập được mặt cắt.";

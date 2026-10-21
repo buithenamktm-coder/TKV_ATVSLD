@@ -94,7 +94,9 @@ namespace MiningVolume2023.Services
             int startIndex,
             int count,
             bool clearFirst,
-            double layoutGap = 90.0)
+            double layoutGap = 90.0,
+            double? batchStartY = null,
+            Action pollCancellation = null)
         {
             if (profiles == null || profiles.Count == 0) throw new InvalidOperationException("Chưa có dữ liệu mặt cắt.");
             if (double.IsNaN(horizontalScale) || double.IsInfinity(horizontalScale) ||
@@ -122,14 +124,14 @@ namespace MiningVolume2023.Services
                 ObjectId styleId = EnsureArialStyle(db, tr);
                 var ms = ModelSpace(db, tr, true);
                 if (clearFirst)
-                    EraseOnLayers(ms, tr, new[] { exLayer, deLayer, axLayer, txLayer });
+                    EraseOnLayers(ms, tr, new[] { exLayer, deLayer, axLayer, txLayer }, pollCancellation);
 
                 double baseX = insertion.X;
-                double currentY = insertion.Y;
+                double currentY = batchStartY ?? insertion.Y;
 
-                // Reconstruct the vertical origin for this batch deterministically
-                // from all earlier profile heights. No CAD scan is required.
-                for (int k = 0; k < startIndex; k++)
+                // Independent callers can reconstruct the origin. The normal
+                // export carries the exact previous ending Y and skips this scan.
+                for (int k = 0; !batchStartY.HasValue && k < startIndex; k++)
                 {
                     var prev = profiles[k];
                     double prevBaseZ = Math.Floor(prev.MinZ / levelStep) * levelStep;
@@ -140,6 +142,7 @@ namespace MiningVolume2023.Services
 
                 for (int pi = startIndex; pi < startIndex + count; pi++)
                 {
+                    pollCancellation?.Invoke();
                     var p = profiles[pi];
                     double width = Math.Max(1.0, p.Line.MaxT - p.Line.MinT);
                     double baseZ = Math.Floor(p.MinZ / levelStep) * levelStep;
@@ -182,6 +185,7 @@ namespace MiningVolume2023.Services
                     }
                     for (double z = baseZ; z <= topZ + 1e-9; z += levelStep)
                     {
+                        pollCancellation?.Invoke();
                         // Both sides share the same z and yy. Never independently
                         // round/interpolate the opposite scale.
                         double yy = y0 + (z - baseZ) * vExag;
@@ -214,7 +218,7 @@ namespace MiningVolume2023.Services
                     // Do NOT subtract MinT again: mine survey coordinates would
                     // displace the sampled curves millions of units off-frame.
                     AddProfilePolylines(ms, tr, p, x0,
-                        y0, baseZ, vExag, exLayer, deLayer);
+                        y0, baseZ, vExag, exLayer, deLayer, pollCancellation: pollCancellation);
 
                     currentY -= height + layoutGap;
                 }
@@ -336,11 +340,13 @@ namespace MiningVolume2023.Services
             return (BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace], write ? OpenMode.ForWrite : OpenMode.ForRead);
         }
 
-        private static void EraseOnLayers(BlockTableRecord ms, Transaction tr, IEnumerable<ObjectId> layers)
+        private static void EraseOnLayers(BlockTableRecord ms, Transaction tr, IEnumerable<ObjectId> layers, Action pollCancellation = null)
         {
             var set = new HashSet<ObjectId>(layers);
+            int scanned = 0;
             foreach (ObjectId id in ms)
             {
+                if ((scanned++ & 255) == 0) pollCancellation?.Invoke();
                 var e = tr.GetObject(id, OpenMode.ForRead) as Entity;
                 if (e != null && set.Contains(e.LayerId)) { e.UpgradeOpen(); e.Erase(); }
             }
@@ -380,7 +386,7 @@ namespace MiningVolume2023.Services
             double vExag,
             ObjectId existingLayer,
             ObjectId designLayer,
-            bool tagForEditing = true)
+            bool tagForEditing = true, Action pollCancellation = null)
         {
             if (profile == null || profile.Segments == null || profile.Segments.Count == 0)
                 return;
@@ -389,9 +395,11 @@ namespace MiningVolume2023.Services
             var design = new List<Point2d>();
             double previousS1 = double.NaN;
             int runIndex = 0;
+            int processed = 0;
 
             foreach (var segment in profile.Segments)
             {
+                if ((processed++ & 255) == 0) pollCancellation?.Invoke();
                 bool contiguous =
                     existing.Count > 0 &&
                     !double.IsNaN(previousS1) &&
@@ -403,7 +411,7 @@ namespace MiningVolume2023.Services
                     {
                         FlushProfilePair(ms, tr, profile.Line.Name, runIndex++,
                             existing, design, existingLayer, designLayer,
-                            x0, y0, baseZ, vExag, tagForEditing);
+                            x0, y0, baseZ, vExag, tagForEditing, pollCancellation);
                     }
                     existing.Clear();
                     design.Clear();
@@ -428,7 +436,7 @@ namespace MiningVolume2023.Services
             if (existing.Count >= 2)
                 FlushProfilePair(ms, tr, profile.Line.Name, runIndex,
                     existing, design, existingLayer, designLayer,
-                    x0, y0, baseZ, vExag, tagForEditing);
+                    x0, y0, baseZ, vExag, tagForEditing, pollCancellation);
         }
 
         private static void FlushProfilePair(
@@ -436,10 +444,10 @@ namespace MiningVolume2023.Services
             List<Point2d> existing, List<Point2d> design,
             ObjectId existingLayer, ObjectId designLayer,
             double x0, double y0, double baseZ, double vExag,
-            bool tagForEditing)
+            bool tagForEditing, Action pollCancellation)
         {
-            var a = FlushProfilePolyline(ms, tr, existing, existingLayer);
-            var c = FlushProfilePolyline(ms, tr, design, designLayer);
+            var a = FlushProfilePolyline(ms, tr, existing, existingLayer, pollCancellation);
+            var c = FlushProfilePolyline(ms, tr, design, designLayer, pollCancellation);
             if (a == null || c == null)
                 throw new InvalidOperationException("Không tạo được hai đường mặt cắt đối ứng.");
             // Only approved volume sections carry EditRegApp metadata.
@@ -472,14 +480,19 @@ namespace MiningVolume2023.Services
             BlockTableRecord ms,
             Transaction tr,
             List<Point2d> points,
-            ObjectId layer)
+            ObjectId layer, Action pollCancellation)
         {
             if (points == null || points.Count < 2) return null;
             var poly = new Polyline(points.Count) { LayerId = layer };
-            for (int i = 0; i < points.Count; i++)
-                poly.AddVertexAt(i, points[i], 0.0, 0.0, 0.0);
+            // Register before filling: cancellation leaves disposal/rollback
+            // with the enclosing transaction instead of leaking a native object.
             ms.AppendEntity(poly);
             tr.AddNewlyCreatedDBObject(poly, true);
+            for (int i = 0; i < points.Count; i++)
+            {
+                if ((i & 255) == 0) pollCancellation?.Invoke();
+                poly.AddVertexAt(i, points[i], 0.0, 0.0, 0.0);
+            }
             return poly;
         }
 

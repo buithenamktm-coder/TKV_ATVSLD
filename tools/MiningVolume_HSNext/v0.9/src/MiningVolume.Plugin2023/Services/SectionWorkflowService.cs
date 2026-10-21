@@ -177,6 +177,7 @@ namespace MiningVolume2023.Services
 
             const int batchSize = 20;
             int total = drawingProfiles.Count;
+            using (var meter = new SectionCadProgress(total))
             using (doc.LockDocument())
             using (var allSections = doc.Database.TransactionManager.StartTransaction())
             {
@@ -184,10 +185,11 @@ namespace MiningVolume2023.Services
                 // the OUTER transaction only after the final batch succeeds:
                 // an exception/cancel must leave the previous section drawing
                 // intact rather than erasing it and drawing only 20 profiles.
+                double nextY = insertion.Y;
                 for (int start = 0; start < total; start += batchSize)
                 {
                     int count = Math.Min(batchSize, total - start);
-                    SectionCadRenderer.ReplaceProfilesBatched(
+                    nextY = SectionCadRenderer.ReplaceProfilesBatched(
                         doc.Database,
                         drawingProfiles,
                         insertion,
@@ -197,9 +199,13 @@ namespace MiningVolume2023.Services
                         start,
                         count,
                         start == 0,
-                        layoutGap);
+                        layoutGap,
+                        nextY,
+                        meter.Poll);
+                    meter.Report(start + count);
                     progress?.Invoke(start + count, total);
                 }
+                meter.Poll();
                 allSections.Commit();
             }
         }

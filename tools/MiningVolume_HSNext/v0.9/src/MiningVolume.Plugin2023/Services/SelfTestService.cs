@@ -150,6 +150,8 @@ namespace MiningVolume2023.Services
                 }
 
                 RunCadTinLayerSmoke(r, existing, design);
+                SectionCadRegression.Run();
+                Check(r, true, "Bố trí mặt cắt theo lô không đổi; hủy xuất khôi phục đối tượng cũ trong side database");
             }
             catch (Exception ex)
             {
