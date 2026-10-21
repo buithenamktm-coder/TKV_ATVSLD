@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using MiningVolume.Core.Grid;
 using MiningVolume.Core.Reporting;
 
@@ -16,6 +17,24 @@ namespace MiningVolume2023.Services
         private const int FirstDataRow = 4; // 1 title + 1 note + 1 header.
         public static SpreadsheetReport Build(GridVolumeReport grid, GridVolumeOptions options)
         {
+            var state = ProjectState.Current;
+            var report = Capture(grid, options);
+            return BuildDataSheets(grid, report, state.MiningUnitGroup, state.MiningUnitName, state.VolumePeriodLabel);
+        }
+
+        // Called on the host thread. Capture all project metadata before yielding;
+        // the worker only reads the accepted grid and owns its new workbook.
+        public static Task<SpreadsheetReport> BuildAsync(GridVolumeReport grid, GridVolumeOptions options)
+        {
+            var report = Capture(grid, options);
+            string group = ProjectState.Current.MiningUnitGroup;
+            string unit = ProjectState.Current.MiningUnitName;
+            string period = ProjectState.Current.VolumePeriodLabel;
+            return Task.Run(() => BuildDataSheets(grid, report, group, unit, period));
+        }
+
+        private static SpreadsheetReport Capture(GridVolumeReport grid, GridVolumeOptions options)
+        {
             if (grid == null || grid.Cells == null) throw new InvalidOperationException("Chưa tính lưới ô vuông.");
             if (options == null) throw new ArgumentNullException(nameof(options));
             var r = new SpreadsheetReport
@@ -24,12 +43,18 @@ namespace MiningVolume2023.Services
                 Creator = "Bùi Thế Nam", CreatedAt = DateTime.Now
             };
             r.Sheets.Add(Info(grid, options));
+            return r;
+        }
+
+        private static SpreadsheetReport BuildDataSheets(GridVolumeReport grid, SpreadsheetReport r,
+            string unitGroup, string unitName, string period)
+        {
             r.Sheets.Add(Nodes(grid));
             r.Sheets.Add(Details(grid));
             r.Sheets.Add(GridSummary(grid));
-            r.Sheets.Add(Totals(grid));
+            r.Sheets.Add(Totals(grid, unitGroup, unitName, period));
             r.Sheets.Add(CalculationDetail(grid));
-            ExportWorkflowService.ApplyOrganizationHeader(r, ProjectState.Current);
+            ExportWorkflowService.ApplyOrganizationHeader(r, unitGroup, unitName);
             return r;
         }
 
@@ -180,7 +205,7 @@ namespace MiningVolume2023.Services
             return s;
         }
 
-        private static ReportSheet Totals(GridVolumeReport grid)
+        private static ReportSheet Totals(GridVolumeReport grid, string unitGroup, string unitName, string period)
         {
             var s=Sheet("TỔNG HỢP KHỐI LƯỢNG","KHỐI LƯỢNG TỔNG HỢP LƯỚI Ô VUÔNG",
                 "Chỉ tiêu","Giá trị","Đơn vị");
@@ -208,15 +233,14 @@ namespace MiningVolume2023.Services
                 ReportCell.Text("")});
             // Sign-off area belongs to the same volume-summary worksheet.
             // Keep all formula row numbers intact by appending after totals.
-            var state = ProjectState.Current;
             s.Rows.Add(new ReportCell[]{ReportCell.Text(""), ReportCell.Text(""), ReportCell.Text("")});
-            if (state.MiningUnitGroup != MiningUnitCatalog.OutsideTkv)
+            if (unitGroup != MiningUnitCatalog.OutsideTkv)
                 s.Rows.Add(new ReportCell[]{ReportCell.Text("Đơn vị cấp trên",true),
                     ReportCell.Text(""),ReportCell.Text(ExportWorkflowService.TkvParentHeading)});
             s.Rows.Add(new ReportCell[]{ReportCell.Text("Đơn vị tính toán",true),
-                ReportCell.Text(""),ReportCell.Text(state.MiningUnitName ?? "")});
+                ReportCell.Text(""),ReportCell.Text(unitName ?? "")});
             s.Rows.Add(new ReportCell[]{ReportCell.Text("Kỳ tính khối lượng",true),
-                ReportCell.Text(""),ReportCell.Text(state.VolumePeriodLabel)});
+                ReportCell.Text(""),ReportCell.Text(period)});
             s.Rows.Add(new ReportCell[]{ReportCell.Text(""),ReportCell.Text(""),ReportCell.Text("")});
             s.Rows.Add(new ReportCell[]{ReportCell.Text("NGƯỜI TÍNH TOÁN",true),
                 ReportCell.Text(""),ReportCell.Text("NGƯỜI KIỂM TRA",true)});

@@ -45,6 +45,36 @@ internal static class FinalAuditRegression
         Check(canceled,"Canceled operation returned a result");
     }
     public static void Add(IDictionary<string,Action> tests) {
+        tests["grid_async_workbook_captures_project_metadata_before_yield"] = () => {
+            var state=State();
+            state.MiningUnitGroup=MiningUnitCatalog.OutsideTkv;
+            state.MiningUnitName="Original grid unit";
+            var options=new GridVolumeOptions { Boundary=Boundary, SizeX=1, SizeY=1 };
+            var grid=new GridVolumeCalculator().Calculate(Plane(5),Plane(0),options);
+            var expected=GridVolumeExcelReportBuilder.Build(grid,options);
+            var pending=GridVolumeExcelReportBuilder.BuildAsync(grid,options);
+            state.MiningUnitName="Changed after export started";
+            var actual=pending.GetAwaiter().GetResult();
+            Check(actual.Sheets.Count==6,"Async grid lost sheets");
+            Check(!actual.IncludeImsatLogo,"Async grid lost outside-unit snapshot");
+            for(int i=0;i<6;i++) {
+                Check(actual.Sheets[i].Title==expected.Sheets[i].Title,"Async grid read live unit");
+                Check(actual.Sheets[i].Rows.Count==expected.Sheets[i].Rows.Count,"Async grid lost rows");
+            }
+            string file=Path.Combine(Path.GetTempPath(),"imsat-grid-async-"+Guid.NewGuid().ToString("N")+".xlsx");
+            try {
+                ExportWorkflowService.WriteXlsx(file,actual);
+                using(var zip=ZipFile.OpenRead(file))
+                using(var stream=zip.GetEntry("xl/worksheets/sheet1.xml").Open()) {
+                    var xml=XDocument.Load(stream);
+                    Check(xml.Descendants().Any(x=>x.Name.LocalName=="t" && x.Value==grid.CalculationId),"Async ID missing");
+                    Check(!xml.ToString().Contains("Changed after export started"),"Async metadata changed");
+                    using(var summary=zip.GetEntry("xl/worksheets/sheet5.xml").Open())
+                        Check(!XDocument.Load(summary).ToString().Contains("Changed after export started"),"Async signature metadata changed");
+                }
+            } finally { if(File.Exists(file))File.Delete(file); }
+        };
+
         tests["grid_calculation_id_survives_workbook_export_and_changes_on_recalculation"] = () => {
             State();
             var options=new GridVolumeOptions { Boundary=Boundary, SizeX=5, SizeY=5 };

@@ -24,6 +24,7 @@ namespace MiningVolume2023.UI
         private readonly Label _tinReuseStatus;
         private readonly DataGridView _cells;
         private bool _syncing;
+        private bool _exportingExcel;
         private CancellationTokenSource _cts;
         private readonly TableLayoutPanel _rootLayout;
         private readonly TableLayoutPanel _settingsGrid;
@@ -380,7 +381,8 @@ namespace MiningVolume2023.UI
 
         private async Task ExportExcelAsync()
         {
-            if (!LicenseUiGuard.Check()) return;
+            if (_exportingExcel || !LicenseUiGuard.Check()) return;
+            _exportingExcel=true;
             try
             {
                 if(!GridWorkflowService.IsCurrent)throw new InvalidOperationException(
@@ -417,14 +419,15 @@ namespace MiningVolume2023.UI
                     // taking a workbook snapshot.
                     GridWorkflowService.EnsureBoundaryCurrent(
                         BoundaryGeometryService.ReadBoundary(ProjectState.Current.GridBoundaryHandle));
-                    var report=GridVolumeExcelReportBuilder.Build(GridWorkflowService.Report,GridWorkflowService.Options);
-                    _excel.Enabled=false;UseWaitCursor=true;_status.Text="Đang xuất 6 sheet Excel...";
+                    _excel.Enabled=false;UseWaitCursor=true;_status.Text="Đang dựng 6 sheet Excel...";
+                    var report=await GridVolumeExcelReportBuilder.BuildAsync(GridWorkflowService.Report,GridWorkflowService.Options);
+                    _status.Text="Đang ghi Excel...";
                     await Task.Run(()=>ExportWorkflowService.WriteXlsx(dlg.FileName,report));
                     _status.Text="Đã xuất "+dlg.FileName;
                 }
             }
             catch(Exception ex){Error(ex,"Xuất lưới Excel");}
-            finally{UseWaitCursor=false;_excel.Enabled=true;}
+            finally{_exportingExcel=false;UseWaitCursor=false;_excel.Enabled=GridWorkflowService.Report!=null;}
         }
 
         private void RefreshCells()
@@ -437,7 +440,7 @@ namespace MiningVolume2023.UI
             _cells.RowCount=r?.Cells.Count??0;
             _cells.Invalidate();
             _draw.Enabled=r!=null;
-            _excel.Enabled=r!=null;
+            _excel.Enabled=r!=null && !_exportingExcel;
             _cancel.Enabled=_cts!=null;
         }
 

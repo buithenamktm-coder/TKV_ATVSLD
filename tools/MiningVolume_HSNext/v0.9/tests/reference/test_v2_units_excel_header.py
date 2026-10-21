@@ -34,7 +34,11 @@ def test_organization_above_excel_title_without_shifting_formula_rows():
     assert 'sheet.Title = prefix + "\\n" + sheet.OrganizationBaseTitle;' in report
     assert "ApplyOrganizationHeader(report, frozenGroup, frozenUnit);" in report
     assert "ApplyOrganizationHeader(report, ProjectState.Current);" not in report
-    assert "ExportWorkflowService.ApplyOrganizationHeader(r, ProjectState.Current);" in grid
+    assert "ExportWorkflowService.ApplyOrganizationHeader(r, unitGroup, unitName);" in grid
+    worker = grid.split("private static SpreadsheetReport BuildDataSheets(", 1)[1].split("private static ReportSheet Sheet(", 1)[0]
+    assert "ProjectState.Current" not in worker
+    totals = grid.split("private static ReportSheet Totals(", 1)[1]
+    assert "ProjectState.Current" not in totals
     mineral = source("src/MiningVolume.Plugin2023/Services/MineralVolumeExcelReportBuilder.cs")
     assert "ExportWorkflowService.ApplyOrganizationHeader(report, state);" in mineral
     assert "OrganizationBaseTitle" in writer
