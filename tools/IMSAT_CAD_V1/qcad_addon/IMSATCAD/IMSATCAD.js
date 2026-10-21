@@ -274,8 +274,14 @@ IMSATCAD.createRibbon = function() {
         for (var g0 = 0; g0 < groups0.length; ++g0) {
             var scripts0 = IMSATCAD[groups0[g0][1]];
             for (var i0 = 0; i0 < scripts0.length; ++i0) {
-                if (isNull(RGuiAction.getByScriptFile(scripts0[i0]))) {
-                    missingRibbonActions.push(scripts0[i0]);
+                try {
+                    if (isNull(RGuiAction.getByScriptFile(scripts0[i0]))) {
+                        missingRibbonActions.push(scripts0[i0]);
+                    }
+                } catch (lookupError) {
+                    qWarning("IMSAT CAD RIBBON BLOCKED: action lookup failed for " +
+                             scripts0[i0] + ": " + lookupError);
+                    return false;
                 }
             }
         }
