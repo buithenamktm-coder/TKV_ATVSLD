@@ -45,6 +45,31 @@ internal static class FinalAuditRegression
         Check(canceled,"Canceled operation returned a result");
     }
     public static void Add(IDictionary<string,Action> tests) {
+        tests["section_band_buffers_preserve_sloped_strip_areas_and_parallel_isolation"] = () => {
+            // e(x)=2-0.4x, d(x)=0. Each half is a triangle of area 5.
+            // Its unit-height strips have areas 3.75 and 1.25 analytically.
+            var line=Profile(1,1).Line;
+            var segments=Enumerable.Range(0,40).Select(i=>new SectionProfileSegment(
+                i*10,(i+1)*10,line.PointAt(i*10),line.PointAt((i+1)*10),
+                i%2==0?2:-2,i%2==0?-2:2,0,0)).ToArray();
+            var profile=new SectionProfile(line,segments,200,200,Array.Empty<string>());
+            var bands=SectionVolumeCalculator.BuildBands(-4,4,1).ToArray();
+            // Interleave empty and occupied bands to expose stale scratch data.
+            var shuffled=new[]{bands[0],bands[4],bands[7],bands[2],bands[5],bands[1],bands[3],bands[6]};
+            var calculator=new SectionBandAreaCalculator();
+            System.Threading.Tasks.Parallel.For(0,64,iteration=>{
+                var order=iteration%2==0?shuffled:shuffled.Reverse().ToArray();
+                var result=calculator.Calculate(profile,order);
+                for(int i=0;i<order.Length;i++) {
+                    double low=order[i].LowerZ;
+                    Near(result.Bands[i].CutArea,low==0?150:low==1?50:0);
+                    Near(result.Bands[i].FillArea,low==-1?150:low==-2?50:0);
+                }
+                Near(result.CutArea,200);Near(result.FillArea,200);
+                var zero=calculator.Calculate(Profile(1,0,0),order);
+                Near(zero.CutArea,0);Near(zero.FillArea,0);
+            });
+        };
         tests["sampler_cancel_during_index_build_does_not_publish_partial_cache"] = () => {
             using(var cts=new System.Threading.CancellationTokenSource()) {
                 var triangles=new ReadProbe<Triangle3>(Enumerable.Repeat(new Triangle3(

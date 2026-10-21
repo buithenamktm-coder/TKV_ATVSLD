@@ -26,6 +26,12 @@ namespace MiningVolume.Core.Volumes
             cancellationToken.ThrowIfCancellationRequested();
             var cut = new double[bands.Count];
             var fill = new double[bands.Count];
+            // Per-call scratch buffers: never shared between parallel profiles.
+            // Clear/reuse preserves vertex order and clipping arithmetic while
+            // avoiding two lists and four delegates for every intersected band.
+            var poly = new List<P>(4);
+            var above = new List<P>(8);
+            var clipped = new List<P>(8);
             foreach (var seg in profile.Segments)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -37,10 +43,10 @@ namespace MiningVolume.Core.Volumes
                 {
                     double u = d0 / (d0 - d1);
                     u = Math.Max(0, Math.Min(1, u));
-                    AddPiece(seg, 0, u, bands, cut, fill, tol, cancellationToken);
-                    AddPiece(seg, u, 1, bands, cut, fill, tol, cancellationToken);
+                    AddPiece(seg, 0, u, bands, cut, fill, tol, cancellationToken, poly, above, clipped);
+                    AddPiece(seg, u, 1, bands, cut, fill, tol, cancellationToken, poly, above, clipped);
                 }
-                else AddPiece(seg, 0, 1, bands, cut, fill, tol, cancellationToken);
+                else AddPiece(seg, 0, 1, bands, cut, fill, tol, cancellationToken, poly, above, clipped);
             }
 
             var list = new List<BandArea>(bands.Count);
@@ -50,7 +56,8 @@ namespace MiningVolume.Core.Volumes
         }
 
         private static void AddPiece(SectionProfileSegment seg, double u0, double u1,
-            IReadOnlyList<LevelBand> bands, double[] cut, double[] fill, double tol, CancellationToken cancellationToken)
+            IReadOnlyList<LevelBand> bands, double[] cut, double[] fill, double tol, CancellationToken cancellationToken,
+            List<P> poly, List<P> above, List<P> clipped)
         {
             if (u1 - u0 <= tol) return;
             double s0 = Lerp(seg.S0, seg.S1, u0), s1 = Lerp(seg.S0, seg.S1, u1);
@@ -59,10 +66,9 @@ namespace MiningVolume.Core.Volumes
             double dm = ((e0 + e1) - (d0 + d1)) * 0.5;
             if (Math.Abs(dm) <= tol) return;
 
-            var poly = new List<P>
-            {
-                new P(s0, e0), new P(s1, e1), new P(s1, d1), new P(s0, d0)
-            };
+            poly.Clear();
+            poly.Add(new P(s0, e0)); poly.Add(new P(s1, e1));
+            poly.Add(new P(s1, d1)); poly.Add(new P(s0, d0));
             // Clipping cannot produce area outside this piece's elevation
             // extent. Keep the same tolerance as the two clipping predicates:
             // near-boundary pieces must still take the exact clipping path.
@@ -73,42 +79,41 @@ namespace MiningVolume.Core.Volumes
                 if ((i & 255) == 0) cancellationToken.ThrowIfCancellationRequested();
                 if (maxZ < bands[i].LowerZ - tol || minZ > bands[i].UpperZ + tol)
                     continue;
-                var clipped = ClipAbove(poly, bands[i].LowerZ, tol);
-                clipped = ClipBelow(clipped, bands[i].UpperZ, tol);
+                ClipAbove(poly, bands[i].LowerZ, tol, above);
+                ClipBelow(above, bands[i].UpperZ, tol, clipped);
                 double a = Area(clipped);
                 if (a <= tol) continue;
                 if (dm > 0) cut[i] += a; else fill[i] += a;
             }
         }
 
-        private static List<P> ClipAbove(List<P> input, double z, double tol)
+        private static void ClipAbove(List<P> input, double z, double tol, List<P> output)
         {
-            return Clip(input, p => p.Z >= z - tol, (a, b) => IntersectHorizontal(a, b, z));
+            Clip(input, z, tol, true, output);
         }
 
-        private static List<P> ClipBelow(List<P> input, double z, double tol)
+        private static void ClipBelow(List<P> input, double z, double tol, List<P> output)
         {
-            return Clip(input, p => p.Z <= z + tol, (a, b) => IntersectHorizontal(a, b, z));
+            Clip(input, z, tol, false, output);
         }
 
-        private static List<P> Clip(List<P> input, Func<P, bool> inside, Func<P, P, P> intersect)
+        private static void Clip(List<P> input, double z, double tol, bool keepAbove, List<P> output)
         {
-            var output = new List<P>();
-            if (input == null || input.Count == 0) return output;
+            output.Clear();
+            if (input.Count == 0) return;
             P prev = input[input.Count - 1];
-            bool prevIn = inside(prev);
+            bool prevIn = keepAbove ? prev.Z >= z - tol : prev.Z <= z + tol;
             foreach (var cur in input)
             {
-                bool curIn = inside(cur);
+                bool curIn = keepAbove ? cur.Z >= z - tol : cur.Z <= z + tol;
                 if (curIn)
                 {
-                    if (!prevIn) output.Add(intersect(prev, cur));
+                    if (!prevIn) output.Add(IntersectHorizontal(prev, cur, z));
                     output.Add(cur);
                 }
-                else if (prevIn) output.Add(intersect(prev, cur));
+                else if (prevIn) output.Add(IntersectHorizontal(prev, cur, z));
                 prev = cur; prevIn = curIn;
             }
-            return output;
         }
 
         private static P IntersectHorizontal(P a, P b, double z)
