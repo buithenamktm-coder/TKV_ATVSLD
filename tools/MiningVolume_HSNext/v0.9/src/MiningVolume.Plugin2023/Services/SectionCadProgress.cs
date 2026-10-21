@@ -12,15 +12,15 @@ namespace MiningVolume2023.Services
         private readonly ProgressMeter _meter = new ProgressMeter();
         private readonly Stopwatch _paint = Stopwatch.StartNew();
         private int _completed;
-        internal SectionCadProgress(int total)
+        internal SectionCadProgress(int total, string operation = "xuất mặt cắt")
         {
-            _meter.Start("IMSAT: xuất mặt cắt — Esc để hủy");
+            _meter.Start("IMSAT: " + operation + " — Esc để hủy");
             _meter.SetLimit(Math.Max(1, total));
         }
         internal void Poll()
         {
             if ((GetAsyncKeyState(0x1B) & 0x8000) != 0)
-                throw new OperationCanceledException("Đã hủy xuất mặt cắt.");
+                throw new OperationCanceledException("Đã hủy thao tác xuất CAD.");
             if (_paint.ElapsedMilliseconds >= 250)
             {
                 Autodesk.AutoCAD.ApplicationServices.Application.UpdateScreen();

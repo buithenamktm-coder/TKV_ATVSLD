@@ -206,14 +206,23 @@ namespace MiningVolume2023.UI
                         existingTin, designTin, existingRevision, designRevision,
                     selectedUnitGroup, selectedUnitName, selectedPeriod);
                     _status.Text = "Đang chèn bảng khối lượng TABLE vào AutoCAD...";
+                    using (var progress = new SectionCadProgress(
+                        currentResult.Intervals.Count + currentResult.Levels.Count + 2, "xuất bảng khối lượng"))
                     using (doc.LockDocument())
-                        CadVolumeTableService.Insert(doc.Database, currentResult, cadInsertion.Value);
+                        CadVolumeTableService.Insert(doc.Database, currentResult, cadInsertion.Value,
+                            progress.Poll, progress.Report);
                 }
 
                 _status.Text = exportExcel && exportCad ? "Đã xuất bảng CAD và file Excel." :
                     exportCad ? "Đã xuất bảng khối lượng lên AutoCAD." : "Đã xuất: " + excelPath;
                 MessageBox.Show(_status.Text, "IMSAT VOLUME", MessageBoxButtons.OK,
                     MessageBoxIcon.Information);
+            }
+            catch (OperationCanceledException)
+            {
+                _status.Text = excelWritten
+                    ? "Đã hủy xuất CAD; file Excel đã xuất: " + excelPath
+                    : "Đã hủy xuất CAD; không lưu bảng dang dở.";
             }
             catch (Exception ex)
             {

@@ -6,6 +6,7 @@ using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.Geometry;
 using MiningVolume.Core.Geometry;
 using MiningVolume.Core.Sections;
+using MiningVolume.Core.Volumes;
 
 namespace MiningVolume2023.Services
 {
@@ -15,6 +16,7 @@ namespace MiningVolume2023.Services
     {
         internal static void Run()
         {
+            VerifyTableRollback();
             var profiles = new List<SectionProfile>();
             for (int i = 0; i < 25; i++)
             {
@@ -53,6 +55,77 @@ namespace MiningVolume2023.Services
                         throw new InvalidOperationException("Canceled section export did not restore original entities.");
                 }
             }
+        }
+
+        private static void VerifyTableRollback()
+        {
+            var intervals = new List<SectionIntervalVolume>();
+            var levels = new List<LevelVolumeSummary>();
+            var bands = new List<LevelBand>();
+            for (int i = 0; i < 85; i++)
+            {
+                intervals.Add(new SectionIntervalVolume { Index = i + 1,
+                    StartSection = "QA-" + i, EndSection = "QA-" + (i + 1),
+                    Distance = 20, CutAreaStart = 5, CutAreaEnd = 5, CutVolume = 100 });
+                var band = new LevelBand(i, i, i + 1);
+                bands.Add(band);
+                levels.Add(new LevelVolumeSummary { Band = band, CutVolume = 100 });
+            }
+            var result = new VolumeResult(bands, intervals, levels,
+                new SectionBandAreas[0], new string[0]);
+            using (var db = new Database(true, true))
+            {
+                int totalPolls = 0;
+                CadVolumeTableService.Insert(db, result, Point3d.Origin, () => totalPolls++);
+                string before = TableSnapshot(db);
+                foreach (int cancelAt in new[] { 1, totalPolls / 2, totalPolls })
+                {
+                    int polls = 0;
+                    bool canceled = false;
+                    try
+                    {
+                        CadVolumeTableService.Insert(db, result, new Point3d(1000, 0, 0), () =>
+                        {
+                            if (++polls >= cancelAt) throw new OperationCanceledException();
+                        });
+                    }
+                    catch (OperationCanceledException) { canceled = true; }
+                    if (!canceled || before != TableSnapshot(db))
+                        throw new InvalidOperationException("Canceled quantity table export left partial entities.");
+                }
+                // Invalid row occurs after the summary was appended: it must
+                // roll back that summary and dispose the unfinished interval table.
+                intervals[40].CutVolume = double.NaN;
+                bool failed = false;
+                try { CadVolumeTableService.Insert(db, result, new Point3d(1000, 0, 0)); }
+                catch (InvalidOperationException) { failed = true; }
+                if (!failed || before != TableSnapshot(db))
+                    throw new InvalidOperationException("Failed quantity table export changed existing tables.");
+            }
+        }
+
+        private static string TableSnapshot(Database db)
+        {
+            var output = new StringBuilder();
+            int count = 0;
+            using (var tr = db.TransactionManager.StartTransaction())
+            {
+                var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
+                var ms = (BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForRead);
+                foreach (ObjectId id in ms)
+                {
+                    var table = tr.GetObject(id, OpenMode.ForRead) as Table;
+                    if (table == null) throw new InvalidOperationException("Unexpected quantity table entity.");
+                    count++;
+                    output.Append(table.Handle).Append('|').Append(table.Layer);
+                    Point(output, table.Position);
+                    for (int row = 0; row < table.Rows.Count; row++)
+                        for (int col = 0; col < table.Columns.Count; col++)
+                            output.Append('|').Append(table.Cells[row, col].TextString);
+                }
+            }
+            if (count != 3) throw new InvalidOperationException("Expected exactly three quantity tables.");
+            return output.ToString();
         }
 
         private static void DrawBatches(Database db, IReadOnlyList<SectionProfile> profiles, Action poll)

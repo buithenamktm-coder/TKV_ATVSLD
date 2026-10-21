@@ -16,7 +16,7 @@ def test_cad_volume_tables_are_native_and_not_images():
     assert "interval.MergeCells(CellRange.Create(interval, 0, 0, 0, columns - 1))" in s
     assert "interval.MergeCells(CellRange.Create(interval, 1, 4, 1, 7))" in s
     assert "interval.MergeCells(CellRange.Create(interval, 1, 8, 1, 10))" in s
-    assert "StyleTable(interval, arial, totalRow)" in s
+    assert "StyleTable(interval, arial, totalRow, pollCancellation)" in s
     assert '"BẢNG TỔNG HỢP KHỐI LƯỢNG THEO MẶT CẮT"' in s
     assert "interval.Cells[totalRow, 8].TextString = F(result.TotalCutVolume)" in s
     # The old +1 row made AutoCAD treat STT as a merged TITLE and hide
