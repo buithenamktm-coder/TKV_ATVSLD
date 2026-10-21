@@ -69,8 +69,8 @@ def test_legacy_constraint_flip_updates_adjacency_locally_without_scanning_all_l
 def test_section_sampler_uses_reusable_triangle_spatial_index():
     s = read("src/MiningVolume.Core/Sections/TinSectionSampler.cs")
     assert "private sealed class TriangleGridIndex" in s
-    assert "IndexFor(existing)" in s
-    assert "IndexFor(design)" in s
+    assert "IndexFor(existing, cancellationToken)" in s
+    assert "IndexFor(design, cancellationToken)" in s
     assert "QuerySegmentTriangles(a, b)" in s
     assert "ITiledTriangleSource" in s
     assert "_tiled.QueryTiles" in s
@@ -103,7 +103,7 @@ def test_section_profiles_are_parallelized_but_keep_original_order():
     # Each parallel iteration still writes to result[i] in input order;
     # the wrapper adds conflict diagnostics without serializing sampling.
     assert "result[i] = AnnotateVerticalConflicts(" in s
-    assert "BuildProfileIndexed(lines[i], existingIndex, designIndex, tol)" in s
+    assert "BuildProfileIndexed(lines[i], existingIndex, designIndex, tol, cancellationToken)" in s
     assert "Interlocked.Increment" in s
 
 def test_section_cad_output_is_batched_to_avoid_one_giant_transaction():

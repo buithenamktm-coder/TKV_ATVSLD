@@ -30,7 +30,68 @@ internal static class FinalAuditRegression
     static VolumeResult Calculate(params SectionProfile[] p)=>new SectionVolumeCalculator().Calculate(
         new SectionSystem(new Vec2(1,0),new Vec2(0,1),Boundary,p.Select(x=>x.Line).ToArray(),Array.Empty<string>()),p,Plane(5),Plane(0),
         new VolumeCalculationOptions{FromLevel=0,ToLevel=10,LevelStep=5});
+    sealed class ReadProbe<T> : IReadOnlyList<T> {
+        readonly IReadOnlyList<T> items;
+        public Action<int> OnRead;
+        public ReadProbe(IReadOnlyList<T> items) { this.items=items; }
+        public int Count => items.Count;
+        public T this[int i] { get { OnRead?.Invoke(i);return items[i]; } }
+        public IEnumerator<T> GetEnumerator() { for(int i=0;i<Count;i++)yield return this[i]; }
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator()=>GetEnumerator();
+    }
+    static void ExpectCanceled(Action action) {
+        bool canceled=false;
+        try { action(); } catch(System.OperationCanceledException) { canceled=true; }
+        Check(canceled,"Canceled operation returned a result");
+    }
     public static void Add(IDictionary<string,Action> tests) {
+        tests["sampler_cancel_during_index_build_does_not_publish_partial_cache"] = () => {
+            using(var cts=new System.Threading.CancellationTokenSource()) {
+                var triangles=new ReadProbe<Triangle3>(Enumerable.Repeat(new Triangle3(
+                    new Vec3(0,0,5),new Vec3(10,0,5),new Vec3(0,10,5)),1024).ToArray());
+                var tin=new TinSurface("cancel",triangles,Array.Empty<ValidationIssue>());
+                triangles.OnRead=i=>{if(i==300)cts.Cancel();};
+                var sampler=new TinSectionSampler();
+                ExpectCanceled(()=>sampler.BuildProfile(Profile(1,5).Line,tin,tin,cancellationToken:cts.Token));
+                triangles.OnRead=null;
+                var recovered=sampler.BuildProfile(Profile(1,5).Line,tin,tin);
+                Check(recovered.HasData,"Canceled index poisoned sampler cache");
+                Near(recovered.CutArea,0);Near(recovered.FillArea,0);
+            }
+        };
+        tests["parallel_sections_cancel_from_progress_never_returns_partial_array"] = () => {
+            using(var cts=new System.Threading.CancellationTokenSource()) {
+                var sampler=new TinSectionSampler();var ht=Plane(5);var tk=Plane(0);
+                var lines=new[]{Profile(1,5).Line,Profile(2,5).Line};
+                ExpectCanceled(()=>sampler.BuildProfiles(lines,ht,tk,(done,total,name)=>cts.Cancel(),
+                    cancellationToken:cts.Token));
+                var fresh=sampler.BuildProfiles(lines,ht,tk);
+                Check(fresh.Count==2,"Recovery lost sections");
+                Near(fresh[0].CutArea,50);Near(fresh[1].CutArea,50);
+            }
+        };
+        tests["volume_cancel_during_band_area_never_returns_partial_result"] = () => {
+            using(var cts=new System.Threading.CancellationTokenSource()) {
+                var line=Profile(1,5).Line;
+                var segments=new ReadProbe<SectionProfileSegment>(Enumerable.Range(0,600).Select(i=>{
+                    double a=i/60d,b=(i+1)/60d;
+                    return new SectionProfileSegment(a,b,line.PointAt(a),line.PointAt(b),5,5,0,0);
+                }).ToArray());
+                var first=new SectionProfile(line,segments,50,0,Array.Empty<string>());
+                var second=Profile(2,5);
+                var system=new SectionSystem(new Vec2(1,0),new Vec2(0,1),Boundary,
+                    new[]{line,second.Line},Array.Empty<string>());
+                var ht=Plane(5);var tk=Plane(0);var calc=new SectionVolumeCalculator();
+                var options=new VolumeCalculationOptions{FromLevel=0,ToLevel=10,LevelStep=5};
+                segments.OnRead=i=>{if(i==300)cts.Cancel();};
+                ExpectCanceled(()=>calc.Calculate(system,new[]{first,second},ht,tk,options,cts.Token));
+                segments.OnRead=null;
+                var result=calc.Calculate(system,new[]{first,second},ht,tk,options);
+                Near(result.TotalCutVolume,1000);Near(result.TotalFillVolume,0);
+                Check(result.IsComplete,"Canceled operation mutated inputs");
+            }
+        };
+
         tests["section_band_extent_filter_preserves_analytic_cut_fill_and_band_order"] = () => {
             var random = new Random(20261021);
             var calculator = new SectionBandAreaCalculator();

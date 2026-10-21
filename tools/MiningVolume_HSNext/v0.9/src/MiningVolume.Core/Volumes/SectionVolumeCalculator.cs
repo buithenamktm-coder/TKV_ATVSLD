@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using System.Collections.Generic;
 using System.Linq;
 using MiningVolume.Core.Sections;
@@ -18,12 +19,14 @@ namespace MiningVolume.Core.Volumes
     public sealed class SectionVolumeCalculator
     {
         public VolumeResult Calculate(SectionSystem system, IReadOnlyList<SectionProfile> endProfiles,
-            TinSurface existing, TinSurface design, VolumeCalculationOptions options)
+            TinSurface existing, TinSurface design, VolumeCalculationOptions options,
+            CancellationToken cancellationToken = default(CancellationToken))
         {
             if (system == null) throw new ArgumentNullException(nameof(system));
             if (endProfiles == null) throw new ArgumentNullException(nameof(endProfiles));
             if (existing == null) throw new ArgumentNullException(nameof(existing));
             if (design == null) throw new ArgumentNullException(nameof(design));
+            cancellationToken.ThrowIfCancellationRequested();
             options = options ?? new VolumeCalculationOptions();
             // A nonoverlapping level range previously produced "valid" zero
             // volumes on every section. Fail with the true TIN Z extent.
@@ -65,6 +68,7 @@ namespace MiningVolume.Core.Volumes
 
             foreach (var line in ordered)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 if (!profileByName.TryGetValue(line.Name, out SectionProfile p) || !p.HasData)
                 {
                     warnings.Add(line.Name + ": chưa có mặt cắt hợp lệ, không dùng để tính khối lượng.");
@@ -78,7 +82,7 @@ namespace MiningVolume.Core.Volumes
                         ": thiếu dữ liệu cao độ trên một phần tuyến; diện tích mặt cắt chưa đầy đủ.");
                     continue;
                 }
-                var ba = areaCalc.Calculate(p, bands, options.Tolerance);
+                var ba = areaCalc.Calculate(p, bands, options.Tolerance, cancellationToken);
                 sectionAreas.Add(ba); areaByName[line.Name] = ba;
             }
 
@@ -91,6 +95,7 @@ namespace MiningVolume.Core.Volumes
 
             for (int i = 0; i < ordered.Count - 1; i++)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var a = ordered[i]; var b = ordered[i + 1];
                 double distance = Math.Abs(b.Offset - a.Offset);
                 if (distance <= options.Tolerance) { warnings.Add($"{a.Name}-{b.Name}: khoảng cách bằng 0, bỏ qua."); continue; }
@@ -111,8 +116,8 @@ namespace MiningVolume.Core.Volumes
                 var midLine = builder.BuildLineAtOffset(system.Boundary, system.Direction, midOffset, -(i + 1), "MID-", options.Tolerance);
                 if (midLine != null && !pa.IsUserEdited && !pb.IsUserEdited)
                 {
-                    pm = sampler.BuildProfile(midLine, existing, design, options.Tolerance);
-                    if (pm.HasData) am = areaCalc.Calculate(pm, bands, options.Tolerance);
+                    pm = sampler.BuildProfile(midLine, existing, design, options.Tolerance, cancellationToken);
+                    if (pm.HasData) am = areaCalc.Calculate(pm, bands, options.Tolerance, cancellationToken);
                 }
 
                 var cutFormula = SelectFormula(
@@ -150,6 +155,7 @@ namespace MiningVolume.Core.Volumes
 
                 for (int k = 0; k < bands.Count; k++)
                 {
+                    if ((k & 255) == 0) cancellationToken.ThrowIfCancellationRequested();
                     double c1 = aa.Bands[k].CutArea, c2 = ab.Bands[k].CutArea;
                     double f1 = aa.Bands[k].FillArea, f2 = ab.Bands[k].FillArea;
                     var cFormula = SelectFormula(
@@ -183,6 +189,7 @@ namespace MiningVolume.Core.Volumes
                 warnings.Add($"CHƯA ĐẦY ĐỦ: {skippedIntervals:n0} khoảng chưa có khối lượng xác nhận. Tổng hiện có chỉ gồm các khoảng đã tính hợp lệ.");
             if (intervalRows.Count == 0)
                 throw new InvalidOperationException("Không có khoảng mặt cắt đủ điều kiện tính. Các tuyến trong phạm vi này đi qua vùng mặt đứng nhiều Z hoặc chưa đủ dữ liệu; không thể thay số chưa xác nhận bằng 0.");
+            cancellationToken.ThrowIfCancellationRequested();
             return new VolumeResult(bands, intervalRows, levels, sectionAreas, warnings,
                 skippedIntervals);
         }

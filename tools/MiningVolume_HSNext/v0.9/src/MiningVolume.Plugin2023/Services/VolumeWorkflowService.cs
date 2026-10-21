@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using System.Collections.Generic;
 using System.Linq;
 using MiningVolume.Core.Sections;
@@ -10,7 +11,8 @@ namespace MiningVolume2023.Services
     public static class VolumeWorkflowService
     {
         public static VolumeResult CalculateCore(SectionSystem system, IReadOnlyList<SectionProfile> profiles,
-            TinSurface existing, TinSurface design, double fromLevel, double toLevel, double levelStep)
+            TinSurface existing, TinSurface design, double fromLevel, double toLevel, double levelStep,
+            CancellationToken cancellationToken = default(CancellationToken))
         {
             if (system == null) throw new InvalidOperationException("Chưa có hệ mặt cắt.");
             if (profiles == null || profiles.Count == 0) throw new InvalidOperationException("Chưa thành lập mặt cắt. Hãy thực hiện Bước 7 trước khi tính khối lượng.");
@@ -31,7 +33,7 @@ namespace MiningVolume2023.Services
                     AreaDifferenceThreshold = 0.40,
                     PreferPrismoidal = false,
                     Tolerance = 1e-7
-                });
+                }, cancellationToken);
         }
 
         public static void Commit(VolumeResult result, double fromLevel, double toLevel, double levelStep)

@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using System.Collections.Generic;
 using MiningVolume.Core.Sections;
 
@@ -17,15 +18,17 @@ namespace MiningVolume.Core.Volumes
             public double X, Z;
         }
 
-        public SectionBandAreas Calculate(SectionProfile profile, IReadOnlyList<LevelBand> bands, double tol = 1e-9)
+        public SectionBandAreas Calculate(SectionProfile profile, IReadOnlyList<LevelBand> bands, double tol = 1e-9, CancellationToken cancellationToken = default(CancellationToken))
         {
             if (profile == null) throw new ArgumentNullException(nameof(profile));
             if (bands == null) throw new ArgumentNullException(nameof(bands));
 
+            cancellationToken.ThrowIfCancellationRequested();
             var cut = new double[bands.Count];
             var fill = new double[bands.Count];
             foreach (var seg in profile.Segments)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 double d0 = seg.ExistingZ0 - seg.DesignZ0;
                 double d1 = seg.ExistingZ1 - seg.DesignZ1;
                 if (seg.Length <= tol) continue;
@@ -34,19 +37,20 @@ namespace MiningVolume.Core.Volumes
                 {
                     double u = d0 / (d0 - d1);
                     u = Math.Max(0, Math.Min(1, u));
-                    AddPiece(seg, 0, u, bands, cut, fill, tol);
-                    AddPiece(seg, u, 1, bands, cut, fill, tol);
+                    AddPiece(seg, 0, u, bands, cut, fill, tol, cancellationToken);
+                    AddPiece(seg, u, 1, bands, cut, fill, tol, cancellationToken);
                 }
-                else AddPiece(seg, 0, 1, bands, cut, fill, tol);
+                else AddPiece(seg, 0, 1, bands, cut, fill, tol, cancellationToken);
             }
 
             var list = new List<BandArea>(bands.Count);
             for (int i = 0; i < bands.Count; i++) list.Add(new BandArea(bands[i], cut[i], fill[i]));
+            cancellationToken.ThrowIfCancellationRequested();
             return new SectionBandAreas(profile.Line.Name, profile.Line.Offset, list);
         }
 
         private static void AddPiece(SectionProfileSegment seg, double u0, double u1,
-            IReadOnlyList<LevelBand> bands, double[] cut, double[] fill, double tol)
+            IReadOnlyList<LevelBand> bands, double[] cut, double[] fill, double tol, CancellationToken cancellationToken)
         {
             if (u1 - u0 <= tol) return;
             double s0 = Lerp(seg.S0, seg.S1, u0), s1 = Lerp(seg.S0, seg.S1, u1);
@@ -66,6 +70,7 @@ namespace MiningVolume.Core.Volumes
             double maxZ = Math.Max(Math.Max(e0, e1), Math.Max(d0, d1));
             for (int i = 0; i < bands.Count; i++)
             {
+                if ((i & 255) == 0) cancellationToken.ThrowIfCancellationRequested();
                 if (maxZ < bands[i].LowerZ - tol || minZ > bands[i].UpperZ + tol)
                     continue;
                 var clipped = ClipAbove(poly, bands[i].LowerZ, tol);

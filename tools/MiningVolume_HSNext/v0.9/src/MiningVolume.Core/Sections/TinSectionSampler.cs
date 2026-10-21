@@ -19,17 +19,19 @@ namespace MiningVolume.Core.Sections
         private TriangleGridIndex _cachedIndex1;
         private TriangleGridIndex _cachedIndex2;
 
-        public SectionProfile BuildProfile(SectionLine line, TinSurface existing, TinSurface design, double tol = 1e-7)
+        public SectionProfile BuildProfile(SectionLine line, TinSurface existing, TinSurface design, double tol = 1e-7, CancellationToken cancellationToken = default(CancellationToken))
         {
             if (line == null) throw new ArgumentNullException(nameof(line));
             if (existing == null) throw new ArgumentNullException(nameof(existing));
             if (design == null) throw new ArgumentNullException(nameof(design));
 
-            var existingIndex = IndexFor(existing);
-            var designIndex = IndexFor(design);
-            return AnnotateVerticalConflicts(
-                BuildProfileIndexed(line, existingIndex, designIndex, tol),
+            var existingIndex = IndexFor(existing, cancellationToken);
+            var designIndex = IndexFor(design, cancellationToken);
+            var profile = AnnotateVerticalConflicts(
+                BuildProfileIndexed(line, existingIndex, designIndex, tol, cancellationToken),
                 existing, design, tol);
+            cancellationToken.ThrowIfCancellationRequested();
+            return profile;
         }
 
         public IReadOnlyList<SectionProfile> BuildProfiles(
@@ -37,7 +39,7 @@ namespace MiningVolume.Core.Sections
             TinSurface existing,
             TinSurface design,
             Action<int, int, string> progress = null,
-            double tol = 1e-7)
+            double tol = 1e-7, CancellationToken cancellationToken = default(CancellationToken))
         {
             if (lines == null) throw new ArgumentNullException(nameof(lines));
             if (existing == null) throw new ArgumentNullException(nameof(existing));
@@ -46,13 +48,14 @@ namespace MiningVolume.Core.Sections
             // Build each spatial index once, then reuse it for the whole section system.
             // Profiles are independent and both triangle indices are immutable after
             // construction, so large section systems can use multiple CPU cores safely.
-            var existingIndex = IndexFor(existing);
-            var designIndex = IndexFor(design);
+            var existingIndex = IndexFor(existing, cancellationToken);
+            var designIndex = IndexFor(design, cancellationToken);
             var result = new SectionProfile[lines.Count];
             int completed = 0;
 
             var options = new ParallelOptions
             {
+                CancellationToken = cancellationToken,
                 // File-backed tiles share a bounded cache and disk. Unrestricted
                 // core-count parallelism evicts hot tiles and serializes reads.
                 MaxDegreeOfParallelism =
@@ -64,12 +67,13 @@ namespace MiningVolume.Core.Sections
             Parallel.For(0, lines.Count, options, i =>
             {
                 result[i] = AnnotateVerticalConflicts(
-                    BuildProfileIndexed(lines[i], existingIndex, designIndex, tol),
+                    BuildProfileIndexed(lines[i], existingIndex, designIndex, tol, cancellationToken),
                     existing, design, tol);
                 int done = Interlocked.Increment(ref completed);
                 progress?.Invoke(done, lines.Count, lines[i].Name);
             });
 
+            cancellationToken.ThrowIfCancellationRequested();
             return result;
         }
 
@@ -101,7 +105,7 @@ namespace MiningVolume.Core.Sections
             SectionLine line,
             TriangleGridIndex existing,
             TriangleGridIndex design,
-            double tol)
+            double tol, CancellationToken cancellationToken)
         {
             var segments = new List<SectionProfileSegment>();
             var warnings = new List<string>();
@@ -110,14 +114,16 @@ namespace MiningVolume.Core.Sections
 
             foreach (var span in line.Spans)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var knots = new List<double> { span.StartT, span.EndT };
-                CollectTriangleEdgeIntersections(line, span, existing, knots, tol);
-                CollectTriangleEdgeIntersections(line, span, design, knots, tol);
+                CollectTriangleEdgeIntersections(line, span, existing, knots, tol, cancellationToken);
+                CollectTriangleEdgeIntersections(line, span, design, knots, tol, cancellationToken);
                 knots.Sort();
                 knots = Deduplicate(knots, tol * 10);
 
                 for (int i = 0; i < knots.Count - 1; i++)
                 {
+                    if ((i & 255) == 0) cancellationToken.ThrowIfCancellationRequested();
                     double t0 = knots[i], t1 = knots[i + 1];
                     if (t1 - t0 <= tol) continue;
                     double tm = (t0 + t1) * 0.5;
@@ -155,12 +161,13 @@ namespace MiningVolume.Core.Sections
             return new SectionProfile(line, segments, cut, fill, warnings);
         }
 
-        private TriangleGridIndex IndexFor(TinSurface tin)
+        private TriangleGridIndex IndexFor(TinSurface tin, CancellationToken cancellationToken = default(CancellationToken))
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (ReferenceEquals(tin, _cachedTin1)) return _cachedIndex1;
             if (ReferenceEquals(tin, _cachedTin2)) return _cachedIndex2;
 
-            var index = new TriangleGridIndex(tin);
+            var index = new TriangleGridIndex(tin, cancellationToken);
             if (_cachedTin1 == null)
             {
                 _cachedTin1 = tin;
@@ -179,12 +186,14 @@ namespace MiningVolume.Core.Sections
             SectionSpan span,
             TriangleGridIndex index,
             List<double> output,
-            double tol)
+            double tol, CancellationToken cancellationToken)
         {
             Vec2 a = line.PointAt(span.StartT);
             Vec2 b = line.PointAt(span.EndT);
+            int visited = 0;
             foreach (var tri in index.QuerySegmentTriangles(a, b))
             {
+                if ((visited++ & 255) == 0) cancellationToken.ThrowIfCancellationRequested();
                 AddEdgeIntersection(a, b, tri.A.XY, tri.B.XY, span.StartT, span.EndT, output, tol);
                 AddEdgeIntersection(a, b, tri.B.XY, tri.C.XY, span.StartT, span.EndT, output, tol);
                 AddEdgeIntersection(a, b, tri.C.XY, tri.A.XY, span.StartT, span.EndT, output, tol);
@@ -309,7 +318,7 @@ namespace MiningVolume.Core.Sections
             private readonly double _originY;
             private readonly double _cell;
 
-            public TriangleGridIndex(TinSurface tin)
+            public TriangleGridIndex(TinSurface tin, CancellationToken cancellationToken)
             {
                 _triangles = tin.Triangles ?? MiningVolume.Core.Compatibility.EmptyArray<Triangle3>.Value;
                 _tiled = _triangles as ITiledTriangleSource;
@@ -341,6 +350,7 @@ namespace MiningVolume.Core.Sections
                 double maxX = double.NegativeInfinity, maxY = double.NegativeInfinity;
                 for (int i = 0; i < count; i++)
                 {
+                    if ((i & 255) == 0) cancellationToken.ThrowIfCancellationRequested();
                     var t = _triangles[i];
                     double ax = Math.Min(t.A.X, Math.Min(t.B.X, t.C.X));
                     double bx = Math.Max(t.A.X, Math.Max(t.B.X, t.C.X));
@@ -359,6 +369,7 @@ namespace MiningVolume.Core.Sections
 
                 for (int i = 0; i < count; i++)
                 {
+                    if ((i & 255) == 0) cancellationToken.ThrowIfCancellationRequested();
                     int ix0 = Ix(_minX[i]), ix1 = Ix(_maxX[i]);
                     int iy0 = Iy(_minY[i]), iy1 = Iy(_maxY[i]);
                     for (int ix = ix0; ix <= ix1; ix++)

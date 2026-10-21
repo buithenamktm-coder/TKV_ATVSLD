@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using System.Collections.Generic;
 using System.Linq;
 using Autodesk.AutoCAD.ApplicationServices;
@@ -107,14 +108,15 @@ namespace MiningVolume2023.Services
             SectionSystem system,
             MiningVolume.Core.Surface.TinSurface existing,
             MiningVolume.Core.Surface.TinSurface design,
-            Action<int, int, string> progress = null)
+            Action<int, int, string> progress = null,
+            CancellationToken cancellationToken = default(CancellationToken))
         {
             if (system == null) throw new InvalidOperationException("Chưa có hệ mặt cắt.");
             if (existing == null || design == null)
                 throw new InvalidOperationException("Chưa có đủ TIN hiện trạng và TIN thiết kế.");
 
             var sampler = new TinSectionSampler();
-            return sampler.BuildProfiles(system.Lines, existing, design, progress);
+            return sampler.BuildProfiles(system.Lines, existing, design, progress, cancellationToken: cancellationToken);
         }
 
         public static void CommitProfiles(IReadOnlyList<SectionProfile> profiles)
