@@ -456,7 +456,10 @@ jobs:
           "Native installer: PASS" | Set-Content "native-install-smoke.txt"
           "Native uninstaller: PASS" | Add-Content "native-install-smoke.txt"
           "GUI functional test: NOT RUN" | Add-Content "native-install-smoke.txt"
+      # Upload diagnostics even when compilation, installation, or GUI smoke fails.
+      # Without always(), the logs needed to fix a failed Windows build are lost.
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: imsat-cad-native-qcad-build-evidence
           path: |
@@ -481,6 +484,6 @@ jobs:
             native/qcad/release/platforms/*.dll
             native/qcad/plugins/*qcadjsapi*.dll
           retention-days: 7
-          if-no-files-found: error
+          if-no-files-found: warn
 # Prototype only: no rebranding, installer, or DWG feature is claimed.
 # Upstream QCAD remains GPLv3. Any distributed modified core must include corresponding source and notices.
