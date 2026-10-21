@@ -382,6 +382,11 @@ jobs:
           )
           $ribbonDiagnostics | Set-Content "native-ribbon-diagnostics.txt" -Encoding UTF8
           Write-Host ($ribbonDiagnostics -join "; ")
+          # Preserve the captured output for diagnosis when add-on startup is silent.
+          $startupOutput | Set-Content "native-startup-output.txt" -Encoding UTF8
+          if ($startupOutput -match 'IMSAT CAD RIBBON BLOCKED') {
+            throw "Native CAD reported Ribbon initialization failure; inspect native-startup-output.txt"
+          }
 
           # Record real installed binary identity. Copying qcad.exe under a new
           # filename is not a completed IMSAT-branded native application.
@@ -424,6 +429,7 @@ jobs:
             native-gui-startup.txt
             native-branding-audit.txt
             native-ribbon-diagnostics.txt
+            native-startup-output.txt
             native-commit-report.txt
             native-qt-dependencies.txt
             native-plugin-dependencies.txt
