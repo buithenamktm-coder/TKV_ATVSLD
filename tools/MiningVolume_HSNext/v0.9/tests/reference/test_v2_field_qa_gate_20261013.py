@@ -137,7 +137,7 @@ def test_field_qa_cad_level_table_has_six_visible_headers_below_native_title():
     assert "const int levelHeaderRows = 2;" in cad
     assert "BẢNG KHỐI LƯỢNG ĐÀO ĐẮP THEO TẦNG" in cad
     assert 'Set(summary, 1, "Hạng mục", "Giá trị");' in cad
-    assert "const int summaryRows = 8;" in cad
+    assert "const int summaryRows = 9;" in cad
     assert 'Set(levels, 1, "Thứ tự", "Tầng/mức", "Cao độ dưới (m)"' in cad
     assert '"Cao độ trên (m)", "Khối lượng đào (m³)", "Khối lượng đắp (m³)"' in cad
     assert "Set(levels, i + levelHeaderRows" in cad

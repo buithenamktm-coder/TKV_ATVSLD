@@ -45,6 +45,36 @@ internal static class FinalAuditRegression
         Check(canceled,"Canceled operation returned a result");
     }
     public static void Add(IDictionary<string,Action> tests) {
+        tests["section_calculation_id_is_stable_across_exports_and_changes_on_recalculation"] = () => {
+            var st=State();
+            string id=st.VolumeResult.CalculationId;
+            Guid parsed;
+            Check(Guid.TryParseExact(id,"N",out parsed),"Invalid calculation identity");
+            var first=ExportWorkflowService.BuildReport(st,new ExportOptions());
+            var second=ExportWorkflowService.BuildReport(st,new ExportOptions());
+            Check(st.VolumeResult.CalculationId==id,"Export changed calculation identity");
+            st.VolumeResult=Calculate(st.SectionProfiles.ToArray());
+            Check(st.VolumeResult.CalculationId!=id,"Recalculation reused prior identity");
+            var dir=Path.Combine(Path.GetTempPath(),"imsat-calculation-id-"+Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
+            try {
+                int n=0;
+                foreach(var report in new[]{first,second}) {
+                    string file=Path.Combine(dir,(++n)+".xlsx");
+                    ExportWorkflowService.WriteXlsx(file,report);
+                    int occurrences=0;
+                    using(var zip=ZipFile.OpenRead(file))
+                        foreach(var entry in zip.Entries.Where(e=>e.FullName.StartsWith("xl/worksheets/") && e.FullName.EndsWith(".xml")))
+                            using(var stream=entry.Open()) {
+                                var xml=XDocument.Load(stream);
+                                occurrences+=xml.Descendants().Count(x=>x.Name.LocalName=="t" && x.Value==id);
+                                Check(!xml.Descendants().Any(x=>x.Name.LocalName=="t" && x.Value==st.VolumeResult.CalculationId),
+                                    "Writing workbook consulted newer calculation");
+                            }
+                    Check(occurrences==2,"Calculation identity missing from information/summary sheets");
+                }
+            } finally { Directory.Delete(dir,true); }
+        };
         tests["section_band_search_matches_individual_clipping_for_order_gaps_overlap_and_tolerance"] = () => {
             var random=new Random(20261022);
             var calc=new SectionBandAreaCalculator();

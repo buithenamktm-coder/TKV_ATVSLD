@@ -169,6 +169,7 @@ namespace MiningVolume2023.Services
             AddKV(s, "Bước chia trục Z, m", st.SectionAxisElevationInterval.ToString("0.###"));
             AddKV(s, "Mức chia tầng tính khối lượng, m", st.LevelStep.ToString("0.###"));
             AddKV(s, "Kỳ tính khối lượng", st.VolumePeriodLabel);
+            AddKV(s, "Mã phiên tính (CalculationId)", st.VolumeResult.CalculationId);
             AddKV(s, "Thời điểm tính khối lượng", FormatCalculationTime(st.VolumeCalculatedUtc));
             AddKV(s, "Thời gian thực tính khối lượng, giây", FormatDuration(st.VolumeCalculationSeconds));
             AddKV(s, "Thời gian xuất Excel", now.ToString("dd/MM/yyyy HH:mm:ss"));
@@ -407,6 +408,8 @@ namespace MiningVolume2023.Services
             // Append the project metadata and sign-off block after the fixed
             // calculation rows. Do not put extra Notes above the table.
             s.Rows.Add(new[] { ReportCell.Text(""), ReportCell.Text(""), ReportCell.Text("") });
+            s.Rows.Add(new[] { ReportCell.Text("Mã phiên tính (CalculationId)"),
+                ReportCell.Text(""), ReportCell.Text(r.CalculationId) });
             if (unitGroup != MiningUnitCatalog.OutsideTkv)
                 s.Rows.Add(new[] { ReportCell.Text("Đơn vị cấp trên", true),
                     ReportCell.Text(""), ReportCell.Text(TkvParentHeading) });

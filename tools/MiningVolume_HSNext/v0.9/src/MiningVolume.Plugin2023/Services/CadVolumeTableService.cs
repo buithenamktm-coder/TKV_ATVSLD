@@ -39,7 +39,7 @@ namespace MiningVolume2023.Services
                 double x = insertion.X;
                 double y = insertion.Y;
 
-                const int summaryRows = 8;
+                const int summaryRows = 9;
                 using (var summary = NewTable(database, layer, summaryRows, 2,
                     new Point3d(x, y, 0), 68))
                 {
@@ -52,6 +52,7 @@ namespace MiningVolume2023.Services
                     Set(summary, 5, "Chênh lệch đào − đắp, m³", F(result.NetVolume));
                     Set(summary, 6, "Số khoảng mặt cắt", result.Intervals.Count.ToString());
                     Set(summary, 7, "Phát triển", "Bùi Thế Nam · 0967280686");
+                    Set(summary, 8, "Mã phiên tính (CalculationId)", result.CalculationId);
                     StyleSimpleTable(summary, arial, summaryRows, 2, pollCancellation);
                     Append(model, tr, summary);
                 }

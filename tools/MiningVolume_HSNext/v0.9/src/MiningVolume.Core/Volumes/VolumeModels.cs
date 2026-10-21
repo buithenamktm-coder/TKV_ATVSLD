@@ -118,6 +118,10 @@ namespace MiningVolume.Core.Volumes
 
     public sealed class VolumeResult
     {
+        // Identity belongs to a calculation result, never to an export attempt.
+        // Re-exporting this object preserves the ID; recalculation creates a new one.
+        public string CalculationId { get; } = Guid.NewGuid().ToString("N");
+
         public VolumeResult(IReadOnlyList<LevelBand> bands,
             IReadOnlyList<SectionIntervalVolume> intervals,
             IReadOnlyList<LevelVolumeSummary> levels,

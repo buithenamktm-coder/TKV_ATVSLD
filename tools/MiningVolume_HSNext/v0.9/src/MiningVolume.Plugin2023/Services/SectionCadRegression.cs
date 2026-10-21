@@ -78,6 +78,8 @@ namespace MiningVolume2023.Services
                 int totalPolls = 0;
                 CadVolumeTableService.Insert(db, result, Point3d.Origin, () => totalPolls++);
                 string before = TableSnapshot(db);
+                if (!before.Contains(result.CalculationId))
+                    throw new InvalidOperationException("CAD table lost calculation identity.");
                 foreach (int cancelAt in new[] { 1, totalPolls / 2, totalPolls })
                 {
                     int polls = 0;
