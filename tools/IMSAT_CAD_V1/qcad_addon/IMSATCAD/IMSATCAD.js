@@ -266,6 +266,24 @@ IMSATCAD.createRibbon = function() {
         qWarning("IMSAT CAD RIBBON BLOCKED: required Qt widgets unavailable");
         return false;
     }
+    // Preflight every configured action before constructing Qt widgets. An incomplete
+    // Ribbon must not appear usable or leave orphan tabs after a failed retry.
+    var missingRibbonActions = [];
+    for (var t0 = 0; t0 < IMSATCAD._ribbonTabs.length; ++t0) {
+        var groups0 = IMSATCAD._ribbonTabs[t0][1];
+        for (var g0 = 0; g0 < groups0.length; ++g0) {
+            var scripts0 = IMSATCAD[groups0[g0][1]];
+            for (var i0 = 0; i0 < scripts0.length; ++i0) {
+                if (isNull(RGuiAction.getByScriptFile(scripts0[i0]))) {
+                    missingRibbonActions.push(scripts0[i0]);
+                }
+            }
+        }
+    }
+    if (missingRibbonActions.length > 0) {
+        qWarning("IMSAT CAD RIBBON BLOCKED: missing registered actions: " + missingRibbonActions.join(", "));
+        return false;
+    }
     try {
         var host = EAction.getToolBar("IMSAT CAD", "IMSATCADRibbonToolBar", Qt.TopToolBarArea);
         if (isNull(host)) { qWarning("IMSAT CAD RIBBON BLOCKED: no toolbar host"); return false; }
