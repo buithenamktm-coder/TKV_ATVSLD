@@ -464,7 +464,7 @@ IMSATCAD.postInit = function() {
     }
     if (!isNull(win)) {
         win.handleUserMessage("IMSAT CAD: " + success + "/" + IMSATCAD._aliases.length +
-                              " aliases, " + drawCount + " draw tools, " + modifyCount + " modify tools, " + annotationCount + " annotation, " + layerCount + " layer, " + utilityCount + " utilities, " + blockCount + " blocks, " + selectionCount + " selection, " + fileCount + " file");
+                              " aliases, Ribbon=" + (ribbonReady ? "READY" : "BLOCKED") + ", " + drawCount + " draw tools, " + modifyCount + " modify tools, " + annotationCount + " annotation, " + layerCount + " layer, " + utilityCount + " utilities, " + blockCount + " blocks, " + selectionCount + " selection, " + fileCount + " file");
     }
 };
 // AutoCAD-style aliases map to the closest native QCAD action; command prompts
