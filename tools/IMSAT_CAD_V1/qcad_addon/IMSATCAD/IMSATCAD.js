@@ -282,6 +282,8 @@ IMSATCAD.setRibbonLanguage = function(language) {
     }
     if (!isNull(IMSATCAD._ribbonLanguageButton)) {
         IMSATCAD._ribbonLanguageButton.setText(language === "vi" ? "English" : "Tiếng Việt");
+        IMSATCAD._ribbonLanguageButton.setToolTip(language === "vi" ?
+            "Switch Ribbon to English" : "Chuyển Ribbon sang tiếng Việt");
     }
     return true;
 };
@@ -381,7 +383,8 @@ IMSATCAD.createRibbon = function() {
             return false;
         }
         languageButton.setText(IMSATCAD._ribbonLanguage === "vi" ? "English" : "Tiếng Việt");
-        languageButton.setToolTip("Change Ribbon language / Đổi ngôn ngữ Ribbon");
+        languageButton.setToolTip(IMSATCAD._ribbonLanguage === "vi" ?
+            "Switch Ribbon to English" : "Chuyển Ribbon sang tiếng Việt");
         languageButton.clicked.connect(function() {
             IMSATCAD.setRibbonLanguage(IMSATCAD._ribbonLanguage === "vi" ? "en" : "vi");
         });
