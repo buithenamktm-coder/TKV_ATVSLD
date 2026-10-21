@@ -398,6 +398,18 @@ jobs:
             "RibbonAcceptance=NOT_READY"
           )
           $ribbonAudit | Set-Content "native-ribbon-acceptance.txt" -Encoding UTF8
+          # This is a diagnostic report, not a substitute for Windows GUI QA.
+          # Verify that all six expected tabs are defined in the packaged add-on.
+          $installedAddon = Join-Path $destination "scripts/IMSATCAD/IMSATCAD.js"
+          $stagedAddon = Join-Path "native/qcad" "scripts/IMSATCAD/IMSATCAD.js"
+          $addonPath = if (Test-Path $installedAddon) { $installedAddon } elseif (Test-Path $stagedAddon) { $stagedAddon } else { $null }
+          if (-not $addonPath) { throw "IMSAT CAD native Ribbon add-on missing from staging and installation" }
+          $addonSource = Get-Content $addonPath -Raw
+          foreach ($tab in @("Home", "Insert", "Annotate", "View", "Manage", "Output")) {
+            if ($addonSource -notmatch ('"' + $tab + '"')) { throw "IMSAT CAD Ribbon tab missing: $tab" }
+          }
+          "SixRibbonTabDefinitions=PASS" | Add-Content "native-ribbon-acceptance.txt"
+          "AddonSourcePath=$addonPath" | Add-Content "native-ribbon-acceptance.txt"
 
           # Record real installed binary identity. Copying qcad.exe under a new
           # filename is not a completed IMSAT-branded native application.
