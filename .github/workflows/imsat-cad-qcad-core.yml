@@ -5,11 +5,17 @@ on:
     paths:
       - ".github/workflows/imsat-cad-qcad-core.yml"
       - "tools/IMSAT_CAD_V1/qcad_addon/**"
+      - "tools/IMSAT_CAD_V1/imsatcad-native-v1.iss"
+      - "tools/IMSAT_CAD_V1/generate-brand.py"
+      - "tools/IMSAT_CAD_V1/assets/**"
   push:
     branches: [imsat-cad-foundation]
     paths:
       - ".github/workflows/imsat-cad-qcad-core.yml"
       - "tools/IMSAT_CAD_V1/qcad_addon/**"
+      - "tools/IMSAT_CAD_V1/imsatcad-native-v1.iss"
+      - "tools/IMSAT_CAD_V1/generate-brand.py"
+      - "tools/IMSAT_CAD_V1/assets/**"
 concurrency:
   group: imsat-cad-native-${{ github.ref }}
   cancel-in-progress: true
