@@ -131,8 +131,13 @@ assert.strictEqual(missingHostWidgets.length, 0, "Incomplete Ribbon must not mou
 assert(missingWarnings.some(x => x.includes("RIBBON BLOCKED") && x.includes(missingScript)),
   "Missing CAD action must produce actionable diagnostic");
 // A missing native Qt widget must be surfaced as a blocker, never silently passed.
-const blockedContext = Object.assign({}, context, { QVBoxLayout: undefined });
+const missingWidgetWarnings = [];
+const blockedContext = Object.assign({}, context, {
+  QVBoxLayout: undefined,
+  qWarning: x => missingWidgetWarnings.push(x)
+});
 vm.runInNewContext(source, blockedContext, { filename: "IMSATCAD.js" });
 assert.strictEqual(blockedContext.IMSATCAD.createRibbon(), false, "Missing Qt widget must fail Ribbon creation");
-assert(warnings.some(x => x.includes("RIBBON BLOCKED")), "Missing explicit Ribbon blocker diagnostic");
+assert(missingWidgetWarnings.some(x => x.includes("RIBBON BLOCKED") && x.includes("Qt widgets unavailable")),
+  "Missing Qt widget must emit its own explicit blocker diagnostic");
 console.log("IMSAT CAD mocked runtime PASS:", toolbars.size, "toolbars,", menuCount, "unique menu actions");
