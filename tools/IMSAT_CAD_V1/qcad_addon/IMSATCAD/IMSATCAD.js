@@ -192,7 +192,7 @@ IMSATCAD.resolveCommandKey = function(key, state) {
     if (key !== "Enter" && key !== "Return" && key !== "Space") {
         return "pass";
     }
-    if (state.commandText && state.commandText.replace(/^\\s+|\\s+$/g, "").length > 0) {
+    if (state.commandText && state.commandText.replace(/^\s+|\s+$/g, "").length > 0) {
         return "execute";
     }
     if (state.actionActive) {
