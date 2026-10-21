@@ -372,6 +372,17 @@ jobs:
             if (-not $gui.HasExited) { Stop-Process -Id $gui.Id -Force -ErrorAction SilentlyContinue }
           }
           "Installed GUI window creation: PASS" | Set-Content "native-gui-startup.txt"
+          # A GUI window alone does not prove the IMSAT add-on initialized.
+          # Capture native startup output separately from GUI acceptance.
+          $startupOutput = ((Get-Content $stdout -Raw -ErrorAction SilentlyContinue) + "`n" + (Get-Content $stderr -Raw -ErrorAction SilentlyContinue))
+          $ribbonDiagnostics = @(
+            "RibbonInitializationInHeadlessLog=" + [bool]($startupOutput -match 'IMSAT CAD Ribbon initialized:'),
+            "AliasInitializationInHeadlessLog=" + [bool]($startupOutput -match 'IMSAT CAD: [0-9]+/[0-9]+ aliases'),
+            "RibbonBlockedInHeadlessLog=" + [bool]($startupOutput -match 'IMSAT CAD RIBBON BLOCKED')
+          )
+          $ribbonDiagnostics | Set-Content "native-ribbon-diagnostics.txt" -Encoding UTF8
+          Write-Host ($ribbonDiagnostics -join "; ")
+
           # Record real installed binary identity. Copying qcad.exe under a new
           # filename is not a completed IMSAT-branded native application.
           $installedInfo = (Get-Item $installedExe).VersionInfo
@@ -412,6 +423,7 @@ jobs:
             native-installed-startup.txt
             native-gui-startup.txt
             native-branding-audit.txt
+            native-ribbon-diagnostics.txt
             native-commit-report.txt
             native-qt-dependencies.txt
             native-plugin-dependencies.txt
