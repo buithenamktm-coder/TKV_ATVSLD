@@ -130,6 +130,20 @@ assert.strictEqual(missingContext.IMSATCAD.createRibbon(), false, "Missing CAD a
 assert.strictEqual(missingHostWidgets.length, 0, "Incomplete Ribbon must not mount Qt widgets");
 assert(missingWarnings.some(x => x.includes("RIBBON BLOCKED") && x.includes(missingScript)),
   "Missing CAD action must produce actionable diagnostic");
+// A native API exception during lookup must fail safely with an actionable error.
+const thrownWarnings = [];
+const thrownContext = Object.assign({}, context, {
+  qWarning: x => thrownWarnings.push(x),
+  RGuiAction: { getByScriptFile(script) {
+    if (script === missingScript) throw new Error("mock native lookup failure");
+    return actions.get(script);
+  } }
+});
+vm.runInNewContext(source, thrownContext, { filename: "IMSATCAD.js" });
+assert.strictEqual(thrownContext.IMSATCAD.createRibbon(), false,
+  "Native lookup exception must not escape or create Ribbon");
+assert(thrownWarnings.some(x => x.includes("RIBBON BLOCKED") && x.includes(missingScript) && x.includes("mock native lookup failure")),
+  "Native lookup exception must identify failing command");
 // A missing native Qt widget must be surfaced as a blocker, never silently passed.
 const missingWidgetWarnings = [];
 const blockedContext = Object.assign({}, context, {
