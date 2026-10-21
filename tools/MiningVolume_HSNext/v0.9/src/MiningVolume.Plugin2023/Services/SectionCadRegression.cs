@@ -7,6 +7,8 @@ using Autodesk.AutoCAD.Geometry;
 using MiningVolume.Core.Geometry;
 using MiningVolume.Core.Sections;
 using MiningVolume.Core.Volumes;
+using MiningVolume.Core.Grid;
+using MiningVolume.Core.Surface;
 
 namespace MiningVolume2023.Services
 {
@@ -17,6 +19,7 @@ namespace MiningVolume2023.Services
         internal static void Run()
         {
             VerifyTableRollback();
+            VerifyGridIdentity();
             var profiles = new List<SectionProfile>();
             for (int i = 0; i < 25; i++)
             {
@@ -53,6 +56,46 @@ namespace MiningVolume2023.Services
                     catch (OperationCanceledException) { canceled = true; }
                     if (!canceled || Snapshot(batched, true) != before)
                         throw new InvalidOperationException("Canceled section export did not restore original entities.");
+                }
+            }
+        }
+
+        private static void VerifyGridIdentity()
+        {
+            var boundary = new[] { new Vec2(0,0), new Vec2(10,0), new Vec2(10,10), new Vec2(0,10) };
+            Func<double,TinSurface> plane = z => new TinSurface("QA", new[] {
+                new Triangle3(new Vec3(0,0,z),new Vec3(10,0,z),new Vec3(10,10,z)),
+                new Triangle3(new Vec3(0,0,z),new Vec3(10,10,z),new Vec3(0,10,z)) }, new ValidationIssue[0]);
+            var options = new GridVolumeOptions { Boundary = boundary, SizeX = 5, SizeY = 5 };
+            var calc = new GridVolumeCalculator();
+            var first = calc.Calculate(plane(5), plane(0), options);
+            var second = calc.Calculate(plane(6), plane(0), options);
+            using (var db = new Database(true,true))
+            {
+                GridCadRenderer.Draw(db, first, false);
+                GridCadRenderer.Draw(db, second, false);
+                using (var tr = db.TransactionManager.StartTransaction())
+                {
+                    var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
+                    var model = (BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForRead);
+                    int oldCount = 0, newCount = 0;
+                    foreach (ObjectId id in model)
+                    {
+                        var poly = tr.GetObject(id, OpenMode.ForRead) as Polyline;
+                        if (poly == null) throw new InvalidOperationException("Grid identity added unexpected entities.");
+                        using (var data = poly.GetXDataForApplication(GridCadRenderer.CalculationIdApp))
+                        {
+                            var values = data?.AsArray();
+                            if (values == null || values.Length != 2)
+                                throw new InvalidOperationException("Missing grid calculation XData.");
+                            string value = values[1].Value as string;
+                            if (value == first.CalculationId) oldCount++;
+                            else if (value == second.CalculationId) newCount++;
+                            else throw new InvalidOperationException("Wrong grid calculation identity.");
+                        }
+                    }
+                    if (oldCount != first.Cells.Count || newCount != second.Cells.Count)
+                        throw new InvalidOperationException("Later grid export overwrote earlier identity.");
                 }
             }
         }

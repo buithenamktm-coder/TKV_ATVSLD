@@ -57,6 +57,7 @@ namespace MiningVolume2023.Services
             Row(s,"Thông số mặt cắt",state.SectionParameterMode);
             Row(s,"Bước chia trục Z, m",state.SectionAxisElevationInterval.ToString("0.###"));
             Row(s,"Kỳ tính khối lượng", state.VolumePeriodLabel);
+            Row(s,"Mã phiên tính (CalculationId)", grid.CalculationId);
             Row(s,"Thời điểm tính lưới", state.GridCalculatedUtc.HasValue
                 ? state.GridCalculatedUtc.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss")
                 : "Chưa xác nhận trong phiên hiện tại");

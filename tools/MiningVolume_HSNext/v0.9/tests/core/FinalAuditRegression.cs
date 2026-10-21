@@ -45,6 +45,28 @@ internal static class FinalAuditRegression
         Check(canceled,"Canceled operation returned a result");
     }
     public static void Add(IDictionary<string,Action> tests) {
+        tests["grid_calculation_id_survives_workbook_export_and_changes_on_recalculation"] = () => {
+            State();
+            var options=new GridVolumeOptions { Boundary=Boundary, SizeX=5, SizeY=5 };
+            var ht=Plane(5);var tk=Plane(0);var calculator=new GridVolumeCalculator();
+            var grid=calculator.Calculate(ht,tk,options);
+            var report=GridVolumeExcelReportBuilder.Build(grid,options);
+            var again=calculator.Calculate(ht,tk,options);
+            Check(grid.CalculationId!=again.CalculationId,"Grid recalculation reused identity");
+            Near(grid.TotalCutVolume,again.TotalCutVolume);
+            string file=Path.Combine(Path.GetTempPath(),"imsat-grid-id-"+Guid.NewGuid().ToString("N")+".xlsx");
+            try {
+                ExportWorkflowService.WriteXlsx(file,report);
+                using(var zip=ZipFile.OpenRead(file))
+                using(var stream=zip.GetEntry("xl/worksheets/sheet1.xml").Open()) {
+                    var xml=XDocument.Load(stream);
+                    Check(xml.Descendants().Count(x=>x.Name.LocalName=="t" && x.Value==grid.CalculationId)==1,
+                        "Grid workbook lost its calculation identity");
+                    Check(!xml.Descendants().Any(x=>x.Name.LocalName=="t" && x.Value==again.CalculationId),
+                        "Grid workbook identity changed after recalculation");
+                }
+            } finally { if(File.Exists(file))File.Delete(file); }
+        };
         tests["section_calculation_id_is_stable_across_exports_and_changes_on_recalculation"] = () => {
             var st=State();
             string id=st.VolumeResult.CalculationId;

@@ -52,6 +52,7 @@ namespace MiningVolume.Core.Grid
 
     public sealed class GridVolumeReport
     {
+        public string CalculationId { get; } = Guid.NewGuid().ToString("N");
         public IReadOnlyList<GridVolumeCell> Cells { get; internal set; }
         public double TotalCutVolume => Cells.Sum(x => x.Volume.CutVolume);
         public double TotalFillVolume => Cells.Sum(x => x.Volume.FillVolume);

@@ -16,6 +16,7 @@ namespace MiningVolume2023.Services
         private const string NoDataLayer = "MV_LUOI_THIEU_DL";
         private const string EmptyLayer = "MV_LUOI_O";
         private const string LabelLayer = "MV_LUOI_NHAN";
+        internal const string CalculationIdApp = "IMSAT_GRID_CALCULATION";
 
         public static void Draw(Database database, GridVolumeReport report, bool labels,
             Action<int, int> progress = null, CancellationToken cancellationToken = default(CancellationToken))
@@ -30,7 +31,18 @@ namespace MiningVolume2023.Services
                     "Hệ lưới vượt 100.000 ô; hãy tăng kích thước ô hoặc chia vùng tính.");
             cancellationToken.ThrowIfCancellationRequested();
             using (var tr = database.TransactionManager.StartTransaction())
+            using (var identity = new ResultBuffer(
+                new TypedValue((int)DxfCode.ExtendedDataRegAppName, CalculationIdApp),
+                new TypedValue((int)DxfCode.ExtendedDataAsciiString, report.CalculationId)))
             {
+                var apps = (RegAppTable)tr.GetObject(database.RegAppTableId, OpenMode.ForRead);
+                if (!apps.Has(CalculationIdApp))
+                {
+                    apps.UpgradeOpen();
+                    var app = new RegAppTableRecord { Name = CalculationIdApp };
+                    apps.Add(app);
+                    tr.AddNewlyCreatedDBObject(app, true);
+                }
                 var bt = (BlockTable)tr.GetObject(database.BlockTableId, OpenMode.ForRead);
                 var model = (BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForWrite);
                 var cut=EnsureLayer(database,tr,CutLayer,1);
@@ -62,6 +74,9 @@ namespace MiningVolume2023.Services
                     }
                     model.AppendEntity(poly);
                     tr.AddNewlyCreatedDBObject(poly,true);
+                    // XData follows each editable cell through save/reopen and
+                    // multiple exports, without adding visible CAD entities.
+                    poly.XData = identity;
                     if(labels)
                     {
                         x/=cell.Corners.Count; y/=cell.Corners.Count;
