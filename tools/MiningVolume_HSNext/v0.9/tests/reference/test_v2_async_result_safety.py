@@ -39,7 +39,7 @@ def test_volume_task_checks_dwg_tin_revisions_and_profile_set_before_commit():
     for check in required:
         assert check in method
     assert method.index("var result = await Task.Run(") < method.index(
-        "VolumeWorkflowService.Commit(result, from, to, step);")
+        "VolumeWorkflowService.Commit(result, calculationFrom, calculationTo, step);")
 
 
 def test_grid_rejects_boundary_geometry_and_parameters_changed_mid_task():
@@ -136,3 +136,20 @@ def test_saveas_copies_with_same_fingerprint_still_switch_projects():
     assert "ReferenceEquals(_loadedDocument, doc)" in restore
     assert "_loadedDocument = doc;" in restore
     assert "ProjectState.Current.Reset();" in restore
+
+
+def test_volume_auto_range_does_not_mutate_accepted_state_before_success():
+    source = read(UI / "VolumePage.cs")
+    method = source.split("private async void CalculateClicked(", 1)[1].split(
+        "private void OnStateChanged(", 1)[0]
+    before_commit = method.split("VolumeWorkflowService.Commit(", 1)[0]
+    import re
+    assert not re.search(r"st\.(FromLevel|ToLevel|LevelStep|VolumeResult)\s*=(?!=)", before_commit)
+    assert "st.NotifyChanged()" not in before_commit
+    assert "double from = st.FromLevel, to = st.ToLevel, step = st.LevelStep;" in before_commit
+    assert "double calculationFrom = from, calculationTo = to;" in before_commit
+    assert "calculationFrom=Math.Floor(minZ/step)*step;" in before_commit
+    assert "calculationTo=Math.Ceiling(maxZ/step)*step;" in before_commit
+    assert "CalculateCore(system, profiles, existing, design, calculationFrom, calculationTo, step, token)" in before_commit
+    assert before_commit.index("token.ThrowIfCancellationRequested();") > before_commit.index("await Task.Run")
+    assert "BindResult(result);" not in method

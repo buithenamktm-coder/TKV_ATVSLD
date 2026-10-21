@@ -102,31 +102,31 @@ namespace MiningVolume2023.UI
                 var doc = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument;
                 if (doc == null)
                     throw new InvalidOperationException("Không có bản vẽ AutoCAD đang hoạt động.");
+                double from = st.FromLevel, to = st.ToLevel, step = st.LevelStep;
+                double calculationFrom = from, calculationTo = to;
                 string autoLevelNote = "";
+                // Keep candidate levels local: cancel/failure must preserve the accepted result.
                 // Repair an old/stale Project default (e.g. 0..+100) without
                 // requiring the operator to redraw all CAD sections first.
                 // Change only if the complete requested range misses the
                 // measured TIN elevation extent; ordinary custom bands remain.
                 var measured=st.SectionProfiles.Where(p=>p!=null && p.HasData).ToArray();
-                if (measured.Length>0 && st.LevelStep>0 &&
-                    !double.IsNaN(st.LevelStep) && !double.IsInfinity(st.LevelStep))
+                if (measured.Length>0 && step>0 &&
+                    !double.IsNaN(step) && !double.IsInfinity(step))
                 {
                     double minZ=measured.Min(p=>p.MinZ);
                     double maxZ=measured.Max(p=>p.MaxZ);
-                    double low=Math.Min(st.FromLevel,st.ToLevel);
-                    double high=Math.Max(st.FromLevel,st.ToLevel);
+                    double low=Math.Min(calculationFrom,calculationTo);
+                    double high=Math.Max(calculationFrom,calculationTo);
                     if (high<minZ-1e-7 || low>maxZ+1e-7 ||
-                        Math.Abs(st.FromLevel-st.ToLevel)<1e-7)
+                        Math.Abs(calculationFrom-calculationTo)<1e-7)
                     {
-                        st.FromLevel=Math.Floor(minZ/st.LevelStep)*st.LevelStep;
-                        st.ToLevel=Math.Ceiling(maxZ/st.LevelStep)*st.LevelStep;
-                        if(st.ToLevel<=st.FromLevel)st.ToLevel=st.FromLevel+st.LevelStep;
-                        st.VolumeResult=null;
-                        autoLevelNote=$"Đã điều chỉnh mức tính theo TIN: {st.FromLevel:0.###} đến {st.ToLevel:0.###} m. ";
-                        st.NotifyChanged();
+                        calculationFrom=Math.Floor(minZ/step)*step;
+                        calculationTo=Math.Ceiling(maxZ/step)*step;
+                        if(calculationTo<=calculationFrom)calculationTo=calculationFrom+step;
+                        autoLevelNote=$"Đã điều chỉnh mức tính theo TIN: {calculationFrom:0.###} đến {calculationTo:0.###} m. ";
                     }
                 }
-                double from = st.FromLevel, to = st.ToLevel, step = st.LevelStep;
                 var system = st.SectionSystem;
                 var profiles = st.SectionProfiles.ToArray();
                 var existing = st.Existing.Tin;
@@ -134,7 +134,7 @@ namespace MiningVolume2023.UI
                 long revisionExisting = st.Existing.Source.Revision;
                 long revisionDesign = st.Design.Source.Revision;
                 var watch = Stopwatch.StartNew();
-                var result = await Task.Run(() => VolumeWorkflowService.CalculateCore(system, profiles, existing, design, from, to, step, token));
+                var result = await Task.Run(() => VolumeWorkflowService.CalculateCore(system, profiles, existing, design, calculationFrom, calculationTo, step, token));
                 token.ThrowIfCancellationRequested();
                 // Never commit an asynchronous volume result to a different DWG,
                 // TIN revision, section geometry or level parameter set.
@@ -150,16 +150,16 @@ namespace MiningVolume2023.UI
                     profiles.Where((p, i) => !ReferenceEquals(p, st.SectionProfiles[i])).Any())
                     throw new InvalidOperationException(
                         "DWG, dữ liệu TIN hoặc mặt cắt đã thay đổi khi tính. Đã giữ nguyên kết quả cũ; hãy tính lại.");
-                VolumeWorkflowService.Commit(result, from, to, step);
+                VolumeWorkflowService.Commit(result, calculationFrom, calculationTo, step);
                 watch.Stop();
                 st.VolumeCalculatedUtc = DateTime.UtcNow;
                 st.VolumeCalculationSeconds = watch.Elapsed.TotalSeconds;
-                BindResult(result);
+                // Commit notifies RefreshView; do not rebuild both tables a second time.
                 _status.Text = !result.IsComplete
                     ? autoLevelNote+$"CHƯA ĐẦY ĐỦ: {result.ExcludedIntervals:n0} khoảng chưa xác nhận; chỉ hiển thị phần khối lượng hợp lệ."
                     : result.Warnings.Count == 0
-                        ? "Đã tính khối lượng thành công."
-                        : "Đã tính khối lượng, cần kiểm tra cảnh báo.";
+                        ? autoLevelNote + "Đã tính khối lượng thành công."
+                        : autoLevelNote + "Đã tính khối lượng, cần kiểm tra cảnh báo.";
             }
             catch (OperationCanceledException)
             {
