@@ -387,6 +387,17 @@ jobs:
           if ($startupOutput -match 'IMSAT CAD RIBBON BLOCKED') {
             throw "Native CAD reported Ribbon initialization failure; inspect native-startup-output.txt"
           }
+          # Headless output is diagnostic only; do not claim Ribbon acceptance
+          # when Qt does not initialize an interactive document window.
+          $ribbonLogObserved = [bool]($startupOutput -match 'IMSAT CAD Ribbon initialized:')
+          $ribbonAudit = @(
+            "HeadlessRibbonInitializationObserved=$ribbonLogObserved",
+            "InstalledGuiWindowCreated=$windowFound",
+            "InteractiveRibbonTabSwitching=NOT_TESTED",
+            "InteractiveNativeActionInvocation=NOT_TESTED",
+            "RibbonAcceptance=NOT_READY"
+          )
+          $ribbonAudit | Set-Content "native-ribbon-acceptance.txt" -Encoding UTF8
 
           # Record real installed binary identity. Copying qcad.exe under a new
           # filename is not a completed IMSAT-branded native application.
@@ -429,6 +440,7 @@ jobs:
             native-gui-startup.txt
             native-branding-audit.txt
             native-ribbon-diagnostics.txt
+            native-ribbon-acceptance.txt
             native-startup-output.txt
             native-commit-report.txt
             native-qt-dependencies.txt
