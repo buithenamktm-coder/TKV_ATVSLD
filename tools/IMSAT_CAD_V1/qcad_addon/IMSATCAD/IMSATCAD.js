@@ -241,6 +241,15 @@ IMSATCAD._aliases = [
 // a missing Qt bridge is a release blocker, not evidence of a working Ribbon.
 IMSATCAD._ribbonCreated = false;
 IMSATCAD._ribbonHost = null;
+// Bilingual IMSAT Ribbon captions (does not replace upstream QCAD translations).
+IMSATCAD._ribbonVietnamese = {
+    "Home": "Trang chủ", "Insert": "Chèn", "Annotate": "Ghi chú",
+    "View": "Hiển thị", "Manage": "Quản lý", "Output": "Xuất bản",
+    "Draw": "Vẽ", "Modify": "Hiệu chỉnh", "Layers": "Lớp",
+    "Blocks": "Khối", "Dimensions": "Kích thước",
+    "View & tools": "Hiển thị và công cụ",
+    "Selection": "Lựa chọn", "File & plot": "Tệp và in"
+};
 IMSATCAD._ribbonTabs = [
     ["Home", [["Draw", "_drawScripts"], ["Modify", "_modifyScripts"], ["Layers", "_layerScripts"]]],
     ["Insert", [["Blocks", "_blockScripts"]]],
@@ -297,7 +306,9 @@ IMSATCAD.createRibbon = function() {
                 }
                 if (groupActions === 0) { continue; }
                 column.addWidget(buttons);
-                var caption = new QLabel(qsTr(panels[g][0]), panel);
+                var groupName = panels[g][0];
+                var groupVi = IMSATCAD._ribbonVietnamese[groupName];
+                var caption = new QLabel(groupVi ? groupName + " / " + groupVi : groupName, panel);
                 column.addWidget(caption);
                 row.addWidget(panel);
                 tabActions += groupActions;
@@ -307,7 +318,8 @@ IMSATCAD.createRibbon = function() {
                 qWarning("IMSAT CAD RIBBON BLOCKED: no registered actions in tab " + spec[0]);
                 return false;
             }
-            tabs.addTab(page, qsTr(spec[0]));
+            var tabVi = IMSATCAD._ribbonVietnamese[spec[0]];
+            tabs.addTab(page, tabVi ? spec[0] + " / " + tabVi : spec[0]);
             totalActions += tabActions;
         }
         host.addWidget(tabs);
