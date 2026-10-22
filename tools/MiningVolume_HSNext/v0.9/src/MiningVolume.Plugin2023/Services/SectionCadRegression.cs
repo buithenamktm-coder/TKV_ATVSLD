@@ -18,6 +18,7 @@ namespace MiningVolume2023.Services
     {
         internal static void Run()
         {
+            VerifyTinPairRollbackAfterSecondSurfaceFailure();
             VerifySectionEraseSkipsTinFaces();
             VerifyTableRollback();
             VerifyGridIdentity();
@@ -135,6 +136,59 @@ namespace MiningVolume2023.Services
                 if (!canceled || TinCadRenderer.CountFaces(db, tinLayer) != 2048)
                     throw new InvalidOperationException("Canceled section redraw modified accepted TIN.");
             }
+        }
+
+        private static void VerifyTinPairRollbackAfterSecondSurfaceFailure()
+        {
+            // Real AutoCAD side database, not a mocked transaction. If the
+            // second TIN fails after first TIN was written, both originals
+            // must retain their native CAD handles and face counts.
+            Func<double, TinSurface> plane = z => new TinSurface("QA plane", new[] {
+                new Triangle3(new Vec3(0,0,z), new Vec3(10,0,z), new Vec3(10,10,z)),
+                new Triangle3(new Vec3(0,0,z), new Vec3(10,10,z), new Vec3(0,10,z))
+            }, new ValidationIssue[0]);
+            using (var db = new Database(true, true))
+            {
+                TinCadRenderer.ReplacePair(db, "QA_PAIR_HT", plane(10), "QA_PAIR_TK", plane(0));
+                var original = TinPairHandles(db);
+                if (TinCadRenderer.CountFaces(db, "QA_PAIR_HT") != 2 ||
+                    TinCadRenderer.CountFaces(db, "QA_PAIR_TK") != 2)
+                    throw new InvalidOperationException("TIN pair setup produced incorrect faces.");
+                // Deliberately degenerate design triangle: writing HT first
+                // cannot change the accepted drawings if design fails.
+                var invalid = new TinSurface("Invalid QA", new[] {
+                    new Triangle3(new Vec3(0,0,5), new Vec3(0,0,5), new Vec3(10,0,5))
+                }, new ValidationIssue[0]);
+                bool rejected = false;
+                try { TinCadRenderer.ReplacePair(db, "QA_PAIR_HT", plane(20), "QA_PAIR_TK", invalid); }
+                catch (InvalidOperationException) { rejected = true; }
+                if (!rejected || TinPairHandles(db) != original)
+                    throw new InvalidOperationException("TIN pair second-surface failure did not roll back both layers.");
+                TinCadRenderer.ReplacePair(db, "QA_PAIR_HT", plane(12), "QA_PAIR_TK", plane(2));
+                if (TinCadRenderer.CountFaces(db, "QA_PAIR_HT") != 2 ||
+                    TinCadRenderer.CountFaces(db, "QA_PAIR_TK") != 2 ||
+                    TinPairHandles(db) == original)
+                    throw new InvalidOperationException("TIN pair did not recover after a failed replacement.");
+            }
+        }
+
+        private static string TinPairHandles(Database db)
+        {
+            var handles = new List<string>();
+            using (var tr = db.TransactionManager.StartOpenCloseTransaction())
+            {
+                var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
+                var ms = (BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForRead);
+                foreach (ObjectId id in ms)
+                {
+                    var face = tr.GetObject(id, OpenMode.ForRead) as Face;
+                    if (face != null &&
+                        (face.Layer == "QA_PAIR_HT" || face.Layer == "QA_PAIR_TK"))
+                        handles.Add(face.Layer + ":" + face.Handle);
+                }
+            }
+            handles.Sort(StringComparer.Ordinal);
+            return string.Join("|", handles);
         }
 
         private static void VerifyGridIdentity()
