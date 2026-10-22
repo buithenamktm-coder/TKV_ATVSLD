@@ -57,7 +57,7 @@ def test_public_key_provisioning_must_fail_closed_and_never_embed_private_xml():
     assert 'internal const string RsaPublicKeyXml = "";' in ps
     assert "rsa.ToXmlString(true)" not in ps
     assert "issuer.private.dpapi" not in ps
-    assert "File.ReadAllText" in ps
+    assert "[System.IO.File]::ReadAllText" in ps
     assert "File.WriteAllText" in ps
     assert "PublicXmlPath" not in ps
     assert "SourceProvisioned=YES" in read("release/prepare_v2_runtime_bundle.ps1")
