@@ -248,8 +248,8 @@ jobs:
           if (-not (Test-Path "dist/V2_QA_CANDIDATE_NOT_RELEASE.txt")) {
             throw "Missing non-release warning for V2 QA Setup."
           }
+          $licenseManifest = Get-Content 'dist/V2_QA_CANDIDATE_NOT_RELEASE.txt' -Raw
           if ($env:IMSAT_REQUIRE_APPROVED_PUBLIC_KEY -eq '1') {
-            $licenseManifest = Get-Content 'dist/V2_QA_CANDIDATE_NOT_RELEASE.txt' -Raw
             if ($licenseManifest -notmatch 'License: RSA_PUBLIC_VERIFIER_PINNED_SHA256=') {
               throw 'BLOCKED: stable V2 QA Setup missing pinned owner public RSA trust anchor.'
             }
@@ -263,7 +263,8 @@ jobs:
             "Workflow run: $env:GITHUB_RUN_ID"
             "V2 Setup SHA256: $v2Hash"
             'AutoCAD 2023 interactive runtime: NOT TESTED'
-            'Production license trust anchor and acceptance: NOT APPROVED'
+            ('Offline license: ' + (($licenseManifest | Select-String 'License: (.*)').Matches.Groups[1].Value))
+            'License activation and user acceptance: NOT TESTED'
           ) | Set-Content -Encoding utf8 dist/V2_BUILD_VERIFICATION.txt
           Get-Content dist/V2_BUILD_VERIFICATION.txt
           & ./release/scan_qa_setup.ps1
