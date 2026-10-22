@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Threading;
 using System.Collections.Generic;
 using System.Linq;
@@ -179,36 +180,66 @@ namespace MiningVolume2023.Services
 
             const int batchSize = 20;
             int total = drawingProfiles.Count;
-            using (var meter = new SectionCadProgress(total))
-            using (doc.LockDocument())
-            using (var allSections = doc.Database.TransactionManager.StartTransaction())
+            int completed = 0;
+            // These are true host-side timings, measured inside AutoCAD 2023.
+            // They are intentionally not estimates from a core-only test.
+            var clock = Stopwatch.StartNew();
+            var batchMs = new List<double>((total + batchSize - 1) / batchSize);
+            string outcome = "FAILED";
+            try
             {
-                // The CAD renderer uses nested transactions per batch. Commit
-                // the OUTER transaction only after the final batch succeeds:
-                // an exception/cancel must leave the previous section drawing
-                // intact rather than erasing it and drawing only 20 profiles.
-                double nextY = insertion.Y;
-                for (int start = 0; start < total; start += batchSize)
+                using (var meter = new SectionCadProgress(total))
+                using (doc.LockDocument())
+                using (var allSections = doc.Database.TransactionManager.StartTransaction())
                 {
-                    int count = Math.Min(batchSize, total - start);
-                    nextY = SectionCadRenderer.ReplaceProfilesBatched(
-                        doc.Database,
-                        drawingProfiles,
-                        insertion,
-                        horizontalScale,
-                        verticalScale,
-                        levelStep,
-                        start,
-                        count,
-                        start == 0,
-                        layoutGap,
-                        nextY,
-                        meter.Poll);
-                    meter.Report(start + count);
-                    progress?.Invoke(start + count, total);
+                    // The CAD renderer uses nested transactions per batch. Commit
+                    // the OUTER transaction only after the final batch succeeds:
+                    // an exception/cancel must leave the previous section drawing
+                    // intact rather than erasing it and drawing only 20 profiles.
+                    double nextY = insertion.Y;
+                    for (int start = 0; start < total; start += batchSize)
+                    {
+                        int count = Math.Min(batchSize, total - start);
+                        long beginTicks = clock.ElapsedTicks;
+                        nextY = SectionCadRenderer.ReplaceProfilesBatched(
+                            doc.Database,
+                            drawingProfiles,
+                            insertion,
+                            horizontalScale,
+                            verticalScale,
+                            levelStep,
+                            start,
+                            count,
+                            start == 0,
+                            layoutGap,
+                            nextY,
+                            meter.Poll);
+                        batchMs.Add((clock.ElapsedTicks - beginTicks) *
+                            1000.0 / Stopwatch.Frequency);
+                        meter.Report(start + count);
+                        completed = start + count;
+                        progress?.Invoke(completed, total);
+                    }
+                    meter.Poll();
+                    allSections.Commit();
                 }
-                meter.Poll();
-                allSections.Commit();
+                outcome = "PASS";
+            }
+            catch (OperationCanceledException)
+            {
+                outcome = "CANCELED";
+                throw;
+            }
+            finally
+            {
+                clock.Stop();
+                // On failure/cancel, completed counts only fully written
+                // batches, NOT accepted CAD content (outer rollback retains
+                // the previous drawing). This status prevents false PASSes.
+                HostPerformanceLog.Record("SECTION_CAD_EXPORT", outcome,
+                    doc.Database.FingerprintGuid, total, completed,
+                    drawingProfiles.Sum(p => p == null ? 0 : p.Segments.Count),
+                    clock.Elapsed.TotalMilliseconds, batchMs);
             }
         }
 
