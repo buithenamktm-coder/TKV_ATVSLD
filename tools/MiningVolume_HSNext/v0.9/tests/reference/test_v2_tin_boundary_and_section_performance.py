@@ -45,5 +45,10 @@ def test_sampling_keeps_complete_geometry_and_avoids_reloading_each_tile_for_eac
     assert "MaxDegreeOfParallelism =" in sampler
     assert "Math.Min(4, Environment.ProcessorCount - 1)" in sampler
     assert "GetTile(tileIndex).TryElevation(p, tol, out z)" in sampler
-    assert "var tris = GetTile(tileIndex).Triangles;" in sampler
-    assert "QuerySegmentTriangles(a, b)" not in sampler.split("private sealed class TilePointIndex", 1)[1]
+    # The per-tile hot index now serves segment intersections as well as
+    # point elevations, without dropping wide triangles or approximating Z.
+    assert "GetTile(tileIndex).QuerySegmentTriangles(a, b)" in sampler
+    local = sampler.split("private sealed class TilePointIndex", 1)[1]
+    assert "public IEnumerable<Triangle3> QuerySegmentTriangles(Vec2 a, Vec2 b)" in local
+    assert "foreach (int id in _broad) candidates.Add(id);" in local
+    assert "yield return _triangles[id];" in local
