@@ -1,4 +1,4 @@
-$ErrorActionPreference = 'Stop'
+﻿$ErrorActionPreference = 'Stop'
 $root = Join-Path $PSScriptRoot '..\bundle\MiningVolume2023.bundle'
 $win = Join-Path $root 'Contents\Windows'
 $required = @(

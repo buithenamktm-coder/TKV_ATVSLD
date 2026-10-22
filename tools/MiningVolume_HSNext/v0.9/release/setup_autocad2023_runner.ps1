@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$Repository = 'buithenamktm-coder/TKV_ATVSLD',
     [string]$RunnerRoot = 'C:\\actions-runner-miningvolume',
     [string]$RunnerName = '',

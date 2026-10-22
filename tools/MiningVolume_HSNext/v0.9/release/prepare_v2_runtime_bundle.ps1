@@ -1,4 +1,4 @@
-# Stage a separate V2 bundle for the licensed AutoCAD 2023 host runtime smoke.
+﻿# Stage a separate V2 bundle for the licensed AutoCAD 2023 host runtime smoke.
 # Never mutate the V1 working bundle or mark an installer FINAL.
 param(
     [string]$Root = (Join-Path $PSScriptRoot '..'),

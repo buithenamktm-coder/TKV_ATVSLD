@@ -1,4 +1,4 @@
-# V2.0 QA-only packaging. Uses Release DLLs already built by the Windows CI,
+﻿# V2.0 QA-only packaging. Uses Release DLLs already built by the Windows CI,
 # stages a separate bundle and supplies version variables through Go linker flags.
 # Does not mutate V1.0 source/bundle or claim the binary is certified.
 param([string]$Root = "")
