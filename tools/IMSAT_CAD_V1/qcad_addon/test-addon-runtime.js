@@ -121,6 +121,16 @@ assert.deepStrictEqual(ribbonPages.map(x => x.label), beforeTabLabels,
 assert.deepStrictEqual(ribbonCaptions.map(x => x.label), beforePanelLabels,
   "Failed language switch must not modify panel labels");
 firstCaption.setText = savedSetText;
+const tabsWidget = context.IMSATCAD._ribbonTabsWidget;
+const savedCount = tabsWidget.count;
+tabsWidget.count = savedCount - 1;
+assert.strictEqual(context.IMSATCAD.setRibbonLanguage("en"), false,
+  "Language switch must reject an incomplete Ribbon tab set");
+assert.strictEqual(context.IMSATCAD._ribbonLanguage, beforeLocale,
+  "Tab count mismatch must not change locale");
+assert.deepStrictEqual(ribbonPages.map(x => x.label), beforeTabLabels,
+  "Tab count mismatch must preserve existing tab labels");
+tabsWidget.count = savedCount;
 const first = [...toolbars.values()].map(x => x.actions.length);
 assert(first.filter(x => x >= 2).length === 8, "Legacy CAD toolbar missing");
 assert.strictEqual(menu.actions.length, new Set(menu.actions).size, "Duplicate menu actions");
