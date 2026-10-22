@@ -1,3 +1,5 @@
+> **V2.0 — RSA production gate:** dùng `IMSAT.LicenseManager.exe fingerprint` để lấy SHA-256 public key, cấu hình `IMSAT_VOLUME_V2_RSA_PUBLIC_XML_B64` và `IMSAT_VOLUME_V2_RSA_PUBLIC_SHA256` trong GitHub Actions; không tải private issuer lên GitHub. Hỗ trợ cấp Pass 1M / 3M / 6M / 1Y / PERMANENT. Xem [V2.0 runtime and RSA procedure](../docs/V2_RUNTIME_RSA_RELEASE_PROCEDURE.md). Việc thêm workflow không tự biến bản QA thành release cuối.
+
 # IMSAT License Manager (Offline – quản trị viên)
 
 Công cụ cấp license **dành riêng cho quản trị viên IMSAT**, không phân phối cùng add-in MiningVolume.
