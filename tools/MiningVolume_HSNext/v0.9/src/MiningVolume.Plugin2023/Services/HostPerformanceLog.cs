@@ -27,7 +27,7 @@ namespace MiningVolume2023.Services
             }
         }
 
-        internal static void Record(string operation, string outcome, Guid drawingFingerprint,
+        internal static void Record(string operation, string outcome, string drawingFingerprint,
             int items, int completed, int geometryCount, double totalMs,
             IReadOnlyList<double> batches = null)
         {
@@ -44,7 +44,7 @@ namespace MiningVolume2023.Services
                     DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture),
                     operation,
                     outcome,
-                    drawingFingerprint.ToString("D"),
+                    string.IsNullOrWhiteSpace(drawingFingerprint) ? "UNKNOWN" : drawingFingerprint,
                     sourceSha,
                     typeof(HostPerformanceLog).Assembly.ManifestModule.ModuleVersionId.ToString("D"),
                     items.ToString(CultureInfo.InvariantCulture),
