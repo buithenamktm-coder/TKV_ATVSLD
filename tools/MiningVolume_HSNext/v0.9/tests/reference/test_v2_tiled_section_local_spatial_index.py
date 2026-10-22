@@ -20,7 +20,7 @@ def test_tiled_sections_use_cached_tile_segment_candidates():
     assert "GetTile(tileIndex).QuerySegmentTriangles(a, b)" in tiled
     assert "foreach (var tri in tris)" not in tiled
 
-    local = code.split("public IReadOnlyList<Triangle3> Triangles => _triangles;", 1)[1].split(
+    local = code.split("private sealed class TilePointIndex", 1)[1].split(
         "public bool TryElevation(Vec2 p, double tol, out double z)", 1
     )[0]
     assert "public IEnumerable<Triangle3> QuerySegmentTriangles(Vec2 a, Vec2 b)" in local
