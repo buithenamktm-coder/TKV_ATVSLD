@@ -75,6 +75,13 @@ assert(gridPositions.every(p => p.row >= 0 && p.row < 3 && p.col >= 0), "Ribbon 
 assert(actionButtons.every(b => b.text && !b.text.endsWith(".js")), "Ribbon button label must not expose script filename");
 assert(actionButtons.every(b => b.minimumWidth >= 84), "Ribbon button minimum width missing");
 assert(actionButtons.every(b => b.action), "Ribbon button missing native action");
+assert.strictEqual(context.IMSATCAD._ribbonButtonCaptions.length, 49, "Missing localized Ribbon commands");
+assert(actionButtons.every(b => b.text && b.tooltip === b.text), "Native command label and tooltip mismatch");
+assert(actionButtons.every(b => b.text !== b.action.script.split("/").pop().replace(/\.js$/, "")),
+  "Ribbon must not show internal QCAD script identifiers");
+const localizedCommands = context.IMSATCAD._ribbonButtonCaptions;
+const vietnameseCommandLabels = localizedCommands.map(x => x.widget.text);
+const originalCommandActions = localizedCommands.map(x => x.widget.action);
 assert.deepStrictEqual(ribbonPages.map(x => x.label), ["Trang chủ", "Chèn", "Ghi chú", "Hiển thị", "Quản lý", "Xuất bản"]);
 assert(ribbonPages.every(x => x.page && x.page.parent), "Ribbon page not created");
 const expectedGroupCaptions = [
@@ -98,6 +105,10 @@ assert.strictEqual(context.IMSATCAD._ribbonLanguage, "en");
 assert.deepStrictEqual(ribbonPages.map(x => x.label), ["Home", "Insert", "Annotate", "View", "Manage", "Output"]);
 assert.deepStrictEqual(ribbonCaptions.map(x => x.label), ["Draw", "Modify", "Layers", "Blocks", "Dimensions", "Navigation", "Selection", "File & plot"]);
 assert.strictEqual(languageButton.text, "Tiếng Việt");
+assert(localizedCommands.every(x => x.widget.text === context.IMSATCAD.commandLabel(x.script, "en")),
+  "Switch to English must translate every command button");
+assert(localizedCommands.every(x => x.widget.tooltip === x.widget.text),
+  "English command tooltips must follow labels");
 assert.strictEqual(languageButton.tooltip, "Chuyển Ribbon sang tiếng Việt");
 assert.strictEqual(context.IMSATCAD.setRibbonLanguage("xx"), false, "Unsupported locale must be rejected");
 languageButton.click();
@@ -105,6 +116,10 @@ assert.deepStrictEqual(ribbonPages.map(x => x.label), ["Trang chủ", "Chèn", "
 assert.deepStrictEqual(ribbonCaptions.map(x => x.label), expectedGroupCaptions);
 assert.strictEqual(languageButton.text, "English");
 assert.strictEqual(languageButton.tooltip, "Switch Ribbon to English");
+assert.deepStrictEqual(localizedCommands.map(x => x.widget.text), vietnameseCommandLabels,
+  "Switch back to Vietnamese must restore all 49 command captions");
+assert(localizedCommands.every((x, i) => x.widget.action === originalCommandActions[i]),
+  "Language switching must not replace native CAD actions");
 // A broken Qt language control must not leave the Ribbon half-translated.
 const beforeLocale = context.IMSATCAD._ribbonLanguage;
 const beforeTabLabels = ribbonPages.map(x => x.label);
@@ -121,6 +136,15 @@ assert.deepStrictEqual(ribbonPages.map(x => x.label), beforeTabLabels,
 assert.deepStrictEqual(ribbonCaptions.map(x => x.label), beforePanelLabels,
   "Failed language switch must not modify panel labels");
 firstCaption.setText = savedSetText;
+// A broken command button API must not partially change the active language.
+const firstCommand = localizedCommands[0].widget;
+const originalTooltipSetter = firstCommand.setToolTip;
+firstCommand.setToolTip = undefined;
+assert.strictEqual(context.IMSATCAD.setRibbonLanguage("en"), false,
+  "Missing native command tooltip API must reject the language switch");
+assert.strictEqual(context.IMSATCAD._ribbonLanguage, "vi");
+assert.deepStrictEqual(localizedCommands.map(x => x.widget.text), vietnameseCommandLabels);
+firstCommand.setToolTip = originalTooltipSetter;
 // QTabWidget.count is a non-configurable getter in the Qt mock.
 // Do not mutate it; the native count guard is exercised by integration checks.
 const first = [...toolbars.values()].map(x => x.actions.length);

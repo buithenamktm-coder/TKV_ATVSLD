@@ -246,6 +246,7 @@ IMSATCAD._ribbonLanguage = "vi";
 IMSATCAD._ribbonTabsWidget = null;
 IMSATCAD._ribbonCaptions = [];
 IMSATCAD._ribbonLanguageButton = null;
+IMSATCAD._ribbonButtonCaptions = [];
 // Bilingual IMSAT Ribbon captions (does not replace upstream QCAD translations).
 IMSATCAD._ribbonVietnamese = {
     "Home": "Trang chủ", "Insert": "Chèn", "Annotate": "Ghi chú",
@@ -254,6 +255,64 @@ IMSATCAD._ribbonVietnamese = {
     "Blocks": "Khối", "Dimensions": "Kích thước",
     "Navigation": "Điều hướng",
     "Selection": "Lựa chọn", "File & plot": "Tệp và in"
+};
+// Command labels are owned by IMSAT, not by upstream QAction translations.
+// Preserve the native action and change only the visible Ribbon button text.
+IMSATCAD._commandLabels = {
+    "Line2P": { en: "Line", vi: "Đường thẳng" },
+    "DrawPolyline": { en: "Polyline", vi: "Đa tuyến" },
+    "CircleCR": { en: "Circle", vi: "Đường tròn" },
+    "ShapeRectanglePP": { en: "Rectangle", vi: "Hình chữ nhật" },
+    "Arc3P": { en: "Arc", vi: "Cung tròn" },
+    "EllipseCPP": { en: "Ellipse", vi: "Elip" },
+    "ShapePolygonCP": { en: "Polygon", vi: "Đa giác" },
+    "HatchFromSelection": { en: "Hatch", vi: "Tô mặt cắt" },
+    "Trim": { en: "Trim", vi: "Xén" },
+    "Offset": { en: "Offset", vi: "Đường song song" },
+    "Round": { en: "Fillet", vi: "Bo góc" },
+    "Bevel": { en: "Chamfer", vi: "Vát góc" },
+    "Translate": { en: "Move", vi: "Di chuyển" },
+    "Rotate": { en: "Rotate", vi: "Xoay" },
+    "Scale": { en: "Scale", vi: "Tỷ lệ" },
+    "Mirror": { en: "Mirror", vi: "Đối xứng" },
+    "Explode": { en: "Explode", vi: "Phá khối" },
+    "Delete": { en: "Erase", vi: "Xóa" },
+    "Undo": { en: "Undo", vi: "Hoàn tác" },
+    "Redo": { en: "Redo", vi: "Làm lại" },
+    "DimHorizontal": { en: "Horizontal dimension", vi: "Kích thước ngang" },
+    "DimVertical": { en: "Vertical dimension", vi: "Kích thước đứng" },
+    "DimAligned": { en: "Aligned dimension", vi: "Kích thước xiên" },
+    "DimAngular": { en: "Angular dimension", vi: "Kích thước góc" },
+    "DimRadial": { en: "Radius dimension", vi: "Kích thước bán kính" },
+    "DimDiametric": { en: "Diameter dimension", vi: "Kích thước đường kính" },
+    "Leader": { en: "Leader", vi: "Đường dẫn chú thích" },
+    "Text": { en: "Text", vi: "Văn bản" },
+    "AddLayer": { en: "New layer", vi: "Lớp mới" },
+    "EditLayer": { en: "Edit layer", vi: "Sửa lớp" },
+    "RemoveLayer": { en: "Delete layer", vi: "Xóa lớp" },
+    "ShowAllLayers": { en: "Show layers", vi: "Hiện tất cả lớp" },
+    "HideAllLayers": { en: "Hide layers", vi: "Ẩn tất cả lớp" },
+    "LockAllLayers": { en: "Lock layers", vi: "Khóa tất cả lớp" },
+    "UnlockAllLayers": { en: "Unlock layers", vi: "Mở khóa các lớp" },
+    "AutoZoom": { en: "Zoom extents", vi: "Hiển thị toàn bộ" },
+    "WindowZoom": { en: "Window zoom", vi: "Phóng theo khung" },
+    "PanZoom": { en: "Pan", vi: "Dịch chuyển khung nhìn" },
+    "Save": { en: "Save", vi: "Lưu" },
+    "SaveAs": { en: "Save as", vi: "Lưu thành" },
+    "Print": { en: "Print", vi: "In" },
+    "CreateBlock": { en: "Create block", vi: "Tạo khối" },
+    "InsertBlock": { en: "Insert block", vi: "Chèn khối" },
+    "EditBlock": { en: "Edit block", vi: "Sửa khối" },
+    "RemoveBlock": { en: "Remove block", vi: "Xóa khối" },
+    "SelectAll": { en: "Select all", vi: "Chọn tất cả" },
+    "DeselectAll": { en: "Deselect all", vi: "Bỏ chọn tất cả" },
+    "InvertSelection": { en: "Invert selection", vi: "Đảo vùng chọn" },
+    "SelectRectangle": { en: "Rectangle selection", vi: "Chọn theo khung" }
+};
+IMSATCAD.commandLabel = function(script, language) {
+    var filename = script.split("/").pop().replace(/\.js$/, "");
+    var pair = IMSATCAD._commandLabels[filename];
+    return pair ? pair[language || IMSATCAD._ribbonLanguage] : filename;
 };
 IMSATCAD._ribbonTabs = [
     ["Home", [["Draw", "_drawScripts"], ["Modify", "_modifyScripts"], ["Layers", "_layerScripts"]]],
@@ -287,6 +346,14 @@ IMSATCAD.setRibbonLanguage = function(language) {
             return false;
         }
     }
+    for (var b = 0; b < IMSATCAD._ribbonButtonCaptions.length; ++b) {
+        var control = IMSATCAD._ribbonButtonCaptions[b].widget;
+        if (isNull(control) || typeof control.setText !== "function" ||
+                typeof control.setToolTip !== "function") {
+            qWarning("IMSAT CAD: Ribbon language switch blocked: command label API unavailable");
+            return false;
+        }
+    }
     if (!isNull(IMSATCAD._ribbonLanguageButton) &&
             (typeof IMSATCAD._ribbonLanguageButton.setText !== "function" ||
              typeof IMSATCAD._ribbonLanguageButton.setToolTip !== "function")) {
@@ -303,6 +370,12 @@ IMSATCAD.setRibbonLanguage = function(language) {
     for (var c = 0; c < IMSATCAD._ribbonCaptions.length; ++c) {
         var caption = IMSATCAD._ribbonCaptions[c];
         caption.widget.setText(IMSATCAD.ribbonLabel(caption.name));
+    }
+    for (var b2 = 0; b2 < IMSATCAD._ribbonButtonCaptions.length; ++b2) {
+        var entry = IMSATCAD._ribbonButtonCaptions[b2];
+        var translated = IMSATCAD.commandLabel(entry.script, language);
+        entry.widget.setText(translated);
+        entry.widget.setToolTip(translated);
     }
     if (!isNull(IMSATCAD._ribbonLanguageButton)) {
         IMSATCAD._ribbonLanguageButton.setText(language === "vi" ? "English" : "Tiếng Việt");
@@ -353,6 +426,7 @@ IMSATCAD.createRibbon = function() {
         tabs.objectName = "IMSATCADRibbonTabs";
         var totalActions = 0;
         var panelCaptions = [];
+        var commandCaptions = [];
         for (var t = 0; t < IMSATCAD._ribbonTabs.length; ++t) {
             var spec = IMSATCAD._ribbonTabs[t];
             var page = new QWidget(tabs);
@@ -375,8 +449,8 @@ IMSATCAD.createRibbon = function() {
                     // Avoid truncated script aliases in the native Ribbon.
                     // Native QAction text is often an abbreviated command name;
                     // use a full descriptive label derived from the action script.
-                    var filename = scripts[i].split("/").pop().replace(/\.js$/, "");
-                    var label = filename.replace(/([a-z])([A-Z])/g, "$1 $2");
+                    var label = IMSATCAD.commandLabel(scripts[i]);
+                    commandCaptions.push({ widget: button, script: scripts[i] });
                     if (typeof button.setText === "function") { button.setText(label); }
                     if (typeof button.setToolTip === "function") { button.setToolTip(label); }
                     if (typeof button.setMinimumWidth === "function") { button.setMinimumWidth(84); }
@@ -420,6 +494,7 @@ IMSATCAD.createRibbon = function() {
         host.addWidget(languageButton);
         IMSATCAD._ribbonTabsWidget = tabs;
         IMSATCAD._ribbonCaptions = panelCaptions;
+        IMSATCAD._ribbonButtonCaptions = commandCaptions;
         IMSATCAD._ribbonLanguageButton = languageButton;
         IMSATCAD._ribbonHost = host;
         IMSATCAD._ribbonCreated = true;
