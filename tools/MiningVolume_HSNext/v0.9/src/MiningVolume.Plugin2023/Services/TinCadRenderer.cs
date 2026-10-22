@@ -39,25 +39,88 @@ namespace MiningVolume2023.Services
         {
             if (string.Equals(existingLayer, designLayer, StringComparison.OrdinalIgnoreCase))
                 throw new ArgumentException("Hai TIN phải có hai layer riêng.");
+
+            // Actual AutoCAD 2023 MVSELFTEST exposed incomplete rollback when
+            // the second (TK) surface was rejected AFTER erasing both TINs.
+            // Perform every user-cancelable/invalid-input check BEFORE CAD writes.
+            ValidateSurfaceBeforePairMutation(existing, existingLayer);
+            ValidateSurfaceBeforePairMutation(design, designLayer);
+            var originalFaces = ValidateExistingPairBeforeMutation(db, existingLayer, designLayer);
             using (var tr = db.TransactionManager.StartTransaction())
             {
                 // One cleanup traversal for BOTH output layers before adding
                 // either 3DFACE collection. Previously the second cleanup
                 // re-opened every face just appended for the first TIN.
-                ClearExistingPairInTransaction(db, tr, existingLayer, designLayer);
-                int ht = ReplaceInTransaction(db, tr, existingLayer, existing, 1, false);
-                int tk = ReplaceInTransaction(db, tr, designLayer, design, 3, false);
+                ClearExistingPairInTransaction(db, tr, existingLayer, designLayer, originalFaces);
+                // Do not allow Esc in the destructive phase: host rollback of
+                // erased native 3DFACEs was NOT reliable on this side database.
+                int ht = ReplaceInTransaction(db, tr, existingLayer, existing, 1, false, false);
+                int tk = ReplaceInTransaction(db, tr, designLayer, design, 3, false, false);
                 // No state adoption or old-store disposal before both writes succeed.
                 tr.Commit();
                 return new[] { ht, tk };
             }
         }
 
-        private static void ClearExistingPairInTransaction(Database db, Transaction tr,
+        private static void ValidateSurfaceBeforePairMutation(TinSurface tin, string layer)
+        {
+            if (tin == null) throw new ArgumentNullException(nameof(tin));
+            if (tin.Triangles == null || tin.Triangles.Count == 0)
+                throw new InvalidOperationException("TIN " + layer + " không có tam giác để ghi CAD.");
+            using (var progress = new SectionCadProgress(1, "kiểm tra TIN " + layer + " trước khi thay thế"))
+            {
+                int visited = 0;
+                foreach (var triangle in tin.Triangles)
+                {
+                    if ((visited++ & 1023) == 0) progress.Poll();
+                    ValidateTriangle(triangle);
+                }
+                foreach (var triangle in tin.VerticalFaces)
+                {
+                    if ((visited++ & 1023) == 0) progress.Poll();
+                    ValidateVerticalFace(triangle);
+                }
+                progress.Poll();
+            }
+        }
+
+        private static List<ObjectId> ValidateExistingPairBeforeMutation(Database db,
             string existingLayer, string designLayer)
         {
-            // The enclosing ReplacePair transaction owns every erased Face and
-            // both new TINs; failure or Esc restores the original two layers.
+            var oldFaces = new List<ObjectId>();
+            using (var check = db.TransactionManager.StartOpenCloseTransaction())
+            using (var progress = new SectionCadProgress(1, "kiểm tra hai layer TIN"))
+            {
+                var lt = (LayerTable)check.GetObject(db.LayerTableId, OpenMode.ForRead);
+                ObjectId existingId = lt.Has(existingLayer) ? lt[existingLayer] : ObjectId.Null;
+                ObjectId designId = lt.Has(designLayer) ? lt[designLayer] : ObjectId.Null;
+                var bt = (BlockTable)check.GetObject(db.BlockTableId, OpenMode.ForRead);
+                var ms = (BlockTableRecord)check.GetObject(
+                    bt[BlockTableRecord.ModelSpace], OpenMode.ForRead);
+                int visited = 0;
+                foreach (ObjectId id in ms)
+                {
+                    if ((visited++ & 1023) == 0) progress.Poll();
+                    var entity = check.GetObject(id, OpenMode.ForRead) as Entity;
+                    if (entity == null) continue;
+                    string layer = entity.LayerId == existingId ? existingLayer :
+                        entity.LayerId == designId ? designLayer : null;
+                    if (layer == null) continue;
+                    if (!(entity is Face))
+                        throw new InvalidOperationException(
+                            "Layer " + layer + " chứa đối tượng không phải 3DFACE. " +
+                            "Không xóa tự động để tránh mất dữ liệu CAD.");
+                    oldFaces.Add(id);
+                }
+                // LAST Esc checkpoint: no TIN faces or layer settings touched.
+                progress.Poll();
+            }
+            return oldFaces;
+        }
+
+        private static void ClearExistingPairInTransaction(Database db, Transaction tr,
+            string existingLayer, string designLayer, IReadOnlyList<ObjectId> originalFaces)
+        {
             var existingId = EnsureLayer(db, tr, existingLayer, 1);
             var designId = EnsureLayer(db, tr, designLayer, 3);
             MoveCurrentLayerAwayIfNeeded(db, tr, existingId);
@@ -69,32 +132,22 @@ namespace MiningVolume2023.Services
                 rec.IsOff = false;
                 if (rec.IsFrozen) rec.IsFrozen = false;
             }
-            var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
-            var ms = (BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForWrite);
-            using (var progress = new SectionCadProgress(1, "kiểm tra hai layer TIN"))
+            // IDs were checked in a read-only preflight before ANY changes.
+            // There is no progress callback or Esc polling during Erase().
+            foreach (ObjectId id in originalFaces)
             {
-                int scanned = 0;
-                foreach (ObjectId id in ms)
-                {
-                    if ((scanned++ & 1023) == 0) progress.Poll();
-                    var ent = tr.GetObject(id, OpenMode.ForRead) as Entity;
-                    if (ent == null) continue;
-                    string layer = ent.LayerId == existingId ? existingLayer :
-                        ent.LayerId == designId ? designLayer : null;
-                    if (layer == null) continue;
-                    if (!(ent is Face))
-                        throw new InvalidOperationException(
-                            "Layer " + layer + " chứa đối tượng không phải 3DFACE. " +
-                            "Không xóa tự động để tránh mất dữ liệu CAD.");
-                    ent.UpgradeOpen();
-                    ent.Erase();
-                }
-                progress.Poll();
+                var face = tr.GetObject(id, OpenMode.ForWrite) as Face;
+                if (face == null ||
+                    (face.LayerId != existingId && face.LayerId != designId))
+                    throw new InvalidOperationException(
+                        "TIN thay đổi giữa kiểm tra và ghi CAD; dừng để bảo vệ bản vẽ.");
+                face.Erase();
             }
         }
 
         private static int ReplaceInTransaction(Database db, Transaction tr, string layerName,
-            TinSurface tin, short aciColor, bool clearExisting = true)
+            TinSurface tin, short aciColor, bool clearExisting = true,
+            bool allowCancellation = true)
         {
             if (tin == null) throw new ArgumentNullException(nameof(tin));
             if (tin.Triangles == null || tin.Triangles.Count == 0)
@@ -149,7 +202,7 @@ namespace MiningVolume2023.Services
                     ms.AppendEntity(face);
                     tr.AddNewlyCreatedDBObject(face, true);
                     written++;
-                    if((written&1023)==0)progress.Poll(written,true);
+                    if(allowCancellation && (written&1023)==0)progress.Poll(written,true);
                 }
 
                 // These faces have zero XY area by design. They are valid
@@ -168,12 +221,12 @@ namespace MiningVolume2023.Services
                     ms.AppendEntity(face);
                     tr.AddNewlyCreatedDBObject(face, true);
                     written++;
-                    if((written&1023)==0)progress.Poll(written,true);
+                    if(allowCancellation && (written&1023)==0)progress.Poll(written,true);
                 }
 
                 if (written != tin.Triangles.Count + tin.VerticalFaces.Count)
                     throw new InvalidOperationException("Số mặt TIN ghi CAD không khớp; hoàn tác toàn bộ thao tác.");
-                progress.Poll(written, true);
+                if (allowCancellation) progress.Poll(written, true);
                 outLayer.IsLocked = true;
             }
             return written;
