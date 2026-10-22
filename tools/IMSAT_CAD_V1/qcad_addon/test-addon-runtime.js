@@ -135,7 +135,7 @@ for (const unsafe of ["copy", "co", "cp", "extend", "ex"]) {
 }
 assert(warnings.every(x => !x.includes("BLOCKED") && !x.includes("FAIL")), "Native Ribbon failure: " + warnings.join("; "));
 assert(messages.length >= 1, "Missing initialization status");
-assert(messages.some(x => x.includes("Ribbon=READY")), "Startup message must expose Ribbon readiness");
+assert(messages.some(x => x.includes("Ribbon=CREATED_NOT_GUI_TESTED")), "Startup message must expose Ribbon readiness");
 // A missing registered CAD command must prevent any partial Ribbon from being mounted.
 const missingScript = "scripts/Draw/Line/Line2P/Line2P.js";
 const missingWarnings = [];
