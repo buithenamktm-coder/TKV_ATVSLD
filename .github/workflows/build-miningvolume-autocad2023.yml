@@ -93,7 +93,10 @@ jobs:
             & "$env:MV_ROOT/release/provision_v2_public_key.ps1" `
               -PublicKeyFile $publicXml `
               -ExpectedPublicKeySha256 $env:V2_ISSUER_PUBLIC_SHA256
-            if ($LASTEXITCODE -ne 0) { throw 'V2 pinned RSA public key provision failed.' }
+            # PowerShell .ps1 does not set $LASTEXITCODE like a native EXE.
+            # Its throws fail this step; the generated SHA-pinned receipt is
+            # the positive evidence of successful public-key provisioning.
+            if (-not $?) { throw 'V2 pinned RSA public key provision failed.' }
             $proof = Join-Path $env:MV_ROOT 'dist/V2_LICENSE_PUBLIC_KEY_PROOF.txt'
             if (!(Test-Path $proof) -or
                 (Get-Content $proof -Raw) -notmatch 'SourceProvisioned=YES') {
