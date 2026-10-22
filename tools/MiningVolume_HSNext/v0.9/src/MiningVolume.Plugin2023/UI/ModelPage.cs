@@ -30,7 +30,11 @@ namespace MiningVolume2023.UI
         private readonly Button _meanZCancel;
         private CancellationTokenSource _meanZCts;
         private CancellationTokenSource _buildCts;
-        private readonly List<RowRef> _rows = new List<RowRef>();
+        // DataGridView.VirtualMode must not allocate one RowRef per point:
+        // mine surveys may contain millions of vertices. Cache only entity
+        // boundaries and resolve a visible/selected vertex on demand.
+        private ModelVertexRowIndex _rowIndex;
+        private ModelRole _rowRole;
         private bool _busy;
 
         public ModelPage()
@@ -151,15 +155,42 @@ namespace MiningVolume2023.UI
 
         private void RebuildRows()
         {
-            _rows.Clear();
-            var s = CurrentSession;
-            if (s.Source != null)
-                foreach (var entity in s.Source.Entities)
-                    foreach (var vertex in entity.Vertices)
-                        _rows.Add(new RowRef { Entity = entity, Vertex = vertex });
-            _grid.RowCount = _rows.Count;
+            var source = CurrentSession.Source;
+            var role = CurrentRole;
+            bool switched = _rowRole != role ||
+                !ReferenceEquals(_rowIndex?.Source, source);
+            bool rebuild = switched || (source != null &&
+                (_rowIndex == null || _rowIndex.Revision != source.Revision ||
+                 _rowIndex.EntityCount != source.Entities.Count));
+
+            if (rebuild)
+            {
+                // Preserve selection on simple Z/enabled edits (same model),
+                // but never carry row selection across different data sources.
+                if (switched) _grid.ClearSelection();
+                _rowIndex = source == null ? null : new ModelVertexRowIndex(source);
+                _rowRole = role;
+            }
+            int count = _rowIndex?.RowCount ?? 0;
+            if (_grid.RowCount != count) _grid.RowCount = count;
             _grid.Invalidate();
             UpdateInfo();
+        }
+
+        private RowRef RowAt(int row)
+        {
+            var index = _rowIndex;
+            var source = CurrentSession.Source;
+            // Fail closed if the model has changed but the UI refresh has not
+            // yet arrived; never edit or zoom a vertex from another revision.
+            if (index == null || !ReferenceEquals(index.Source, source) ||
+                index.Revision != source.Revision || _rowRole != CurrentRole)
+                return null;
+            SourceEntity entity;
+            ModelVertex vertex;
+            return index.TryGet(row, out entity, out vertex)
+                ? new RowRef { Entity = entity, Vertex = vertex }
+                : null;
         }
 
         private void UpdateInfo()
@@ -170,7 +201,7 @@ namespace MiningVolume2023.UI
                 : "TẠO / CẬP NHẬT TIN THIẾT KẾ";
 
             _info.Text =
-                $"{s.Name} • nguồn: {s.Layer ?? "-"} • {s.EntityCount:n0} đối tượng • {s.ActiveVertexCount:n0}/{s.VertexCount:n0} đỉnh đang dùng" +
+                $"{s.Name} • nguồn: {s.Layer ?? "-"} • {s.EntityCount:n0} đối tượng • {_rowIndex?.ActiveVertexCount ?? 0:n0}/{_rowIndex?.RowCount ?? 0:n0} đỉnh đang dùng" +
                 Environment.NewLine +
                 SurfaceWorkflowService.TinStatusText(ModelRole.Existing) + "   |   " +
                 SurfaceWorkflowService.TinStatusText(ModelRole.Design) +
@@ -192,8 +223,8 @@ namespace MiningVolume2023.UI
 
         private void GridCellValueNeeded(object sender, DataGridViewCellValueEventArgs e)
         {
-            if (e.RowIndex < 0 || e.RowIndex >= _rows.Count) return;
-            var r = _rows[e.RowIndex];
+            var r = RowAt(e.RowIndex);
+            if (r == null) return;
             bool enabled = r.Entity.IsEnabled && r.Vertex.IsEnabled;
             switch (_grid.Columns[e.ColumnIndex].Name)
             {
@@ -225,8 +256,8 @@ namespace MiningVolume2023.UI
         private IEnumerable<RowRef> SelectedRows()
         {
             return _grid.SelectedRows.Cast<DataGridViewRow>()
-                .Where(x => x.Index >= 0 && x.Index < _rows.Count)
-                .Select(x => _rows[x.Index]);
+                .Select(x => RowAt(x.Index))
+                .Where(x => x != null);
         }
 
         private void DisableSelectedVertices()
