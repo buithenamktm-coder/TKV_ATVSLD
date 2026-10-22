@@ -197,7 +197,7 @@ namespace MiningVolume2023.UI
                 if (exportExcel)
                 {
                     _status.Text = "Đang lập workbook và ghi file Excel...";
-                    var report = await Task.Run(() => ExportWorkflowService.BuildReport(st, opt));
+                    var report = await Task.Run(() => ExportWorkflowService.BuildReport(st, opt, token), token);
                     token.ThrowIfCancellationRequested();
                     EnsureExportInputsCurrent(doc, st, currentResult, approvedProfiles,
                         existingTin, designTin, existingRevision, designRevision,
