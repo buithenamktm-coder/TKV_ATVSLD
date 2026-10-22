@@ -393,7 +393,14 @@ jobs:
           } finally {
             if (-not $gui.HasExited) { Stop-Process -Id $gui.Id -Force -ErrorAction SilentlyContinue }
           }
-          "Installed GUI window creation: PASS" | Set-Content "native-gui-startup.txt"
+          $gui.Refresh()
+          $windowTitle = $gui.MainWindowTitle
+          @(
+            "Installed GUI window creation: PASS",
+            "WindowTitle=$windowTitle",
+            "WindowTitleContainsIMSAT=" + [bool]($windowTitle -match "IMSAT"),
+            "WindowTitleContainsQCAD=" + [bool]($windowTitle -match "QCAD")
+          ) | Set-Content "native-gui-startup.txt" -Encoding UTF8
           # A GUI window alone does not prove the IMSAT add-on initialized.
           # Capture native startup output separately from GUI acceptance.
           $startupOutput = ((Get-Content $stdout -Raw -ErrorAction SilentlyContinue) + "`n" + (Get-Content $stderr -Raw -ErrorAction SilentlyContinue))
