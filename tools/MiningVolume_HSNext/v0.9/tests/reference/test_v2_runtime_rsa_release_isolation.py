@@ -55,7 +55,8 @@ def test_public_key_provisioning_must_fail_closed_and_never_embed_private_xml():
     assert "SourceProvisioned=YES" in ps
     assert "RSA public key không khớp SHA-256" in ps
     assert 'internal const string RsaPublicKeyXml = "";' in ps
-    assert "private issuer key" not in ps.lower()
+    assert "rsa.ToXmlString(true)" not in ps
+    assert "issuer.private.dpapi" not in ps
     assert "File.ReadAllText" in ps
     assert "File.WriteAllText" in ps
     assert "PublicXmlPath" not in ps
