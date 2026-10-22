@@ -105,6 +105,22 @@ assert.deepStrictEqual(ribbonPages.map(x => x.label), ["Trang chủ", "Chèn", "
 assert.deepStrictEqual(ribbonCaptions.map(x => x.label), expectedGroupCaptions);
 assert.strictEqual(languageButton.text, "English");
 assert.strictEqual(languageButton.tooltip, "Switch Ribbon to English");
+// A broken Qt language control must not leave the Ribbon half-translated.
+const beforeLocale = context.IMSATCAD._ribbonLanguage;
+const beforeTabLabels = ribbonPages.map(x => x.label);
+const beforePanelLabels = ribbonCaptions.map(x => x.label);
+const firstCaption = context.IMSATCAD._ribbonCaptions[0].widget;
+const savedSetText = firstCaption.setText;
+firstCaption.setText = undefined;
+assert.strictEqual(context.IMSATCAD.setRibbonLanguage("en"), false,
+  "Language switch must reject a missing panel label API");
+assert.strictEqual(context.IMSATCAD._ribbonLanguage, beforeLocale,
+  "Failed language switch must not change locale state");
+assert.deepStrictEqual(ribbonPages.map(x => x.label), beforeTabLabels,
+  "Failed language switch must not modify tab labels");
+assert.deepStrictEqual(ribbonCaptions.map(x => x.label), beforePanelLabels,
+  "Failed language switch must not modify panel labels");
+firstCaption.setText = savedSetText;
 const first = [...toolbars.values()].map(x => x.actions.length);
 assert(first.filter(x => x >= 2).length === 8, "Legacy CAD toolbar missing");
 assert.strictEqual(menu.actions.length, new Set(menu.actions).size, "Duplicate menu actions");
