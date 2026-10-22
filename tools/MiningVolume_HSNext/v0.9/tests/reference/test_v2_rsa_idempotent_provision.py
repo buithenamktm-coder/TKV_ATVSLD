@@ -61,7 +61,7 @@ try {
     & './release/provision_v2_public_key.ps1' -PublicKeyFile $xmlFile -ExpectedPublicKeySha256 $pin -SourceFile $source -ReceiptFile $proof
     if ((Get-Content $proof -Raw) -notmatch 'ProvisionMode=ALREADY_MATCHED') {throw 'second provisioning must match'}
     $after = [IO.File]::ReadAllBytes($source)
-    if (-not [Linq.Enumerable]::SequenceEqual([byte[]]$before,[byte[]]$after)) {
+    if (-not ([Convert]::ToBase64String($before) -eq [Convert]::ToBase64String($after))) {
         throw 'idempotent run changed source'
     }
     $modified = [IO.File]::ReadAllText($source).Replace('RsaPublicKeyXml = @"','RsaPublicKeyXml = @"CONFLICT')
@@ -79,7 +79,8 @@ finally {
 '''
     result = subprocess.run(
         [shell, "-NoProfile", "-NonInteractive", "-Command", script],
-        cwd=ROOT, text=True, capture_output=True, timeout=110,
+        cwd=ROOT, text=True, encoding="utf-8", errors="replace",
+        capture_output=True, timeout=110,
     )
     assert result.returncode == 0, result.stdout + "\n" + result.stderr
     assert "PUBLIC RSA REPEAT/CONFLICT TEST PASS" in result.stdout
