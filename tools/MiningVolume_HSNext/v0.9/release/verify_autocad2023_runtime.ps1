@@ -3,6 +3,7 @@ param(
     [string]$OutputPath = (Join-Path $PSScriptRoot '..\dist\RUNTIME_VERIFICATION.txt'),
     [string]$SelfTestPath = (Join-Path $PSScriptRoot '..\dist\MVSELFTEST_RUNTIME.txt'),
     [int]$TimeoutSeconds = 180,
+    [ValidateSet('1.0', '2.0')][string]$ProductVersion = '1.0',
     [switch]$KeepInstalled
 )
 
@@ -63,6 +64,10 @@ if (Get-Process acad -ErrorAction SilentlyContinue) {
 }
 
 $bundle = (Resolve-Path $BundlePath).Path
+$packageXml = Get-Content (Join-Path $bundle 'PackageContents.xml') -Raw
+if ($packageXml -notmatch ('AppVersion="' + [regex]::Escape($ProductVersion + '.0') + '"')) {
+    throw "BLOCKED: AutoCAD bundle/AppVersion không khớp mục tiêu $ProductVersion."
+}
 $required = @(
     'PackageContents.xml',
     'Contents\Windows\MiningVolume2023.dll',
@@ -130,7 +135,9 @@ try {
     ) | Set-Content -Path $scriptPath -Encoding ASCII
 
     $oldSelfTest = $env:MININGVOLUME_SELFTEST_FILE
+    $oldProductVersion = $env:MININGVOLUME_RUNTIME_PRODUCT_VERSION
     $env:MININGVOLUME_SELFTEST_FILE = $SelfTestPath
+    $env:MININGVOLUME_RUNTIME_PRODUCT_VERSION = $ProductVersion
     try {
         $proc = Start-Process -FilePath $acad -ArgumentList @('/nologo','/b',"`"$scriptPath`"") -PassThru
         $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
@@ -169,8 +176,13 @@ Startup log hiện tại:
 $startupDetail"
         }
         $result = Get-Content $SelfTestPath -Raw
-        if ($result -notmatch 'MiningVolume HS-Next v1\.0 runtime self-test') {
-            throw 'MVSELFTEST log không đúng phiên bản v1.0.'
+        $expectedBanner = if ($ProductVersion -eq '2.0') {
+            'IMSAT VOLUME V2.0 runtime self-test'
+        } else {
+            'MiningVolume HS-Next v1.0 runtime self-test'
+        }
+        if ($result -notmatch [regex]::Escape($expectedBanner)) {
+            throw "MVSELFTEST log không đúng phiên bản $ProductVersion."
         }
         if ($result -notmatch 'Status=PASS') {
             throw "MVSELFTEST không PASS.\n\n$result"
@@ -199,7 +211,8 @@ $startupDetail"
 
         $sourceCommit = if ($env:SOURCE_SHA) { $env:SOURCE_SHA } elseif ($env:GITHUB_SHA) { $env:GITHUB_SHA } else { 'local' }
         $lines = @(
-            'MiningVolume HS-Next v1.0 - AUTOCAD 2023 RUNTIME VERIFICATION',
+            ('IMSAT VOLUME ' + $ProductVersion + ' - AUTOCAD 2023 RUNTIME SMOKE VERIFICATION'),
+            ('ProductVersion=' + $ProductVersion),
             ('Timestamp=' + (Get-Date).ToString('o')),
             'Status=PASS',
             ('SourceCommit=' + $sourceCommit),
@@ -212,6 +225,7 @@ $startupDetail"
     }
     finally {
         $env:MININGVOLUME_SELFTEST_FILE = $oldSelfTest
+        $env:MININGVOLUME_RUNTIME_PRODUCT_VERSION = $oldProductVersion
     }
 }
 finally {
