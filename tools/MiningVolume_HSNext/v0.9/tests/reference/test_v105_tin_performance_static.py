@@ -13,7 +13,13 @@ def test_renderer_replaces_once_and_prefilters_tin_clear_before_destructive_phas
     clear = s[s.index("public static int Clear"):s.index("public static int CountFaces")]
     # Pair export clears both layers in one traversal, then writes each TIN
     # without entering the single-TIN cleanup loop.
-    assert pair_clear.count("foreach (ObjectId id in ms)") == 1
+    pair_preflight = s[s.index("private static List<ObjectId> ValidateExistingPairBeforeMutation"):s.index("private static void ClearExistingPairInTransaction")]
+    assert pair_preflight.count("foreach (ObjectId id in ms)") == 1
+    assert "oldFaces.Add(id)" in pair_preflight
+    assert "progress.Poll();" in pair_preflight
+    assert pair_clear.count("foreach (ObjectId id in originalFaces)") == 1
+    assert "face.Erase();" in pair_clear
+    assert "progress.Poll()" not in pair_clear
     assert "ClearExistingPairInTransaction(" in pair
     assert "existingLayer, existing, 1, false" in pair
     assert "designLayer, design, 3, false" in pair
@@ -169,7 +175,8 @@ def test_large_tin_is_file_backed_and_cad_render_uses_complete_mesh():
     assert "BuildCadPreview" not in workflow
     assert "foreach (var t in tin.Triangles)" in renderer
     assert "foreach (var t in tin.VerticalFaces)" in renderer
-    assert "if((written&1023)==0)progress.Poll(written,true);" in renderer
+    assert "if(allowCancellation && (written&1023)==0)progress.Poll(written,true);" in renderer
+    assert "bool allowCancellation = true" in renderer
 
 
 def test_large_tin_ui_has_progress_and_user_cancel():

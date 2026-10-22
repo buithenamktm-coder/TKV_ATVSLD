@@ -342,7 +342,45 @@ namespace MiningVolume2023.Services
                 try { TinCadRenderer.ReplacePair(db, "QA_PAIR_HT", plane(20), "QA_PAIR_TK", invalid); }
                 catch (InvalidOperationException) { rejected = true; }
                 if (!rejected || TinPairHandles(db) != original)
-                    throw new InvalidOperationException("TIN pair second-surface failure did not roll back both layers.");
+                    throw new InvalidOperationException("TIN pair second-surface failure did not preserve both original layers.");
+
+                // The first invalid input must also be rejected before any
+                // handle/visibility/color changes on either accepted TIN.
+                rejected = false;
+                try { TinCadRenderer.ReplacePair(db, "QA_PAIR_HT", invalid, "QA_PAIR_TK", plane(3)); }
+                catch (InvalidOperationException) { rejected = true; }
+                if (!rejected || TinPairHandles(db) != original)
+                    throw new InvalidOperationException("TIN pair first-surface failure changed accepted faces.");
+
+                // A manual DBText accidentally placed on TK must be detected
+                // before HT is erased. The foreign object and both prior TINs
+                // must survive the refusal, not merely report an error.
+                ObjectId foreignId;
+                using (var tr = db.TransactionManager.StartTransaction())
+                {
+                    var lt = (LayerTable)tr.GetObject(db.LayerTableId, OpenMode.ForRead);
+                    var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
+                    var ms = (BlockTableRecord)tr.GetObject(
+                        bt[BlockTableRecord.ModelSpace], OpenMode.ForWrite);
+                    var foreign = new DBText { LayerId = lt["QA_PAIR_TK"],
+                        Position = Point3d.Origin, Height = 1, TextString = "PRESERVE_PAIR" };
+                    foreignId = ms.AppendEntity(foreign);
+                    tr.AddNewlyCreatedDBObject(foreign, true);
+                    tr.Commit();
+                }
+                rejected = false;
+                try { TinCadRenderer.ReplacePair(db, "QA_PAIR_HT", plane(12), "QA_PAIR_TK", plane(2)); }
+                catch (InvalidOperationException) { rejected = true; }
+                if (!rejected || TinPairHandles(db) != original ||
+                    TinCadRenderer.CountUnexpectedEntities(db, "QA_PAIR_TK") != 1)
+                    throw new InvalidOperationException(
+                        "TIN pair foreign-object preflight did not preserve original drawing.");
+                using (var tr = db.TransactionManager.StartTransaction())
+                {
+                    ((Entity)tr.GetObject(foreignId, OpenMode.ForWrite)).Erase();
+                    tr.Commit();
+                }
+
                 TinCadRenderer.ReplacePair(db, "QA_PAIR_HT", plane(12), "QA_PAIR_TK", plane(2));
                 if (TinCadRenderer.CountFaces(db, "QA_PAIR_HT") != 2 ||
                     TinCadRenderer.CountFaces(db, "QA_PAIR_TK") != 2 ||
