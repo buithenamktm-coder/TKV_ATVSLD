@@ -18,6 +18,7 @@ namespace MiningVolume2023.Services
     {
         internal static void Run()
         {
+            VerifyBoundarySelectionSkipsTinAndSupportsCancel();
             VerifyTinClearRollbackOnCancelAndForeignObject();
             VerifyTinPairRollbackAfterSecondSurfaceFailure();
             VerifySectionEraseSkipsTinFaces();
@@ -80,6 +81,93 @@ namespace MiningVolume2023.Services
                     if (!canceled || Snapshot(batched, true) != before)
                         throw new InvalidOperationException("Canceled section export did not restore original entities.");
                 }
+            }
+        }
+
+        private static void VerifyBoundarySelectionSkipsTinAndSupportsCancel()
+        {
+            // Host side-database proof: a normal LWPOLYLINE boundary must
+            // be found without treating millions of TIN faces as candidates.
+            // Repeated boundaries and Esc must never silently accept a
+            // different region or change previously stored CAD entities.
+            using (var db = new Database(true, true))
+            {
+                string selectedHandle = null;
+                using (var tr = db.TransactionManager.StartTransaction())
+                {
+                    var lt = (LayerTable)tr.GetObject(db.LayerTableId, OpenMode.ForWrite);
+                    var b = new LayerTableRecord { Name = "QA_BOUNDARY" };
+                    var bId = lt.Add(b);
+                    tr.AddNewlyCreatedDBObject(b, true);
+                    var t = new LayerTableRecord { Name = "QA_TIN" };
+                    var tId = lt.Add(t);
+                    tr.AddNewlyCreatedDBObject(t, true);
+                    var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
+                    var ms = (BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForWrite);
+                    for (int i = 0; i < 2300; i++)
+                    {
+                        double x = i * 2;
+                        var face = new Face(new Point3d(x,0,1),
+                            new Point3d(x+1,0,1), new Point3d(x,1,1),
+                            new Point3d(x,1,1),true,true,true,false) { LayerId = tId };
+                        ms.AppendEntity(face);
+                        tr.AddNewlyCreatedDBObject(face, true);
+                    }
+                    var border = new Polyline(4) { LayerId = bId, Closed = true };
+                    border.AddVertexAt(0,new Point2d(0,0),0,0,0);
+                    border.AddVertexAt(1,new Point2d(20,0),0,0,0);
+                    border.AddVertexAt(2,new Point2d(20,20),0,0,0);
+                    border.AddVertexAt(3,new Point2d(0,20),0,0,0);
+                    ms.AppendEntity(border);
+                    selectedHandle = border.Handle.ToString();
+                    tr.AddNewlyCreatedDBObject(border, true);
+                    tr.Commit();
+                }
+
+                int polls = 0;
+                string found = BoundaryGeometryService.FindUniqueBoundaryOnLayer(
+                    db, "QA_BOUNDARY", () => polls++);
+                if (!string.Equals(found, selectedHandle,
+                        StringComparison.OrdinalIgnoreCase) || polls < 3 ||
+                    TinCadRenderer.CountFaces(db,"QA_TIN") != 2300)
+                    throw new InvalidOperationException(
+                        "TIN-dense drawing boundary lookup missed the closed polyline.");
+
+                bool canceled = false;
+                polls = 0;
+                try
+                {
+                    BoundaryGeometryService.FindUniqueBoundaryOnLayer(
+                        db, "QA_BOUNDARY", () =>
+                        {
+                            if (++polls >= 2) throw new OperationCanceledException();
+                        });
+                }
+                catch (OperationCanceledException) { canceled = true; }
+                if (!canceled || TinCadRenderer.CountFaces(db,"QA_TIN") != 2300)
+                    throw new InvalidOperationException(
+                        "Canceled boundary scan did not preserve source TIN.");
+
+                using (var tr = db.TransactionManager.StartTransaction())
+                {
+                    var lt = (LayerTable)tr.GetObject(db.LayerTableId, OpenMode.ForRead);
+                    var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
+                    var ms = (BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForWrite);
+                    var duplicate = new Polyline(4) { LayerId = lt["QA_BOUNDARY"], Closed = true };
+                    duplicate.AddVertexAt(0,new Point2d(30,30),0,0,0);
+                    duplicate.AddVertexAt(1,new Point2d(40,30),0,0,0);
+                    duplicate.AddVertexAt(2,new Point2d(40,40),0,0,0);
+                    duplicate.AddVertexAt(3,new Point2d(30,40),0,0,0);
+                    ms.AppendEntity(duplicate);
+                    tr.AddNewlyCreatedDBObject(duplicate, true);
+                    tr.Commit();
+                }
+                bool rejected = false;
+                try { BoundaryGeometryService.FindUniqueBoundaryOnLayer(db, "QA_BOUNDARY"); }
+                catch (InvalidOperationException) { rejected = true; }
+                if (!rejected || TinCadRenderer.CountFaces(db,"QA_TIN") != 2300)
+                    throw new InvalidOperationException(
+                        "Ambiguous closed boundaries must require explicit selection.");
             }
         }
 
