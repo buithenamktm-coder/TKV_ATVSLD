@@ -68,7 +68,7 @@ def test_cancellation_keeps_model_state_and_host_regression():
     qa = read("src/MiningVolume.Plugin2023/Services/SectionCadRegression.cs")
     assert "VerifyTinClearRollbackOnCancelAndForeignObject();" in qa
     assert "CancelAt=" in qa
-    assert "faces=" + remaining" in qa
+    assert 'faces=" + remaining' in qa
     assert "new[] { 1, 2, 3, 4 }" in qa
     assert "TinCadRenderer.CountFaces(db, layer)" in qa
     assert "TinCadRenderer.CountUnexpectedEntities(db, layer) != 1" in qa
