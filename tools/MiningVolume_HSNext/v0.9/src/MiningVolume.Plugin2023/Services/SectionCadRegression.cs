@@ -375,11 +375,33 @@ namespace MiningVolume2023.Services
                     TinCadRenderer.CountUnexpectedEntities(db, "QA_PAIR_TK") != 1)
                     throw new InvalidOperationException(
                         "TIN pair foreign-object preflight did not preserve original drawing.");
+                // AutoCAD 2023 HOST: a foreign DBText on a locked TIN layer
+                // cannot be opened ForWrite (eOnLockedLayer). The QA fixture
+                // must unlock TK just for removing its OWN test DBText and
+                // restore the original lock flag before committing. This is
+                // NOT a change to the production ReplacePair safety contract.
                 using (var tr = db.TransactionManager.StartTransaction())
                 {
-                    ((Entity)tr.GetObject(foreignId, OpenMode.ForWrite)).Erase();
+                    var lt = (LayerTable)tr.GetObject(db.LayerTableId, OpenMode.ForRead);
+                    var tkLayer = (LayerTableRecord)tr.GetObject(
+                        lt["QA_PAIR_TK"], OpenMode.ForWrite);
+                    bool wasLocked = tkLayer.IsLocked;
+                    tkLayer.IsLocked = false;
+                    try
+                    {
+                        ((Entity)tr.GetObject(foreignId, OpenMode.ForWrite)).Erase();
+                    }
+                    finally
+                    {
+                        tkLayer.IsLocked = wasLocked;
+                    }
                     tr.Commit();
                 }
+                if (TinCadRenderer.CountUnexpectedEntities(db, "QA_PAIR_TK") != 0 ||
+                    !TinCadRenderer.IsLayerLocked(db, "QA_PAIR_TK") ||
+                    TinPairHandles(db) != original)
+                    throw new InvalidOperationException(
+                        "QA foreign-object cleanup changed the accepted TIN pair or lock state.");
 
                 TinCadRenderer.ReplacePair(db, "QA_PAIR_HT", plane(12), "QA_PAIR_TK", plane(2));
                 if (TinCadRenderer.CountFaces(db, "QA_PAIR_HT") != 2 ||

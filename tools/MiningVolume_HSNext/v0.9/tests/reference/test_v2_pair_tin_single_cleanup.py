@@ -76,3 +76,39 @@ def test_host_regression_checks_failed_pair_does_not_lose_original_handles():
     assert 'TinCadRenderer.ReplacePair(db, "QA_PAIR_HT", plane(20), "QA_PAIR_TK", invalid)' in regress
     assert "TinPairHandles(db) != original" in regress
     assert "TinPairHandles(db) == original" in regress
+
+
+def test_host_qa_foreign_entity_cleanup_respects_tin_layer_lock():
+    """Host found eOnLockedLayer while removing QA-only DBText from TK.
+
+    Any unlock belongs solely to test fixture cleanup, after production
+    ReplacePair has already refused the foreign object without mutation.
+    """
+    src = read("src/MiningVolume.Plugin2023/Services/SectionCadRegression.cs")
+    qa = src.split("private static void VerifyTinPairRollbackAfterSecondSurfaceFailure()", 1)[1].split(
+        "private static string TinPairHandles(", 1
+    )[0]
+    assert "CountUnexpectedEntities(db, \"QA_PAIR_TK\") != 1" in qa
+    assert "TinPairHandles(db) != original" in qa
+    assert "bool wasLocked = tkLayer.IsLocked;" in qa
+    assert "tkLayer.IsLocked = false;" in qa
+    assert "((Entity)tr.GetObject(foreignId, OpenMode.ForWrite)).Erase();" in qa
+    assert "tkLayer.IsLocked = wasLocked;" in qa
+    assert qa.index("tkLayer.IsLocked = false;") < qa.index(
+        "tr.GetObject(foreignId, OpenMode.ForWrite)") < qa.index(
+        "tkLayer.IsLocked = wasLocked;"
+    ) < qa.index("tr.Commit();", qa.index("tkLayer.IsLocked = wasLocked;"))
+    assert "!TinCadRenderer.IsLayerLocked(db, \"QA_PAIR_TK\")" in qa
+    assert "TinPairHandles(db) != original" in qa
+    assert qa.index("if (TinCadRenderer.CountUnexpectedEntities(db, \"QA_PAIR_TK\") != 0") < qa.rindex(
+        'TinCadRenderer.ReplacePair(db, "QA_PAIR_HT", plane(12), "QA_PAIR_TK", plane(2))'
+    )
+
+    # Production preflight stays READ-ONLY and must not temporarily unlock
+    # either layer to inspect a foreign entity.
+    renderer = read("src/MiningVolume.Plugin2023/Services/TinCadRenderer.cs")
+    preflight = renderer.split("private static List<ObjectId> ValidateExistingPairBeforeMutation(", 1)[1].split(
+        "private static void ClearExistingPairInTransaction(", 1
+    )[0]
+    assert "OpenMode.ForWrite" not in preflight
+    assert "IsLocked = false" not in preflight
