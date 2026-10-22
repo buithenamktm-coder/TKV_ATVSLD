@@ -179,7 +179,7 @@ namespace MiningVolume2023.Services
             return written;
         }
 
-        public static int Clear(Database db, string layerName)
+        public static int Clear(Database db, string layerName, Action pollCancellation = null)
         {
             int erased = 0;
             using (var tr = db.TransactionManager.StartTransaction())
@@ -197,21 +197,34 @@ namespace MiningVolume2023.Services
                 var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
                 var ms = (BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForRead);
 
-                // Validate and erase in one pass. A dedicated TIN layer must contain
-                // faces only; foreign CAD entities are never deleted automatically.
-                foreach (ObjectId id in ms)
+                // One transactional pass: if Esc, an injected cancel callback
+                // or a foreign object aborts cleanup, AutoCAD restores ALL
+                // original faces and the layer's previous lock/visibility.
+                // The previous implementation could block on a million-face
+                // drawing without ever checking whether the user hit Esc.
+                using (var progress = new TinCadProgress(0, "xóa " + layerName))
                 {
-                    var ent = tr.GetObject(id, OpenMode.ForRead) as Entity;
-                    if (ent == null || ent.LayerId != layerId) continue;
-                    if (!(ent is Face))
-                        throw new InvalidOperationException(
-                            $"Layer {layerName} chứa đối tượng không phải 3DFACE; " +
-                            "không xóa tự động để tránh mất dữ liệu CAD.");
-                    ent.UpgradeOpen();
-                    ent.Erase();
-                    erased++;
+                    int scanned = 0;
+                    foreach (ObjectId id in ms)
+                    {
+                        if ((scanned++ & 1023) == 0)
+                        {
+                            pollCancellation?.Invoke();
+                            progress.Poll(0, false);
+                        }
+                        var ent = tr.GetObject(id, OpenMode.ForRead) as Entity;
+                        if (ent == null || ent.LayerId != layerId) continue;
+                        if (!(ent is Face))
+                            throw new InvalidOperationException(
+                                $"Layer {layerName} chứa đối tượng không phải 3DFACE; " +
+                                "không xóa tự động để tránh mất dữ liệu CAD.");
+                        ent.UpgradeOpen();
+                        ent.Erase();
+                        erased++;
+                    }
+                    pollCancellation?.Invoke();
+                    progress.Poll(0, false);
                 }
-
                 outLayer.IsLocked = true;
                 tr.Commit();
             }
