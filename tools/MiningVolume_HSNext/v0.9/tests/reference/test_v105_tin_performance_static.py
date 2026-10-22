@@ -5,7 +5,7 @@ ROOT = Path(__file__).resolve().parents[2]
 def read(rel):
     return (ROOT / rel).read_text(encoding="utf-8")
 
-def test_renderer_replaces_and_clears_tin_in_one_modelspace_pass_each():
+def test_renderer_replaces_once_and_prefilters_tin_clear_before_destructive_phase():
     s = read("src/MiningVolume.Plugin2023/Services/TinCadRenderer.cs")
     pair = s[s.index("public static int[] ReplacePair"):s.index("private static void ClearExistingPairInTransaction")]
     pair_clear = s[s.index("private static void ClearExistingPairInTransaction"):s.index("private static int ReplaceInTransaction")]
@@ -23,9 +23,17 @@ def test_renderer_replaces_and_clears_tin_in_one_modelspace_pass_each():
     assert "second full scan" in replace
     assert "ent.LayerId != layerId" in clear
     assert "if (!(ent is Face))" in clear
-    assert "ent.Erase();" in clear
-    assert clear.index("ent.Erase();") < clear.rindex("tr.Commit();")
-    assert "progress.Poll(0, false)" in clear
+    # Host cancellation proved that mid-erase exception rollback is unsafe.
+    # One non-destructive ModelSpace scan gathers only the verified Face IDs;
+    # the second phase erases those IDs directly, without another traversal.
+    assert "faces.Add(id);" in clear
+    assert "face.Erase();" in clear
+    assert clear.index("faces.Add(id);") < clear.index("face.Erase();")
+    assert clear.index("face.Erase();") < clear.rindex("tr.Commit();")
+    assert "progress.Poll();" in clear
+    after_erase = clear.split("face.Erase();", 1)[1]
+    assert "progress.Poll();" not in after_erase
+    assert "pollCancellation?.Invoke();" not in after_erase
 
 def test_pair_build_does_not_rescan_just_written_cad_layers():
     s = read("src/MiningVolume.Plugin2023/Services/SurfaceWorkflowService.cs")

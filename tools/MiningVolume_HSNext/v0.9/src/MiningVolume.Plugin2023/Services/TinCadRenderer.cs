@@ -181,12 +181,65 @@ namespace MiningVolume2023.Services
 
         public static int Clear(Database db, string layerName, Action pollCancellation = null)
         {
-            int erased = 0;
+            // Two phases on the AutoCAD host:
+            //   1. Scan + validate every entity on the reserved TIN layer, while
+            //      allowing Esc and injected cancellation. DO NOT erase anything.
+            //   2. Only after a final cancellation poll, erase the verified faces
+            //      in one CAD transaction without interruption.
+            //
+            // Host regression found that canceling in the middle of DBObject.Erase
+            // may leave fewer faces visible after transaction disposal on some
+            // AutoCAD side databases. No CAD mutation is therefore allowed before
+            // the last cancellation opportunity. The irreversible phase must be
+            // atomic and is deliberately not cancellable. Do not insert an Esc
+            // poll or any callback into phase 2 without a host-proven rollback.
+            if (db == null) throw new ArgumentNullException(nameof(db));
+            if (string.IsNullOrWhiteSpace(layerName))
+                throw new ArgumentException("Chưa chọn layer TIN để xóa.", nameof(layerName));
+
+            var faces = new List<ObjectId>();
+            using (var progress = new SectionCadProgress(1, "kiểm tra TIN trước khi xóa " + layerName))
+            using (var check = db.TransactionManager.StartOpenCloseTransaction())
+            {
+                var lt = (LayerTable)check.GetObject(db.LayerTableId, OpenMode.ForRead);
+                if (!lt.Has(layerName))
+                {
+                    pollCancellation?.Invoke();
+                    progress.Poll();
+                    return 0;
+                }
+                var layerId = lt[layerName];
+                var bt = (BlockTable)check.GetObject(db.BlockTableId, OpenMode.ForRead);
+                var ms = (BlockTableRecord)check.GetObject(
+                    bt[BlockTableRecord.ModelSpace], OpenMode.ForRead);
+
+                int visited = 0;
+                foreach (ObjectId id in ms)
+                {
+                    if ((visited++ & 1023) == 0)
+                    {
+                        pollCancellation?.Invoke();
+                        progress.Poll();
+                    }
+                    var ent = check.GetObject(id, OpenMode.ForRead) as Entity;
+                    if (ent == null || ent.LayerId != layerId) continue;
+                    if (!(ent is Face))
+                        throw new InvalidOperationException(
+                            $"Layer {layerName} chứa đối tượng không phải 3DFACE; " +
+                            "không xóa tự động để tránh mất dữ liệu CAD.");
+                    faces.Add(id);
+                }
+                // This is the LAST cancellation opportunity. All 3DFACE objects
+                // are still untouched, so Esc is guaranteed to preserve the TIN.
+                pollCancellation?.Invoke();
+                progress.Poll();
+            }
+
             using (var tr = db.TransactionManager.StartTransaction())
             {
                 var lt = (LayerTable)tr.GetObject(db.LayerTableId, OpenMode.ForRead);
-                if (!lt.Has(layerName)) { tr.Commit(); return 0; }
-
+                if (!lt.Has(layerName))
+                    throw new InvalidOperationException("Layer TIN bị thay đổi khi chuẩn bị xóa.");
                 var layerId = lt[layerName];
                 MoveCurrentLayerAwayIfNeeded(db, tr, layerId);
                 var outLayer = (LayerTableRecord)tr.GetObject(layerId, OpenMode.ForWrite);
@@ -194,41 +247,20 @@ namespace MiningVolume2023.Services
                 outLayer.IsOff = false;
                 if (outLayer.IsFrozen) outLayer.IsFrozen = false;
 
-                var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
-                var ms = (BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForRead);
-
-                // One transactional pass: if Esc, an injected cancel callback
-                // or a foreign object aborts cleanup, AutoCAD restores ALL
-                // original faces and the layer's previous lock/visibility.
-                // The previous implementation could block on a million-face
-                // drawing without ever checking whether the user hit Esc.
-                using (var progress = new TinCadProgress(0, "xóa " + layerName))
+                // No cancellation callbacks, no UI pumping and no intermediate
+                // commits after the first Erase(). Treat phase 2 as atomic.
+                foreach (ObjectId id in faces)
                 {
-                    int scanned = 0;
-                    foreach (ObjectId id in ms)
-                    {
-                        if ((scanned++ & 1023) == 0)
-                        {
-                            pollCancellation?.Invoke();
-                            progress.Poll(0, false);
-                        }
-                        var ent = tr.GetObject(id, OpenMode.ForRead) as Entity;
-                        if (ent == null || ent.LayerId != layerId) continue;
-                        if (!(ent is Face))
-                            throw new InvalidOperationException(
-                                $"Layer {layerName} chứa đối tượng không phải 3DFACE; " +
-                                "không xóa tự động để tránh mất dữ liệu CAD.");
-                        ent.UpgradeOpen();
-                        ent.Erase();
-                        erased++;
-                    }
-                    pollCancellation?.Invoke();
-                    progress.Poll(0, false);
+                    var face = tr.GetObject(id, OpenMode.ForWrite) as Face;
+                    if (face == null || face.LayerId != layerId)
+                        throw new InvalidOperationException(
+                            "TIN thay đổi giữa bước kiểm tra và bước xóa; dừng để bảo vệ bản vẽ.");
+                    face.Erase();
                 }
                 outLayer.IsLocked = true;
                 tr.Commit();
             }
-            return erased;
+            return faces.Count;
         }
 
         public static int CountFaces(Database db, string layerName)
