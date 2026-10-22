@@ -41,15 +41,60 @@ namespace MiningVolume2023.Services
                 throw new ArgumentException("Hai TIN phải có hai layer riêng.");
             using (var tr = db.TransactionManager.StartTransaction())
             {
-                int ht = ReplaceInTransaction(db, tr, existingLayer, existing, 1);
-                int tk = ReplaceInTransaction(db, tr, designLayer, design, 3);
+                // One cleanup traversal for BOTH output layers before adding
+                // either 3DFACE collection. Previously the second cleanup
+                // re-opened every face just appended for the first TIN.
+                ClearExistingPairInTransaction(db, tr, existingLayer, designLayer);
+                int ht = ReplaceInTransaction(db, tr, existingLayer, existing, 1, false);
+                int tk = ReplaceInTransaction(db, tr, designLayer, design, 3, false);
                 // No state adoption or old-store disposal before both writes succeed.
                 tr.Commit();
                 return new[] { ht, tk };
             }
         }
 
-        private static int ReplaceInTransaction(Database db, Transaction tr, string layerName, TinSurface tin, short aciColor)
+        private static void ClearExistingPairInTransaction(Database db, Transaction tr,
+            string existingLayer, string designLayer)
+        {
+            // The enclosing ReplacePair transaction owns every erased Face and
+            // both new TINs; failure or Esc restores the original two layers.
+            var existingId = EnsureLayer(db, tr, existingLayer, 1);
+            var designId = EnsureLayer(db, tr, designLayer, 3);
+            MoveCurrentLayerAwayIfNeeded(db, tr, existingId);
+            MoveCurrentLayerAwayIfNeeded(db, tr, designId);
+            foreach (var id in new[] { existingId, designId })
+            {
+                var rec = (LayerTableRecord)tr.GetObject(id, OpenMode.ForWrite);
+                rec.IsLocked = false;
+                rec.IsOff = false;
+                if (rec.IsFrozen) rec.IsFrozen = false;
+            }
+            var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
+            var ms = (BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForWrite);
+            using (var progress = new SectionCadProgress(1, "kiểm tra hai layer TIN"))
+            {
+                int scanned = 0;
+                foreach (ObjectId id in ms)
+                {
+                    if ((scanned++ & 1023) == 0) progress.Poll();
+                    var ent = tr.GetObject(id, OpenMode.ForRead) as Entity;
+                    if (ent == null) continue;
+                    string layer = ent.LayerId == existingId ? existingLayer :
+                        ent.LayerId == designId ? designLayer : null;
+                    if (layer == null) continue;
+                    if (!(ent is Face))
+                        throw new InvalidOperationException(
+                            "Layer " + layer + " chứa đối tượng không phải 3DFACE. " +
+                            "Không xóa tự động để tránh mất dữ liệu CAD.");
+                    ent.UpgradeOpen();
+                    ent.Erase();
+                }
+                progress.Poll();
+            }
+        }
+
+        private static int ReplaceInTransaction(Database db, Transaction tr, string layerName,
+            TinSurface tin, short aciColor, bool clearExisting = true)
         {
             if (tin == null) throw new ArgumentNullException(nameof(tin));
             if (tin.Triangles == null || tin.Triangles.Count == 0)
@@ -72,19 +117,22 @@ namespace MiningVolume2023.Services
                 // One ModelSpace pass only: validate the reserved layer and erase the
                 // previous MiningVolume faces in the same transaction. This avoids a
                 // second full scan on large mine drawings.
-                int scanned=0;
-                foreach (ObjectId id in ms)
+                if (clearExisting)
                 {
-                    if((++scanned&1023)==0)progress.Poll(0,false);
-                    var ent = tr.GetObject(id, OpenMode.ForRead) as Entity;
-                    if (ent == null || ent.LayerId != layerId) continue;
-                    if (!(ent is Face))
-                        throw new InvalidOperationException(
-                            $"Layer {layerName} chứa đối tượng không phải 3DFACE. " +
-                            "MiningVolume không xóa tự động để tránh mất dữ liệu CAD. " +
-                            "Hãy chuyển đối tượng đó sang layer khác rồi tạo lại TIN.");
-                    ent.UpgradeOpen();
-                    ent.Erase();
+                    int scanned=0;
+                    foreach (ObjectId id in ms)
+                    {
+                        if((++scanned&1023)==0)progress.Poll(0,false);
+                        var ent = tr.GetObject(id, OpenMode.ForRead) as Entity;
+                        if (ent == null || ent.LayerId != layerId) continue;
+                        if (!(ent is Face))
+                            throw new InvalidOperationException(
+                                $"Layer {layerName} chứa đối tượng không phải 3DFACE. " +
+                                "MiningVolume không xóa tự động để tránh mất dữ liệu CAD. " +
+                                "Hãy chuyển đối tượng đó sang layer khác rồi tạo lại TIN.");
+                        ent.UpgradeOpen();
+                        ent.Erase();
+                    }
                 }
 
                 foreach (var t in tin.Triangles)

@@ -7,9 +7,18 @@ def read(rel):
 
 def test_renderer_replaces_and_clears_tin_in_one_modelspace_pass_each():
     s = read("src/MiningVolume.Plugin2023/Services/TinCadRenderer.cs")
-    replace = s[s.index("public static int Replace"):s.index("public static int Clear")]
+    pair = s[s.index("public static int[] ReplacePair"):s.index("private static void ClearExistingPairInTransaction")]
+    pair_clear = s[s.index("private static void ClearExistingPairInTransaction"):s.index("private static int ReplaceInTransaction")]
+    replace = s[s.index("private static int ReplaceInTransaction"):s.index("public static int Clear")]
     clear = s[s.index("public static int Clear"):s.index("public static int CountFaces")]
+    # Pair export clears both layers in one traversal, then writes each TIN
+    # without entering the single-TIN cleanup loop.
+    assert pair_clear.count("foreach (ObjectId id in ms)") == 1
+    assert "ClearExistingPairInTransaction(" in pair
+    assert "existingLayer, existing, 1, false" in pair
+    assert "designLayer, design, 3, false" in pair
     assert replace.count("foreach (ObjectId id in ms)") == 1
+    assert "if (clearExisting)" in replace
     assert clear.count("foreach (ObjectId id in ms)") == 1
     assert "second full scan" in replace
     assert "Validate and erase in one pass" in clear
