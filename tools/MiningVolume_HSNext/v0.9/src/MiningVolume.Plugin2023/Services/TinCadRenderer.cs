@@ -154,7 +154,7 @@ namespace MiningVolume2023.Services
                 throw new InvalidOperationException("TIN không có tam giác để ghi xuống AutoCAD.");
 
             int written = 0;
-            using(var progress=new TinCadProgress(tin.Triangles.Count+tin.VerticalFaces.Count, layerName))
+            using(var progress=new TinCadProgress(tin.Triangles.Count+tin.VerticalFaces.Count, layerName, allowCancellation))
             {
                 var layerId = EnsureLayer(db, tr, layerName, aciColor);
                 MoveCurrentLayerAwayIfNeeded(db, tr, layerId);
