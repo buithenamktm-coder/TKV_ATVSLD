@@ -43,6 +43,12 @@ def test_build_v2_qa_requires_pinned_approval_receipt_in_trusted_pipeline():
     assert "IMSAT_REQUIRE_APPROVED_PUBLIC_KEY -eq '1'" in s
     assert "refusing" not in s.lower() or "BLOCKED:" in s
     assert "TRIAL_ONLY: PUBLIC_KEY_NOT_PROVISIONED" in s
+    # PowerShell must output single manifest lines. Parentheses are required
+    # around concatenations inside @(...), or QA parsing can falsely fail.
+    assert "('License: ' + $keyState)" in s
+    assert "('SHA256 EXE: ' + $hash)" in s
+    assert "('Source SHA: ' + $env:SOURCE_SHA)" in s
+    assert "'License: '+ $keyState" not in s
     assert "NOT A RELEASE" in s
     assert "Runtime AutoCAD host acceptance: NOT VERIFIED." in s
 

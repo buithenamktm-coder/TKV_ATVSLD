@@ -94,10 +94,10 @@ try {
     $hash = (Get-FileHash -Algorithm SHA256 $exe).Hash
     $lines = @(
         'IMSAT MININGVOLUME V2.0 QA CANDIDATE — NOT A RELEASE',
-        'Build UTC: '+ [DateTime]::UtcNow.ToString('o'),
-        'Source SHA: '+ $env:SOURCE_SHA,
-        'SHA256 EXE: '+ $hash,
-        'License: '+ $keyState,
+        ('Build UTC: ' + [DateTime]::UtcNow.ToString('o')),
+        ('Source SHA: ' + $env:SOURCE_SHA),
+        ('SHA256 EXE: ' + $hash),
+        ('License: ' + $keyState),
         'Requires: Windows 64-bit + AutoCAD 2023; DO NOT install on production computers.',
         'Runtime AutoCAD host acceptance: NOT VERIFIED.',
         'NO production distribution until signed key provisioning, backup/recovery, real CAD tests and Release Gates PASS.'
