@@ -205,17 +205,31 @@ namespace MiningVolume2023.Services
                 if (TinCadRenderer.CountFaces(db, layer) != 2300)
                     throw new InvalidOperationException("TIN clear QA fixture incomplete.");
 
-                int polls = 0;
-                bool canceled = false;
-                try
+                // Host regression: cancel at scan start, at both full
+                // 1024-entity checkpoints and at the final gate. No 3DFACE
+                // may have been erased before ANY cancellation callback.
+                bool initialLocked = TinCadRenderer.IsLayerLocked(db, layer);
+                foreach (int cancelAt in new[] { 1, 2, 3, 4 })
                 {
-                    TinCadRenderer.Clear(db, layer, () => {
-                        if (++polls >= 2) throw new OperationCanceledException();
-                    });
+                    int polls = 0;
+                    bool canceled = false;
+                    try
+                    {
+                        TinCadRenderer.Clear(db, layer, () => {
+                            if (++polls >= cancelAt) throw new OperationCanceledException();
+                        });
+                    }
+                    catch (OperationCanceledException) { canceled = true; }
+                    int remaining = TinCadRenderer.CountFaces(db, layer);
+                    if (!canceled || polls != cancelAt || remaining != 2300 ||
+                        TinCadRenderer.IsLayerLocked(db, layer) != initialLocked)
+                        throw new InvalidOperationException(
+                            "Canceled TIN delete did not preserve the original faces/layer. " +
+                            "CancelAt=" + cancelAt + ", polls=" + polls +
+                            ", canceled=" + canceled + ", faces=" + remaining +
+                            ", initialLocked=" + initialLocked +
+                            ", nowLocked=" + TinCadRenderer.IsLayerLocked(db, layer));
                 }
-                catch (OperationCanceledException) { canceled = true; }
-                if (!canceled || polls < 2 || TinCadRenderer.CountFaces(db, layer) != 2300)
-                    throw new InvalidOperationException("Canceled TIN delete did not roll back all faces.");
 
                 using (var tr = db.TransactionManager.StartTransaction())
                 {
