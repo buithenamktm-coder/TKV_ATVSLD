@@ -174,6 +174,64 @@ internal static class CoreRegression
     static void RunTests()
     {
         var tests=new Dictionary<string,Action> {
+            ["batch_source_edit_6000_entities_single_revision_and_no_partial_changes"] = ()=>{
+                var entities=Enumerable.Range(0,6000).Select(i =>
+                    Entity("E"+i,SourceEntityType.Point,P(i,0,i))).ToArray();
+                var model=Model(entities);
+                var keys=Enumerable.Range(0,2000).Select(i =>
+                    new KeyValuePair<string,int>("E"+(i*3),0)).ToList();
+                keys.Add(keys[0]); // duplicate selection must not log/edit twice
+                long old=model.Revision;
+                model.ValidateVertexSelection(keys);
+                model.SetVerticesEnabled(keys,false);
+                Check(model.Revision==old+1 && model.EditHistory.Count==2000,
+                    "Batch exclusion should record per vertex but touch source only once");
+                Check(!entities[0].Vertices[0].IsEnabled &&
+                    entities[1].Vertices[0].IsEnabled &&
+                    !entities[5997].Vertices[0].IsEnabled,
+                    "Batch exclusion changed wrong source vertex");
+                Check(entities[5997].Vertices[0].Original.Z==5997,
+                    "Source edits must retain original CAD Z");
+
+                long revision=model.Revision;int history=model.EditHistory.Count;
+                var invalid=keys.Take(3).Concat(new[]{
+                    new KeyValuePair<string,int>("E10",3) }).ToArray();
+                bool rejected=false;
+                try{model.SetVerticesEnabled(invalid,true);}
+                catch(ArgumentOutOfRangeException){rejected=true;}
+                Check(rejected && model.Revision==revision &&
+                    model.EditHistory.Count==history &&
+                    !entities[0].Vertices[0].IsEnabled,
+                    "Bad row must reject complete edit batch without partial mutations");
+                rejected=false;
+                try{model.RestoreSelectedVertices(new[]{
+                    keys[0],new KeyValuePair<string,int>("MISSING",0)});}
+                catch(KeyNotFoundException){rejected=true;}
+                Check(rejected && model.Revision==revision &&
+                    model.EditHistory.Count==history &&
+                    !entities[0].Vertices[0].IsEnabled,
+                    "Unknown source entity must reject complete restore batch");
+
+                model.SetEntitiesEnabled(keys.Select(x=>x.Key),false);
+                Check(model.Revision==revision+1 &&
+                    !entities[0].IsEnabled && entities[1].IsEnabled,
+                    "Batch entity exclusion changed wrong entities or revision");
+                revision=model.Revision;
+                model.RestoreSelectedVertices(keys);
+                Check(model.Revision==revision+1 &&
+                    model.EditHistory.Count==4000 &&
+                    entities[0].IsEnabled && entities[5997].IsEnabled &&
+                    entities[0].Vertices[0].IsEnabled &&
+                    entities[5997].Vertices[0].IsEnabled &&
+                    entities[1].IsEnabled,
+                    "Batch restore must enable entities/vertices and keep complete history");
+                revision=model.Revision;
+                model.SetVerticesEnabled(Array.Empty<KeyValuePair<string,int>>(),true);
+                model.SetEntitiesEnabled(Array.Empty<string>(),false);
+                model.RestoreSelectedVertices(Array.Empty<KeyValuePair<string,int>>());
+                Check(model.Revision==revision,
+                    "Empty batch must not change source revision");
+            },
             ["model_grid_virtual_index_maps_vertices_and_revisions"] = ()=>{
                 var longLine=Entity("long",SourceEntityType.Polyline3d,
                     Enumerable.Range(0,30000).Select(i=>P(i,0,i*0.1)).ToArray());

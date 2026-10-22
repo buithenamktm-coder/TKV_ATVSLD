@@ -139,6 +139,87 @@ namespace MiningVolume.Core.Model
             var e = Entities.FirstOrDefault(x => x.Id == id);
             if (e != null) { e.SetEnabled(true); Touch(); }
         }
+        // Resolve every selected vertex BEFORE changing any source data.
+        // An invalid row may not leave the model half-edited or pollute history.
+        private sealed class SelectedVertex
+        {
+            public SourceEntity Entity;
+            public ModelVertex Vertex;
+        }
+
+        private List<SelectedVertex> ResolveVertices(
+            IEnumerable<KeyValuePair<string, int>> selection)
+        {
+            if (selection == null) throw new ArgumentNullException(nameof(selection));
+            var byId = Entities.ToDictionary(e => e.Id, StringComparer.Ordinal);
+            var resolved = new List<SelectedVertex>();
+            foreach (var item in selection.Distinct())
+            {
+                SourceEntity entity;
+                if (item.Key == null || !byId.TryGetValue(item.Key, out entity))
+                    throw new KeyNotFoundException("Không tìm thấy đối tượng nguồn: " + item.Key);
+                if (item.Value < 0 || item.Value >= entity.Vertices.Count)
+                    throw new ArgumentOutOfRangeException(nameof(selection),
+                        "Chỉ số đỉnh nguồn không hợp lệ.");
+                resolved.Add(new SelectedVertex
+                {
+                    Entity = entity,
+                    Vertex = entity.Vertices[item.Value]
+                });
+            }
+            return resolved;
+        }
+
+        public void ValidateVertexSelection(
+            IEnumerable<KeyValuePair<string, int>> selection)
+        {
+            ResolveVertices(selection);
+        }
+
+        public void SetVerticesEnabled(
+            IEnumerable<KeyValuePair<string, int>> selection, bool enabled)
+        {
+            var selected = ResolveVertices(selection);
+            foreach (var item in selected)
+            {
+                var vertex = item.Vertex;
+                Record(item.Entity, vertex, enabled ? "Enable vertex" : "Exclude vertex",
+                    vertex.Position.Z, enabled);
+                vertex.SetEnabled(enabled);
+            }
+            if (selected.Count != 0) Touch();
+        }
+
+        public void SetEntitiesEnabled(IEnumerable<string> ids, bool enabled)
+        {
+            if (ids == null) throw new ArgumentNullException(nameof(ids));
+            var selected = new HashSet<string>(ids, StringComparer.Ordinal);
+            if (selected.Contains(null))
+                throw new ArgumentException("Mã đối tượng nguồn không được rỗng.", nameof(ids));
+            bool changed = false;
+            foreach (var entity in Entities)
+            {
+                if (!selected.Contains(entity.Id)) continue;
+                entity.SetEnabled(enabled);
+                changed = true;
+            }
+            if (changed) Touch();
+        }
+
+        public void RestoreSelectedVertices(
+            IEnumerable<KeyValuePair<string, int>> selection)
+        {
+            var selected = ResolveVertices(selection);
+            foreach (var item in selected)
+            {
+                item.Entity.SetEnabled(true);
+                var vertex = item.Vertex;
+                Record(item.Entity, vertex, "Restore vertex", vertex.Original.Z, true);
+                vertex.Reset();
+            }
+            if (selected.Count != 0) Touch();
+        }
+
         public void SetVertexEnabled(string id, int vertexIndex, bool enabled)
         {
             var e = Entities.First(x => x.Id == id);

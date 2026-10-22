@@ -14,9 +14,9 @@ def body(text, start, end):
 def test_manual_model_edits_are_not_applied_before_autocad_invalidation():
     ui = source("src/MiningVolume.Plugin2023/UI/ModelPage.cs")
     sections = (
-        ("private void DisableSelectedVertices(", "private void DisableSelectedEntities(", "SetVertexEnabled("),
-        ("private void DisableSelectedEntities(", "private void RestoreSelected(", "RemoveEntityFromModel("),
-        ("private void RestoreSelected(", "private void RestoreAll(", "RestoreEntity("),
+        ("private void DisableSelectedVertices(", "private void DisableSelectedEntities(", "SetVerticesEnabled("),
+        ("private void DisableSelectedEntities(", "private void RestoreSelected(", "SetEntitiesEnabled("),
+        ("private void RestoreSelected(", "private void RestoreAll(", "RestoreSelectedVertices("),
         ("private void RestoreAll(", "private void EditZ(", "RestoreVertices("),
         ("private void EditZ(", "private void ZoomSelected(", "OverrideVertexZ("),
     )

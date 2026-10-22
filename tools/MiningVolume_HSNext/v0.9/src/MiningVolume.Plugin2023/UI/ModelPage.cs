@@ -271,10 +271,13 @@ namespace MiningVolume2023.UI
                 string.Join("\r\n",rows.Take(8).Select(r=>"Handle "+r.Entity.Handle+" / đỉnh "+r.Vertex.Index+
                     " / Z "+r.Vertex.Position.Z))+"\r\nChỉ loại khỏi mô hình; CAD gốc giữ nguyên."))return;
             if(!ReferenceEquals(source,CurrentSession.Source)||source.Revision!=revision)return;
+            var selection = rows.Select(r =>
+                new KeyValuePair<string, int>(r.Entity.Id, r.Vertex.Index)).ToList();
+            source.ValidateVertexSelection(selection);
             // Invalidate the prior CAD surface before altering model vertices.
-            // If AutoCAD refuses to clear a locked layer, the source stays unchanged.
+            // If AutoCAD refuses to clear a locked layer, source stays untouched.
             SurfaceWorkflowService.InvalidateTin(CurrentRole, clearCadLayer: true);
-            foreach (var r in rows) source.SetVertexEnabled(r.Entity.Id, r.Vertex.Index, false);
+            source.SetVerticesEnabled(selection, false);
             ProjectState.Current.NotifyChanged();
         }
 
@@ -283,8 +286,9 @@ namespace MiningVolume2023.UI
             var ids = SelectedRows().Select(r => r.Entity.Id).Distinct().ToList();
             if (ids.Count == 0) return;
             var source = CurrentSession.Source;
+            if (source == null) return;
             SurfaceWorkflowService.InvalidateTin(CurrentRole, clearCadLayer: true);
-            foreach (var id in ids) source.RemoveEntityFromModel(id);
+            source.SetEntitiesEnabled(ids, false);
             ProjectState.Current.NotifyChanged();
         }
 
@@ -293,11 +297,12 @@ namespace MiningVolume2023.UI
             var rows = SelectedRows().ToList();
             if (rows.Count == 0) return;
             var source = CurrentSession.Source;
+            if (source == null) return;
+            var selection = rows.Select(row =>
+                new KeyValuePair<string, int>(row.Entity.Id, row.Vertex.Index)).ToList();
+            source.ValidateVertexSelection(selection);
             SurfaceWorkflowService.InvalidateTin(CurrentRole, clearCadLayer: true);
-            foreach(var row in rows) {
-                source.RestoreEntity(row.Entity.Id);
-                source.RestoreVertex(row.Entity.Id,row.Vertex.Index);
-            }
+            source.RestoreSelectedVertices(selection);
             ProjectState.Current.NotifyChanged();
         }
 
