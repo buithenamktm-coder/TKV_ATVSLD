@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$BundlePath = (Join-Path $PSScriptRoot '..\bundle\MiningVolume2023.bundle'),
     [string]$OutputPath = (Join-Path $PSScriptRoot '..\dist\RUNTIME_VERIFICATION.txt'),
     [string]$SelfTestPath = (Join-Path $PSScriptRoot '..\dist\MVSELFTEST_RUNTIME.txt'),
