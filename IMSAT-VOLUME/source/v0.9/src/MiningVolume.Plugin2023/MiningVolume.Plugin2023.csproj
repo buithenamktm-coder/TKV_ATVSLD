@@ -1,0 +1,49 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="../../compat/IMSAT.CadCompatibility.props" />
+  <PropertyGroup>
+    <TargetFramework>$(IMSATCadFramework)</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <AssemblyName>MiningVolume2023</AssemblyName>
+    <AssemblyName Condition="'$(IMSATCadFlavor)' != 'ACAD2023_NET48'">IMSATVolume.$(IMSATCadFlavor)</AssemblyName>
+    <RootNamespace>MiningVolume2023</RootNamespace>
+    <UseAutoCADNuGet Condition="'$(UseAutoCADNuGet)'==''">false</UseAutoCADNuGet>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\MiningVolume.Core\MiningVolume.Core.csproj" />
+    <ProjectReference Include="..\MiningVolume.Surface\MiningVolume.Surface.csproj" />
+    <ProjectReference Include="..\MiningVolume.Cad2023\MiningVolume.Cad2023.csproj" />
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies.net45" Version="1.0.3" PrivateAssets="all" Condition="'$(IMSATCadFramework)' == 'net45'" />
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies.net46" Version="1.0.3" PrivateAssets="all" Condition="'$(IMSATCadFramework)' == 'net46'" />
+    <PackageReference Include="System.ValueTuple" Version="4.5.0" Condition="'$(IMSATCadFramework)' == 'net45' Or '$(IMSATCadFramework)' == 'net46'" />
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies.net47" Version="1.0.3" PrivateAssets="all" Condition="'$(IMSATCadFramework)' == 'net47'" />
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies.net48" Version="1.0.3" PrivateAssets="all" Condition="'$(IMSATCadFramework)' == 'net48'" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(IMSATCadIsModern)' != 'true'">
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Runtime.Serialization" />
+    <Reference Include="System.Security" />
+    <Reference Include="System.IO.Compression" />
+    <Reference Include="System.IO.Compression.FileSystem" />
+    <Reference Include="PresentationCore" />
+    <Reference Include="PresentationFramework" />
+    <Reference Include="WindowsBase" />
+    <Reference Include="Microsoft.CSharp" />
+    <Reference Include="System.Xml.Linq" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Assets\imsat_logo_64.png" CopyToOutputDirectory="PreserveNewest" />
+    <EmbeddedResource Include="Assets\imsat_logo_64.png" LogicalName="MiningVolume2023.Assets.imsat_logo_64.png" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(UseAutoCADNuGet)'=='true'">
+    <PackageReference Include="AutoCAD.NET" Version="$(IMSATCadPackageVersion)" PrivateAssets="all" ExcludeAssets="runtime" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(UseAutoCADNuGet)'!='true'">
+    <Reference Include="AcCoreMgd"><HintPath>$(IMSATCadHostDir)\AcCoreMgd.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="AcDbMgd"><HintPath>$(IMSATCadHostDir)\AcDbMgd.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="AcMgd"><HintPath>$(IMSATCadHostDir)\AcMgd.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="AcWindows"><HintPath>$(IMSATCadHostDir)\AcWindows.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="AdWindows"><HintPath>$(IMSATCadHostDir)\AdWindows.dll</HintPath><Private>false</Private></Reference>
+  </ItemGroup>
+</Project>

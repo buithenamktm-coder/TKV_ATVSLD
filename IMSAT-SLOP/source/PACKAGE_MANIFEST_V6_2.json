@@ -1,0 +1,362 @@
+{
+  "product": "IMSAT Slope Stability Professional V6.2",
+  "created_utc": "2026-07-30T06:31:09.705685+00:00",
+  "file_count": 71,
+  "files": [
+    {
+      "path": "00_BUILD_EXE_BANG_CMD.bat",
+      "size": 8788,
+      "sha256": "2aafa8da6e71c71ff296a23da558dc96aae5043bda4459ff3e6fb6c0ad0cbb08"
+    },
+    {
+      "path": "01_CHAY_EXE_DA_BUILD.bat",
+      "size": 207,
+      "sha256": "2309fadd3774ff9394244a652d9ee41c3b34449f2acba30952941b89ebb00e8d"
+    },
+    {
+      "path": "01_CHAY_PHAN_MEM_EXE.bat",
+      "size": 310,
+      "sha256": "e9e4a449f4dde264a2edabb0d314d4d29fda862108d83a4bf0ebe90444164db2"
+    },
+    {
+      "path": "02_MO_THU_MUC_EXE.bat",
+      "size": 264,
+      "sha256": "3e08a616b6ad38782b0077f4f8571431d96aae2fea3db40a9086d190d1d58d05"
+    },
+    {
+      "path": "BENCHMARK_ACCEPTANCE_CRITERIA.md",
+      "size": 858,
+      "sha256": "ae286bccd3ebdc0b7c6c2f2702b5956f8f96dc56719fb446f46b4ca1ac4a37d2"
+    },
+    {
+      "path": "CMD_BUILDER_VERSION.txt",
+      "size": 79,
+      "sha256": "e57147bbfb850a3abb1d2b36d8b4fade7b836b11a1f424661e88707a5407f441"
+    },
+    {
+      "path": "IMSAT_Slope_Stability_V6_2_Professional_ONEFILE.spec",
+      "size": 953,
+      "sha256": "4d1e4532d334087cb6270e2460e0be96317bd63b294b05cf47292db8c2a4b645"
+    },
+    {
+      "path": "KNOWN_LIMITATIONS_V6_2.md",
+      "size": 674,
+      "sha256": "f585372660ed8344080d14d49089ab7440a10979e0ede041883cf45b6875c8cf"
+    },
+    {
+      "path": "README.md",
+      "size": 4046,
+      "sha256": "aaf7dafdea9901a36d9b47413fd547b8a9bf067276167ee1926cb9e15910cf92"
+    },
+    {
+      "path": "README_V6_2.txt",
+      "size": 522,
+      "sha256": "5486e4ea9dc177d079b70af010e9a22ecf1033a4fb299e92c84d00bc734fe3fb"
+    },
+    {
+      "path": "RELEASE_NOTES_V6_2.md",
+      "size": 1559,
+      "sha256": "27bbe0595b7ea28e5fc0ca6b1c27ec0dca28dfd9893610f1e4a1d5e98fe8eefd"
+    },
+    {
+      "path": "THIRD_PARTY_NOTICES.md",
+      "size": 562,
+      "sha256": "2f5a34daa681af533c63c1ee094fc690e93155d292c69faf4ac3f70fc8000f9a"
+    },
+    {
+      "path": "app/__init__.py",
+      "size": 78,
+      "sha256": "a59228603fc91df8561f0847468762049aeddf9e40f0bbf045fb96b115829aa7"
+    },
+    {
+      "path": "app/algorithms/__init__.py",
+      "size": 380,
+      "sha256": "9a9de5ef84d2b3d871bfc8cda9f21ae1026fc9bf32724f5fbcb1c139fd2b2304"
+    },
+    {
+      "path": "app/algorithms/morgenstern_price.py",
+      "size": 10537,
+      "sha256": "53eef0097dc403ee7471a36a77e267875d48dcc83d8bd05475ae537b19ae8fcc"
+    },
+    {
+      "path": "app/algorithms/solver.py",
+      "size": 40358,
+      "sha256": "3b347c1aa3a30c9f53a04cb0ba0a46ba4c091b808b8bad3b6b6f8eebf0bcc425"
+    },
+    {
+      "path": "app/core/__init__.py",
+      "size": 22,
+      "sha256": "84c159b9388b9c89f0c4c6cfbdee2e438f4121ac0bb306b2a74f1c80eae0f973"
+    },
+    {
+      "path": "app/core/crash_handler.py",
+      "size": 1373,
+      "sha256": "0f339c86812b1b32513ff5dde1c28c28d6074f10b14635eea473582849bd5dfe"
+    },
+    {
+      "path": "app/core/geometry.py",
+      "size": 5824,
+      "sha256": "504f217037265f9b576c85addde9c0838b055fc0d00bb13ea68a3440507f58f9"
+    },
+    {
+      "path": "app/core/models.py",
+      "size": 10039,
+      "sha256": "549c126c9e3fe779f4d943f8af0d889b326294b973d4d3dc3617474d57eb59ff"
+    },
+    {
+      "path": "app/core/solver_job.py",
+      "size": 4687,
+      "sha256": "63dc98efeaf7f60e9776a3e41da9a89dea44fac780f1ccc4bb811c1b95eaa1fd"
+    },
+    {
+      "path": "app/io/__init__.py",
+      "size": 336,
+      "sha256": "491681fe37f403bd23d2b971888586b4dd782bf416dcca88c12908a495babd74"
+    },
+    {
+      "path": "app/io/cad_model_import.py",
+      "size": 9032,
+      "sha256": "06c0ccac18267fd31f072c690496467d5d319bd7cbcc81fa2886863cfad32359"
+    },
+    {
+      "path": "app/io/cad_reader.py",
+      "size": 14079,
+      "sha256": "ecfb7076dd983e6aec378168b9dd0a058418d0520c7a740da59d5b54869b356b"
+    },
+    {
+      "path": "app/io/gsz_reader.py",
+      "size": 12633,
+      "sha256": "9ca04678166ca2349e97767d4fd80c153009c87b35200406321626827bf8ff0c"
+    },
+    {
+      "path": "app/io/project_io.py",
+      "size": 465,
+      "sha256": "d1e094992a89e23dffd69c456aab9412aadc3328cf0e9729148a08b59595e229"
+    },
+    {
+      "path": "app/reports/__init__.py",
+      "size": 157,
+      "sha256": "bab470fe3dc41f4fd76c855da3176ab32d62ce64af831e845b9abf6028ee738b"
+    },
+    {
+      "path": "app/reports/exporter.py",
+      "size": 4513,
+      "sha256": "654510af2cc2a5a5bcbd09c144c0dd8f45c1752253f1bd8c5eaca90df6725d63"
+    },
+    {
+      "path": "app/ui/__init__.py",
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "app/ui/cad_import_dialog.py",
+      "size": 3431,
+      "sha256": "a316556045496c3c92e4c0efefb9a0fa6de38f48a7c38f97acf182d6bd56b1d2"
+    },
+    {
+      "path": "app/ui/engineering_canvas.py",
+      "size": 19248,
+      "sha256": "a6d7fedc8cef156ae0fd9451504d100e6a66dcf2d019794852d68ef062ee1fa8"
+    },
+    {
+      "path": "app/ui/main_window.py",
+      "size": 38488,
+      "sha256": "9d833e5ecdbb54cc6c793a475fe2ae365be5237581e74ea28a22e30aee795baa"
+    },
+    {
+      "path": "app/ui/materials_dialog.py",
+      "size": 4358,
+      "sha256": "a4b389d846321b5f94f26afc712ae29558b6c04a3cf3cc599479800c070d2e07"
+    },
+    {
+      "path": "app/ui/region_dialogs.py",
+      "size": 2454,
+      "sha256": "985e0efa27e1a7a06d0e13e5a09325af279a056440c2b4167ac26e05c8f335fb"
+    },
+    {
+      "path": "app/ui/settings_dialogs.py",
+      "size": 12397,
+      "sha256": "c3286b6852dca547249df8add4e9035006ee48f8b943b19f9e7300a6d4cb96af"
+    },
+    {
+      "path": "app/ui/styles.py",
+      "size": 1484,
+      "sha256": "cfbe0f31e340b75db7c6a18b52101c3cca52f73d95aafbb3c6a398e828a75d73"
+    },
+    {
+      "path": "assets/logo_imsat.ico",
+      "size": 34721,
+      "sha256": "63cd3328859a6db4a548504c38afa02b70322560361ed25e50b66251979ba469"
+    },
+    {
+      "path": "assets/logo_imsat.png",
+      "size": 32950,
+      "sha256": "5fbbd5ee0a0dff8a7512f6141a0f61f72ace526541a675820f52f89ec3d6ac58"
+    },
+    {
+      "path": "examples/MC 20-20.gsz",
+      "size": 120234,
+      "sha256": "bcd4aadb4d643d880b308e1f50ab7a3a8a7887ac69d79bf060684df23a17303f"
+    },
+    {
+      "path": "examples/MC B1-B2.gsz",
+      "size": 340148,
+      "sha256": "0e4130af191955754100b535cde0b93dc371fba05267d4093b5a379001d2e281"
+    },
+    {
+      "path": "examples/MC C1-C2.gsz",
+      "size": 89034,
+      "sha256": "2f457f219f0c77c786d8ab3e64deb3f850c0d5ffb92922e5d64ca532edae260d"
+    },
+    {
+      "path": "examples/MC D1-D2.gsz",
+      "size": 89178,
+      "sha256": "6b864506d840b52391d2c0a07a126ee6f3d1e790fa63437c216513348d38bec2"
+    },
+    {
+      "path": "examples/MC E1-E2.gsz",
+      "size": 180706,
+      "sha256": "78de4936966afc46d2c80c7152335f55370f68356dc70e10a264114b7c96df1b"
+    },
+    {
+      "path": "examples/MC F1-F2.gsz",
+      "size": 91198,
+      "sha256": "82dace7cae02230dde859e2077e3992ccc816ef5b75e27155aaa977bbab4e392"
+    },
+    {
+      "path": "examples/MC TIII.gsz",
+      "size": 479954,
+      "sha256": "79366f8dd753537a6e1e246b4d4fc1a9c6e2ad4e700fd5cfad1bf6a62843b389"
+    },
+    {
+      "path": "examples/MC TV.gsz",
+      "size": 220697,
+      "sha256": "c9e2486e2371cd6eeacbbf91c58b68bfdefa803debbdd077c81d37d691f9a918"
+    },
+    {
+      "path": "main.py",
+      "size": 961,
+      "sha256": "0d0ad2836f6f91f358214f9e474ce8782ac5afa70c038286add2d651407d3b8f"
+    },
+    {
+      "path": "requirements-build.txt",
+      "size": 53,
+      "sha256": "2b9239fcf9f96f9cba221312a57e56bb471900573e028c32599e903dfefec192"
+    },
+    {
+      "path": "requirements-windows-test.txt",
+      "size": 57,
+      "sha256": "8723f1f235c5be589fe755e6fabb75cacee847a27b350965c2de79456ec60deb"
+    },
+    {
+      "path": "requirements.txt",
+      "size": 60,
+      "sha256": "e507eb29cb283116248111b97e18f9a0d94ec5e024eb4e404be31e49750ff6b0"
+    },
+    {
+      "path": "tests/V6_2_CAD_CLOSED_SECTION_VALIDATION.json",
+      "size": 4650,
+      "sha256": "f4e7f30107ad303c39566035a5de4935751de0ce01285c8499db104512083bb6"
+    },
+    {
+      "path": "tests/V6_2_LARGE_OPEN_PIT_VALIDATION.json",
+      "size": 1227,
+      "sha256": "2937ff0639e307e8051cf41ce56b7f50d26a631abc86ad69e9525965545aabf6"
+    },
+    {
+      "path": "tests/V6_2_LOCAL_CORE_ACCEPTANCE.json",
+      "size": 5420,
+      "sha256": "33abb8d7d53195c99bb5fbad8fe8b28f207741e26f637d84c03dbf6d3af4d94b"
+    },
+    {
+      "path": "tests/V6_GEOMETRY_REFERENCE.png",
+      "size": 449564,
+      "sha256": "31867ab7c5df8160a85d0e2357124260da75f69d57e4cc9a13ea16d5b0603cd9"
+    },
+    {
+      "path": "tests/V6_GEOMETRY_VALIDATION.json",
+      "size": 1614,
+      "sha256": "9e00d2b056fef15613ee526ad4849a52750fdf3b31a751230558affe686e4519"
+    },
+    {
+      "path": "tests/V6_MP_BENCHMARK.json",
+      "size": 2352,
+      "sha256": "cc2618583a63e3b32aeb7ece490dba1bc33215da54285edc7b4c1e15d8c07ab3"
+    },
+    {
+      "path": "tests/V6_PROJECT_REPORT_VALIDATION.json",
+      "size": 175,
+      "sha256": "f3eb053e48065f7ae45e8477128f3592190f3e073c77877c0d319e2dbd04a6ca"
+    },
+    {
+      "path": "tests/V6_RESULTS_REFERENCE.png",
+      "size": 116105,
+      "sha256": "9e13ca2b940b2a799fa4d9a68ee7fbb2ccffe517256b7657f88099027c1a2488"
+    },
+    {
+      "path": "tests/V6_SOLVER_VALIDATION.json",
+      "size": 890,
+      "sha256": "85a132640bc9ef3354e664aca48ab4d0d373881a179d14869b738f074f8a51df"
+    },
+    {
+      "path": "tests/test_cad_closed_section_workflow.py",
+      "size": 3743,
+      "sha256": "ec34d42d414521e8b8b9b23d4ecbf6791ece9d7a476299dd03c4303b40f0f88b"
+    },
+    {
+      "path": "tests/test_geometry_core.py",
+      "size": 1607,
+      "sha256": "66d9603ec4ab4256497681b74e8cacd452f75b560efb19e72ed0e54d3aed154d"
+    },
+    {
+      "path": "tests/test_large_open_pit_workflow.py",
+      "size": 6137,
+      "sha256": "73a6ef1aadbda8409a438511ff7e88e70568201a65b7c28d55bd210ac21076e1"
+    },
+    {
+      "path": "tests/test_morgenstern_price_benchmark.py",
+      "size": 2084,
+      "sha256": "27f7f934c05255b0ab984d478e58b40b520e157afaed3014e323471655b27f1f"
+    },
+    {
+      "path": "tests/test_project_reports.py",
+      "size": 3150,
+      "sha256": "baf436448f124531d7b851fffa6d230b19eb2e9c8e31c98339428144b186e725"
+    },
+    {
+      "path": "tests/test_solver_core.py",
+      "size": 2202,
+      "sha256": "2c4255550838bd003c93b9b362c00fe2627a43505e9ca4c07532a57ebc992025"
+    },
+    {
+      "path": "tests/test_v6_contract.py",
+      "size": 1909,
+      "sha256": "81f2cd7ffe910119516f8f23acc1d957f02de391d40944bef1497089e84cf399"
+    },
+    {
+      "path": "tools/create_solver_smoke_input.py",
+      "size": 1798,
+      "sha256": "e5cd0be8da1f91a8a5af22b986f1309e254cc3d6b1dde57237c1275717d4f730"
+    },
+    {
+      "path": "tools/generate_v6_2_audit.py",
+      "size": 2812,
+      "sha256": "bddbf6c9e01689f929b2e3f598d95a48040d33c72228728820e906ac693d693e"
+    },
+    {
+      "path": "tools/release_acceptance.py",
+      "size": 1519,
+      "sha256": "44d0f173378aba99e40e8e5a75fd507a458c22df9bca9c4b052eb733b45c7724"
+    },
+    {
+      "path": "tools/verify_solver_smoke_output.py",
+      "size": 1027,
+      "sha256": "670b1bdb0ed1b4b4b33bd91359041811f9e1493e5ddf290bf6d2e34d2b1d49e9"
+    },
+    {
+      "path": "tools/windows_ui_smoke.py",
+      "size": 3692,
+      "sha256": "791993afe7d324fb39ee413927f213af493412b39e3745b5597eef98aa8cb2b3"
+    }
+  ]
+}

@@ -1,9 +1,7 @@
-# IMSAT-HRM
+# IMSAT HRM
 
-Phần mềm quản lý nhân sự IMSAT.
+Chưa tìm thấy mã nguồn IMSAT HRM trong các nhánh GitHub đã kiểm tra. Hiện đây là thư mục dành riêng cho dự án, chưa nhập mã nguồn.
 
-Lưu ý: chỉ khởi tạo thư mục quản lý; chưa đưa mã nguồn hoặc bộ cài vào đây.
+**Không chuyển nhầm** các tệp `main.py`, `database/`, `modules/`, `ui/` của ứng dụng TKV_ATVSLD gốc vào IMSAT HRM vì chưa có bằng chứng chúng là cùng một dự án.
 
-Mục đích: tách riêng nội dung dự án, tài liệu kỹ thuật, mã nguồn và cấu hình build khi được chuyển vào một cách có kiểm soát.
-
-Trạng thái: khởi tạo cấu trúc thư mục; **chưa đồng bộ mã nguồn từ máy tính**.
+Khi đối chiếu được thư mục mã nguồn HRM trên máy Windows, sẽ đồng bộ riêng mà không ghi đè dữ liệu đang chạy.

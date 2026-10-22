@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="../../compat/IMSAT.CadCompatibility.props" />
+  <PropertyGroup>
+    <TargetFramework>$(IMSATCadFramework)</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <AssemblyName>MiningVolume.Core</AssemblyName>
+    <RootNamespace>MiningVolume.Core</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies.net45" Version="1.0.3" PrivateAssets="all" Condition="'$(IMSATCadFramework)' == 'net45'" />
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies.net46" Version="1.0.3" PrivateAssets="all" Condition="'$(IMSATCadFramework)' == 'net46'" />
+    <PackageReference Include="System.ValueTuple" Version="4.5.0" Condition="'$(IMSATCadFramework)' == 'net45' Or '$(IMSATCadFramework)' == 'net46'" />
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies.net47" Version="1.0.3" PrivateAssets="all" Condition="'$(IMSATCadFramework)' == 'net47'" />
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies.net48" Version="1.0.3" PrivateAssets="all" Condition="'$(IMSATCadFramework)' == 'net48'" />
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="System.Numerics" />
+    <Reference Include="System.IO.Compression" />
+    <Reference Include="System.IO.Compression.FileSystem" />
+  </ItemGroup>
+</Project>

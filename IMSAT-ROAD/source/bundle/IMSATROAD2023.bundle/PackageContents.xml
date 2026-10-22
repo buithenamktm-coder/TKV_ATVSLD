@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ApplicationPackage SchemaVersion="1.0" AutodeskProduct="AutoCAD"
+ ProductType="Application" Name="IMSAT ROAD" AppVersion="0.1.0"
+ Description="IMSAT ROAD Preview - one-existing-TIN road survey design - AutoCAD 2023"
+ Author="Bùi Thế Nam">
+ <CompanyDetails Name="IMSAT" />
+ <RuntimeRequirements OS="Win64" Platform="AutoCAD*" SeriesMin="R24.2" SeriesMax="R24.2" />
+ <Components>
+  <ComponentEntry AppName="IMSAT ROAD 2023" Version="0.1.0"
+   ModuleName="./Contents/Windows/IMSAT.Road.Plugin2023.dll"
+   LoadOnAutoCADStartup="True"/>
+ </Components>
+</ApplicationPackage>

@@ -1,0 +1,11 @@
+{
+  "status": "PASS",
+  "roundtrip_fs": 1.8563847897329875,
+  "results": 5,
+  "reports": [
+    "_report.html",
+    "_surfaces.csv",
+    "_slices.csv"
+  ],
+  "cad_regions": 1
+}
