@@ -62,4 +62,4 @@ def test_release_scripts_have_bom_for_windows_powershell_51():
         "installer/build_v2_qa.ps1",
     )
     for script in scripts:
-        assert (ROOT / script).read_bytes().startswith(b"\\xef\\xbb\\xbf"), script
+        assert (ROOT / script).read_bytes().startswith(b"\xef\xbb\xbf"), script
