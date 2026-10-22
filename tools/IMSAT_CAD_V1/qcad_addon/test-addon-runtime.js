@@ -158,6 +158,25 @@ assert.strictEqual(context.IMSATCAD.setRibbonLanguage("en"), false,
 assert.strictEqual(context.IMSATCAD._ribbonLanguage, "vi");
 assert.deepStrictEqual(localizedCommands.map(x => x.widget.text), vietnameseCommandLabels);
 firstCommand.setToolTip = originalTooltipSetter;
+// A setter can throw after API preflight; rollback must restore the entire Ribbon.
+const originalCommandTextSetter = firstCommand.setText;
+firstCommand.setText = function(label) {
+  if (label === "Line") throw new Error("mock Qt setter failure");
+  return originalCommandTextSetter(label);
+};
+assert.strictEqual(context.IMSATCAD.setRibbonLanguage("en"), false,
+  "Native setter exceptions must be reported as failed language switches");
+assert.strictEqual(context.IMSATCAD._ribbonLanguage, "vi",
+  "Qt setter exception must restore the previous locale");
+assert.deepStrictEqual(ribbonPages.map(x => x.label),
+  ["Trang chủ", "Chèn", "Ghi chú", "Hiển thị", "Quản lý", "Xuất bản"]);
+assert.deepStrictEqual(ribbonCaptions.map(x => x.label), expectedGroupCaptions);
+assert.deepStrictEqual(localizedCommands.map(x => x.widget.text), vietnameseCommandLabels,
+  "Native setter failure must restore every command caption");
+assert(localizedCommands.every(x => x.widget.tooltip === context.IMSATCAD.commandToolTip(x.script, "vi")),
+  "Native setter failure must restore all command tooltips");
+assert.strictEqual(languageButton.text, "English");
+firstCommand.setText = originalCommandTextSetter;
 // QTabWidget.count is a non-configurable getter in the Qt mock.
 // Do not mutate it; the native count guard is exercised by integration checks.
 const first = [...toolbars.values()].map(x => x.actions.length);

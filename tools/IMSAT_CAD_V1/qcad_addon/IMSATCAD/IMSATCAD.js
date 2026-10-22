@@ -375,27 +375,66 @@ IMSATCAD.setRibbonLanguage = function(language) {
         qWarning("IMSAT CAD: Ribbon language switch blocked: button API unavailable");
         return false;
     }
-    IMSATCAD._ribbonLanguage = language;
+    // A native Qt setter may throw despite passing API preflight.
+    // Keep the locale and visible captions consistent after such failures.
+    var previousLanguage = IMSATCAD._ribbonLanguage;
     var tabs = IMSATCAD._ribbonTabsWidget;
-    if (!isNull(tabs)) {
-        for (var t = 0; t < IMSATCAD._ribbonTabs.length; ++t) {
-            tabs.setTabText(t, IMSATCAD.ribbonLabel(IMSATCAD._ribbonTabs[t][0]));
+    function applyCaptions(locale) {
+        IMSATCAD._ribbonLanguage = locale;
+        if (!isNull(tabs)) {
+            for (var t = 0; t < IMSATCAD._ribbonTabs.length; ++t) {
+                tabs.setTabText(t, IMSATCAD.ribbonLabel(IMSATCAD._ribbonTabs[t][0]));
+            }
+        }
+        for (var c = 0; c < IMSATCAD._ribbonCaptions.length; ++c) {
+            var caption = IMSATCAD._ribbonCaptions[c];
+            caption.widget.setText(IMSATCAD.ribbonLabel(caption.name));
+        }
+        for (var b2 = 0; b2 < IMSATCAD._ribbonButtonCaptions.length; ++b2) {
+            var entry = IMSATCAD._ribbonButtonCaptions[b2];
+            entry.widget.setText(IMSATCAD.commandLabel(entry.script, locale));
+            entry.widget.setToolTip(IMSATCAD.commandToolTip(entry.script, locale));
+        }
+        if (!isNull(IMSATCAD._ribbonLanguageButton)) {
+            IMSATCAD._ribbonLanguageButton.setText(locale === "vi" ? "English" : "Tiếng Việt");
+            IMSATCAD._ribbonLanguageButton.setToolTip(locale === "vi" ?
+                "Switch Ribbon to English" : "Chuyển Ribbon sang tiếng Việt");
         }
     }
-    for (var c = 0; c < IMSATCAD._ribbonCaptions.length; ++c) {
-        var caption = IMSATCAD._ribbonCaptions[c];
-        caption.widget.setText(IMSATCAD.ribbonLabel(caption.name));
-    }
-    for (var b2 = 0; b2 < IMSATCAD._ribbonButtonCaptions.length; ++b2) {
-        var entry = IMSATCAD._ribbonButtonCaptions[b2];
-        var translated = IMSATCAD.commandLabel(entry.script, language);
-        entry.widget.setText(translated);
-        entry.widget.setToolTip(IMSATCAD.commandToolTip(entry.script, language));
-    }
-    if (!isNull(IMSATCAD._ribbonLanguageButton)) {
-        IMSATCAD._ribbonLanguageButton.setText(language === "vi" ? "English" : "Tiếng Việt");
-        IMSATCAD._ribbonLanguageButton.setToolTip(language === "vi" ?
-            "Switch Ribbon to English" : "Chuyển Ribbon sang tiếng Việt");
+    try {
+        applyCaptions(language);
+    } catch (translationError) {
+        qWarning("IMSAT CAD: Ribbon language switch failed: " + translationError);
+        // Best-effort restoration: one broken widget must not prevent the
+        // remaining controls from returning to the previous language.
+        IMSATCAD._ribbonLanguage = previousLanguage;
+        if (!isNull(tabs)) {
+            for (var rt = 0; rt < IMSATCAD._ribbonTabs.length; ++rt) {
+                try { tabs.setTabText(rt, IMSATCAD.ribbonLabel(IMSATCAD._ribbonTabs[rt][0])); }
+                catch (restoreTabError) { qWarning("IMSAT CAD: restore tab failed: " + restoreTabError); }
+            }
+        }
+        for (var rc = 0; rc < IMSATCAD._ribbonCaptions.length; ++rc) {
+            try {
+                var oldCaption = IMSATCAD._ribbonCaptions[rc];
+                oldCaption.widget.setText(IMSATCAD.ribbonLabel(oldCaption.name));
+            } catch (restorePanelError) { qWarning("IMSAT CAD: restore panel failed: " + restorePanelError); }
+        }
+        for (var rb = 0; rb < IMSATCAD._ribbonButtonCaptions.length; ++rb) {
+            var oldEntry = IMSATCAD._ribbonButtonCaptions[rb];
+            try { oldEntry.widget.setText(IMSATCAD.commandLabel(oldEntry.script, previousLanguage)); }
+            catch (restoreCommandError) { qWarning("IMSAT CAD: restore command failed: " + restoreCommandError); }
+            try { oldEntry.widget.setToolTip(IMSATCAD.commandToolTip(oldEntry.script, previousLanguage)); }
+            catch (restoreTooltipError) { qWarning("IMSAT CAD: restore tooltip failed: " + restoreTooltipError); }
+        }
+        if (!isNull(IMSATCAD._ribbonLanguageButton)) {
+            try {
+                IMSATCAD._ribbonLanguageButton.setText(previousLanguage === "vi" ? "English" : "Tiếng Việt");
+                IMSATCAD._ribbonLanguageButton.setToolTip(previousLanguage === "vi" ?
+                    "Switch Ribbon to English" : "Chuyển Ribbon sang tiếng Việt");
+            } catch (restoreSelectorError) { qWarning("IMSAT CAD: restore language selector failed: " + restoreSelectorError); }
+        }
+        return false;
     }
     return true;
 };
