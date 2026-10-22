@@ -7,12 +7,13 @@ using MiningVolume.Core.Volumes;
 namespace MiningVolume2023.Services
 {
     /// <summary>
-    /// Xuất bảng AutoCAD bằng đối tượng TABLE gốc, không render thành ảnh.
+    /// Một Block cho mỗi lần xuất, chứa ba TABLE gốc có thể chỉnh qua BEDIT.
     /// Không tự xóa bảng cũ: kết quả do người dùng có thể đã hiệu chỉnh/bàn giao.
     /// </summary>
     internal static class CadVolumeTableService
     {
         internal const string OutputLayer = "MV_KL_BANG";
+        internal const string BlockPrefix = "IMSAT_KL_";
         private const double RowHeight = 8.0;
         private const double TableGap = 28.0;
 
@@ -28,7 +29,13 @@ namespace MiningVolume2023.Services
             if (!IsFinite(result.TotalCutVolume) || !IsFinite(result.TotalFillVolume))
                 throw new InvalidOperationException("Kết quả khối lượng không hợp lệ (NaN/Infinity).");
 
+            if (!IsFinite(insertion.X) || !IsFinite(insertion.Y) || !IsFinite(insertion.Z))
+                throw new InvalidOperationException("Điểm chèn bảng không hợp lệ (NaN/Infinity).");
+
             using (var tr = database.TransactionManager.StartTransaction())
+            using (var block = new BlockTableRecord {
+                Name = BlockPrefix + result.CalculationId + "_" + Guid.NewGuid().ToString("N"),
+                Origin = Point3d.Origin })
             {
                 pollCancellation?.Invoke();
                 var layer = EnsureOutputLayer(database, tr);
@@ -36,8 +43,13 @@ namespace MiningVolume2023.Services
                 var bt = (BlockTable)tr.GetObject(database.BlockTableId, OpenMode.ForRead);
                 var model = (BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForWrite);
 
-                double x = insertion.X;
-                double y = insertion.Y;
+                bt.UpgradeOpen();
+                ObjectId blockId = bt.Add(block);
+                tr.AddNewlyCreatedDBObject(block, true);
+                // Local coordinates keep grouping independent of insertion;
+                // this remains the existing 2D table output at Z=0.
+                double x = 0;
+                double y = 0;
 
                 const int summaryRows = 9;
                 using (var summary = NewTable(database, layer, summaryRows, 2,
@@ -54,7 +66,7 @@ namespace MiningVolume2023.Services
                     Set(summary, 7, "Phát triển", "Bùi Thế Nam · 0967280686");
                     Set(summary, 8, "Mã phiên tính (CalculationId)", result.CalculationId);
                     StyleSimpleTable(summary, arial, summaryRows, 2, pollCancellation);
-                    Append(model, tr, summary);
+                    Append(block, tr, summary);
                 }
                 reportProgress?.Invoke(1);
                 y -= RowHeight * summaryRows + TableGap;
@@ -100,7 +112,7 @@ namespace MiningVolume2023.Services
                     interval.Cells[totalRow, 9].TextString = F(result.TotalFillVolume);
                     interval.Cells[totalRow, 10].TextString = F(result.NetVolume);
                     StyleTable(interval, arial, totalRow, pollCancellation);
-                    Append(model, tr, interval);
+                    Append(block, tr, interval);
                 }
                 y -= RowHeight * (totalRow + 1) + TableGap;
 
@@ -137,10 +149,17 @@ namespace MiningVolume2023.Services
                     levels.Cells[levelsTotalRow, 4].TextString = F(cutLevels);
                     levels.Cells[levelsTotalRow, 5].TextString = F(fillLevels);
                     StyleSimpleTable(levels, arial, levelsTotalRow + 1, 6, pollCancellation);
-                    Append(model, tr, levels);
+                    Append(block, tr, levels);
                 }
-                // A cancel or callback failure rolls back all three tables,
-                // including tables already appended earlier in this transaction.
+                using (var reference = new BlockReference(
+                    new Point3d(insertion.X, insertion.Y, 0), blockId) { LayerId = layer })
+                {
+                    model.AppendEntity(reference);
+                    tr.AddNewlyCreatedDBObject(reference, true);
+                }
+                // A cancel or callback failure rolls back the definition,
+                // reference and all three native tables, including
+                // tables already appended earlier in this transaction.
                 reportProgress?.Invoke(result.Intervals.Count + result.Levels.Count + 2);
                 pollCancellation?.Invoke();
                 tr.Commit();

@@ -211,7 +211,7 @@ namespace MiningVolume2023.UI
                     EnsureExportInputsCurrent(doc, st, currentResult, approvedProfiles,
                         existingTin, designTin, existingRevision, designRevision,
                     selectedUnitGroup, selectedUnitName, selectedPeriod);
-                    _status.Text = "Đang chèn bảng khối lượng TABLE vào AutoCAD...";
+                    _status.Text = "Đang xuất Block bảng khối lượng vào AutoCAD...";
                     using (var progress = new SectionCadProgress(
                         currentResult.Intervals.Count + currentResult.Levels.Count + 2, "xuất bảng khối lượng"))
                     using (doc.LockDocument())

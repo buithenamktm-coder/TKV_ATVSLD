@@ -190,10 +190,17 @@ namespace MiningVolume2023.Services
                 catch (InvalidOperationException) { failed = true; }
                 if (!failed || before != TableSnapshot(db))
                     throw new InvalidOperationException("Failed quantity table export changed existing tables.");
+                intervals[40].CutVolume = 100;
+                var next = new VolumeResult(bands, intervals, levels,
+                    new SectionBandAreas[0], new string[0]);
+                CadVolumeTableService.Insert(db, next, new Point3d(1000, 200, 0));
+                string repeated = TableSnapshot(db, 2);
+                if (!repeated.StartsWith(before, StringComparison.Ordinal) || !repeated.Contains(next.CalculationId))
+                    throw new InvalidOperationException("Re-export changed the accepted block or lost the new identity.");
             }
         }
 
-        private static string TableSnapshot(Database db)
+        private static string TableSnapshot(Database db, int expectedExports = 1)
         {
             var output = new StringBuilder();
             int count = 0;
@@ -201,19 +208,41 @@ namespace MiningVolume2023.Services
             {
                 var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
                 var ms = (BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForRead);
+                int references = 0, definitions = 0;
+                foreach (ObjectId id in bt)
+                {
+                    var definition = (BlockTableRecord)tr.GetObject(id, OpenMode.ForRead);
+                    if (definition.Name.StartsWith(CadVolumeTableService.BlockPrefix, StringComparison.Ordinal)) definitions++;
+                }
                 foreach (ObjectId id in ms)
                 {
-                    var table = tr.GetObject(id, OpenMode.ForRead) as Table;
-                    if (table == null) throw new InvalidOperationException("Unexpected quantity table entity.");
-                    count++;
-                    output.Append(table.Handle).Append('|').Append(table.Layer);
-                    Point(output, table.Position);
-                    for (int row = 0; row < table.Rows.Count; row++)
-                        for (int col = 0; col < table.Columns.Count; col++)
-                            output.Append('|').Append(table.Cells[row, col].TextString);
+                    var reference = tr.GetObject(id, OpenMode.ForRead) as BlockReference;
+                    if (reference == null) throw new InvalidOperationException("Quantity output must be a block reference.");
+                    references++;
+                    output.Append(reference.Handle).Append('|').Append(reference.Layer);
+                    Point(output, reference.Position);
+                    var definition = (BlockTableRecord)tr.GetObject(reference.BlockTableRecord, OpenMode.ForRead);
+                    if (!definition.Name.StartsWith(CadVolumeTableService.BlockPrefix, StringComparison.Ordinal))
+                        throw new InvalidOperationException("Unexpected quantity block definition.");
+                    output.Append(definition.Name);
+                    int tables = 0;
+                    foreach (ObjectId child in definition)
+                    {
+                        var table = tr.GetObject(child, OpenMode.ForRead) as Table;
+                        if (table == null) throw new InvalidOperationException("Quantity block must retain native tables.");
+                        count++; tables++;
+                        output.Append(table.Handle).Append('|').Append(table.Layer);
+                        Point(output, table.Position.TransformBy(reference.BlockTransform));
+                        for (int row = 0; row < table.Rows.Count; row++)
+                            for (int col = 0; col < table.Columns.Count; col++)
+                                output.Append('|').Append(table.Cells[row, col].TextString);
+                    }
+                    if (tables != 3) throw new InvalidOperationException("Each quantity block must contain three tables.");
                 }
+                if (references != expectedExports || definitions != expectedExports)
+                    throw new InvalidOperationException("Quantity export leaked a block reference/definition.");
             }
-            if (count != 3) throw new InvalidOperationException("Expected exactly three quantity tables.");
+            if (count != expectedExports * 3) throw new InvalidOperationException("Unexpected quantity table count.");
             return output.ToString();
         }
 

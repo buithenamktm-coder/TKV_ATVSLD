@@ -1,3 +1,5 @@
+> **Quantity Block follow-up 2026-10-22:** [Evidence and remaining host gates](qa/20261022-quantity-block/README.md). One Block containing three native tables per export; rollback and re-export host regressions compiled. COMPILE_PASS; 342 Python tests pass, 1 skipped. HOST_RUNTIME_BLOCKED. No CAD performance or final release acceptance claimed.
+
 > **Integrated review 2026-10-22:** See [current batch evidence](qa/20261022-integrated-pipeline/README.md). 131 executable C# cases; 333 reference checks + 9 compatibility contracts pass, 1 PowerShell case skipped. AutoCAD 2023 compile: 0 warnings/errors. Shared TIN indexing, combined CAD-layer inspection, quick/edit cancellation and atomic Excel cancellation are implemented together. HOST_RUNTIME_BLOCKED; production license anchor/Windows installation and complete P0–P6 acceptance remain open. No official Setup. Historical evidence below does not supersede these limits.
 
 # Trạng thái mới nhất — QA TIN/Excel 12/10/2026
