@@ -24,7 +24,7 @@ namespace MiningVolume2023.UI
         private readonly Label _tinReuseStatus;
         private readonly DataGridView _cells;
         private bool _syncing;
-        private bool _exportingExcel;
+        private CancellationTokenSource _excelCts;
         private CancellationTokenSource _cts;
         private readonly TableLayoutPanel _rootLayout;
         private readonly TableLayoutPanel _settingsGrid;
@@ -381,8 +381,10 @@ namespace MiningVolume2023.UI
 
         private async Task ExportExcelAsync()
         {
-            if (_exportingExcel || !LicenseUiGuard.Check()) return;
-            _exportingExcel=true;
+            if (_excelCts != null) { _excelCts.Cancel(); return; }
+            if (!LicenseUiGuard.Check()) return;
+            var exportCts = _excelCts = new CancellationTokenSource();
+            var exportToken = exportCts.Token;
             try
             {
                 if(!GridWorkflowService.IsCurrent)throw new InvalidOperationException(
@@ -419,15 +421,17 @@ namespace MiningVolume2023.UI
                     // taking a workbook snapshot.
                     GridWorkflowService.EnsureBoundaryCurrent(
                         BoundaryGeometryService.ReadBoundary(ProjectState.Current.GridBoundaryHandle));
-                    _excel.Enabled=false;UseWaitCursor=true;_status.Text="Đang dựng 6 sheet Excel...";
-                    var report=await GridVolumeExcelReportBuilder.BuildAsync(GridWorkflowService.Report,GridWorkflowService.Options);
+                    _excel.Text="Hủy xuất Excel";UseWaitCursor=true;_status.Text="Đang dựng 6 sheet Excel...";
+                    var report=await GridVolumeExcelReportBuilder.BuildAsync(GridWorkflowService.Report,GridWorkflowService.Options,exportToken);
+                    exportToken.ThrowIfCancellationRequested();
                     _status.Text="Đang ghi Excel...";
-                    await Task.Run(()=>ExportWorkflowService.WriteXlsx(dlg.FileName,report));
+                    await Task.Run(()=>ExportWorkflowService.WriteXlsx(dlg.FileName,report,exportToken));
                     _status.Text="Đã xuất "+dlg.FileName;
                 }
             }
+            catch(OperationCanceledException){_status.Text="Đã hủy xuất Excel; giữ nguyên file trước đó.";}
             catch(Exception ex){Error(ex,"Xuất lưới Excel");}
-            finally{_exportingExcel=false;UseWaitCursor=false;_excel.Enabled=GridWorkflowService.Report!=null;}
+            finally{_excelCts=null;exportCts.Dispose();_excel.Text="Xuất Excel";UseWaitCursor=false;_excel.Enabled=GridWorkflowService.Report!=null;}
         }
 
         private void RefreshCells()
@@ -440,7 +444,7 @@ namespace MiningVolume2023.UI
             _cells.RowCount=r?.Cells.Count??0;
             _cells.Invalidate();
             _draw.Enabled=r!=null;
-            _excel.Enabled=r!=null && !_exportingExcel;
+            _excel.Enabled=_excelCts!=null || r!=null;
             _cancel.Enabled=_cts!=null;
         }
 
@@ -477,7 +481,7 @@ namespace MiningVolume2023.UI
             if(disposing)
             {
                 ProjectState.Current.Changed-=ProjectChanged;
-                _cts?.Cancel();
+                _cts?.Cancel(); _excelCts?.Cancel();
             }
             base.Dispose(disposing);
         }

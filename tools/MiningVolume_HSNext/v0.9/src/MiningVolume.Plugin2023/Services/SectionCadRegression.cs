@@ -31,6 +31,26 @@ namespace MiningVolume2023.Services
                         100 + i, 100 + i, 90, 90));
                 profiles.Add(new SectionProfile(line, segments, 300 * (10 + i), 0, new string[0]));
             }
+            using (var quick = new Database(true, true))
+            {
+                int polls = 0;
+                SectionCadRenderer.DrawQuickProfiles(quick, profiles, Point3d.Origin, 1000, 500, 5, 90, () => polls++);
+                string accepted = Snapshot(quick, true);
+                foreach (int cancelAt in new[] { 1, polls / 2, polls })
+                {
+                    int count = 0; bool canceled = false;
+                    try { SectionCadRenderer.DrawQuickProfiles(quick, profiles, Point3d.Origin, 1000, 500, 5, 90,
+                        () => { if (++count == cancelAt) throw new OperationCanceledException(); }); }
+                    catch (OperationCanceledException) { canceled = true; }
+                    if (!canceled || Snapshot(quick, true) != accepted)
+                        throw new InvalidOperationException("Quick-section cancellation did not restore original drawing.");
+                }
+                var inspection = TinCadRenderer.InspectLayers(quick, new[] { "MV_MC_NHANH_HT", "ABSENT_QA" });
+                if (!inspection["MV_MC_NHANH_HT"].Exists || inspection["MV_MC_NHANH_HT"].Faces != 0 ||
+                    inspection["MV_MC_NHANH_HT"].Unexpected != TinCadRenderer.CountUnexpectedEntities(quick,"MV_MC_NHANH_HT") ||
+                    inspection["ABSENT_QA"].Exists)
+                    throw new InvalidOperationException("Batched TIN inspection lost unexpected/missing layer state.");
+            }
             using (var whole = new Database(true, true))
             using (var batched = new Database(true, true))
             {
@@ -70,6 +90,15 @@ namespace MiningVolume2023.Services
             var calc = new GridVolumeCalculator();
             var first = calc.Calculate(plane(5), plane(0), options);
             var second = calc.Calculate(plane(6), plane(0), options);
+            using (var inspectionDb = new Database(true,true))
+            {
+                TinCadRenderer.Replace(inspectionDb,"QA_HT",plane(5),1);
+                TinCadRenderer.Replace(inspectionDb,"QA_TK",plane(0),3);
+                var scan = TinCadRenderer.InspectLayers(inspectionDb,new[] {"QA_HT","QA_TK"});
+                foreach (string name in new[] {"QA_HT","QA_TK"})
+                    if (!scan[name].Exists || scan[name].Faces != 2 || scan[name].Unexpected != 0)
+                        throw new InvalidOperationException("Batched TIN inspection changed face counts.");
+            }
             using (var db = new Database(true,true))
             {
                 GridCadRenderer.Draw(db, first, false);

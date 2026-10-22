@@ -39,12 +39,64 @@ internal static class FinalAuditRegression
         public IEnumerator<T> GetEnumerator() { for(int i=0;i<Count;i++)yield return this[i]; }
         System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator()=>GetEnumerator();
     }
+    sealed class CancelText {
+        public Action OnText;
+        public override string ToString() { OnText?.Invoke(); return "cancel-row"; }
+    }
     static void ExpectCanceled(Action action) {
         bool canceled=false;
         try { action(); } catch(System.OperationCanceledException) { canceled=true; }
         Check(canceled,"Canceled operation returned a result");
     }
     public static void Add(IDictionary<string,Action> tests) {
+        tests["integrated_excel_cancel_mid_write_preserves_existing_file_and_cleans_staging"] = () => {
+            string directory=Path.Combine(Path.GetTempPath(),"imsat-cancel-"+Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(directory);
+            string target=Path.Combine(directory,"accepted.xlsx");
+            File.WriteAllText(target,"previous accepted output");
+            try {
+                using(var cts=new System.Threading.CancellationTokenSource()) {
+                    var report=new SpreadsheetReport { IncludeImsatLogo=false };
+                    var sheet=new ReportSheet { Name="QA" };sheet.Headers.Add("Value");report.Sheets.Add(sheet);
+                    sheet.Rows.Add(new[] { ReportCell.Text(new CancelText { OnText=()=>cts.Cancel() }) });
+                    sheet.Rows.Add(new[] { ReportCell.Text("Never publish partial workbook") });
+                    ExpectCanceled(()=>ExportWorkflowService.WriteXlsx(target,report,cts.Token));
+                    Check(File.ReadAllText(target)=="previous accepted output","Cancellation replaced accepted Excel");
+                    Check(Directory.GetFiles(directory).Length==1,"Canceled export leaked staging files");
+                    sheet.Rows.Clear();sheet.Rows.Add(new[] {ReportCell.N3(12.5)});
+                    ExportWorkflowService.WriteXlsx(target,report);
+                    using(var zip=ZipFile.OpenRead(target))
+                        Check(zip.GetEntry("xl/worksheets/sheet1.xml")!=null,"Export did not recover after cancellation");
+                }
+            } finally {Directory.Delete(directory,true);}
+        };
+        tests["quick_section_cancel_during_route_processing_returns_no_partial_profile"] = () => {
+            using(var cts=new System.Threading.CancellationTokenSource()) {
+                var route=new ReadProbe<Vec2>(new[] { new Vec2(0,1),new Vec2(5,1),new Vec2(10,1) });
+                route.OnRead=i=>{if(i==2)cts.Cancel();};
+                ExpectCanceled(()=>new QuickSectionProfileBuilder().Build(1,"quick",route,Plane(5),Plane(0),cancellationToken:cts.Token));
+            }
+        };
+
+        tests["section_index_is_shared_across_workflows_and_replaced_with_tin"] = () => {
+            var triangles=new ReadProbe<Triangle3>(new[] {
+                new Triangle3(new Vec3(0,0,5),new Vec3(10,0,5),new Vec3(0,10,5)) });
+            int reads=0;
+            triangles.OnRead=i=>System.Threading.Interlocked.Increment(ref reads);
+            var tin=new TinSurface("shared",triangles,Array.Empty<ValidationIssue>());
+            // Empty routes isolate index construction from legitimate query reads.
+            System.Threading.Tasks.Parallel.For(0,16,i=>new TinSectionSampler().BuildProfiles(
+                Array.Empty<SectionLine>(),tin,tin));
+            Check(reads==1,"Concurrent samplers rebuilt the same spatial index");
+            double z;
+            Check(new TinSectionSampler().TryElevation(tin,new Vec2(1,1),1e-7,out z),"Shared index lost coverage");
+            Near(z,5);
+            var replaced=new TinSurface("shared",new[] {
+                new Triangle3(new Vec3(0,0,9),new Vec3(10,0,9),new Vec3(0,10,9)) },Array.Empty<ValidationIssue>());
+            Check(new TinSectionSampler().TryElevation(replaced,new Vec2(1,1),1e-7,out z),"New TIN lost coverage");
+            Near(z,9);
+        };
+
         tests["grid_async_workbook_captures_project_metadata_before_yield"] = () => {
             var state=State();
             state.MiningUnitGroup=MiningUnitCatalog.OutsideTkv;
@@ -184,7 +236,7 @@ internal static class FinalAuditRegression
                 var sampler=new TinSectionSampler();
                 ExpectCanceled(()=>sampler.BuildProfile(Profile(1,5).Line,tin,tin,cancellationToken:cts.Token));
                 triangles.OnRead=null;
-                var recovered=sampler.BuildProfile(Profile(1,5).Line,tin,tin);
+                var recovered=new TinSectionSampler().BuildProfile(Profile(1,5).Line,tin,tin);
                 Check(recovered.HasData,"Canceled index poisoned sampler cache");
                 Near(recovered.CutArea,0);Near(recovered.FillArea,0);
             }

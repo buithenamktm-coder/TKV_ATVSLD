@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Threading;
 using MiningVolume.Core.Grid;
 using MiningVolume.Core.Reporting;
 
@@ -24,13 +25,13 @@ namespace MiningVolume2023.Services
 
         // Called on the host thread. Capture all project metadata before yielding;
         // the worker only reads the accepted grid and owns its new workbook.
-        public static Task<SpreadsheetReport> BuildAsync(GridVolumeReport grid, GridVolumeOptions options)
+        public static Task<SpreadsheetReport> BuildAsync(GridVolumeReport grid, GridVolumeOptions options, CancellationToken cancellationToken = default(CancellationToken))
         {
             var report = Capture(grid, options);
             string group = ProjectState.Current.MiningUnitGroup;
             string unit = ProjectState.Current.MiningUnitName;
             string period = ProjectState.Current.VolumePeriodLabel;
-            return Task.Run(() => BuildDataSheets(grid, report, group, unit, period));
+            return Task.Run(() => BuildDataSheets(grid, report, group, unit, period, cancellationToken));
         }
 
         private static SpreadsheetReport Capture(GridVolumeReport grid, GridVolumeOptions options)
@@ -47,13 +48,15 @@ namespace MiningVolume2023.Services
         }
 
         private static SpreadsheetReport BuildDataSheets(GridVolumeReport grid, SpreadsheetReport r,
-            string unitGroup, string unitName, string period)
+            string unitGroup, string unitName, string period, CancellationToken cancellationToken = default(CancellationToken))
         {
-            r.Sheets.Add(Nodes(grid));
-            r.Sheets.Add(Details(grid));
-            r.Sheets.Add(GridSummary(grid));
+            cancellationToken.ThrowIfCancellationRequested();
+            r.Sheets.Add(Nodes(grid, cancellationToken));
+            r.Sheets.Add(Details(grid, cancellationToken));
+            r.Sheets.Add(GridSummary(grid, cancellationToken));
             r.Sheets.Add(Totals(grid, unitGroup, unitName, period));
-            r.Sheets.Add(CalculationDetail(grid));
+            r.Sheets.Add(CalculationDetail(grid, cancellationToken));
+            cancellationToken.ThrowIfCancellationRequested();
             ExportWorkflowService.ApplyOrganizationHeader(r, unitGroup, unitName);
             return r;
         }
@@ -108,7 +111,7 @@ namespace MiningVolume2023.Services
             return s;
         }
 
-        private static ReportSheet Nodes(GridVolumeReport grid)
+        private static ReportSheet Nodes(GridVolumeReport grid, CancellationToken cancellationToken)
         {
             var s=Sheet("CAO ĐỘ NÚT LƯỚI","CAO ĐỘ CÁC NÚT LƯỚI",
                 "STT","Mã nút","I","J","X","Y","Ztn","Ztk","ΔZ","Trạng thái");
@@ -117,6 +120,7 @@ namespace MiningVolume2023.Services
                 Comparer<(int,int)>.Create((a,b)=>a.Item1!=b.Item1?a.Item1.CompareTo(b.Item1):a.Item2.CompareTo(b.Item2)));
             foreach(var c in grid.Cells)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 for(int k=0;k<4;k++)
                 {
                     int x=c.I+(k==1||k==2?1:0), y=c.J+(k>=2?1:0);
@@ -136,6 +140,7 @@ namespace MiningVolume2023.Services
             int row=FirstDataRow, i=0;
             foreach(var item in nodes)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var p=item.Value;
                 bool valid=!p.uncertain && p.tn.HasValue && p.tk.HasValue;
                 s.Rows.Add(new ReportCell[]
@@ -154,7 +159,7 @@ namespace MiningVolume2023.Services
             return s;
         }
 
-        private static ReportSheet Details(GridVolumeReport grid)
+        private static ReportSheet Details(GridVolumeReport grid, CancellationToken cancellationToken)
         {
             var s=Sheet("CHI TIẾT Ô LƯỚI","KHỐI LƯỢNG ĐÀO ĐẮP CHI TIẾT TỪNG Ô",
                 "STT","Mã ô","I","J","S ô (m²)","S có TIN (m²)","S thiếu (m²)",
@@ -163,6 +168,7 @@ namespace MiningVolume2023.Services
             int row=FirstDataRow,i=0;
             foreach(var c in grid.Cells)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 s.Rows.Add(new ReportCell[]
                 {
                     ReportCell.Int(++i),ReportCell.Text(c.CellCode),ReportCell.Int(c.I),ReportCell.Int(c.J),
@@ -181,13 +187,14 @@ namespace MiningVolume2023.Services
             return s;
         }
 
-        private static ReportSheet GridSummary(GridVolumeReport grid)
+        private static ReportSheet GridSummary(GridVolumeReport grid, CancellationToken cancellationToken)
         {
             var s=Sheet("BẢNG LƯỚI TỔNG HỢP","BẢNG LƯỚI TỔNG HỢP LIÊN KẾT",
                 "Mã ô","Diện tích (m²)","V đào (m³)","V đắp (m³)","V thuần (m³)");
             s.Notes.Add("Dữ liệu liên kết với CHI TIẾT Ô LƯỚI; ô có trạng thái chưa xác nhận giữ trống khối lượng.");
             foreach(var c in grid.Cells.Select((v,i)=>new{v,i}))
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 int n=FirstDataRow+c.i;
                 string pre="'CHI TIẾT Ô LƯỚI'!";
                 s.Rows.Add(new ReportCell[]
@@ -251,13 +258,14 @@ namespace MiningVolume2023.Services
             return s;
         }
 
-        private static ReportSheet CalculationDetail(GridVolumeReport grid)
+        private static ReportSheet CalculationDetail(GridVolumeReport grid, CancellationToken cancellationToken)
         {
             var s=Sheet("CHI TIẾT TÍNH TOÁN","THUYẾT MINH PHƯƠNG PHÁP TÍCH PHÂN LƯỚI",
                 "Mã ô","Thuật toán","S có TIN (m²)","V đào (m³)","V đắp (m³)","Kiểm tra");
             s.Notes.Add("Giao tam giác hiện trạng/thiết kế/ô lưới, cắt tại ΔZ=0, tích phân tuyến tính; không thể tái giao hình học nếu chỉ sửa Excel.");
             for(int i=0;i<grid.Cells.Count;i++)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 int row=FirstDataRow+i;
                 string prefix="'CHI TIẾT Ô LƯỚI'!";
                 var c=grid.Cells[i];

@@ -233,7 +233,8 @@ namespace MiningVolume2023.Services
         public static void DrawQuickProfiles(Database db,
             IReadOnlyList<SectionProfile> profiles, Point3d insertion,
             double horizontalScale, double verticalScale,
-            double elevationStep, double layoutGap)
+            double elevationStep, double layoutGap,
+            Action pollCancellation = null, Action<int> reportProgress = null)
         {
             if (db == null) throw new ArgumentNullException(nameof(db));
             if (profiles == null || profiles.Count == 0)
@@ -251,6 +252,7 @@ namespace MiningVolume2023.Services
                 throw new ArgumentOutOfRangeException(nameof(layoutGap),
                     "Giãn cách mặt cắt nhanh phải từ 30 đơn vị CAD trở lên.");
             double exaggeration = horizontalScale / verticalScale;
+            pollCancellation?.Invoke();
             using (var tr = db.TransactionManager.StartTransaction())
             {
                 EnsureFrameRegApp(db, tr);
@@ -261,8 +263,10 @@ namespace MiningVolume2023.Services
                 var style = EnsureArialStyle(db, tr);
                 var ms = ModelSpace(db, tr, true);
                 double baseX = insertion.X, currentY = insertion.Y;
+                int completed = 0;
                 foreach (var profile in profiles)
                 {
+                    pollCancellation?.Invoke();
                     if (profile == null || !profile.HasData) continue;
                     double baseZ = Math.Floor(profile.MinZ / elevationStep) * elevationStep;
                     double topZ = Math.Ceiling(profile.MaxZ / elevationStep) * elevationStep;
@@ -283,6 +287,7 @@ namespace MiningVolume2023.Services
                         "Mặt cắt nhanh " + profile.Line.Name,3.0,0);
                     for (double z = baseZ; z <= topZ + elevationStep*1e-6; z += elevationStep)
                     {
+                        pollCancellation?.Invoke();
                         double yy = y0 + (z-baseZ)*exaggeration;
                         AddLine(ms,tr,new Point3d(x0-1.5,yy,0),
                             new Point3d(x0+1.5,yy,0),axis);
@@ -296,13 +301,15 @@ namespace MiningVolume2023.Services
                     }
                     // QuickSectionProfileBuilder also provides local stations.
                     AddProfilePolylines(ms,tr,profile,x0,y0,baseZ,
-                        exaggeration,ht,tk, tagForEditing: false);
+                        exaggeration,ht,tk, tagForEditing: false, pollCancellation: pollCancellation);
                     AddText(ms,tr,style,label,new Point3d(x0+width/2-4,y0-11,0),
                         "L (m)",3.0,0);
                     AddText(ms,tr,style,label,new Point3d(x0,y0-20,0),
                         "Chỉ tra TIN; không dùng tính khối lượng",2.5,0);
                     currentY -= height + Math.Max(40.0, layoutGap);
+                    reportProgress?.Invoke(++completed);
                 }
+                pollCancellation?.Invoke();
                 tr.Commit();
             }
         }

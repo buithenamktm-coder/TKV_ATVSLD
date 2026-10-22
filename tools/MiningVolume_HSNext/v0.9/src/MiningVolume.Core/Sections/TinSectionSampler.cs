@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using MiningVolume.Core.Geometry;
@@ -14,10 +15,24 @@ namespace MiningVolume.Core.Sections
     /// </summary>
     public sealed class TinSectionSampler
     {
-        private TinSurface _cachedTin1;
-        private TinSurface _cachedTin2;
-        private TriangleGridIndex _cachedIndex1;
-        private TriangleGridIndex _cachedIndex2;
+        // A rebuilt surface is a new identity. Weak keys release the index when
+        // its surface is no longer retained by a project/snapshot. All samplers
+        // (normal, quick and interval-midpoint) share the same completed index.
+        private static readonly ConditionalWeakTable<TinSurface, IndexSlot> IndexCache =
+            new ConditionalWeakTable<TinSurface, IndexSlot>();
+        private sealed class LocalIndex
+        {
+            internal readonly TinSurface Tin;
+            internal readonly TriangleGridIndex Index;
+            internal LocalIndex(TinSurface tin, TriangleGridIndex index) { Tin = tin; Index = index; }
+        }
+        private LocalIndex _firstIndex, _secondIndex;
+
+        private sealed class IndexSlot
+        {
+            internal readonly object Sync = new object();
+            internal TriangleGridIndex Index;
+        }
 
         public SectionProfile BuildProfile(SectionLine line, TinSurface existing, TinSurface design, double tol = 1e-7, CancellationToken cancellationToken = default(CancellationToken))
         {
@@ -164,21 +179,32 @@ namespace MiningVolume.Core.Sections
         private TriangleGridIndex IndexFor(TinSurface tin, CancellationToken cancellationToken = default(CancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (ReferenceEquals(tin, _cachedTin1)) return _cachedIndex1;
-            if (ReferenceEquals(tin, _cachedTin2)) return _cachedIndex2;
-
-            var index = new TriangleGridIndex(tin, cancellationToken);
-            if (_cachedTin1 == null)
+            // Keep the per-sampler two-surface hot path lock-free for hundreds
+            // of interval midpoint queries; publish identity/index as one object.
+            var first = _firstIndex;
+            if (first != null && ReferenceEquals(first.Tin, tin)) return first.Index;
+            var second = _secondIndex;
+            if (second != null && ReferenceEquals(second.Tin, tin)) return second.Index;
+            var slot = IndexCache.GetValue(tin, _ => new IndexSlot());
+            // Waiting for another build is cancelable too. Never cache Lazy<T>
+            // exceptions: a canceled build must be retryable by the next caller.
+            while (!Monitor.TryEnter(slot.Sync, 50))
+                cancellationToken.ThrowIfCancellationRequested();
+            try
             {
-                _cachedTin1 = tin;
-                _cachedIndex1 = index;
+                cancellationToken.ThrowIfCancellationRequested();
+                if (slot.Index == null)
+                {
+                    var index = new TriangleGridIndex(tin, cancellationToken);
+                    cancellationToken.ThrowIfCancellationRequested();
+                    slot.Index = index;
+                }
+                var local = new LocalIndex(tin, slot.Index);
+                if (_firstIndex == null) _firstIndex = local;
+                else _secondIndex = local;
+                return local.Index;
             }
-            else
-            {
-                _cachedTin2 = tin;
-                _cachedIndex2 = index;
-            }
-            return index;
+            finally { Monitor.Exit(slot.Sync); }
         }
 
         private static void CollectTriangleEdgeIntersections(

@@ -1,3 +1,5 @@
+> **Integrated review 2026-10-22:** See [current batch evidence](qa/20261022-integrated-pipeline/README.md). 131 executable C# cases; 333 reference checks + 9 compatibility contracts pass, 1 PowerShell case skipped. AutoCAD 2023 compile: 0 warnings/errors. Shared TIN indexing, combined CAD-layer inspection, quick/edit cancellation and atomic Excel cancellation are implemented together. HOST_RUNTIME_BLOCKED; production license anchor/Windows installation and complete P0–P6 acceptance remain open. No official Setup. Historical evidence below does not supersede these limits.
+
 # Trạng thái mới nhất — QA TIN/Excel 12/10/2026
 
 **QA CANDIDATE — NOT OFFICIAL RELEASE.** Báo cáo hiện hành: [V2_FINAL_TRACEABILITY_20261012.md](V2_FINAL_TRACEABILITY_20261012.md); nguyên nhân và bằng chứng P0: [P0_TIN_RENDER_AUDIT_20261012.md](P0_TIN_RENDER_AUDIT_20261012.md); [hướng dẫn cài/gỡ/kiểm DLL](V2_QA_INSTALL_VERIFY_20261012.md).

@@ -28,6 +28,7 @@ namespace MiningVolume2023.UI
         private readonly Label _status;
         private bool _syncing;
         private CancellationTokenSource _profileCts;
+        private CancellationTokenSource _quickCts, _editCts;
         private readonly bool _quickOnly;
         private readonly Action<AppPage> _navigate;
         private bool _compactParameters;
@@ -355,7 +356,7 @@ namespace MiningVolume2023.UI
 
         protected override void Dispose(bool disposing)
         {
-            if (disposing) { _profileCts?.Cancel(); ProjectState.Current.Changed -= OnStateChanged; }
+            if (disposing) { _profileCts?.Cancel(); _quickCts?.Cancel(); _editCts?.Cancel(); ProjectState.Current.Changed -= OnStateChanged; }
             base.Dispose(disposing);
         }
 
@@ -645,8 +646,12 @@ namespace MiningVolume2023.UI
         /// </summary>
         private async void DrawQuickSections(object sender, EventArgs e)
         {
+            if (_quickCts != null) { _quickCts.Cancel(); return; }
             if (!LicenseUiGuard.Check()) return;
+            var cts = _quickCts = new CancellationTokenSource();
+            var token = cts.Token;
             var button = sender as Button;
+            string originalText = button?.Text;
             var st = ProjectState.Current;
             var doc = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument;
             try
@@ -668,7 +673,7 @@ namespace MiningVolume2023.UI
                 double hScale = st.HorizontalScale, vScale = st.VerticalScale;
                 double axisStep = st.SectionAxisElevationInterval;
                 double layoutGap = st.SectionLayoutGap;
-                if (button != null) button.Enabled = false;
+                if (button != null) button.Text = "Hủy mặt cắt nhanh";
                 UseWaitCursor = true;
                 _status.Text = "Đang tra TIN theo " + selected.Count +
                     " tuyến mặt cắt nhanh độc lập...";
@@ -680,8 +685,9 @@ namespace MiningVolume2023.UI
                     return selected.Select((route, i) =>
                         builder.Build(i + 1, "MCN-" + (i+1).ToString("00") +
                             " (" + route.SourceHandle + ")", route.Vertices,
-                            ht, tk, sampler)).ToArray();
+                            ht, tk, sampler, token)).ToArray();
                 });
+                token.ThrowIfCancellationRequested();
                 if (!ReferenceEquals(doc,
                         Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument) ||
                     !ReferenceEquals(ht, st.Existing.Tin) ||
@@ -700,12 +706,14 @@ namespace MiningVolume2023.UI
                 if (valid.Length == 0)
                     throw new InvalidOperationException(
                         "Các tuyến đã chọn không có đoạn giao đủ dữ liệu của hai TIN.");
+                using (var progress = new SectionCadProgress(valid.Length, "vẽ mặt cắt nhanh"))
                 using (doc.LockDocument())
                     SectionCadRenderer.DrawQuickProfiles(doc.Database, valid,
-                        insertion.Value, hScale, vScale, axisStep, layoutGap);
+                        insertion.Value, hScale, vScale, axisStep, layoutGap, progress.Poll, progress.Report);
                 watch.Stop();
                 _status.Text = "Đã vẽ mặt cắt nhanh thành công.";
             }
+            catch (OperationCanceledException) { _status.Text = "Đã hủy mặt cắt nhanh; không lưu kết quả dang dở."; }
             catch (Exception ex)
             {
                 _status.Text = "Chưa vẽ được mặt cắt nhanh: " + ex.Message;
@@ -714,15 +722,20 @@ namespace MiningVolume2023.UI
             }
             finally
             {
+                _quickCts = null; cts.Dispose();
                 UseWaitCursor = false;
-                if (button != null && !button.IsDisposed) button.Enabled = true;
+                if (button != null && !button.IsDisposed) { button.Enabled = true; button.Text = originalText; }
             }
         }
 
         private async void UpdateEditedProfiles(object sender, EventArgs e)
         {
+            if (_editCts != null) { _editCts.Cancel(); return; }
             if (!LicenseUiGuard.Check()) return;
+            var cts = _editCts = new CancellationTokenSource();
+            var token = cts.Token;
             var button = sender as Button;
+            string originalText = button?.Text;
             var state = ProjectState.Current;
             var doc = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument;
             try
@@ -732,7 +745,7 @@ namespace MiningVolume2023.UI
                     throw new InvalidOperationException("Hãy xuất/vẽ hệ mặt cắt trước khi hiệu chỉnh.");
                 if (Math.Abs(state.FromLevel - state.ToLevel) < 1e-9)
                     throw new InvalidOperationException("Hãy thiết lập 'Tính từ mức' và 'Đến mức' trước khi cập nhật khối lượng.");
-                if (button != null) button.Enabled = false;
+                if (button != null) button.Text = "Hủy cập nhật mặt cắt";
                 UseWaitCursor = true;
                 SectionWorkflowService.EnsureProfileInputsReady();
                 var oldProfiles = state.SectionProfiles.ToArray();
@@ -748,7 +761,8 @@ namespace MiningVolume2023.UI
                 var watch = Stopwatch.StartNew();
                 _status.Text = "Đang tính lại diện tích đào/đắp và khối lượng từ mặt cắt đã sửa trên CAD...";
                 var volume = await Task.Run(() => VolumeWorkflowService.CalculateCore(
-                    sectionSystem, edited, existing, design, from, to, step));
+                    sectionSystem, edited, existing, design, from, to, step, token));
+                token.ThrowIfCancellationRequested();
                 if (!ReferenceEquals(doc, Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument) ||
                     !ReferenceEquals(sectionSystem, state.SectionSystem) ||
                     !ReferenceEquals(existing, state.Existing.Tin) ||
@@ -780,6 +794,7 @@ namespace MiningVolume2023.UI
                     " m³; đắp " + volume.TotalFillVolume.ToString("n2") + " m³.";
                 RefreshGrid();
             }
+            catch (OperationCanceledException) { _status.Text = "Đã hủy cập nhật; giữ nguyên kết quả đã chấp nhận trước đó."; }
             catch (Exception ex)
             {
                 _status.Text = "Chưa cập nhật mặt cắt: " + ex.Message;
@@ -787,8 +802,9 @@ namespace MiningVolume2023.UI
             }
             finally
             {
+                _editCts = null; cts.Dispose();
                 UseWaitCursor = false;
-                if (button != null) button.Enabled = true;
+                if (button != null && !button.IsDisposed) { button.Enabled = true; button.Text = originalText; }
             }
         }
 

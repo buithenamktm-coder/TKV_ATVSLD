@@ -1,0 +1,23 @@
+{
+  "baseline": "1d2351d4edd48f87515fd6fd87e66dcd6c8c9132",
+  "platform": "Linux-6.18.55-x86_64-with-glibc2.39",
+  "python": "3.12.14",
+  "source_sha_note": "working tree integrated changes; source hashes below",
+  "sources": {
+    "tools/MiningVolume_HSNext/v0.9/src/MiningVolume.Core/Reporting/SpreadsheetReport.cs": "604bed694ed2af0ee6a45e27b099a6657e7f6547440d23637058565faa8130c8",
+    "tools/MiningVolume_HSNext/v0.9/src/MiningVolume.Core/Sections/QuickSectionProfileBuilder.cs": "014a2265309bd0c271717b2224b7214eb8d5673705287b13db1b62ae33f88935",
+    "tools/MiningVolume_HSNext/v0.9/src/MiningVolume.Core/Sections/TinSectionSampler.cs": "5ac7a0034196ca5d18081e92321724ab16d531b20d57b7a5f93b4d607953a834",
+    "tools/MiningVolume_HSNext/v0.9/src/MiningVolume.Plugin2023/Services/ExportWorkflowService.cs": "1e81777c7e1fc56ddfbfca270aa43555f49b588b712edd7eb94d9f3d2151788d",
+    "tools/MiningVolume_HSNext/v0.9/src/MiningVolume.Plugin2023/Services/GridVolumeExcelReportBuilder.cs": "3cff54fa3598ef29f45c955bffe49f705b9c80e3686577ffa470d08f71f5730d",
+    "tools/MiningVolume_HSNext/v0.9/src/MiningVolume.Plugin2023/Services/SectionCadRegression.cs": "288b39d3370f480fb41130c1ae9c5f49e4a1b8a3797d58857c6262ce8107d067",
+    "tools/MiningVolume_HSNext/v0.9/src/MiningVolume.Plugin2023/Services/SectionCadRenderer.cs": "c31b5a907a150fe1f225c6a7bed7f9307ebadf780eff03bc8b0715e0de65dfd6",
+    "tools/MiningVolume_HSNext/v0.9/src/MiningVolume.Plugin2023/Services/SurfaceWorkflowService.cs": "9d6a9533f9c7d3fca98d32eb362a7e1dfafaa661ce0843f366713b3dfa1860f7",
+    "tools/MiningVolume_HSNext/v0.9/src/MiningVolume.Plugin2023/Services/TinCadRenderer.cs": "563fb713449b28896e407bfc5958845a2beb2ac077c4ac3f56c8e591b264cf2f",
+    "tools/MiningVolume_HSNext/v0.9/src/MiningVolume.Plugin2023/UI/ExportPage.cs": "09450ffd54f5c25850305f7a69d02f9c1c64f78fb967ed9b29d4578d2532d329",
+    "tools/MiningVolume_HSNext/v0.9/src/MiningVolume.Plugin2023/UI/GridPage.cs": "33bee324597c3957881820089fa83608046597db984c29d34256287122b10f65",
+    "tools/MiningVolume_HSNext/v0.9/src/MiningVolume.Plugin2023/UI/SectionPage.cs": "37d8869f99d00afe6e8c3c951affb4ae9e0931f96d93e72ebca69d92bb8c0177",
+    "tools/MiningVolume_HSNext/v0.9/tests/core/FinalAuditRegression.cs": "b7eca11856f4582693bbd04b268bb2083d7b7d6ee5db142127bdf8b247ab54a7",
+    "tools/MiningVolume_HSNext/v0.9/tests/reference/test_v2_field_qa_gate_20261013.py": "62323541f234c3f5897876ae6d3716b3073718558edea06573c000ec9310a092",
+    "tools/MiningVolume_HSNext/v0.9/tests/reference/test_v2_owner_acceptance_20261013.py": "ddf70d891df2a1c5d4a5ae03d26e69d325c623455573cc426e0c81c2e96c865a"
+  }
+}

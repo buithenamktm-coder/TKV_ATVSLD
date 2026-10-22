@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Diagnostics;
 using MiningVolume.Core.Model;
 using MiningVolume.Core.Reporting;
@@ -76,7 +77,7 @@ namespace MiningVolume2023.Services
             }
         }
 
-        public static void WriteXlsx(string filePath, SpreadsheetReport report)
+        public static void WriteXlsx(string filePath, SpreadsheetReport report, CancellationToken cancellationToken = default(CancellationToken))
         {
             // Applies to section volumes, grid volumes and seam/mineral reports,
             // including their formula-linked detail/summary worksheets.
@@ -87,9 +88,10 @@ namespace MiningVolume2023.Services
             Directory.CreateDirectory(directory);
             var staging=Path.Combine(directory,"."+Path.GetFileName(target)+"."+Guid.NewGuid().ToString("N")+".tmp");
             try {
-                SimpleXlsxWriter.Write(staging, report);
+                SimpleXlsxWriter.Write(staging, report, cancellationToken);
                 // Failure to add a decorative logo must never discard a
                 // complete workbook (including all linked Excel formulas).
+                cancellationToken.ThrowIfCancellationRequested();
                 if (report.IncludeImsatLogo)
                 {
                     try { XlsxBrandingInjector.Apply(staging, report); }
@@ -104,9 +106,10 @@ namespace MiningVolume2023.Services
                             "continuing with full Excel workbook: " + ex.Message);
                         // A partial ZIP edit may have occurred: regenerate
                         // pristine XLSX, preserving all source formulas.
-                        SimpleXlsxWriter.Write(staging, report);
+                        SimpleXlsxWriter.Write(staging, report, cancellationToken);
                     }
                 }
+                cancellationToken.ThrowIfCancellationRequested();
                 if(File.Exists(target))File.Replace(staging,target,null);
                 else File.Move(staging,target);
             } finally {if(File.Exists(staging))File.Delete(staging);}

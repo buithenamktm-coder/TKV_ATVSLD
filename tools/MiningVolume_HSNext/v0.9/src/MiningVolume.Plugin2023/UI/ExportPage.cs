@@ -3,6 +3,7 @@ using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Threading;
 using System.Windows.Forms;
 using MiningVolume.Core.Reporting;
 using MiningVolume2023.Services;
@@ -11,6 +12,7 @@ namespace MiningVolume2023.UI
 {
     public sealed class ExportPage : UserControl
     {
+        private CancellationTokenSource _exportCts;
         private readonly CheckBox _xyz;
         private readonly CheckBox _sectionData;
         private readonly CheckBox _sectionArea;
@@ -92,12 +94,13 @@ namespace MiningVolume2023.UI
 
         protected override void Dispose(bool disposing)
         {
-            if (disposing) ProjectState.Current.Changed -= StateChanged;
+            if (disposing) { _exportCts?.Cancel(); ProjectState.Current.Changed -= StateChanged; }
             base.Dispose(disposing);
         }
 
         private async void ExportClicked(object sender, EventArgs e)
         {
+            if (_exportCts != null) { _exportCts.Cancel(); return; }
             if (!LicenseUiGuard.Check()) return;
             var st = ProjectState.Current;
             bool exportCad = _toCad.Checked;
@@ -179,9 +182,11 @@ namespace MiningVolume2023.UI
             string selectedUnitName = st.MiningUnitName;
             string selectedPeriod = st.VolumePeriodLabel;
             bool excelWritten = false;
+            var cts = _exportCts = new CancellationTokenSource();
+            var token = cts.Token;
             try
             {
-                _export.Enabled = false;
+                _export.Text = "Hủy xuất kết quả";
                 UseWaitCursor = true;
                 if (exportCad)
                     SurfaceWorkflowService.EnsureBothTinsReady(synchronizeCadLayers: true);
@@ -193,10 +198,11 @@ namespace MiningVolume2023.UI
                 {
                     _status.Text = "Đang lập workbook và ghi file Excel...";
                     var report = await Task.Run(() => ExportWorkflowService.BuildReport(st, opt));
+                    token.ThrowIfCancellationRequested();
                     EnsureExportInputsCurrent(doc, st, currentResult, approvedProfiles,
                         existingTin, designTin, existingRevision, designRevision,
                     selectedUnitGroup, selectedUnitName, selectedPeriod);
-                    await Task.Run(() => ExportWorkflowService.WriteXlsx(excelPath, report));
+                    await Task.Run(() => ExportWorkflowService.WriteXlsx(excelPath, report, token));
                     excelWritten = true;
                 }
 
@@ -210,7 +216,7 @@ namespace MiningVolume2023.UI
                         currentResult.Intervals.Count + currentResult.Levels.Count + 2, "xuất bảng khối lượng"))
                     using (doc.LockDocument())
                         CadVolumeTableService.Insert(doc.Database, currentResult, cadInsertion.Value,
-                            progress.Poll, progress.Report);
+                            () => { token.ThrowIfCancellationRequested(); progress.Poll(); }, progress.Report);
                 }
 
                 _status.Text = exportExcel && exportCad ? "Đã xuất bảng CAD và file Excel." :
@@ -222,7 +228,7 @@ namespace MiningVolume2023.UI
             {
                 _status.Text = excelWritten
                     ? "Đã hủy xuất CAD; file Excel đã xuất: " + excelPath
-                    : "Đã hủy xuất CAD; không lưu bảng dang dở.";
+                    : "Đã hủy xuất kết quả; không lưu file hoặc bảng dang dở.";
             }
             catch (Exception ex)
             {
@@ -234,6 +240,8 @@ namespace MiningVolume2023.UI
             }
             finally
             {
+                _exportCts = null; cts.Dispose();
+                _export.Text = "Xuất Excel / CAD";
                 UseWaitCursor = false;
                 RefreshState();
             }
@@ -280,6 +288,7 @@ namespace MiningVolume2023.UI
 
         private void RefreshState()
         {
+            if (_exportCts != null) return;
             var st = ProjectState.Current;
             _developer.Text = ExportOptions.FixedDeveloperName;
             _contact.Text = ExportOptions.FixedDeveloperContact;

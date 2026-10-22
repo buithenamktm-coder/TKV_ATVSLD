@@ -1,0 +1,3 @@
+{"stage":"volume_15_profiles_200_bands_including_mid_sections","ms":[16.7706,15.7527,17.3843,16.2373,16.7765],"allocated_bytes":[4973816,4973760,4973760,4973760,4973848],"scope":"Linux .NET 8 core only; HOST_RUNTIME_BLOCKED"}
+{"stage":"volume_85_profiles_200_bands_including_mid_sections","ms":[103.0942,95.4368,119.103,106.5995,106.768],"allocated_bytes":[28846136,28846080,28846080,28846080,28846168],"scope":"Linux .NET 8 core only; HOST_RUNTIME_BLOCKED"}
+{"stage":"volume_300_profiles_200_bands_including_mid_sections","ms":[689.6582,351.0618,719.3281,364.5082,352.1491],"allocated_bytes":[102346920,102346864,102346864,102346864,102346952],"scope":"Linux .NET 8 core only; HOST_RUNTIME_BLOCKED"}

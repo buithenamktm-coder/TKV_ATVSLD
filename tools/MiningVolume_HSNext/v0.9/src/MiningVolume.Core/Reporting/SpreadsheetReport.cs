@@ -4,6 +4,7 @@ using System.Globalization;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Threading;
 using System.Text;
 using System.Xml;
 
@@ -92,18 +93,20 @@ namespace MiningVolume.Core.Reporting
         private const int StyleBodyNumber2Bold = 11;
         private const int StyleBodyNumber3Bold = 12;
 
-        public static void Write(string filePath, SpreadsheetReport report)
+        public static void Write(string filePath, SpreadsheetReport report, CancellationToken cancellationToken = default(CancellationToken))
         {
             if(string.IsNullOrWhiteSpace(filePath))throw new ArgumentException("Đường dẫn không hợp lệ.",nameof(filePath));
             var target=Path.GetFullPath(filePath);var directory=Path.GetDirectoryName(target);
             Directory.CreateDirectory(directory);
             var staging=Path.Combine(directory,"."+Path.GetFileName(target)+"."+Guid.NewGuid().ToString("N")+".tmp");
             try {
-                WriteCore(staging,report);
+                cancellationToken.ThrowIfCancellationRequested();
+                WriteCore(staging,report,cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
                 if(File.Exists(target))File.Replace(staging,target,null);else File.Move(staging,target);
             } finally {if(File.Exists(staging))File.Delete(staging);}
         }
-        private static void WriteCore(string filePath, SpreadsheetReport report)
+        private static void WriteCore(string filePath, SpreadsheetReport report, CancellationToken cancellationToken)
         {
             if (string.IsNullOrWhiteSpace(filePath)) throw new ArgumentException("Đường dẫn file Excel không hợp lệ.", nameof(filePath));
             if (report == null) throw new ArgumentNullException(nameof(report));
@@ -125,7 +128,7 @@ namespace MiningVolume.Core.Reporting
                 WriteWorkbookRelationships(zip, report.Sheets.Count);
                 WriteStyles(zip);
                 for (int i = 0; i < report.Sheets.Count; i++)
-                    WriteWorksheet(zip, i + 1, report.Sheets[i], normalizedNames[i]);
+                    WriteWorksheet(zip, i + 1, report.Sheets[i], normalizedNames[i], cancellationToken);
             }
 
             ValidatePackage(filePath, report.Sheets.Count);
@@ -341,7 +344,7 @@ namespace MiningVolume.Core.Reporting
             x.WriteEndElement();
         }
 
-        private static void WriteWorksheet(ZipArchive zip, int sheetIndex, ReportSheet sheet, string normalizedName)
+        private static void WriteWorksheet(ZipArchive zip, int sheetIndex, ReportSheet sheet, string normalizedName, CancellationToken cancellationToken)
         {
             int colCount = Math.Max(1, Math.Max(sheet.Headers.Count, Math.Max(sheet.ColumnWidths.Count, sheet.Rows.Count == 0 ? 0 : sheet.Rows.Max(r => r?.Count ?? 0))));
             int titleRows = string.IsNullOrWhiteSpace(sheet.Title) ? 0 : 1;
@@ -410,6 +413,7 @@ namespace MiningVolume.Core.Reporting
                 bool signatureStarted = false;
                 foreach (var dataRow in sheet.Rows)
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     bool signatureTitle = sheet.HasSignatures && dataRow != null &&
                         dataRow.Any(c => c != null && string.Equals(Convert.ToString(c.Value),
                             "NGƯỜI TÍNH TOÁN", StringComparison.Ordinal));

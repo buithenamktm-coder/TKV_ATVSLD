@@ -29,7 +29,7 @@ def test_export_does_not_fail_for_missing_imsat_logo_for_any_unit():
     assert "report.IncludeImsatLogo = !outside;" in export
     assert "if (report.IncludeImsatLogo)" in export
     assert "catch (Exception ex) when (!(ex is OutOfMemoryException)" in export
-    assert "SimpleXlsxWriter.Write(staging, report);" in export
+    assert "SimpleXlsxWriter.Write(staging, report, cancellationToken);" in export
     assert "if (!report.IncludeImsatLogo) return;" in logo
     assert 'GetManifestResourceStream("MiningVolume2023.Assets.imsat_logo_64.png")' in logo
     assert "if (logo == null) return;" in logo

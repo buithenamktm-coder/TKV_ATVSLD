@@ -33,7 +33,7 @@ def test_excel_outside_tkv_never_gets_logo_and_missing_asset_not_fatal():
     assert "public bool IncludeImsatLogo { get; set; } = true;" in report
     assert "report.IncludeImsatLogo = !outside;" in export
     assert "if (report.IncludeImsatLogo)" in export
-    assert "SimpleXlsxWriter.Write(staging, report);" in export
+    assert "SimpleXlsxWriter.Write(staging, report, cancellationToken);" in export
     assert "if (!report.IncludeImsatLogo) return;" in logo
     assert 'GetManifestResourceStream("MiningVolume2023.Assets.imsat_logo_64.png")' in logo
     assert "if (logo == null) return;" in logo

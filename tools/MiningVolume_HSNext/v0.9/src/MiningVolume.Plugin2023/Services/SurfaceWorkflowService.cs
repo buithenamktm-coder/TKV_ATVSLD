@@ -728,8 +728,22 @@ namespace MiningVolume2023.Services
         public static void EnsureBothTinsReady(bool synchronizeCadLayers)
         {
             EnsureTinRegionMatchesCad();
-            EnsureTinReady(ModelRole.Existing, synchronizeCadLayers);
-            EnsureTinReady(ModelRole.Design, synchronizeCadLayers);
+            EnsureTinReady(ModelRole.Existing, false);
+            EnsureTinReady(ModelRole.Design, false);
+            if (synchronizeCadLayers)
+            {
+                var state = ProjectState.Current;
+                var doc = Application.DocumentManager.MdiActiveDocument ??
+                    throw new InvalidOperationException("Không có bản vẽ AutoCAD đang hoạt động.");
+                using (doc.LockDocument())
+                using (var progress = new SectionCadProgress(1, "kiểm tra hai layer TIN"))
+                {
+                    var inspection = TinCadRenderer.InspectLayers(doc.Database,
+                        new[] { state.Existing.TinLayer, state.Design.TinLayer }, progress.Poll);
+                    EnsureTinLayerSynchronized(ModelRole.Existing, inspection[state.Existing.TinLayer]);
+                    EnsureTinLayerSynchronized(ModelRole.Design, inspection[state.Design.TinLayer]);
+                }
+            }
         }
 
         public static void EnsureTinReady(ModelRole role, bool synchronizeCadLayer)
@@ -753,18 +767,26 @@ namespace MiningVolume2023.Services
         {
             var session = ProjectState.Current.Get(role);
             if (!session.IsTinCurrent) return;
-
             var doc = Application.DocumentManager.MdiActiveDocument ??
-                      throw new InvalidOperationException("Không có bản vẽ AutoCAD đang hoạt động.");
-            int count;
-            int unexpected;
-            bool exists;
+                throw new InvalidOperationException("Không có bản vẽ AutoCAD đang hoạt động.");
             using (doc.LockDocument())
+            using (var progress = new SectionCadProgress(1, "kiểm tra layer TIN"))
             {
-                exists = TinCadRenderer.LayerExists(doc.Database, session.TinLayer);
-                count = TinCadRenderer.CountFaces(doc.Database, session.TinLayer);
-                unexpected = TinCadRenderer.CountUnexpectedEntities(doc.Database, session.TinLayer);
+                var inspection = TinCadRenderer.InspectLayers(doc.Database,
+                    new[] { session.TinLayer }, progress.Poll);
+                EnsureTinLayerSynchronized(role, inspection[session.TinLayer]);
             }
+        }
+
+        private static void EnsureTinLayerSynchronized(ModelRole role, TinCadRenderer.LayerInspection inspection)
+        {
+            var session = ProjectState.Current.Get(role);
+            if (!session.IsTinCurrent) return;
+            var doc = Application.DocumentManager.MdiActiveDocument ??
+                throw new InvalidOperationException("Không có bản vẽ AutoCAD đang hoạt động.");
+            int count = inspection.Faces;
+            int unexpected = inspection.Unexpected;
+            bool exists = inspection.Exists;
 
             if (unexpected > 0)
                 throw new InvalidOperationException(

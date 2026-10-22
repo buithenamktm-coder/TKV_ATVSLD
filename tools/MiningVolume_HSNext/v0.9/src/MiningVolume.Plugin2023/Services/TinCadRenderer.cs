@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Autodesk.AutoCAD.Colors;
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.Geometry;
@@ -214,6 +215,48 @@ namespace MiningVolume2023.Services
                 }
             }
             return count;
+        }
+
+        internal sealed class LayerInspection
+        {
+            internal bool Exists;
+            internal int Faces;
+            internal int Unexpected;
+        }
+
+        // One model-space traversal for both TIN layers and both entity counts.
+        // No retained database cache: manual edits remain visible next time.
+        internal static Dictionary<string, LayerInspection> InspectLayers(Database db,
+            IEnumerable<string> names, Action pollCancellation = null)
+        {
+            var result = new Dictionary<string, LayerInspection>(StringComparer.OrdinalIgnoreCase);
+            using (var tr = db.TransactionManager.StartOpenCloseTransaction())
+            {
+                var lt = (LayerTable)tr.GetObject(db.LayerTableId, OpenMode.ForRead);
+                var byId = new Dictionary<ObjectId, LayerInspection>();
+                foreach (string name in names)
+                {
+                    if (result.ContainsKey(name)) continue;
+                    var entry = new LayerInspection { Exists = lt.Has(name) };
+                    result.Add(name, entry);
+                    if (entry.Exists) byId[lt[name]] = entry;
+                }
+                if (byId.Count == 0) return result;
+                var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
+                var ms = (BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForRead);
+                int visited = 0;
+                foreach (ObjectId id in ms)
+                {
+                    if ((visited++ & 255) == 0) pollCancellation?.Invoke();
+                    var entity = tr.GetObject(id, OpenMode.ForRead) as Entity;
+                    LayerInspection entry;
+                    if (entity == null || !byId.TryGetValue(entity.LayerId, out entry)) continue;
+                    if (entity is Face) entry.Faces++;
+                    else entry.Unexpected++;
+                }
+                pollCancellation?.Invoke();
+            }
+            return result;
         }
 
         public static bool IsLayerVisible(Database db, string layerName)
