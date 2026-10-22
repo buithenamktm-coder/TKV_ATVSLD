@@ -491,17 +491,13 @@ namespace MiningVolume.Core.Sections
 
                     foreach (int tileIndex in _tiled.QueryTiles(minX, minY, maxX, maxY))
                     {
-                        var tris = GetTile(tileIndex).Triangles;
-                        foreach (var tri in tris)
-                        {
-                            double tMinX = Math.Min(tri.A.X, Math.Min(tri.B.X, tri.C.X));
-                            double tMaxX = Math.Max(tri.A.X, Math.Max(tri.B.X, tri.C.X));
-                            double tMinY = Math.Min(tri.A.Y, Math.Min(tri.B.Y, tri.C.Y));
-                            double tMaxY = Math.Max(tri.A.Y, Math.Max(tri.B.Y, tri.C.Y));
-                            if (tMaxX < minX || tMinX > maxX || tMaxY < minY || tMinY > maxY)
-                                continue;
+                        // Reuse the hot tile's exact triangle AABBs and 32x32
+                        // spatial bins. Previously EVERY triangle in a touched
+                        // ~8192-face tile was revisited for EACH section span.
+                        // Candidate selection is conservative; edge-intersection
+                        // and elevation formulae remain completely unchanged.
+                        foreach (var tri in GetTile(tileIndex).QuerySegmentTriangles(a, b))
                             yield return tri;
-                        }
                     }
                     yield break;
                 }
@@ -569,6 +565,79 @@ namespace MiningVolume.Core.Sections
                 }
 
                 public IReadOnlyList<Triangle3> Triangles => _triangles;
+
+                // A line can cross only a thin corridor of the tile. Walk
+                // that corridor with at least two samples per cell, including
+                // neighboring cells for corner/tangent intersections. Very
+                // large triangles are always considered via _broad.
+                // Importantly, clip the LINE to the tile first: a long mine
+                // section may be millions of metres from this tiny tile.
+                public IEnumerable<Triangle3> QuerySegmentTriangles(Vec2 a, Vec2 b)
+                {
+                    double dx = b.X - a.X, dy = b.Y - a.Y;
+                    double lo = 0, hi = 1;
+                    double pad = Math.Max(1e-7, Math.Max(_dx, _dy) * 1e-8);
+                    if (!Clip(-dx, a.X - (_x - pad), ref lo, ref hi) ||
+                        !Clip(dx, (_x + GridSide * _dx + pad) - a.X, ref lo, ref hi) ||
+                        !Clip(-dy, a.Y - (_y - pad), ref lo, ref hi) ||
+                        !Clip(dy, (_y + GridSide * _dy + pad) - a.Y, ref lo, ref hi))
+                        yield break;
+
+                    double ax = a.X + lo * dx, ay = a.Y + lo * dy;
+                    double bx = a.X + hi * dx, by = a.Y + hi * dy;
+                    double cells = Math.Max(Math.Abs(bx - ax) / _dx,
+                        Math.Abs(by - ay) / _dy);
+                    int steps = Math.Max(1, (int)Math.Ceiling(cells * 2.0));
+                    var candidates = new HashSet<int>();
+                    for (int step = 0; step <= steps; step++)
+                    {
+                        double u = step / (double)steps;
+                        int ix = Bin(ax + (bx - ax) * u, _x, _dx);
+                        int iy = Bin(ay + (by - ay) * u, _y, _dy);
+                        for (int ox = -1; ox <= 1; ox++)
+                        for (int oy = -1; oy <= 1; oy++)
+                        {
+                            int cx = ix + ox, cy = iy + oy;
+                            if (cx < 0 || cx >= GridSide || cy < 0 || cy >= GridSide)
+                                continue;
+                            List<int> ids;
+                            if (!_bins.TryGetValue(cx * GridSide + cy, out ids))
+                                continue;
+                            foreach (int id in ids) candidates.Add(id);
+                        }
+                    }
+                    foreach (int id in _broad) candidates.Add(id);
+
+                    // The original code also required triangle AABB overlap
+                    // with the entire source segment. Keep that exact filter:
+                    // the bins must NEVER become a geometry approximation.
+                    double minX = Math.Min(a.X, b.X), maxX = Math.Max(a.X, b.X);
+                    double minY = Math.Min(a.Y, b.Y), maxY = Math.Max(a.Y, b.Y);
+                    foreach (int id in candidates)
+                    {
+                        if (_maxX[id] < minX || _minX[id] > maxX ||
+                            _maxY[id] < minY || _minY[id] > maxY)
+                            continue;
+                        yield return _triangles[id];
+                    }
+                }
+
+                private static bool Clip(double p, double q, ref double lo, ref double hi)
+                {
+                    if (p == 0) return q >= 0;
+                    double v = q / p;
+                    if (p < 0)
+                    {
+                        if (v > hi) return false;
+                        if (v > lo) lo = v;
+                    }
+                    else
+                    {
+                        if (v < lo) return false;
+                        if (v < hi) hi = v;
+                    }
+                    return true;
+                }
 
                 public bool TryElevation(Vec2 p, double tol, out double z)
                 {
