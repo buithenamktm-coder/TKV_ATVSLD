@@ -92,7 +92,7 @@ namespace MiningVolume2023.Services
             // different region or change previously stored CAD entities.
             using (var db = new Database(true, true))
             {
-                ObjectId selected = ObjectId.Null;
+                string selectedHandle = null;
                 using (var tr = db.TransactionManager.StartTransaction())
                 {
                     var lt = (LayerTable)tr.GetObject(db.LayerTableId, OpenMode.ForWrite);
@@ -118,7 +118,8 @@ namespace MiningVolume2023.Services
                     border.AddVertexAt(1,new Point2d(20,0),0,0,0);
                     border.AddVertexAt(2,new Point2d(20,20),0,0,0);
                     border.AddVertexAt(3,new Point2d(0,20),0,0,0);
-                    selected = ms.AppendEntity(border);
+                    ms.AppendEntity(border);
+                    selectedHandle = border.Handle.ToString();
                     tr.AddNewlyCreatedDBObject(border, true);
                     tr.Commit();
                 }
@@ -126,7 +127,7 @@ namespace MiningVolume2023.Services
                 int polls = 0;
                 string found = BoundaryGeometryService.FindUniqueBoundaryOnLayer(
                     db, "QA_BOUNDARY", () => polls++);
-                if (!string.Equals(found, selected.Handle.ToString(),
+                if (!string.Equals(found, selectedHandle,
                         StringComparison.OrdinalIgnoreCase) || polls < 3 ||
                     TinCadRenderer.CountFaces(db,"QA_TIN") != 2300)
                     throw new InvalidOperationException(
