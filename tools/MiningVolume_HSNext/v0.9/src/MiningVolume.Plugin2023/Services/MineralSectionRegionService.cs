@@ -56,16 +56,17 @@ namespace MiningVolume2023.Services
                 throw new InvalidOperationException("Không có bản vẽ AutoCAD.");
 
             using (doc.LockDocument())
+            using (var meter = new SectionCadProgress(1, "gán vùng khoáng sản"))
             using (var tr = doc.Database.TransactionManager.StartTransaction())
             {
-                var frame = FindFrame(doc.Database, tr, profile.Line.Name);
+                var frame = FindFrame(doc.Database, tr, profile.Line.Name, meter.Poll);
                 var id = doc.Database.GetObjectId(false,
                     new Handle(Convert.ToInt64(handle, 16)), 0);
                 var poly = tr.GetObject(id, OpenMode.ForWrite) as Polyline;
                 if (poly == null) throw new InvalidOperationException("Chọn LWPOLYLINE khép kín trên mặt cắt.");
                 var region = ReadPhysicalPolygon(poly, frame);
                 double area = MineralSectionPolygonCalculator.ValidateAndMeasure(profile, region);
-                ValidateNoOverlap(doc.Database, tr, poly.ObjectId, profile.Line.Name, frame, region);
+                ValidateNoOverlap(doc.Database, tr, poly.ObjectId, profile.Line.Name, frame, region, meter.Poll);
                 EnsureRegApp(doc.Database,tr,AreaRegApp);
                 var layer=EnsureLayer(doc.Database,tr,RegionLayer,6);
                 poly.LayerId=layer;
@@ -74,6 +75,7 @@ namespace MiningVolume2023.Services
                     new TypedValue((int)DxfCode.ExtendedDataRegAppName,AreaRegApp),
                     new TypedValue((int)DxfCode.ExtendedDataAsciiString,body.Id),
                     new TypedValue((int)DxfCode.ExtendedDataAsciiString,profile.Line.Name));
+                meter.Poll();
                 tr.Commit();
                 ProjectState.Current.NotifyChanged();
                 return area;
@@ -92,6 +94,7 @@ namespace MiningVolume2023.Services
                 throw new InvalidOperationException("Không có bản vẽ AutoCAD.");
             var output=new List<RegionGeometry>();
             using(doc.LockDocument())
+            using(var meter=new SectionCadProgress(1, "cập nhật vùng khoáng sản"))
             using(var tr=doc.Database.TransactionManager.StartTransaction())
             {
                 var bt=(BlockTable)tr.GetObject(doc.Database.BlockTableId,OpenMode.ForRead);
@@ -100,9 +103,16 @@ namespace MiningVolume2023.Services
                 var bodies=state.MineralBodies.Where(x=>!x.IsDeleted)
                     .ToDictionary(b=>b.Id,StringComparer.OrdinalIgnoreCase);
                 var frames=new Dictionary<string,SectionFrame>(StringComparer.OrdinalIgnoreCase);
+                // Native mine DWGs can contain more than a million TIN faces.
+                // Reading each 3DFACE simply to find a mineral LWPOLYLINE
+                // needlessly allocates AutoCAD wrappers and stalls the palette.
+                var polyClass=Autodesk.AutoCAD.Runtime.RXObject.GetClass(typeof(Polyline));
 
+                int scanned=0;
                 foreach(ObjectId id in ms)
                 {
+                    if((scanned++ & 1023)==0)meter.Poll();
+                    if(!id.ObjectClass.IsDerivedFrom(polyClass))continue;
                     var poly=tr.GetObject(id,OpenMode.ForRead) as Polyline;
                     if(poly==null)continue;
                     if(!TryReadTag(poly,AreaRegApp,out string bodyId,out string sectionName))
@@ -118,7 +128,7 @@ namespace MiningVolume2023.Services
                             " đã gắn với vùng "+poly.Handle+". Cần kiểm tra lại hệ mặt cắt.");
                     if(!frames.TryGetValue(sectionName,out var frame))
                     {
-                        frame=FindFrame(doc.Database,tr,sectionName);
+                        frame=FindFrame(doc.Database,tr,sectionName,meter.Poll);
                         frames.Add(sectionName,frame);
                     }
                     var physical=ReadPhysicalPolygon(poly,frame);
@@ -141,7 +151,10 @@ namespace MiningVolume2023.Services
                 }
 
                 // Cross-body overlap in the same section must never silently double count.
+                // Poll per region so a high-density polygon set remains cancelable.
                 for(int i=0;i<output.Count;i++)
+                {
+                    meter.Poll();
                     for(int j=i+1;j<output.Count;j++)
                     {
                         if(!string.Equals(output[i].Area.SectionName,output[j].Area.SectionName,
@@ -152,10 +165,16 @@ namespace MiningVolume2023.Services
                                 " và "+output[j].Area.PolylineHandle+" chồng lấn "+overlap.ToString("0.###")+
                                 " m² trên "+output[i].Area.SectionName+". Cần chỉnh trước khi cập nhật.");
                     }
+                }
 
                 // Replace ONLY generated labels tagged by this plugin, not user CAD data.
+                // Avoid opening any TIN faces or polylines while finding DBText.
+                var textClass=Autodesk.AutoCAD.Runtime.RXObject.GetClass(typeof(DBText));
+                int labelsScanned=0;
                 foreach(ObjectId id in ms)
                 {
+                    if((labelsScanned++ & 1023)==0)meter.Poll();
+                    if(!id.ObjectClass.IsDerivedFrom(textClass))continue;
                     var text=tr.GetObject(id,OpenMode.ForRead) as DBText;
                     if(text!=null&&TryReadTag(text,LabelRegApp,out _,out _))
                     {
@@ -170,6 +189,7 @@ namespace MiningVolume2023.Services
                     var styleId=styles.Has("MV_ARIAL")?styles["MV_ARIAL"]:doc.Database.Textstyle;
                     foreach(var region in output)
                     {
+                        meter.Poll();
                         var label=new DBText
                         {
                             LayerId=labelLayer,TextStyleId=styleId,
@@ -184,6 +204,7 @@ namespace MiningVolume2023.Services
                             new TypedValue((int)DxfCode.ExtendedDataAsciiString,region.Area.SectionName));
                     }
                 }
+                meter.Poll();
                 tr.Commit();
             }
             state.NotifyChanged();
@@ -192,13 +213,17 @@ namespace MiningVolume2023.Services
         }
 
         private static void ValidateNoOverlap(Database db,Transaction tr,ObjectId currentId,
-            string sectionName,SectionFrame frame,IReadOnlyList<Vec2> candidate)
+            string sectionName,SectionFrame frame,IReadOnlyList<Vec2> candidate,
+            Action pollCancellation = null)
         {
             var bt=(BlockTable)tr.GetObject(db.BlockTableId,OpenMode.ForRead);
             var ms=(BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace],OpenMode.ForRead);
+            var polyClass=Autodesk.AutoCAD.Runtime.RXObject.GetClass(typeof(Polyline));
+            int inspected=0;
             foreach(ObjectId id in ms)
             {
-                if(id==currentId)continue;
+                if((inspected++ & 1023)==0)pollCancellation?.Invoke();
+                if(id==currentId||!id.ObjectClass.IsDerivedFrom(polyClass))continue;
                 var poly=tr.GetObject(id,OpenMode.ForRead) as Polyline;
                 if(poly==null||!TryReadTag(poly,AreaRegApp,out _,out string oldSection)||
                    !string.Equals(sectionName,oldSection,StringComparison.OrdinalIgnoreCase))continue;
@@ -228,13 +253,18 @@ namespace MiningVolume2023.Services
             return points;
         }
 
-        private static SectionFrame FindFrame(Database db,Transaction tr,string name)
+        private static SectionFrame FindFrame(Database db,Transaction tr,string name,
+            Action pollCancellation = null)
         {
             var bt=(BlockTable)tr.GetObject(db.BlockTableId,OpenMode.ForRead);
             var ms=(BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace],OpenMode.ForRead);
             SectionFrame result=null;
+            var textClass=Autodesk.AutoCAD.Runtime.RXObject.GetClass(typeof(DBText));
+            int scanned=0;
             foreach(ObjectId id in ms)
             {
+                if((scanned++ & 1023)==0)pollCancellation?.Invoke();
+                if(!id.ObjectClass.IsDerivedFrom(textClass))continue;
                 var text=tr.GetObject(id,OpenMode.ForRead) as DBText;
                 if(text==null||!TryReadFrame(text,name,out var frame))continue;
                 if(result!=null)throw new InvalidOperationException("Tên mặt cắt "+name+
