@@ -73,6 +73,38 @@ jobs:
           python tests/core/run_core.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      # Only the trusted, merged V2 development branch may consume the
+      # owner's approved PUBLIC verifier. PR CI remains keyless and isolated.
+      # Provision AFTER source/static tests but BEFORE compiling the plugin.
+      - name: Provision pinned RSA PUBLIC verifier for V2 QA installer
+        if: github.event_name == 'push' && github.ref == 'refs/heads/miningvolume-v2-chatgpt-p0-continuation'
+        shell: pwsh
+        env:
+          V2_ISSUER_PUBLIC_B64: ${{ secrets.IMSAT_VOLUME_V2_RSA_PUBLIC_XML_B64 }}
+          V2_ISSUER_PUBLIC_SHA256: ${{ vars.IMSAT_VOLUME_V2_RSA_PUBLIC_SHA256 }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:V2_ISSUER_PUBLIC_B64) -or
+              [string]::IsNullOrWhiteSpace($env:V2_ISSUER_PUBLIC_SHA256)) {
+            throw 'BLOCKED: configure the ADMIN issuer PUBLIC XML and approved SHA256 variable. Do not create keys in CI.'
+          }
+          $publicXml = Join-Path $env:RUNNER_TEMP 'imsat-v2-approved-public-only.xml'
+          try {
+            [IO.File]::WriteAllBytes($publicXml, [Convert]::FromBase64String($env:V2_ISSUER_PUBLIC_B64))
+            & "$env:MV_ROOT/release/provision_v2_public_key.ps1" `
+              -PublicKeyFile $publicXml `
+              -ExpectedPublicKeySha256 $env:V2_ISSUER_PUBLIC_SHA256
+            if ($LASTEXITCODE -ne 0) { throw 'V2 pinned RSA public key provision failed.' }
+            $proof = Join-Path $env:MV_ROOT 'dist/V2_LICENSE_PUBLIC_KEY_PROOF.txt'
+            if (!(Test-Path $proof) -or
+                (Get-Content $proof -Raw) -notmatch 'SourceProvisioned=YES') {
+              throw 'V2 RSA approval proof missing. No installable signed-license QA artifact.'
+            }
+          }
+          finally {
+            Remove-Item $publicXml -Force -ErrorAction SilentlyContinue
+            Remove-Item Env:V2_ISSUER_PUBLIC_B64 -ErrorAction SilentlyContinue
+          }
+
       - name: Restore .NET Framework solution
         shell: pwsh
         run: |
@@ -204,6 +236,8 @@ jobs:
       - name: Build V2.0 QA Candidate Setup (NOT RELEASE)
         if: startsWith(github.ref_name, 'miningvolume-v2-') || startsWith(github.head_ref, 'miningvolume-v2-')
         shell: pwsh
+        env:
+          IMSAT_REQUIRE_APPROVED_PUBLIC_KEY: ${{ github.event_name == 'push' && github.ref == 'refs/heads/miningvolume-v2-chatgpt-p0-continuation' && '1' || '0' }}
         run: |
           Set-Location $env:MV_ROOT
           & ./installer/build_v2_qa.ps1
@@ -214,6 +248,12 @@ jobs:
           if (-not (Test-Path "dist/V2_QA_CANDIDATE_NOT_RELEASE.txt")) {
             throw "Missing non-release warning for V2 QA Setup."
           }
+          $licenseManifest = Get-Content 'dist/V2_QA_CANDIDATE_NOT_RELEASE.txt' -Raw
+          if ($env:IMSAT_REQUIRE_APPROVED_PUBLIC_KEY -eq '1') {
+            if ($licenseManifest -notmatch 'License: RSA_PUBLIC_VERIFIER_PINNED_SHA256=') {
+              throw 'BLOCKED: stable V2 QA Setup missing pinned owner public RSA trust anchor.'
+            }
+          }
           $v2Hash = (Get-FileHash 'dist/IMSAT_MiningVolume_V2_0_QA_CANDIDATE.exe' -Algorithm SHA256).Hash.ToLowerInvariant()
           "SHA256  $v2Hash  IMSAT_MiningVolume_V2_0_QA_CANDIDATE.exe" | Set-Content -Encoding ascii dist/V2_SHA256SUMS.txt
           @(
@@ -223,7 +263,8 @@ jobs:
             "Workflow run: $env:GITHUB_RUN_ID"
             "V2 Setup SHA256: $v2Hash"
             'AutoCAD 2023 interactive runtime: NOT TESTED'
-            'Production license trust anchor and acceptance: NOT APPROVED'
+            ('Offline license: ' + (($licenseManifest | Select-String 'License: (.*)').Matches.Groups[1].Value))
+            'License activation and user acceptance: NOT TESTED'
           ) | Set-Content -Encoding utf8 dist/V2_BUILD_VERIFICATION.txt
           Get-Content dist/V2_BUILD_VERIFICATION.txt
           & ./release/scan_qa_setup.ps1
@@ -332,6 +373,7 @@ jobs:
           path: |
             tools/MiningVolume_HSNext/v0.9/dist/IMSAT_MiningVolume_V2_0_QA_CANDIDATE.exe
             tools/MiningVolume_HSNext/v0.9/dist/V2_QA_CANDIDATE_NOT_RELEASE.txt
+            tools/MiningVolume_HSNext/v0.9/dist/V2_LICENSE_PUBLIC_KEY_PROOF.txt
             tools/MiningVolume_HSNext/v0.9/dist/V2_SHA256SUMS.txt
             tools/MiningVolume_HSNext/v0.9/dist/V2_BUILD_VERIFICATION.txt
             tools/MiningVolume_HSNext/v0.9/dist/V2_SECURITY_SCAN.txt

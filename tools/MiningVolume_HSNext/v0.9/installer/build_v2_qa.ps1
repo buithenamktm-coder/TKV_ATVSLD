@@ -71,6 +71,25 @@ try {
         if ($src.Contains('RsaPublicKeyXml = "";')) {
             $keyState = 'TRIAL_ONLY: PUBLIC_KEY_NOT_PROVISIONED'
         }
+        else {
+            # A non-empty source constant is not proof of the approved issuer.
+            # Require the SHA-pinned public-only receipt from this build.
+            $publicProof = Join-Path $dist "V2_LICENSE_PUBLIC_KEY_PROOF.txt"
+            if (Test-Path $publicProof) {
+                $receipt = [System.IO.File]::ReadAllText($publicProof)
+                $m = [regex]::Match($receipt, '(?m)^PublicKeySha256=([0-9a-fA-F]{64})\r?$')
+                if ($receipt -match '(?m)^SourceProvisioned=YES\r?$' -and
+                    $receipt -match '(?m)^PrivateKeyIncluded=NO\r?$' -and
+                    $m.Success) {
+                    $keyState = 'RSA_PUBLIC_VERIFIER_PINNED_SHA256=' +
+                        $m.Groups[1].Value.ToLowerInvariant()
+                }
+            }
+        }
+    }
+    if ($env:IMSAT_REQUIRE_APPROVED_PUBLIC_KEY -eq '1' -and
+        -not $keyState.StartsWith('RSA_PUBLIC_VERIFIER_PINNED_SHA256=')) {
+        throw "BLOCKED: V2 QA Setup missing approved issuer RSA public verifier."
     }
     $hash = (Get-FileHash -Algorithm SHA256 $exe).Hash
     $lines = @(
