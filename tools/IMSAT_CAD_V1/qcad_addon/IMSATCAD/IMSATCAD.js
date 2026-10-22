@@ -272,8 +272,11 @@ IMSATCAD.setRibbonLanguage = function(language) {
     // Validate the live widgets before changing state to avoid a partially
     // translated Ribbon when the native Qt bridge is unavailable.
     var currentTabs = IMSATCAD._ribbonTabsWidget;
-    if (!isNull(currentTabs) && typeof currentTabs.setTabText !== "function") {
-        qWarning("IMSAT CAD: Ribbon language switch blocked: tab text API unavailable");
+    if (!isNull(currentTabs) &&
+            (typeof currentTabs.setTabText !== "function" ||
+             typeof currentTabs.count !== "number" ||
+             currentTabs.count !== IMSATCAD._ribbonTabs.length)) {
+        qWarning("IMSAT CAD: Ribbon language switch blocked: tab API or tab count mismatch");
         return false;
     }
     for (var k = 0; k < IMSATCAD._ribbonCaptions.length; ++k) {
