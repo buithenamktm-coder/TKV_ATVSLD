@@ -21,7 +21,11 @@ def test_renderer_replaces_and_clears_tin_in_one_modelspace_pass_each():
     assert "if (clearExisting)" in replace
     assert clear.count("foreach (ObjectId id in ms)") == 1
     assert "second full scan" in replace
-    assert "Validate and erase in one pass" in clear
+    assert "ent.LayerId != layerId" in clear
+    assert "if (!(ent is Face))" in clear
+    assert "ent.Erase();" in clear
+    assert clear.index("ent.Erase();") < clear.rindex("tr.Commit();")
+    assert "progress.Poll(0, false)" in clear
 
 def test_pair_build_does_not_rescan_just_written_cad_layers():
     s = read("src/MiningVolume.Plugin2023/Services/SurfaceWorkflowService.cs")
