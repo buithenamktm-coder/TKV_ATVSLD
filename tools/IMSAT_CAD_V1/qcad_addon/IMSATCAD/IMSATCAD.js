@@ -269,6 +269,26 @@ IMSATCAD.ribbonLabel = function(name) {
 };
 IMSATCAD.setRibbonLanguage = function(language) {
     if (language !== "vi" && language !== "en") { return false; }
+    // Validate the live widgets before changing state to avoid a partially
+    // translated Ribbon when the native Qt bridge is unavailable.
+    var currentTabs = IMSATCAD._ribbonTabsWidget;
+    if (!isNull(currentTabs) && typeof currentTabs.setTabText !== "function") {
+        qWarning("IMSAT CAD: Ribbon language switch blocked: tab text API unavailable");
+        return false;
+    }
+    for (var k = 0; k < IMSATCAD._ribbonCaptions.length; ++k) {
+        if (isNull(IMSATCAD._ribbonCaptions[k].widget) ||
+                typeof IMSATCAD._ribbonCaptions[k].widget.setText !== "function") {
+            qWarning("IMSAT CAD: Ribbon language switch blocked: panel caption API unavailable");
+            return false;
+        }
+    }
+    if (!isNull(IMSATCAD._ribbonLanguageButton) &&
+            (typeof IMSATCAD._ribbonLanguageButton.setText !== "function" ||
+             typeof IMSATCAD._ribbonLanguageButton.setToolTip !== "function")) {
+        qWarning("IMSAT CAD: Ribbon language switch blocked: button API unavailable");
+        return false;
+    }
     IMSATCAD._ribbonLanguage = language;
     var tabs = IMSATCAD._ribbonTabsWidget;
     if (!isNull(tabs)) {
