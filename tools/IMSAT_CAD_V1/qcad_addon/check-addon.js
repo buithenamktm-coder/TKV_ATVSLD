@@ -6,6 +6,7 @@ const assert = require("assert");
 const source = fs.readFileSync(path.join(__dirname, "IMSATCAD", "IMSATCAD.js"), "utf8");
 const groups = ["draw", "modify", "annotation", "layer", "utility", "block", "selection", "file"];
 const all = [];
+const ownership = new Map();
 for (const group of groups) {
   const regex = new RegExp("IMSATCAD\\._" + group + "Scripts\\s*=\\s*\\[([\\s\\S]*?)\\];");
   const match = source.match(regex);
@@ -13,7 +14,24 @@ for (const group of groups) {
   const paths = [...match[1].matchAll(/"(scripts\/[^"]+\.js)"/g)].map(m => m[1]);
   assert(paths.length >= 2, "Insufficient actions for " + group);
   assert.strictEqual(paths.length, new Set(paths).size, "Duplicate actions in " + group);
+  for (const script of paths) {
+    assert(!ownership.has(script), "Ribbon command appears in multiple groups: " + script);
+    ownership.set(script, group);
+  }
   all.push(...paths);
+}
+// A command should appear once in the Ribbon and in its task-appropriate group.
+for (const [script, group] of [
+  ["scripts/Draw/Hatch/HatchFromSelection/HatchFromSelection.js", "draw"],
+  ["scripts/Draw/Text/Text.js", "annotation"],
+  ["scripts/Edit/Undo/Undo.js", "modify"],
+  ["scripts/Edit/Redo/Redo.js", "modify"],
+  ["scripts/File/Print/Print.js", "file"]
+]) {
+  assert.strictEqual(ownership.get(script), group, "Incorrect Ribbon group: " + script);
+}
+for (const [script, group] of ownership) {
+  if (group === "utility") assert(script.startsWith("scripts/View/"), "View group contains unrelated command: " + script);
 }
 const aliases = [...source.matchAll(/\["(scripts\/[^"]+\.js)",\s*\[([^\]]+)\]\]/g)];
 assert(aliases.length >= 15, "Too few native command aliases");

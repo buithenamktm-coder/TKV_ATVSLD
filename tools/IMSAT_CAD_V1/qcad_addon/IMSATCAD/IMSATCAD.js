@@ -82,7 +82,8 @@ IMSATCAD._drawScripts = [
     "scripts/Draw/Shape/ShapeRectanglePP/ShapeRectanglePP.js",
     "scripts/Draw/Arc/Arc3P/Arc3P.js",
     "scripts/Draw/Ellipse/EllipseCPP/EllipseCPP.js",
-    "scripts/Draw/Shape/ShapePolygonCP/ShapePolygonCP.js"
+    "scripts/Draw/Shape/ShapePolygonCP/ShapePolygonCP.js",
+    "scripts/Draw/Hatch/HatchFromSelection/HatchFromSelection.js"
 ];
 IMSATCAD._modifyScripts = [
     "scripts/Modify/Trim/Trim.js",
@@ -94,7 +95,9 @@ IMSATCAD._modifyScripts = [
     "scripts/Modify/Scale/Scale.js",
     "scripts/Modify/Mirror/Mirror.js",
     "scripts/Modify/Explode/Explode.js",
-    "scripts/Edit/Delete/Delete.js"
+    "scripts/Edit/Delete/Delete.js",
+    "scripts/Edit/Undo/Undo.js",
+    "scripts/Edit/Redo/Redo.js"
 ];
 // These QCAD categories expose the upstream annotation and layer actions.
 IMSATCAD._annotationScripts = [
@@ -104,7 +107,8 @@ IMSATCAD._annotationScripts = [
     "scripts/Draw/Dimension/DimAngular/DimAngular.js",
     "scripts/Draw/Dimension/DimRadial/DimRadial.js",
     "scripts/Draw/Dimension/DimDiametric/DimDiametric.js",
-    "scripts/Draw/Dimension/Leader/Leader.js"
+    "scripts/Draw/Dimension/Leader/Leader.js",
+    "scripts/Draw/Text/Text.js"
 ];
 IMSATCAD._layerScripts = [
     "scripts/Layer/AddLayer/AddLayer.js",
@@ -115,15 +119,12 @@ IMSATCAD._layerScripts = [
     "scripts/Layer/LockAllLayers/LockAllLayers.js",
     "scripts/Layer/UnlockAllLayers/UnlockAllLayers.js"
 ];
+// View-only navigation commands; drawing, annotation, edit history and
+// printing live in their respective Ribbon groups without duplicate buttons.
 IMSATCAD._utilityScripts = [
-    "scripts/Draw/Text/Text.js",
-    "scripts/Draw/Hatch/HatchFromSelection/HatchFromSelection.js",
-    "scripts/Edit/Undo/Undo.js",
-    "scripts/Edit/Redo/Redo.js",
     "scripts/View/Zoom/AutoZoom/AutoZoom.js",
     "scripts/View/Zoom/WindowZoom/WindowZoom.js",
-    "scripts/View/Zoom/PanZoom/PanZoom.js",
-    "scripts/File/Print/Print.js"
+    "scripts/View/Zoom/PanZoom/PanZoom.js"
 ];
 IMSATCAD._fileScripts = [
     "scripts/File/Save/Save.js",
@@ -251,14 +252,14 @@ IMSATCAD._ribbonVietnamese = {
     "View": "Hiển thị", "Manage": "Quản lý", "Output": "Xuất bản",
     "Draw": "Vẽ", "Modify": "Hiệu chỉnh", "Layers": "Lớp",
     "Blocks": "Khối", "Dimensions": "Kích thước",
-    "View & tools": "Hiển thị và công cụ",
+    "Navigation": "Điều hướng",
     "Selection": "Lựa chọn", "File & plot": "Tệp và in"
 };
 IMSATCAD._ribbonTabs = [
     ["Home", [["Draw", "_drawScripts"], ["Modify", "_modifyScripts"], ["Layers", "_layerScripts"]]],
     ["Insert", [["Blocks", "_blockScripts"]]],
     ["Annotate", [["Dimensions", "_annotationScripts"]]],
-    ["View", [["View & tools", "_utilityScripts"]]],
+    ["View", [["Navigation", "_utilityScripts"]]],
     ["Manage", [["Selection", "_selectionScripts"]]],
     ["Output", [["File & plot", "_fileScripts"]]]
 ];

@@ -79,7 +79,7 @@ assert.deepStrictEqual(ribbonPages.map(x => x.label), ["Trang chủ", "Chèn", "
 assert(ribbonPages.every(x => x.page && x.page.parent), "Ribbon page not created");
 const expectedGroupCaptions = [
   "Vẽ", "Hiệu chỉnh", "Lớp", "Khối", "Kích thước",
-  "Hiển thị và công cụ", "Lựa chọn", "Tệp và in"
+  "Điều hướng", "Lựa chọn", "Tệp và in"
 ];
 assert.deepStrictEqual(ribbonCaptions.map(x => x.label), expectedGroupCaptions,
   "Ribbon panel captions must retain bilingual labels");
@@ -96,7 +96,7 @@ assert.strictEqual(languageButton.tooltip, "Switch Ribbon to English");
 languageButton.click();
 assert.strictEqual(context.IMSATCAD._ribbonLanguage, "en");
 assert.deepStrictEqual(ribbonPages.map(x => x.label), ["Home", "Insert", "Annotate", "View", "Manage", "Output"]);
-assert.deepStrictEqual(ribbonCaptions.map(x => x.label), ["Draw", "Modify", "Layers", "Blocks", "Dimensions", "View & tools", "Selection", "File & plot"]);
+assert.deepStrictEqual(ribbonCaptions.map(x => x.label), ["Draw", "Modify", "Layers", "Blocks", "Dimensions", "Navigation", "Selection", "File & plot"]);
 assert.strictEqual(languageButton.text, "Tiếng Việt");
 assert.strictEqual(languageButton.tooltip, "Chuyển Ribbon sang tiếng Việt");
 assert.strictEqual(context.IMSATCAD.setRibbonLanguage("xx"), false, "Unsupported locale must be rejected");
