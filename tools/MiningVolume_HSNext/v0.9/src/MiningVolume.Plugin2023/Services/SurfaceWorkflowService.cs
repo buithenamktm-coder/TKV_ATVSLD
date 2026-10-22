@@ -518,10 +518,35 @@ namespace MiningVolume2023.Services
             var ht = existing.Tin;
             var tk = design.Tin;
             progress?.Invoke("Đang ghi TIN hiện trạng xuống AutoCAD, tiếp đến thiết kế; Esc để hủy cả thao tác...");
-            int[] written;
-            using (doc.LockDocument())
-                written = TinCadRenderer.ReplacePair(doc.Database, state.Existing.TinLayer, ht,
-                    state.Design.TinLayer, tk);
+            int[] written = null;
+            var clock = Stopwatch.StartNew();
+            string outcome = "FAILED";
+            try
+            {
+                using (doc.LockDocument())
+                    written = TinCadRenderer.ReplacePair(doc.Database, state.Existing.TinLayer, ht,
+                        state.Design.TinLayer, tk);
+                outcome = "PASS";
+            }
+            catch (OperationCanceledException)
+            {
+                outcome = "CANCELED";
+                throw;
+            }
+            finally
+            {
+                clock.Stop();
+                try
+                {
+                    int faces = checked(ht.Triangles.Count + ht.VerticalFaces.Count +
+                        tk.Triangles.Count + tk.VerticalFaces.Count);
+                    HostPerformanceLog.Record("TIN_CAD_PAIR", outcome,
+                        doc.Database.FingerprintGuid, faces,
+                        written == null ? 0 : written[0] + written[1], faces,
+                        clock.Elapsed.TotalMilliseconds);
+                }
+                catch { /* Metrics are never allowed to change CAD semantics. */ }
+            }
             // Both CAD layers committed together. Only now transfer ownership of stores.
             AdoptTin(state.Existing, existing.Tin, existing.SourceRevision, existing.SourceModifiedUtc,
                 written[0], false);
@@ -589,15 +614,43 @@ namespace MiningVolume2023.Services
             var cadTin = tin;
             bool cadPreview = false;
 
-            int written;
-            using (doc.LockDocument())
+            int written = 0;
+            var clock = Stopwatch.StartNew();
+            string outcome = "FAILED";
+            try
             {
-                written = TinCadRenderer.Replace(
-                    doc.Database,
-                    session.TinLayer,
-                    cadTin,
-                    role == ModelRole.Existing ? (short)1 : (short)3);
-                TinCadRenderer.SetVisible(doc.Database, session.TinLayer, true);
+                using (doc.LockDocument())
+                {
+                    written = TinCadRenderer.Replace(
+                        doc.Database,
+                        session.TinLayer,
+                        cadTin,
+                        role == ModelRole.Existing ? (short)1 : (short)3);
+                    TinCadRenderer.SetVisible(doc.Database, session.TinLayer, true);
+                }
+                if (written != checked(cadTin.Triangles.Count + cadTin.VerticalFaces.Count))
+                    throw new InvalidOperationException(
+                        "Ghi TIN CAD không đúng số mặt yêu cầu.");
+                outcome = "PASS";
+            }
+            catch (OperationCanceledException)
+            {
+                outcome = "CANCELED";
+                throw;
+            }
+            finally
+            {
+                clock.Stop();
+                try
+                {
+                    int faces = checked(cadTin.Triangles.Count + cadTin.VerticalFaces.Count);
+                    HostPerformanceLog.Record(role == ModelRole.Existing
+                            ? "TIN_CAD_EXISTING" : "TIN_CAD_DESIGN", outcome,
+                        doc.Database.FingerprintGuid, faces,
+                        outcome == "PASS" ? written : 0, faces,
+                        clock.Elapsed.TotalMilliseconds);
+                }
+                catch { /* Metrics must not mask a geometry or CAD exception. */ }
             }
 
             int expectedCadFaces = cadTin.Triangles.Count + cadTin.VerticalFaces.Count;
