@@ -53,3 +53,11 @@ def test_edited_profile_preflight_is_one_scan_and_skips_cad_faces():
     assert "p.IsUserEdited" in scan
     assert "if (grouped.Count == 0 && allowMissingUnedited)" in scan
     assert "Không tìm thấy đường CAD hiệu chỉnh" in scan
+
+    label_update = code.split("internal static void UpdateAreaLabels(", 1)[1].split(
+        "private static Tagged Decode(", 1
+    )[0]
+    assert "id.ObjectClass.IsDerivedFrom(textClass)" in label_update
+    assert label_update.index("id.ObjectClass.IsDerivedFrom(textClass)") < label_update.index(
+        "tr.GetObject(id,OpenMode.ForRead)"
+    )
