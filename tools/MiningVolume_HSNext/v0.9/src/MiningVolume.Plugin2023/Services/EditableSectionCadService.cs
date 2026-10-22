@@ -117,7 +117,10 @@ namespace MiningVolume2023.Services
             {
                 var ms = GetModelSpace(db, tr);
                 var labels=new Dictionary<string,List<DBText>>(StringComparer.OrdinalIgnoreCase);
+                var textClass = Autodesk.AutoCAD.Runtime.RXObject.GetClass(typeof(DBText));
                 foreach(ObjectId id in ms) {
+                    // Avoid opening every TIN face to find a handful of labels.
+                    if (!id.ObjectClass.IsDerivedFrom(textClass)) continue;
                     var text=tr.GetObject(id,OpenMode.ForRead) as DBText;
                     if(text==null)continue;
                     using(var data=text.GetXDataForApplication(SectionCadRenderer.AreaRegApp)) {
