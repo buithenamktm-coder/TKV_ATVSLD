@@ -100,9 +100,14 @@ namespace MiningVolume2023.Services
                 var bodies=state.MineralBodies.Where(x=>!x.IsDeleted)
                     .ToDictionary(b=>b.Id,StringComparer.OrdinalIgnoreCase);
                 var frames=new Dictionary<string,SectionFrame>(StringComparer.OrdinalIgnoreCase);
+                // Native mine DWGs can contain more than a million TIN faces.
+                // Reading each 3DFACE simply to find a mineral LWPOLYLINE
+                // needlessly allocates AutoCAD wrappers and stalls the palette.
+                var polyClass=Autodesk.AutoCAD.Runtime.RXObject.GetClass(typeof(Polyline));
 
                 foreach(ObjectId id in ms)
                 {
+                    if(!id.ObjectClass.IsDerivedFrom(polyClass))continue;
                     var poly=tr.GetObject(id,OpenMode.ForRead) as Polyline;
                     if(poly==null)continue;
                     if(!TryReadTag(poly,AreaRegApp,out string bodyId,out string sectionName))
@@ -154,8 +159,11 @@ namespace MiningVolume2023.Services
                     }
 
                 // Replace ONLY generated labels tagged by this plugin, not user CAD data.
+                // Avoid opening any TIN faces or polylines while finding DBText.
+                var textClass=Autodesk.AutoCAD.Runtime.RXObject.GetClass(typeof(DBText));
                 foreach(ObjectId id in ms)
                 {
+                    if(!id.ObjectClass.IsDerivedFrom(textClass))continue;
                     var text=tr.GetObject(id,OpenMode.ForRead) as DBText;
                     if(text!=null&&TryReadTag(text,LabelRegApp,out _,out _))
                     {
@@ -196,9 +204,10 @@ namespace MiningVolume2023.Services
         {
             var bt=(BlockTable)tr.GetObject(db.BlockTableId,OpenMode.ForRead);
             var ms=(BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace],OpenMode.ForRead);
+            var polyClass=Autodesk.AutoCAD.Runtime.RXObject.GetClass(typeof(Polyline));
             foreach(ObjectId id in ms)
             {
-                if(id==currentId)continue;
+                if(id==currentId||!id.ObjectClass.IsDerivedFrom(polyClass))continue;
                 var poly=tr.GetObject(id,OpenMode.ForRead) as Polyline;
                 if(poly==null||!TryReadTag(poly,AreaRegApp,out _,out string oldSection)||
                    !string.Equals(sectionName,oldSection,StringComparison.OrdinalIgnoreCase))continue;
@@ -233,8 +242,10 @@ namespace MiningVolume2023.Services
             var bt=(BlockTable)tr.GetObject(db.BlockTableId,OpenMode.ForRead);
             var ms=(BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace],OpenMode.ForRead);
             SectionFrame result=null;
+            var textClass=Autodesk.AutoCAD.Runtime.RXObject.GetClass(typeof(DBText));
             foreach(ObjectId id in ms)
             {
+                if(!id.ObjectClass.IsDerivedFrom(textClass))continue;
                 var text=tr.GetObject(id,OpenMode.ForRead) as DBText;
                 if(text==null||!TryReadFrame(text,name,out var frame))continue;
                 if(result!=null)throw new InvalidOperationException("Tên mặt cắt "+name+
