@@ -168,6 +168,20 @@ assert.strictEqual(thrownContext.IMSATCAD.createRibbon(), false,
   "Native lookup exception must not escape or create Ribbon");
 assert(thrownWarnings.some(x => x.includes("RIBBON BLOCKED") && x.includes(missingScript) && x.includes("mock native lookup failure")),
   "Native lookup exception must identify failing command");
+// A toolbar host without Qt widget insertion must block the Ribbon cleanly.
+const brokenHostWarnings = [];
+const brokenHostContext = Object.assign({}, context, {
+  qWarning: x => brokenHostWarnings.push(x),
+  EAction: Object.assign(function BrokenEAction() {}, EAction, {
+    getToolBar: (label, id) => id === "IMSATCADRibbonToolBar" ? {} : EAction.getToolBar(label, id)
+  })
+});
+brokenHostContext.EAction.prototype = EAction.prototype;
+vm.runInNewContext(source, brokenHostContext, { filename: "IMSATCAD.js" });
+assert.strictEqual(brokenHostContext.IMSATCAD.createRibbon(), false,
+  "Ribbon must reject a toolbar host without addWidget");
+assert(brokenHostWarnings.some(x => x.includes("toolbar host cannot accept widgets")),
+  "Broken toolbar host must emit a diagnostic");
 // A missing native Qt widget must be surfaced as a blocker, never silently passed.
 const missingWidgetWarnings = [];
 const blockedContext = Object.assign({}, context, {
