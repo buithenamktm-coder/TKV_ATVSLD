@@ -321,7 +321,10 @@ IMSATCAD.createRibbon = function() {
     }
     try {
         var host = EAction.getToolBar("IMSAT CAD", "IMSATCADRibbonToolBar", Qt.TopToolBarArea);
-        if (isNull(host)) { qWarning("IMSAT CAD RIBBON BLOCKED: no toolbar host"); return false; }
+        if (isNull(host) || typeof host.addWidget !== "function") {
+            qWarning("IMSAT CAD RIBBON BLOCKED: toolbar host cannot accept widgets");
+            return false;
+        }
         var tabs = new QTabWidget(host);
         tabs.objectName = "IMSATCADRibbonTabs";
         var totalActions = 0;
@@ -388,6 +391,7 @@ IMSATCAD.createRibbon = function() {
         languageButton.clicked.connect(function() {
             IMSATCAD.setRibbonLanguage(IMSATCAD._ribbonLanguage === "vi" ? "en" : "vi");
         });
+        // Add widgets only after both Ribbon pages and language signal are valid.
         host.addWidget(tabs);
         host.addWidget(languageButton);
         IMSATCAD._ribbonTabsWidget = tabs;
