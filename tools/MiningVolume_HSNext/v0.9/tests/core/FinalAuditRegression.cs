@@ -70,6 +70,38 @@ internal static class FinalAuditRegression
                 }
             } finally {Directory.Delete(directory,true);}
         };
+        tests["section_report_build_cancel_recovers_and_preserves_volume_formulas"] = () => {
+            var state = State();
+            var options = new ExportOptions();
+            string id = state.VolumeResult.CalculationId;
+            using (var cts = new System.Threading.CancellationTokenSource()) {
+                cts.Cancel();
+                ExpectCanceled(() => ExportWorkflowService.BuildReport(state, options, cts.Token));
+            }
+            // The next attempt is not poisoned by the canceled report build;
+            // volume provenance and all worksheet formulas stay unchanged.
+            var recovered = ExportWorkflowService.BuildReport(state, options,
+                System.Threading.CancellationToken.None);
+            var baseline = ExportWorkflowService.BuildReport(state, options);
+            Check(state.VolumeResult.CalculationId == id, "Cancelled report changed the volume identity");
+            Check(recovered.Sheets.Count == baseline.Sheets.Count,
+                "Cancelled report changed the selected sheets on retry");
+            for (int i = 0; i < recovered.Sheets.Count; i++) {
+                var lhs = recovered.Sheets[i];
+                var rhs = baseline.Sheets[i];
+                Check(lhs.Name == rhs.Name && lhs.Rows.Count == rhs.Rows.Count,
+                    "Canceled report changed worksheet structure on retry");
+                for (int row = 0; row < lhs.Rows.Count; row++) {
+                    Check(lhs.Rows[row].Count == rhs.Rows[row].Count, "Canceled report changed columns");
+                    for (int col = 0; col < lhs.Rows[row].Count; col++) {
+                        var x = lhs.Rows[row][col];
+                        var y = rhs.Rows[row][col];
+                        Check(x.Kind == y.Kind && Equals(x.Value, y.Value),
+                            "Canceled report changed an Excel value/formula");
+                    }
+                }
+            }
+        };
         tests["quick_section_cancel_during_route_processing_returns_no_partial_profile"] = () => {
             using(var cts=new System.Threading.CancellationTokenSource()) {
                 var route=new ReadProbe<Vec2>(new[] { new Vec2(0,1),new Vec2(5,1),new Vec2(10,1) });
