@@ -64,9 +64,116 @@ internal static class CoreRegression
         var p=Prepare(new[]{P(-1,-6),P(11,-6),P(11,6),P(-1,6)},segs,policy);
         Check(p.HasErrors,"Legacy overlap policy bypassed manual review");
     }
+    // Exercises the REAL tiled index without writing a giant temporary TIN
+    // to disk. Both sources expose the same exact triangles.
+    private sealed class RegressionTile : ITiledTriangleSource
+    {
+        private readonly Triangle3[] _items;
+        private readonly TinTileInfo _tile;
+        internal RegressionTile(Triangle3[] items, double max)
+        {
+            _items = items;
+            _tile = new TinTileInfo(0, 0, items.Length, 0, 0, max, max);
+        }
+        public IReadOnlyList<TinTileInfo> Tiles => new[] { _tile };
+        public bool IsFileBacked => true;
+        public int Count => _items.Length;
+        public Triangle3 this[int i] => _items[i];
+        public IReadOnlyList<Triangle3> ReadTile(int index)
+        {
+            if (index != 0) throw new ArgumentOutOfRangeException(nameof(index));
+            return _items;
+        }
+        public IEnumerable<int> QueryTiles(double minX, double minY, double maxX, double maxY)
+        {
+            if (_tile.Intersects(minX, minY, maxX, maxY)) yield return 0;
+        }
+        public IEnumerator<Triangle3> GetEnumerator() => ((IEnumerable<Triangle3>)_items).GetEnumerator();
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
+        public void Dispose() { }
+    }
+
+    static void CheckTiledSectionParity()
+    {
+        const int n = 40;
+        var existing = new List<Triangle3>();
+        var design = new List<Triangle3>();
+        Func<double,double,double> height = (x,y) => 11 + 0.1*x + 0.2*y;
+        for (int ix = 0; ix < n; ix++)
+        for (int iy = 0; iy < n; iy++)
+        {
+            Vec3 A(double x,double y) => P(x,y,height(x,y));
+            Vec3 B(double x,double y) => P(x,y,height(x,y)-5);
+            var points = new[] { (x:(double)ix,y:(double)iy),
+                (x:(double)ix+1,y:(double)iy),
+                (x:(double)ix+1,y:(double)iy+1),
+                (x:(double)ix,y:(double)iy+1) };
+            foreach (int[] face in new[]{new[]{0,1,2},new[]{0,2,3}})
+            {
+                existing.Add(new Triangle3(
+                    A(points[face[0]].x,points[face[0]].y),
+                    A(points[face[1]].x,points[face[1]].y),
+                    A(points[face[2]].x,points[face[2]].y)));
+                design.Add(new Triangle3(
+                    B(points[face[0]].x,points[face[0]].y),
+                    B(points[face[1]].x,points[face[1]].y),
+                    B(points[face[2]].x,points[face[2]].y)));
+            }
+        }
+        var issues = Array.Empty<ValidationIssue>();
+        var referenceExisting = new TinSurface("reference HT", existing.ToArray(), issues);
+        var referenceDesign = new TinSurface("reference TK", design.ToArray(), issues);
+        var tiledExisting = new TinSurface("tiled HT", new RegressionTile(existing.ToArray(),n),issues);
+        var tiledDesign = new TinSurface("tiled TK", new RegressionTile(design.ToArray(),n),issues);
+        var lines = new [] {
+            new SectionLine(1,"horizontal",0,new Vec2(1,0),new Vec2(0,1),
+                new[]{new SectionSpan(0,n)}),
+            new SectionLine(2,"horizontal-edge",n,new Vec2(1,0),new Vec2(0,1),
+                new[]{new SectionSpan(0,n)}),
+            new SectionLine(3,"horizontal-near",0.0000001,new Vec2(1,0),new Vec2(0,1),
+                new[]{new SectionSpan(0,n)}),
+            new SectionLine(4,"vertical",0,new Vec2(0,1),new Vec2(1,0),
+                new[]{new SectionSpan(0,n)}),
+            new SectionLine(5,"vertical-middle",n/2.0,new Vec2(0,1),new Vec2(1,0),
+                new[]{new SectionSpan(0,n)}),
+            new SectionLine(6,"diagonal",0,new Vec2(Math.Sqrt(.5),Math.Sqrt(.5)),
+                new Vec2(-Math.Sqrt(.5),Math.Sqrt(.5)),
+                new[]{new SectionSpan(0,n*Math.Sqrt(2.0))})
+        };
+        var standard = new TinSectionSampler();
+        var tiled = new TinSectionSampler();
+        foreach(var line in lines)
+        {
+            var a = standard.BuildProfile(line,referenceExisting,referenceDesign);
+            var b = tiled.BuildProfile(line,tiledExisting,tiledDesign);
+            Check(Math.Abs(a.CutArea-b.CutArea)<1e-6,
+                "Tiled spatial candidate query changed cut area for "+line.Name);
+            Check(Math.Abs(a.FillArea-b.FillArea)<1e-6,
+                "Tiled spatial candidate query changed fill area for "+line.Name);
+            Check(b.Segments.Count==a.Segments.Count,
+                "Tiled spatial candidate query missed a segment for "+line.Name);
+            Check(Math.Abs(b.CutArea - n*5)<1e-5,
+                "Tiled spatial candidate query lost terrain coverage for "+line.Name);
+        }
+        // The pair of very wide triangles MUST still be discovered through
+        // the broad-bin fallback (each triangle covers all 32x32 cells).
+        var wide = new [] {
+            new Triangle3(P(0,0,10),P(n,0,10),P(n,n,10)),
+            new Triangle3(P(0,0,10),P(n,n,10),P(0,n,10))
+        };
+        var wideTiled = new TinSurface("wide",new RegressionTile(wide,n),issues);
+        var wideReference = new TinSurface("wide-reference",wide,issues);
+        var aWide = standard.BuildProfile(lines[5],wideReference,referenceDesign);
+        var bWide = tiled.BuildProfile(lines[5],wideTiled,tiledDesign);
+        Check(Math.Abs(aWide.CutArea-bWide.CutArea)<1e-6 &&
+            Math.Abs(aWide.FillArea-bWide.FillArea)<1e-6,
+            "Broad triangles omitted from tiled section spatial query");
+    }
+
     static void RunTests()
     {
         var tests=new Dictionary<string,Action> {
+            ["tiled_section_spatial_query_matches_exact_reference"] = CheckTiledSectionParity,
             ["clipped_upright_vertical_faces_all_valid_ABC_permutations"] = ()=>{
                 var ring=new[]{new Vec2(0,0),new Vec2(8,0),new Vec2(8,10),new Vec2(0,10)};
                 var source=new Triangle3(P(-2,5,10),P(-2,5,20),P(10,5,12));
