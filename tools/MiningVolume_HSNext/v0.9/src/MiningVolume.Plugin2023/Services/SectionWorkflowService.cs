@@ -236,10 +236,14 @@ namespace MiningVolume2023.Services
                 // On failure/cancel, completed counts only fully written
                 // batches, NOT accepted CAD content (outer rollback retains
                 // the previous drawing). This status prevents false PASSes.
-                HostPerformanceLog.Record("SECTION_CAD_EXPORT", outcome,
-                    doc.Database.FingerprintGuid, total, completed,
-                    drawingProfiles.Sum(p => p == null ? 0 : p.Segments.Count),
-                    clock.Elapsed.TotalMilliseconds, batchMs);
+                try
+                {
+                    HostPerformanceLog.Record("SECTION_CAD_EXPORT", outcome,
+                        doc.Database.FingerprintGuid, total, completed,
+                        drawingProfiles.Sum(p => p == null ? 0 : p.Segments.Count),
+                        clock.Elapsed.TotalMilliseconds, batchMs);
+                }
+                catch { /* A logging failure must not mask the CAD transaction result. */ }
             }
         }
 
