@@ -375,6 +375,10 @@ namespace MiningVolume2023.UI
                 _info.Text = "Đã xóa TIN " + modelName +
                     ". Dữ liệu địa hình nguồn được giữ nguyên.";
             }
+            catch (OperationCanceledException) {
+                _info.Text = "Đã hủy xóa TIN " + modelName +
+                    ". TIN và kết quả khối lượng trước thao tác được giữ nguyên.";
+            }
             catch (Exception ex) {
                 MessageBox.Show(this, "Không thể xóa TIN. Mô hình được giữ lại nếu thao tác CAD thất bại.\r\n" + ex.Message,
                     "IMSAT VOLUME", MessageBoxButtons.OK, MessageBoxIcon.Error);
