@@ -42,7 +42,8 @@ def test_source_actions_still_resolve_current_entities():
     ui = read("src/MiningVolume.Plugin2023/UI/ModelPage.cs")
     assert "private IEnumerable<RowRef> SelectedRows()" in ui
     assert ".Select(x => RowAt(x.Index))" in ui
-    assert "source.SetVertexEnabled(r.Entity.Id, r.Vertex.Index, false)" in ui
+    assert "source.SetVerticesEnabled(selection, false)" in ui
+    assert "source.ValidateVertexSelection(selection)" in ui
     assert "source.OverrideVertexZ(row.Entity.Id, row.Vertex.Index, form.Value)" in ui
     assert "CadViewService.ZoomToHandle(row.Entity.Handle)" in ui
     assert "index.Revision != source.Revision" in ui
