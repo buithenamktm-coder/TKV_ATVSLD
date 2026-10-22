@@ -174,6 +174,49 @@ internal static class CoreRegression
     static void RunTests()
     {
         var tests=new Dictionary<string,Action> {
+            ["model_grid_virtual_index_maps_vertices_and_revisions"] = ()=>{
+                var longLine=Entity("long",SourceEntityType.Polyline3d,
+                    Enumerable.Range(0,30000).Select(i=>P(i,0,i*0.1)).ToArray());
+                var singleton=Entity("single",SourceEntityType.Point,P(-1,-2,7));
+                var tail=Entity("tail",SourceEntityType.Line,P(1,1,1),P(2,2,2));
+                var source=Model(singleton,
+                    Entity("empty",SourceEntityType.Point,Array.Empty<Vec3>()),
+                    longLine,tail);
+                var index=new ModelVertexRowIndex(source);
+                Check(index.RowCount==30003 && index.ActiveVertexCount==30003,
+                    "Virtual row index missed a source vertex");
+                foreach(int row in new[]{0,1,15000,30000,30001,30002})
+                {
+                    SourceEntity entity;
+                    ModelVertex vertex;
+                    Check(index.TryGet(row,out entity,out vertex),
+                        "Virtual row lookup missed row "+row);
+                    var expectedEntity=row==0?singleton:row<=30000?longLine:tail;
+                    int expectedLocal=row==0?0:row<=30000?row-1:row-30001;
+                    Check(ReferenceEquals(entity,expectedEntity) &&
+                        ReferenceEquals(vertex,expectedEntity.Vertices[expectedLocal]),
+                        "Virtual row index changed object/vertex mapping");
+                }
+                foreach(int row in new[]{-1,30003,int.MaxValue})
+                {
+                    SourceEntity entity;
+                    ModelVertex vertex;
+                    Check(!index.TryGet(row,out entity,out vertex) &&
+                        entity==null && vertex==null,
+                        "Virtual row index returned a phantom vertex");
+                }
+                source.SetVertexEnabled("long",29999,false);
+                var renewed=new ModelVertexRowIndex(source);
+                Check(renewed.Revision!=index.Revision &&
+                    renewed.RowCount==index.RowCount &&
+                    renewed.ActiveVertexCount==30002,
+                    "Revision rebuild changed row offsets or missed excluded vertex");
+                SourceEntity currentEntity;
+                ModelVertex currentVertex;
+                Check(renewed.TryGet(30000,out currentEntity,out currentVertex) &&
+                    !currentVertex.IsEnabled,
+                    "Virtual grid failed to show excluded vertex without changing row order");
+            },
             ["tiled_section_spatial_query_matches_exact_reference"] = CheckTiledSectionParity,
             ["clipped_upright_vertical_faces_all_valid_ABC_permutations"] = ()=>{
                 var ring=new[]{new Vec2(0,0),new Vec2(8,0),new Vec2(8,10),new Vec2(0,10)};
