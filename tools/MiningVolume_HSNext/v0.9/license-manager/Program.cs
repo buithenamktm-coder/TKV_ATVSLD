@@ -66,6 +66,10 @@ namespace ImsatLicenseManager
                         if (args.Length != 1) return Usage();
                         Console.WriteLine(File.ReadAllText(PublicPath,Encoding.UTF8));
                         break;
+                    case "fingerprint":
+                        if (args.Length != 1) return Usage();
+                        PrintPublicFingerprint();
+                        break;
                     case "issue":
                         if (args.Length != 5) return Usage();
                         Issue(args[1],args[2],args[3],args[4]);
@@ -98,6 +102,7 @@ namespace ImsatLicenseManager
             Console.WriteLine("  selftest");
             Console.WriteLine("  issue <MachineId64hex> <INTERNAL|UNIT> <Customer> <YYYY-MM-DD|PERMANENT>");
             Console.WriteLine("  public");
+            Console.WriteLine("  fingerprint  (SHA-256 of RSA public-only XML; no private key)");
             Console.WriteLine("  provision <full path to plugin LicenseService.cs>");
             Console.WriteLine("  verify <full path to .mvlic>");
             Console.WriteLine("All issuing keys stay in the admin Windows profile, never in the CAD plugin.");
@@ -134,6 +139,23 @@ namespace ImsatLicenseManager
             }
             IssuerBackup.SelfTest();
             Console.WriteLine("LICENSE MANAGER SELFTEST PASS");
+        }
+
+        private static void PrintPublicFingerprint()
+        {
+            if (!File.Exists(PublicPath))
+                throw new FileNotFoundException("Chưa init issuer.public.xml trên máy quản trị.");
+            using (var rsa = new RSACryptoServiceProvider())
+            {
+                rsa.PersistKeyInCsp = false;
+                rsa.FromXmlString(File.ReadAllText(PublicPath, Encoding.UTF8).Trim());
+                if (!rsa.PublicOnly || rsa.KeySize < 3072)
+                    throw new InvalidOperationException("RSA public-only 3072-bit required.");
+                byte[] canonical = Encoding.UTF8.GetBytes(rsa.ToXmlString(false));
+                using (var sha = SHA256.Create())
+                    Console.WriteLine("IMSAT_VOLUME_V2_RSA_PUBLIC_SHA256=" +
+                        BitConverter.ToString(sha.ComputeHash(canonical)).Replace("-", "").ToLowerInvariant());
+            }
         }
 
         private static void BackupIssuer(string destination)
