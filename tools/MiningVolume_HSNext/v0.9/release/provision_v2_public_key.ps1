@@ -54,16 +54,32 @@ if ($actual -ne $ExpectedPublicKeySha256.ToLowerInvariant()) {
 }
 $source = [System.IO.File]::ReadAllText((Resolve-Path -LiteralPath $SourceFile).Path)
 $placeholder = 'internal const string RsaPublicKeyXml = "";'
-if ($source.IndexOf($placeholder, [StringComparison]::Ordinal) -lt 0 -or
-    $source.IndexOf($placeholder, $source.IndexOf($placeholder) + $placeholder.Length,
-        [StringComparison]::Ordinal) -ge 0) {
-    throw 'BLOCKED: source đã provision hoặc không còn placeholder gốc. Không được âm thầm đổi khóa.'
-}
 $escaped = $canonical.Replace('"','""')
 $replacement = 'internal const string RsaPublicKeyXml = @"' + $escaped + '";'
-$updated = $source.Replace($placeholder, $replacement)
-[System.IO.File]::WriteAllText((Resolve-Path -LiteralPath $SourceFile).Path,
-    $updated, (New-Object System.Text.UTF8Encoding($false)))
+
+# A user may rerun provisioning after a successful earlier run. Permit only
+# the identical, approved PUBLIC verifier. Never silently change a verifier
+# already embedded for an issuer that may have issued permanent licenses.
+$marker = 'internal const string RsaPublicKeyXml = '
+$first = $source.IndexOf($marker, [StringComparison]::Ordinal)
+if ($first -lt 0 -or
+    $source.IndexOf($marker, $first + $marker.Length,
+        [StringComparison]::Ordinal) -ge 0) {
+    throw 'BLOCKED: RsaPublicKeyXml missing or declared more than once.'
+}
+if ($source.Contains($placeholder)) {
+    $updated = $source.Replace($placeholder, $replacement)
+    [System.IO.File]::WriteAllText((Resolve-Path -LiteralPath $SourceFile).Path,
+        $updated, (New-Object System.Text.UTF8Encoding($false)))
+    $provisionMode = 'INSERTED'
+}
+elseif ($source.Contains($replacement)) {
+    # Idempotent success: the compiled verifier will match the pinned hash.
+    $provisionMode = 'ALREADY_MATCHED'
+}
+else {
+    throw 'BLOCKED: source contains a different RSA public key or invalid verifier. Do not overwrite.'
+}
 $parent = Split-Path -Parent $ReceiptFile
 if (-not (Test-Path $parent)) { New-Item -ItemType Directory -Force $parent | Out-Null }
 @(
@@ -74,8 +90,9 @@ if (-not (Test-Path $parent)) { New-Item -ItemType Directory -Force $parent | Ou
     'KeyBits=3072-or-greater'
     'PrivateKeyIncluded=NO'
     'SourceProvisioned=YES'
+    ('ProvisionMode=' + $provisionMode)
     'RuntimeLicenseActivation=NOT_YET_TESTED'
     'ReleaseStatus=BLOCKED_UNTIL_HOST_AND_T01_T22_PASS'
 ) | Set-Content -Encoding UTF8 $ReceiptFile
-Write-Host ('[PASS] Public RSA verifier pinned: ' + $actual)
+Write-Host ('[PASS] Public RSA verifier pinned: ' + $actual + ' (' + $provisionMode + ')')
 Write-Host '[SECURITY] No issuer private key loaded or printed.'
