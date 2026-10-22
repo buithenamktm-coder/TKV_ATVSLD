@@ -103,7 +103,14 @@ assert.strictEqual(new Set(ribbonCaptions.map(x => x.label)).size, ribbonCaption
   "Duplicate Ribbon panel captions");
 assert(context.IMSATCAD._ribbonCreated, "Native ribbon creation flag missing");
 assert(context.IMSATCAD._ribbonHost, "Native ribbon host not retained");
-assert.strictEqual(toolbars.get("IMSATCADRibbonToolBar").widgets.length, 2, "Ribbon or language selector duplicated");
+const ribbonHostWidgets = toolbars.get("IMSATCADRibbonToolBar").widgets;
+assert.strictEqual(ribbonHostWidgets.length, 1,
+  "Ribbon tabs and language selector must mount atomically as one toolbar widget");
+assert.strictEqual(ribbonHostWidgets[0].objectName, "IMSATCADRibbonShell");
+assert.strictEqual(context.IMSATCAD._ribbonTabsWidget.parent, ribbonHostWidgets[0],
+  "Ribbon tabs must belong to the single toolbar shell");
+assert.strictEqual(context.IMSATCAD._ribbonLanguageButton.parent, ribbonHostWidgets[0],
+  "Language selector must belong to the same toolbar shell");
 // The visible Qt selector must switch both tabs and panel labels, twice.
 const languageButton = context.IMSATCAD._ribbonLanguageButton;
 assert(languageButton && languageButton.onClick, "Ribbon language selector must be interactive");

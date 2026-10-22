@@ -476,7 +476,13 @@ IMSATCAD.createRibbon = function() {
             qWarning("IMSAT CAD RIBBON BLOCKED: toolbar host cannot accept widgets");
             return false;
         }
-        var tabs = new QTabWidget(host);
+        // Mount Ribbon tabs and language selector as one native toolbar widget.
+        // A two-widget mount could leave an orphan Ribbon when the second
+        // QToolBar.addWidget call fails, causing duplicate tabs on retry.
+        var ribbonShell = new QWidget(host);
+        ribbonShell.objectName = "IMSATCADRibbonShell";
+        var shellLayout = new QHBoxLayout(ribbonShell);
+        var tabs = new QTabWidget(ribbonShell);
         tabs.objectName = "IMSATCADRibbonTabs";
         var totalActions = 0;
         var panelCaptions = [];
@@ -531,7 +537,7 @@ IMSATCAD.createRibbon = function() {
             totalActions += tabActions;
         }
         // Reject a decorative selector with no native Qt signal.
-        var languageButton = new QToolButton(host);
+        var languageButton = new QToolButton(ribbonShell);
         if (isNull(languageButton.clicked) ||
                 typeof languageButton.clicked.connect !== "function") {
             qWarning("IMSAT CAD RIBBON BLOCKED: language button has no Qt click signal");
@@ -544,8 +550,9 @@ IMSATCAD.createRibbon = function() {
             IMSATCAD.setRibbonLanguage(IMSATCAD._ribbonLanguage === "vi" ? "en" : "vi");
         });
         // Add widgets only after both Ribbon pages and language signal are valid.
-        host.addWidget(tabs);
-        host.addWidget(languageButton);
+        shellLayout.addWidget(tabs);
+        shellLayout.addWidget(languageButton);
+        host.addWidget(ribbonShell);
         IMSATCAD._ribbonTabsWidget = tabs;
         IMSATCAD._ribbonCaptions = panelCaptions;
         IMSATCAD._ribbonButtonCaptions = commandCaptions;
