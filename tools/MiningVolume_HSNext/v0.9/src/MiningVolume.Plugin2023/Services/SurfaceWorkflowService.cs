@@ -628,6 +628,9 @@ namespace MiningVolume2023.Services
                         role == ModelRole.Existing ? (short)1 : (short)3);
                     TinCadRenderer.SetVisible(doc.Database, session.TinLayer, true);
                 }
+                if (written != checked(cadTin.Triangles.Count + cadTin.VerticalFaces.Count))
+                    throw new InvalidOperationException(
+                        "Ghi TIN CAD không đúng số mặt yêu cầu.");
                 outcome = "PASS";
             }
             catch (OperationCanceledException)
