@@ -68,6 +68,8 @@ def test_host_proof_is_local_versioned_and_nonblocking():
         "File.AppendAllText(",
     ):
         assert token in code, token
+    assert "string drawingFingerprint" in code
+    assert "drawingFingerprint.ToString(\"D\")" not in code
     assert "lock (Sync)" in code
     assert "catch" in code
     assert "No DWG filename" in code
