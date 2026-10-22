@@ -184,6 +184,29 @@ assert(localizedCommands.every(x => x.widget.tooltip === context.IMSATCAD.comman
   "Native setter failure must restore all command tooltips");
 assert.strictEqual(languageButton.text, "English");
 firstCommand.setText = originalCommandTextSetter;
+// Qt bridges can expose QTabWidget.count as count() instead of a property.
+const actualTabWidget = context.IMSATCAD._ribbonTabsWidget;
+const callableCountTabs = {
+  count() { return actualTabWidget.count; },
+  setTabText(index, label) { actualTabWidget.setTabText(index, label); }
+};
+context.IMSATCAD._ribbonTabsWidget = callableCountTabs;
+assert.strictEqual(context.IMSATCAD.setRibbonLanguage("en"), true,
+  "Callable native Qt tab count must allow English locale");
+assert.deepStrictEqual(ribbonPages.map(x => x.label),
+  ["Home", "Insert", "Annotate", "View", "Manage", "Output"]);
+assert.strictEqual(context.IMSATCAD.setRibbonLanguage("vi"), true,
+  "Callable native Qt tab count must allow Vietnamese locale");
+assert.deepStrictEqual(ribbonPages.map(x => x.label),
+  ["Trang chủ", "Chèn", "Ghi chú", "Hiển thị", "Quản lý", "Xuất bản"]);
+context.IMSATCAD._ribbonTabsWidget = {
+  count() { throw new Error("native count failed"); },
+  setTabText() { throw new Error("must not update tabs"); }
+};
+assert.strictEqual(context.IMSATCAD.setRibbonLanguage("en"), false,
+  "Qt tab count exception must block partial language updates");
+assert.strictEqual(context.IMSATCAD._ribbonLanguage, "vi");
+context.IMSATCAD._ribbonTabsWidget = actualTabWidget;
 // QTabWidget.count is a non-configurable getter in the Qt mock.
 // Do not mutate it; the native count guard is exercised by integration checks.
 const first = [...toolbars.values()].map(x => x.actions.length);

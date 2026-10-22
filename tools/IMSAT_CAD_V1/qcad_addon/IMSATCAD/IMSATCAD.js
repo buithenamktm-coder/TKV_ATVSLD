@@ -342,6 +342,17 @@ IMSATCAD.ribbonLabel = function(name) {
     return IMSATCAD._ribbonLanguage === "vi" && IMSATCAD._ribbonVietnamese[name] ?
         IMSATCAD._ribbonVietnamese[name] : name;
 };
+// Qt bridges expose QTabWidget.count as either a property or a method.
+IMSATCAD.ribbonTabCount = function(tabs) {
+    if (isNull(tabs)) { return null; }
+    try {
+        var count = typeof tabs.count === "function" ? tabs.count() : tabs.count;
+        return typeof count === "number" && isFinite(count) && count >= 0 ? count : null;
+    } catch (countError) {
+        qWarning("IMSAT CAD: cannot read native Ribbon tab count: " + countError);
+        return null;
+    }
+};
 IMSATCAD.setRibbonLanguage = function(language) {
     if (language !== "vi" && language !== "en") { return false; }
     // Validate the live widgets before changing state to avoid a partially
@@ -349,8 +360,7 @@ IMSATCAD.setRibbonLanguage = function(language) {
     var currentTabs = IMSATCAD._ribbonTabsWidget;
     if (!isNull(currentTabs) &&
             (typeof currentTabs.setTabText !== "function" ||
-             typeof currentTabs.count !== "number" ||
-             currentTabs.count !== IMSATCAD._ribbonTabs.length)) {
+             IMSATCAD.ribbonTabCount(currentTabs) !== IMSATCAD._ribbonTabs.length)) {
         qWarning("IMSAT CAD: Ribbon language switch blocked: tab API or tab count mismatch");
         return false;
     }
