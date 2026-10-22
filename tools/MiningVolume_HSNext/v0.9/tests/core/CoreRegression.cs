@@ -152,7 +152,8 @@ internal static class CoreRegression
                 "Tiled spatial candidate query changed fill area for "+line.Name);
             Check(b.Segments.Count==a.Segments.Count,
                 "Tiled spatial candidate query missed a segment for "+line.Name);
-            Check(Math.Abs(b.CutArea - n*5)<1e-5,
+            double expectedLength = line.Name == "diagonal" ? n*Math.Sqrt(2.0) : n;
+            Check(Math.Abs(b.CutArea - expectedLength*5)<1e-5,
                 "Tiled spatial candidate query lost terrain coverage for "+line.Name);
         }
         // The pair of very wide triangles MUST still be discovered through
