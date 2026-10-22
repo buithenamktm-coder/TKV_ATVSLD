@@ -42,6 +42,9 @@ def test_cancellation_keeps_model_state_and_host_regression():
         "public static void EnsureBothTinsReady(", 1
     )[0]
     assert invalid.index("TinCadRenderer.Clear(") < invalid.index("session.Tin = null;")
+    # No separate, committed PrepareLayer transaction before cancellation:
+    # even layer visibility and existence must remain untouched on failure.
+    assert "TinCadRenderer.PrepareLayer(" not in invalid
 
     qa = read("src/MiningVolume.Plugin2023/Services/SectionCadRegression.cs")
     assert "VerifyTinClearRollbackOnCancelAndForeignObject();" in qa
