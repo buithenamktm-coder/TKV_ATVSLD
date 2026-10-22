@@ -26,8 +26,12 @@ namespace MiningVolume2023.Services
             using (var tr = db.TransactionManager.StartOpenCloseTransaction())
             {
                 var ms = GetModelSpace(db, tr);
+                var polyClass = Autodesk.AutoCAD.Runtime.RXObject.GetClass(typeof(Polyline));
                 foreach (ObjectId id in ms)
                 {
+                    // Only open polylines: mine TINs can contain millions
+                    // of 3DFACEs that must not be opened for this check.
+                    if (!id.ObjectClass.IsDerivedFrom(polyClass)) continue;
                     var poly = tr.GetObject(id, OpenMode.ForRead) as Polyline;
                     if (poly == null) continue;
                     using (var data = poly.GetXDataForApplication(SectionCadRenderer.EditRegApp))
@@ -43,16 +47,9 @@ namespace MiningVolume2023.Services
             if (db == null) throw new ArgumentNullException(nameof(db));
             if (approved == null || approved.Count == 0)
                 throw new InvalidOperationException("Chưa có mặt cắt để xác minh trước khi xuất.");
-            if (!HasEditableProfiles(db))
-            {
-                if (approved.Any(p => p != null && p.IsUserEdited))
-                    throw new InvalidOperationException(
-                        "Hệ mặt cắt đã hiệu chỉnh không còn tồn tại trên CAD. " +
-                        "Không xuất số liệu cũ; hãy khôi phục đường đã chỉnh.");
-                return;
-            }
-
-            var actual = ReadEditedProfiles(db, approved);
+            // One ModelSpace traversal instead of separate existence and
+            // geometry scans; retain full XData identity/geometry validation.
+            var actual = ReadEditedProfiles(db, approved, allowMissingUnedited: true);
             if (!EditedSectionProfileBuilder.SameGeometry(approved, actual))
                 throw new InvalidOperationException(
                     "Đường mặt cắt trên CAD đã thay đổi sau lần cập nhật khối lượng. " +
@@ -60,7 +57,8 @@ namespace MiningVolume2023.Services
         }
 
         internal static IReadOnlyList<SectionProfile> ReadEditedProfiles(
-            Database db, IReadOnlyList<SectionProfile> originals)
+            Database db, IReadOnlyList<SectionProfile> originals,
+            bool allowMissingUnedited = false)
         {
             if (originals == null || originals.Count == 0)
                 throw new InvalidOperationException("Chưa có mặt cắt được tính từ TIN.");
@@ -68,8 +66,12 @@ namespace MiningVolume2023.Services
             using (var tr = db.TransactionManager.StartOpenCloseTransaction())
             {
                 var ms = GetModelSpace(db, tr);
+                var polyClass = Autodesk.AutoCAD.Runtime.RXObject.GetClass(typeof(Polyline));
                 foreach (ObjectId id in ms)
                 {
+                    // Only open polylines: mine TINs can contain millions
+                    // of 3DFACEs that must not be opened for this check.
+                    if (!id.ObjectClass.IsDerivedFrom(polyClass)) continue;
                     var poly = tr.GetObject(id, OpenMode.ForRead) as Polyline;
                     if (poly == null) continue;
                     using (var data = poly.GetXDataForApplication(SectionCadRenderer.EditRegApp))
@@ -81,6 +83,16 @@ namespace MiningVolume2023.Services
                         list.Add(record);
                     }
                 }
+            }
+            // No tagged CAD sections is valid only for untouched profiles
+            // that have never been exported for manual editing.
+            if (grouped.Count == 0 && allowMissingUnedited)
+            {
+                if (originals.Any(p => p != null && p.IsUserEdited))
+                    throw new InvalidOperationException(
+                        "Hệ mặt cắt đã hiệu chỉnh không còn tồn tại trên CAD. " +
+                        "Không xuất số liệu cũ; hãy khôi phục đường đã chỉnh.");
+                return originals;
             }
             var result = new List<SectionProfile>(originals.Count);
             foreach (var orig in originals)
