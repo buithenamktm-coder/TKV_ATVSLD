@@ -54,7 +54,9 @@ if ($actual -ne $ExpectedPublicKeySha256.ToLowerInvariant()) {
 }
 $source = [System.IO.File]::ReadAllText((Resolve-Path -LiteralPath $SourceFile).Path)
 $placeholder = 'internal const string RsaPublicKeyXml = "";'
-if ($source.Split(@($placeholder),[System.StringSplitOptions]::None).Length -ne 2) {
+if ($source.IndexOf($placeholder, [StringComparison]::Ordinal) -lt 0 -or
+    $source.IndexOf($placeholder, $source.IndexOf($placeholder) + $placeholder.Length,
+        [StringComparison]::Ordinal) -ge 0) {
     throw 'BLOCKED: source đã provision hoặc không còn placeholder gốc. Không được âm thầm đổi khóa.'
 }
 $escaped = $canonical.Replace('"','""')
