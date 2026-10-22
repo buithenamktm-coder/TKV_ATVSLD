@@ -1,4 +1,4 @@
-# V2.0 RELEASE/host-QA provisioning. Public-only; never reads a private issuer key.
+﻿# V2.0 RELEASE/host-QA provisioning. Public-only; never reads a private issuer key.
 # A missing, malformed or unexpected public key MUST stop the production build.
 param(
     [Parameter(Mandatory=$true)][string]$PublicKeyFile,
