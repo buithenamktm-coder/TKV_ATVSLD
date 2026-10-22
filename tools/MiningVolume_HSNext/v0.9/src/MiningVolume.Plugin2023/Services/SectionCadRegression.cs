@@ -18,6 +18,7 @@ namespace MiningVolume2023.Services
     {
         internal static void Run()
         {
+            VerifySectionEraseSkipsTinFaces();
             VerifyTableRollback();
             VerifyGridIdentity();
             var profiles = new List<SectionProfile>();
@@ -77,6 +78,62 @@ namespace MiningVolume2023.Services
                     if (!canceled || Snapshot(batched, true) != before)
                         throw new InvalidOperationException("Canceled section export did not restore original entities.");
                 }
+            }
+        }
+
+        private static void VerifySectionEraseSkipsTinFaces()
+        {
+            // Host-only regression on an isolated DWG. The real mine model
+            // can contain >1M native Face objects and a section redraw must
+            // leave them entirely intact, even if canceled mid-transaction.
+            using (var db = new Database(true, true))
+            {
+                const string tinLayer = "QA_TIN_FACES";
+                using (var tr = db.TransactionManager.StartTransaction())
+                {
+                    var layers = (LayerTable)tr.GetObject(db.LayerTableId, OpenMode.ForWrite);
+                    var layer = new LayerTableRecord { Name = tinLayer };
+                    var layerId = layers.Add(layer);
+                    tr.AddNewlyCreatedDBObject(layer, true);
+                    var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
+                    var model = (BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForWrite);
+                    for (int i = 0; i < 2048; i++)
+                    {
+                        var p = new Point3d(i * 2, 0, 0);
+                        var q = new Point3d(i * 2 + 1, 0, 0);
+                        var top = new Point3d(i * 2, 1, 0);
+                        var face = new Face(p, q, top, top, true, true, true, false)
+                        {
+                            LayerId = layerId
+                        };
+                        model.AppendEntity(face);
+                        tr.AddNewlyCreatedDBObject(face, true);
+                    }
+                    tr.Commit();
+                }
+                var line = new SectionLine(1, "QA-MC-1", 0,
+                    new Vec2(1, 0), new Vec2(0, 1),
+                    new[] { new SectionSpan(0, 10) });
+                var segment = new SectionProfileSegment(0, 10, line.PointAt(0), line.PointAt(10),
+                    100, 100, 95, 95);
+                var profiles = new[]
+                {
+                    new SectionProfile(line, new[] { segment }, 50, 0, new string[0])
+                };
+                if (TinCadRenderer.CountFaces(db, tinLayer) != 2048)
+                    throw new InvalidOperationException("TIN regression fixture was not created.");
+                SectionCadRenderer.ReplaceProfiles(db, profiles, Point3d.Origin, 1000, 1000, 5);
+                SectionCadRenderer.ReplaceProfiles(db, profiles, Point3d.Origin, 1000, 1000, 5);
+                if (TinCadRenderer.CountFaces(db, tinLayer) != 2048)
+                    throw new InvalidOperationException("Section redraw deleted unrelated TIN geometry.");
+                bool canceled = false;
+                try
+                {
+                    DrawBatches(db, profiles, () => { throw new OperationCanceledException(); });
+                }
+                catch (OperationCanceledException) { canceled = true; }
+                if (!canceled || TinCadRenderer.CountFaces(db, tinLayer) != 2048)
+                    throw new InvalidOperationException("Canceled section redraw modified accepted TIN.");
             }
         }
 
