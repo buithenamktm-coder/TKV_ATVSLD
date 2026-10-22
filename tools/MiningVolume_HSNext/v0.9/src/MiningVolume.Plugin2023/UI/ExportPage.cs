@@ -188,8 +188,11 @@ namespace MiningVolume2023.UI
             {
                 _export.Text = "Hủy xuất kết quả";
                 UseWaitCursor = true;
-                if (exportCad)
-                    SurfaceWorkflowService.EnsureBothTinsReady(synchronizeCadLayers: true);
+                // Quantity output uses the approved VolumeResult, NOT TIN
+                // 3DFACE layers. A full 1.6M+ face sync would rescan or
+                // rebuild unchanged CAD geometry before inserting a tiny
+                // quantity Block. The check below still validates source
+                // revisions, clipping boundary and edited section polylines.
                 EnsureExportInputsCurrent(doc, st, currentResult, approvedProfiles,
                     existingTin, designTin, existingRevision, designRevision,
                     selectedUnitGroup, selectedUnitName, selectedPeriod);
@@ -208,9 +211,13 @@ namespace MiningVolume2023.UI
 
                 if (exportCad)
                 {
-                    EnsureExportInputsCurrent(doc, st, currentResult, approvedProfiles,
-                        existingTin, designTin, existingRevision, designRevision,
-                    selectedUnitGroup, selectedUnitName, selectedPeriod);
+                    // Excel write awaits background I/O: revalidate before CAD
+                    // if a workbook was requested. CAD-only has not yielded
+                    // since its validated preflight; scanning twice is wasteful.
+                    if (exportExcel)
+                        EnsureExportInputsCurrent(doc, st, currentResult, approvedProfiles,
+                            existingTin, designTin, existingRevision, designRevision,
+                            selectedUnitGroup, selectedUnitName, selectedPeriod);
                     _status.Text = "Đang xuất Block bảng khối lượng vào AutoCAD...";
                     using (var progress = new SectionCadProgress(
                         currentResult.Intervals.Count + currentResult.Levels.Count + 2, "xuất bảng khối lượng"))
