@@ -661,10 +661,10 @@ namespace MiningVolume2023.Services
                 {
                     using (doc.LockDocument())
                     {
-                        TinCadRenderer.PrepareLayer(
-                            doc.Database,
-                            session.TinLayer,
-                            role == ModelRole.Existing ? (short)1 : (short)3);
+                        // Clear itself unlocks/thaws the layer INSIDE its
+                        // rollback transaction. A separate PrepareLayer()
+                        // committed visibility/lock changes even if Esc then
+                        // canceled deletion, and could create an empty layer.
                         TinCadRenderer.Clear(doc.Database, session.TinLayer);
                     }
                     try { doc.Editor.Regen(); } catch { }

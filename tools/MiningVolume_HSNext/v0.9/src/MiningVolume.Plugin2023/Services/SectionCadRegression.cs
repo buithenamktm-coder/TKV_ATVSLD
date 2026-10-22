@@ -18,6 +18,7 @@ namespace MiningVolume2023.Services
     {
         internal static void Run()
         {
+            VerifyTinClearRollbackOnCancelAndForeignObject();
             VerifyTinPairRollbackAfterSecondSurfaceFailure();
             VerifySectionEraseSkipsTinFaces();
             VerifyTableRollback();
@@ -79,6 +80,82 @@ namespace MiningVolume2023.Services
                     if (!canceled || Snapshot(batched, true) != before)
                         throw new InvalidOperationException("Canceled section export did not restore original entities.");
                 }
+            }
+        }
+
+        private static void VerifyTinClearRollbackOnCancelAndForeignObject()
+        {
+            // Use real 3DFACEs in a separate AutoCAD database. The cleanup
+            // routine must never leave a partially erased survey when Esc
+            // or a foreign entity aborts the operation.
+            using (var db = new Database(true, true))
+            {
+                const string layer = "QA_CANCEL_TIN";
+                ObjectId foreignId = ObjectId.Null;
+                using (var tr = db.TransactionManager.StartTransaction())
+                {
+                    var lt = (LayerTable)tr.GetObject(db.LayerTableId, OpenMode.ForWrite);
+                    var record = new LayerTableRecord { Name = layer };
+                    var layerId = lt.Add(record);
+                    tr.AddNewlyCreatedDBObject(record, true);
+                    var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
+                    var ms = (BlockTableRecord)tr.GetObject(
+                        bt[BlockTableRecord.ModelSpace], OpenMode.ForWrite);
+                    for (int i = 0; i < 2300; i++)
+                    {
+                        double x = i * 2;
+                        var face = new Face(new Point3d(x, 0, 0),
+                            new Point3d(x + 1, 0, 0),
+                            new Point3d(x, 1, 0),
+                            new Point3d(x, 1, 0), true, true, true, false)
+                        { LayerId = layerId };
+                        ms.AppendEntity(face);
+                        tr.AddNewlyCreatedDBObject(face, true);
+                    }
+                    tr.Commit();
+                }
+                if (TinCadRenderer.CountFaces(db, layer) != 2300)
+                    throw new InvalidOperationException("TIN clear QA fixture incomplete.");
+
+                int polls = 0;
+                bool canceled = false;
+                try
+                {
+                    TinCadRenderer.Clear(db, layer, () => {
+                        if (++polls >= 2) throw new OperationCanceledException();
+                    });
+                }
+                catch (OperationCanceledException) { canceled = true; }
+                if (!canceled || polls < 2 || TinCadRenderer.CountFaces(db, layer) != 2300)
+                    throw new InvalidOperationException("Canceled TIN delete did not roll back all faces.");
+
+                using (var tr = db.TransactionManager.StartTransaction())
+                {
+                    var lt = (LayerTable)tr.GetObject(db.LayerTableId, OpenMode.ForRead);
+                    var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
+                    var ms = (BlockTableRecord)tr.GetObject(
+                        bt[BlockTableRecord.ModelSpace], OpenMode.ForWrite);
+                    var text = new DBText { LayerId = lt[layer],
+                        Position = Point3d.Origin, Height = 2, TextString = "PRESERVE" };
+                    foreignId = ms.AppendEntity(text);
+                    tr.AddNewlyCreatedDBObject(text, true);
+                    tr.Commit();
+                }
+                bool rejected = false;
+                try { TinCadRenderer.Clear(db, layer); }
+                catch (InvalidOperationException) { rejected = true; }
+                if (!rejected || TinCadRenderer.CountFaces(db, layer) != 2300 ||
+                    TinCadRenderer.CountUnexpectedEntities(db, layer) != 1)
+                    throw new InvalidOperationException("TIN delete erased data despite foreign object.");
+
+                using (var tr = db.TransactionManager.StartTransaction())
+                {
+                    ((Entity)tr.GetObject(foreignId, OpenMode.ForWrite)).Erase();
+                    tr.Commit();
+                }
+                if (TinCadRenderer.Clear(db, layer) != 2300 ||
+                    TinCadRenderer.CountFaces(db, layer) != 0)
+                    throw new InvalidOperationException("TIN delete did not recover after cancellation.");
             }
         }
 
