@@ -18,6 +18,10 @@ def test_trusted_v2_push_uses_owner_public_only_key_before_build():
     assert "-ExpectedPublicKeySha256 $env:V2_ISSUER_PUBLIC_SHA256" in s
     assert "provision_v2_public_key.ps1" in s
     assert "No installable signed-license QA artifact" in s
+    # .ps1 does not set LASTEXITCODE. Hosted Windows CI previously pinned
+    # the correct RSA key, then falsely failed on an unset $LASTEXITCODE.
+    assert "if (-not $?) { throw 'V2 pinned RSA public key provision failed.' }" in s
+    assert "if ($LASTEXITCODE -ne 0) { throw 'V2 pinned RSA public key provision failed.' }" not in s
     assert "Remove-Item $publicXml -Force" in s
     assert "IMSAT_REQUIRE_APPROVED_PUBLIC_KEY" in s
     assert "RSA_PUBLIC_VERIFIER_PINNED_SHA256=" in s
