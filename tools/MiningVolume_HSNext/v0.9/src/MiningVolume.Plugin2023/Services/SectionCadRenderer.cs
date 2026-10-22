@@ -350,10 +350,16 @@ namespace MiningVolume2023.Services
         private static void EraseOnLayers(BlockTableRecord ms, Transaction tr, IEnumerable<ObjectId> layers, Action pollCancellation = null)
         {
             var set = new HashSet<ObjectId>(layers);
+            // ModelSpace may contain millions of TIN 3DFACEs. The IMSAT
+            // section/preview renderer creates LINE, LWPOLYLINE and DBTEXT,
+            // never 3DFACE. Classify ObjectIds BEFORE expensive DB opens;
+            // retain unrelated TIN geometry even when exporting 300 sections.
+            var faceClass = Autodesk.AutoCAD.Runtime.RXObject.GetClass(typeof(Face));
             int scanned = 0;
             foreach (ObjectId id in ms)
             {
                 if ((scanned++ & 255) == 0) pollCancellation?.Invoke();
+                if (id.ObjectClass.IsDerivedFrom(faceClass)) continue;
                 var e = tr.GetObject(id, OpenMode.ForRead) as Entity;
                 if (e != null && set.Contains(e.LayerId)) { e.UpgradeOpen(); e.Erase(); }
             }
