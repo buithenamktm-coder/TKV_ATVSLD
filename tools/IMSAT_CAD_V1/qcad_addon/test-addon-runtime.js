@@ -76,10 +76,19 @@ assert(actionButtons.every(b => b.text && !b.text.endsWith(".js")), "Ribbon butt
 assert(actionButtons.every(b => b.minimumWidth >= 84), "Ribbon button minimum width missing");
 assert(actionButtons.every(b => b.action), "Ribbon button missing native action");
 assert.strictEqual(context.IMSATCAD._ribbonButtonCaptions.length, 49, "Missing localized Ribbon commands");
-assert(actionButtons.every(b => b.text && b.tooltip === b.text), "Native command label and tooltip mismatch");
+assert(actionButtons.every(b => b.text && b.tooltip.indexOf(b.text) === 0),
+  "Native command tooltip must start with the localized command label");
 assert(actionButtons.every(b => b.text !== b.action.script.split("/").pop().replace(/\.js$/, "")),
   "Ribbon must not show internal QCAD script identifiers");
 const localizedCommands = context.IMSATCAD._ribbonButtonCaptions;
+assert(localizedCommands.every(x => x.widget.tooltip === context.IMSATCAD.commandToolTip(x.script, "vi")),
+  "Vietnamese tooltips must include only actual registered aliases");
+assert.strictEqual(context.IMSATCAD.commandToolTip("scripts/Draw/Line/Line2P/Line2P.js", "vi"),
+  "Đường thẳng (LINE, L, LN)");
+assert.strictEqual(context.IMSATCAD.commandToolTip("scripts/Draw/Hatch/HatchFromSelection/HatchFromSelection.js", "vi"),
+  "Tô mặt cắt", "Commands without registered aliases must not invent shortcuts");
+assert(!context.IMSATCAD.commandToolTip("scripts/Draw/Hatch/HatchFromSelection/HatchFromSelection.js", "vi").includes("COPY"),
+  "Do not advertise unsupported AutoCAD aliases");
 const vietnameseCommandLabels = localizedCommands.map(x => x.widget.text);
 const originalCommandActions = localizedCommands.map(x => x.widget.action);
 assert.deepStrictEqual(ribbonPages.map(x => x.label), ["Trang chủ", "Chèn", "Ghi chú", "Hiển thị", "Quản lý", "Xuất bản"]);
@@ -107,8 +116,10 @@ assert.deepStrictEqual(ribbonCaptions.map(x => x.label), ["Draw", "Modify", "Lay
 assert.strictEqual(languageButton.text, "Tiếng Việt");
 assert(localizedCommands.every(x => x.widget.text === context.IMSATCAD.commandLabel(x.script, "en")),
   "Switch to English must translate every command button");
-assert(localizedCommands.every(x => x.widget.tooltip === x.widget.text),
-  "English command tooltips must follow labels");
+assert(localizedCommands.every(x => x.widget.tooltip === context.IMSATCAD.commandToolTip(x.script, "en")),
+  "English tooltips must show registered aliases with translated labels");
+assert.strictEqual(context.IMSATCAD.commandToolTip("scripts/Draw/Line/Line2P/Line2P.js", "en"),
+  "Line (LINE, L, LN)");
 assert.strictEqual(languageButton.tooltip, "Chuyển Ribbon sang tiếng Việt");
 assert.strictEqual(context.IMSATCAD.setRibbonLanguage("xx"), false, "Unsupported locale must be rejected");
 languageButton.click();
@@ -118,6 +129,8 @@ assert.strictEqual(languageButton.text, "English");
 assert.strictEqual(languageButton.tooltip, "Switch Ribbon to English");
 assert.deepStrictEqual(localizedCommands.map(x => x.widget.text), vietnameseCommandLabels,
   "Switch back to Vietnamese must restore all 49 command captions");
+assert(localizedCommands.every(x => x.widget.tooltip === context.IMSATCAD.commandToolTip(x.script, "vi")),
+  "Switch back must restore Vietnamese command tooltips and registered aliases");
 assert(localizedCommands.every((x, i) => x.widget.action === originalCommandActions[i]),
   "Language switching must not replace native CAD actions");
 // A broken Qt language control must not leave the Ribbon half-translated.

@@ -314,6 +314,21 @@ IMSATCAD.commandLabel = function(script, language) {
     var pair = IMSATCAD._commandLabels[filename];
     return pair ? pair[language || IMSATCAD._ribbonLanguage] : filename;
 };
+// Show the actual registered command aliases, not speculative AutoCAD shortcuts.
+// The tooltip is a view-only hint; the underlying QCAD QAction is unchanged.
+IMSATCAD.commandAliases = function(script) {
+    for (var i = 0; i < IMSATCAD._aliases.length; ++i) {
+        if (IMSATCAD._aliases[i][0] === script) {
+            return IMSATCAD._aliases[i][1].join(", ").toUpperCase();
+        }
+    }
+    return "";
+};
+IMSATCAD.commandToolTip = function(script, language) {
+    var label = IMSATCAD.commandLabel(script, language);
+    var aliases = IMSATCAD.commandAliases(script);
+    return aliases.length > 0 ? label + " (" + aliases + ")" : label;
+};
 IMSATCAD._ribbonTabs = [
     ["Home", [["Draw", "_drawScripts"], ["Modify", "_modifyScripts"], ["Layers", "_layerScripts"]]],
     ["Insert", [["Blocks", "_blockScripts"]]],
@@ -375,7 +390,7 @@ IMSATCAD.setRibbonLanguage = function(language) {
         var entry = IMSATCAD._ribbonButtonCaptions[b2];
         var translated = IMSATCAD.commandLabel(entry.script, language);
         entry.widget.setText(translated);
-        entry.widget.setToolTip(translated);
+        entry.widget.setToolTip(IMSATCAD.commandToolTip(entry.script, language));
     }
     if (!isNull(IMSATCAD._ribbonLanguageButton)) {
         IMSATCAD._ribbonLanguageButton.setText(language === "vi" ? "English" : "Tiếng Việt");
@@ -452,7 +467,7 @@ IMSATCAD.createRibbon = function() {
                     var label = IMSATCAD.commandLabel(scripts[i]);
                     commandCaptions.push({ widget: button, script: scripts[i] });
                     if (typeof button.setText === "function") { button.setText(label); }
-                    if (typeof button.setToolTip === "function") { button.setToolTip(label); }
+                    if (typeof button.setToolTip === "function") { button.setToolTip(IMSATCAD.commandToolTip(scripts[i])); }
                     if (typeof button.setMinimumWidth === "function") { button.setMinimumWidth(84); }
                     // Ribbon groups use three compact rows, expanding horizontally as needed.
                     // This avoids very tall panels when a group has many actions.
