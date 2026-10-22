@@ -61,22 +61,6 @@ jobs:
         with:
           go-version: '1.23.x'
 
-      - name: Inject ONLY pinned public RSA verifier from admin issuer
-        shell: pwsh
-        run: |
-          if ([string]::IsNullOrWhiteSpace($env:PUBLIC_RSA_B64) -or [string]::IsNullOrWhiteSpace($env:APPROVED_RSA_SHA256)) {
-            throw 'BLOCKED: set IMSAT_VOLUME_V2_RSA_PUBLIC_XML_B64 secret and IMSAT_VOLUME_V2_RSA_PUBLIC_SHA256 variable. Never use a CI-generated issuer key.'
-          }
-          $path=Join-Path $env:RUNNER_TEMP 'imsat-v2-public.xml'
-          try {
-            [IO.File]::WriteAllBytes($path,[Convert]::FromBase64String($env:PUBLIC_RSA_B64))
-            & "$env:MV_ROOT/release/provision_v2_public_key.ps1" -PublicKeyFile $path -ExpectedPublicKeySha256 $env:APPROVED_RSA_SHA256
-            if ($LASTEXITCODE -ne 0) { throw 'RSA public verifier provision failed.' }
-          } finally {
-            Remove-Item $path -Force -ErrorAction SilentlyContinue
-            Remove-Item Env:PUBLIC_RSA_B64 -ErrorAction SilentlyContinue
-          }
-
       - name: Check C# algorithms, Python tests and RSA issuer self-test
         shell: pwsh
         run: |
@@ -92,6 +76,22 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Issuer build failed.' }
           & 'license-manager/bin/Release/net48/IMSAT.LicenseManager.exe' selftest
           if ($LASTEXITCODE -ne 0) { throw 'RSA issuer tamper regression failed.' }
+
+      - name: Inject ONLY pinned public RSA verifier from admin issuer
+        shell: pwsh
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:PUBLIC_RSA_B64) -or [string]::IsNullOrWhiteSpace($env:APPROVED_RSA_SHA256)) {
+            throw 'BLOCKED: set IMSAT_VOLUME_V2_RSA_PUBLIC_XML_B64 secret and IMSAT_VOLUME_V2_RSA_PUBLIC_SHA256 variable. Never use a CI-generated issuer key.'
+          }
+          $path=Join-Path $env:RUNNER_TEMP 'imsat-v2-public.xml'
+          try {
+            [IO.File]::WriteAllBytes($path,[Convert]::FromBase64String($env:PUBLIC_RSA_B64))
+            & "$env:MV_ROOT/release/provision_v2_public_key.ps1" -PublicKeyFile $path -ExpectedPublicKeySha256 $env:APPROVED_RSA_SHA256
+            if ($LASTEXITCODE -ne 0) { throw 'RSA public verifier provision failed.' }
+          } finally {
+            Remove-Item $path -Force -ErrorAction SilentlyContinue
+            Remove-Item Env:PUBLIC_RSA_B64 -ErrorAction SilentlyContinue
+          }
 
       - name: Compile with installed AutoCAD 2023 assemblies
         shell: pwsh
