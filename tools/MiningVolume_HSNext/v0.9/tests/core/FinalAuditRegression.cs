@@ -49,6 +49,22 @@ internal static class FinalAuditRegression
         Check(canceled,"Canceled operation returned a result");
     }
     public static void Add(IDictionary<string,Action> tests) {
+        tests["section_axis_ticks_bounded_and_precision_safe"] = () => {
+            var ticks = SectionAxisTicks.Create(-10, 10, 0.1, 250);
+            Check(ticks.Count == 201, "Fractional axis lost endpoint");
+            Near(ticks[0], -10); Near(ticks[200], 10);
+            for (int i=1;i<ticks.Count;i++) Check(ticks[i]>ticks[i-1], "Repeated elevation tick");
+            Check(SectionAxisTicks.Create(0,249,1,250).Count==250,"Budget boundary rejected");
+            foreach (var args in new[] {
+                new[]{1e16,1e16,0.1}, new[]{1e6,1e6,1e-12},
+                new[]{0.0,250.0,1.0}, new[]{0.0,1.0,double.NaN},
+                new[]{0.0,double.PositiveInfinity,1.0}, new[]{1.0,0.0,1.0} }) {
+                bool rejected=false;
+                try { SectionAxisTicks.Create(args[0],args[1],args[2],250); }
+                catch(ArgumentOutOfRangeException) { rejected=true; }
+                Check(rejected,"Invalid/unrepresentable axis accepted");
+            }
+        };
         tests["integrated_excel_cancel_mid_write_preserves_existing_file_and_cleans_staging"] = () => {
             string directory=Path.Combine(Path.GetTempPath(),"imsat-cancel-"+Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(directory);

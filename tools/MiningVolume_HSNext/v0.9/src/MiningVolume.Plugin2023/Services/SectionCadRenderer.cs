@@ -104,7 +104,7 @@ namespace MiningVolume2023.Services
                 horizontalScale < 1 || verticalScale < 1)
                 throw new ArgumentOutOfRangeException(
                     "Tỷ lệ ngang/đứng phải là số dương hợp lệ.");
-            if (levelStep <= 0)
+            if (levelStep <= 0 || double.IsNaN(levelStep) || double.IsInfinity(levelStep))
                 throw new ArgumentOutOfRangeException(nameof(levelStep),
                     "Bước chia trục cao độ trên mặt cắt phải lớn hơn 0.");
             if (double.IsNaN(layoutGap) || double.IsInfinity(layoutGap) || layoutGap < 30.0)
@@ -148,7 +148,7 @@ namespace MiningVolume2023.Services
                     double baseZ = Math.Floor(p.MinZ / levelStep) * levelStep;
                     double topZ = Math.Ceiling(p.MaxZ / levelStep) * levelStep;
                     if (topZ <= baseZ) topZ = baseZ + levelStep;
-                    EnsureElevationTickBudget(baseZ, topZ, levelStep, p.Line.Name);
+                    var elevationTicks = EnsureElevationTickBudget(baseZ, topZ, levelStep, p.Line.Name);
                     double height = (topZ - baseZ) * vExag;
                     double x0 = baseX, y0 = currentY;
                     double rightAxisX = x0 + width;
@@ -183,7 +183,7 @@ namespace MiningVolume2023.Services
                         AddLine(ms, tr, new Point3d(x0 + x, y0 - 1.5, 0), new Point3d(x0 + x, y0 + 1.5, 0), axLayer);
                         AddText(ms, tr, styleId, txLayer, new Point3d(x0 + x, y0 - 5.0, 0), x.ToString("0.##"), 3.0, 0);
                     }
-                    for (double z = baseZ; z <= topZ + 1e-9; z += levelStep)
+                    foreach (double z in elevationTicks)
                     {
                         pollCancellation?.Invoke();
                         // Both sides share the same z and yy. Never independently
@@ -222,6 +222,7 @@ namespace MiningVolume2023.Services
 
                     currentY -= height + layoutGap;
                 }
+                pollCancellation?.Invoke();
                 tr.Commit();
                 return currentY;
             }
@@ -271,7 +272,7 @@ namespace MiningVolume2023.Services
                     double baseZ = Math.Floor(profile.MinZ / elevationStep) * elevationStep;
                     double topZ = Math.Ceiling(profile.MaxZ / elevationStep) * elevationStep;
                     if (topZ <= baseZ) topZ = baseZ + elevationStep;
-                    EnsureElevationTickBudget(baseZ, topZ, elevationStep, profile.Line.Name);
+                    var elevationTicks = EnsureElevationTickBudget(baseZ, topZ, elevationStep, profile.Line.Name);
                     double height = (topZ - baseZ) * exaggeration;
                     double width = Math.Max(1, profile.Line.MaxT - profile.Line.MinT);
                     double x0 = baseX, y0 = currentY, right = x0 + width;
@@ -285,7 +286,7 @@ namespace MiningVolume2023.Services
                         new Point3d(right,y0+height,0),axis);
                     AddText(ms,tr,style,label,new Point3d(x0,y0+height+9,0),
                         "Mặt cắt nhanh " + profile.Line.Name,3.0,0);
-                    for (double z = baseZ; z <= topZ + elevationStep*1e-6; z += elevationStep)
+                    foreach (double z in elevationTicks)
                     {
                         pollCancellation?.Invoke();
                         double yy = y0 + (z-baseZ)*exaggeration;
@@ -321,7 +322,7 @@ namespace MiningVolume2023.Services
         // volume-band calculation parameters or silently coarsens a drawing.
         private const int MaxElevationTicksPerProfile = 250;
 
-        private static void EnsureElevationTickBudget(
+        private static IReadOnlyList<double> EnsureElevationTickBudget(
             double baseZ, double topZ, double step, string profileName)
         {
             if (double.IsNaN(baseZ) || double.IsInfinity(baseZ) ||
@@ -339,6 +340,12 @@ namespace MiningVolume2023.Services
                     MaxElevationTicksPerProfile.ToString("n0") +
                     " vạch/nhãn trên CAD. Hãy tăng 'Bước chia trục Z, m' " +
                     "rồi vẽ lại. Bước chia tầng tính khối lượng không thay đổi.");
+            try { return SectionAxisTicks.Create(baseZ, topZ, step, MaxElevationTicksPerProfile); }
+            catch (ArgumentOutOfRangeException ex)
+            {
+                throw new InvalidOperationException("Mặt cắt " + profileName +
+                    ": bước chia trục Z không biểu diễn được tại cao độ này. Hãy kiểm tra cao độ hoặc tăng bước chia trục Z.", ex);
+            }
         }
 
         private static BlockTableRecord ModelSpace(Database db, Transaction tr, bool write)

@@ -16,14 +16,35 @@ namespace MiningVolume2023.Services
     // Does not touch the user's drawing or substitute a mock for host rollback.
     internal static class SectionCadRegression
     {
-        internal static void Run()
+        internal static void Run(Action<string> reportPassed = null)
         {
-            VerifyBoundarySelectionSkipsTinAndSupportsCancel();
-            VerifyTinClearRollbackOnCancelAndForeignObject();
-            VerifyTinPairRollbackAfterSecondSurfaceFailure();
-            VerifySectionEraseSkipsTinFaces();
-            VerifyTableRollback();
-            VerifyGridIdentity();
+            // Each group owns disposable side databases. A failed fixture must
+            // not hide failures in unrelated groups until another installation.
+            var errors = new List<Exception>();
+            RunGroup("Boundary selection", () => { VerifyBoundarySelectionSkipsTinAndSupportsCancel(); }, errors, reportPassed);
+            RunGroup("TIN clear rollback", () => { VerifyTinClearRollbackOnCancelAndForeignObject(); }, errors, reportPassed);
+            RunGroup("TIN pair rollback", () => { VerifyTinPairRollbackAfterSecondSurfaceFailure(); }, errors, reportPassed);
+            RunGroup("Section erase preserves TIN", () => { VerifySectionEraseSkipsTinFaces(); }, errors, reportPassed);
+            RunGroup("Quantity block rollback", () => { VerifyTableRollback(); }, errors, reportPassed);
+            RunGroup("Grid calculation identity", () => { VerifyGridIdentity(); }, errors, reportPassed);
+            RunGroup("Section layout and cancellation", VerifySectionLayoutAndCancellation, errors, reportPassed);
+            if (errors.Count > 0)
+                throw new AggregateException("CAD regression groups failed: " + errors.Count, errors);
+        }
+
+        private static void RunGroup(string name, Action test, List<Exception> errors, Action<string> reportPassed)
+        {
+            try { test(); }
+            catch (Exception ex)
+            {
+                errors.Add(new InvalidOperationException("CAD group: " + name, ex));
+                return;
+            }
+            reportPassed?.Invoke(name);
+        }
+
+        private static void VerifySectionLayoutAndCancellation()
+        {
             var profiles = new List<SectionProfile>();
             for (int i = 0; i < 25; i++)
             {
@@ -63,6 +84,21 @@ namespace MiningVolume2023.Services
                 DrawBatches(batched, profiles, () => totalPolls++);
                 if (Snapshot(whole) != Snapshot(batched))
                     throw new InvalidOperationException("Section batch carry changed CAD geometry or labels.");
+                // Exercise the renderer directly, without an outer transaction:
+                // cancellation at its final poll must undo deletion and redraw.
+                int directPolls = 0;
+                SectionCadRenderer.ReplaceProfilesBatched(whole, profiles, Point3d.Origin,
+                    1000, 500, 5, 0, profiles.Count, true, pollCancellation: () => directPolls++);
+                string directBefore = Snapshot(whole, true);
+                int directCount = 0; bool directCanceled = false;
+                try {
+                    SectionCadRenderer.ReplaceProfilesBatched(whole, profiles, Point3d.Origin,
+                        1000, 500, 5, 0, profiles.Count, true, pollCancellation: () => {
+                            if (++directCount == directPolls) throw new OperationCanceledException();
+                        });
+                } catch (OperationCanceledException) { directCanceled = true; }
+                if (!directCanceled || Snapshot(whole, true) != directBefore)
+                    throw new InvalidOperationException("Final renderer cancellation failed to restore drawing.");
                 string before = Snapshot(batched, true);
                 // Include cancellation during deletion, first batch, and after
                 // an inner transaction has committed (the outer must undo it).
