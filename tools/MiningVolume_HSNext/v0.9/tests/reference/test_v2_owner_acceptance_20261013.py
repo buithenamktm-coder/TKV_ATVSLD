@@ -99,5 +99,5 @@ def test_professional_formula_quick_section_and_custom_scales():
 def test_export_tip_removed_and_excel_logic_preserved():
     page = source("MiningVolume.Plugin2023/UI/ExportPage.cs")
     assert "Excel: Arial 12 • bảng đóng khung" not in page
-    assert "ExportWorkflowService.WriteXlsx" in page
+    assert "ExportWorkflowService.WriteValidatedXlsxAsync" in page
     assert "CadVolumeTableService.Insert" in page

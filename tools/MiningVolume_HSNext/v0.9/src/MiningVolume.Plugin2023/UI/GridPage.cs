@@ -401,6 +401,7 @@ namespace MiningVolume2023.UI
                     // but never let an operator mistake its totals for complete
                     // approved excavation quantities.
                     var currentGrid = GridWorkflowService.Report;
+                    var acceptedDoc = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument;
                     if (currentGrid == null)
                         throw new InvalidOperationException("Không còn kết quả lưới hiện hành.");
                     if (!currentGrid.IsComplete)
@@ -421,11 +422,30 @@ namespace MiningVolume2023.UI
                     // taking a workbook snapshot.
                     GridWorkflowService.EnsureBoundaryCurrent(
                         BoundaryGeometryService.ReadBoundary(ProjectState.Current.GridBoundaryHandle));
+                    var acceptedGrid = currentGrid;
+                    var acceptedOptions = GridWorkflowService.Options;
+                    var state = ProjectState.Current;
+                    string group = state.MiningUnitGroup, unit = state.MiningUnitName,
+                        period = state.VolumePeriodLabel;
+                    Action validateCurrent = () =>
+                    {
+                        if (acceptedDoc == null || !ReferenceEquals(acceptedDoc,
+                            Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument) ||
+                            !ReferenceEquals(acceptedGrid, GridWorkflowService.Report) ||
+                            !ReferenceEquals(acceptedOptions, GridWorkflowService.Options) ||
+                            group != state.MiningUnitGroup || unit != state.MiningUnitName ||
+                            period != state.VolumePeriodLabel)
+                            throw new InvalidOperationException(
+                                "Dữ liệu lưới, bản vẽ hoặc thông tin báo cáo đã thay đổi. Không lưu Excel cũ; hãy xuất lại.");
+                        GridWorkflowService.EnsureBoundaryCurrent(
+                            BoundaryGeometryService.ReadBoundary(state.GridBoundaryHandle));
+                    };
+                    validateCurrent();
                     _excel.Text="Hủy xuất Excel";UseWaitCursor=true;_status.Text="Đang dựng 6 sheet Excel...";
-                    var report=await GridVolumeExcelReportBuilder.BuildAsync(GridWorkflowService.Report,GridWorkflowService.Options,exportToken);
+                    var report=await GridVolumeExcelReportBuilder.BuildAsync(acceptedGrid,acceptedOptions,exportToken);
                     exportToken.ThrowIfCancellationRequested();
                     _status.Text="Đang ghi Excel...";
-                    await Task.Run(()=>ExportWorkflowService.WriteXlsx(dlg.FileName,report,exportToken));
+                    await ExportWorkflowService.WriteValidatedXlsxAsync(dlg.FileName,report,validateCurrent,exportToken);
                     _status.Text="Đã xuất "+dlg.FileName;
                 }
             }

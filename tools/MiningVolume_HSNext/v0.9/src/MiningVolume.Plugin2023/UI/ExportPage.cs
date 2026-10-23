@@ -205,7 +205,10 @@ namespace MiningVolume2023.UI
                     EnsureExportInputsCurrent(doc, st, currentResult, approvedProfiles,
                         existingTin, designTin, existingRevision, designRevision,
                     selectedUnitGroup, selectedUnitName, selectedPeriod);
-                    await Task.Run(() => ExportWorkflowService.WriteXlsx(excelPath, report, token));
+                    await ExportWorkflowService.WriteValidatedXlsxAsync(excelPath, report,
+                        () => EnsureExportInputsCurrent(doc, st, currentResult, approvedProfiles,
+                            existingTin, designTin, existingRevision, designRevision,
+                            selectedUnitGroup, selectedUnitName, selectedPeriod), token);
                     excelWritten = true;
                 }
 

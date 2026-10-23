@@ -120,7 +120,7 @@ def test_section_export_blocks_cad_grip_changes_and_dwg_switch():
         "private static void EnsureExportInputsCurrent(", 1)[0]
     assert start.count("EnsureExportInputsCurrent(doc, st, currentResult, approvedProfiles,") >= 3
     assert "var report = await Task.Run(" in start
-    assert "await Task.Run(() => ExportWorkflowService.WriteXlsx(" in start
+    assert "await ExportWorkflowService.WriteValidatedXlsxAsync(" in start
     assert "var actual = ReadEditedProfiles(db, approved, allowMissingUnedited: true)" in cad
     assert "if (originals.Any(p => p != null && p.IsUserEdited))" in cad
     assert "Decode(poly, data, poll)" in cad
@@ -155,3 +155,17 @@ def test_volume_auto_range_does_not_mutate_accepted_state_before_success():
     assert "CalculateCore(system, profiles, existing, design, calculationFrom, calculationTo, step, token)" in before_commit
     assert before_commit.index("token.ThrowIfCancellationRequested();") > before_commit.index("await Task.Run")
     assert "BindResult(result);" not in method
+
+
+def test_grid_and_section_excel_revalidate_before_publication():
+    writer = read(SERVICES / "ExportWorkflowService.cs")
+    method = writer.split("public static async Task WriteValidatedXlsxAsync(", 1)[1].split("public static void WriteXlsx(", 1)[0]
+    awaited = method.index("await Task.Run(")
+    final_validation = method.index("validateCurrent();", awaited)
+    assert awaited < final_validation < method.index("File.Replace(")
+    assert "ConfigureAwait(false)" not in method
+    grid = read(UI / "GridPage.cs")
+    assert "!ReferenceEquals(acceptedGrid, GridWorkflowService.Report)" in grid
+    assert "!ReferenceEquals(acceptedOptions, GridWorkflowService.Options)" in grid
+    assert "await ExportWorkflowService.WriteValidatedXlsxAsync(dlg.FileName,report,validateCurrent,exportToken)" in grid
+    assert "GridVolumeExcelReportBuilder.BuildAsync(acceptedGrid,acceptedOptions,exportToken)" in grid

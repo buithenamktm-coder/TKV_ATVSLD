@@ -40,7 +40,7 @@ def test_export_page_supports_cad_xlsx_or_both_without_forcing_xlsx():
     assert "if (exportExcel)" in s
     assert "if (exportCad)" in s
     assert "CadVolumeTableService.Insert" in s
-    assert "ExportWorkflowService.WriteXlsx" in s
+    assert "ExportWorkflowService.WriteValidatedXlsxAsync" in s
     # Recheck the authoritative CAD section paths and approved volume before
     # either output; the guard also rejects a DWG/TIN switch mid-export.
     assert "EnsureExportInputsCurrent(doc, st, currentResult, approvedProfiles," in s

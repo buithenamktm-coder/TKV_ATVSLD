@@ -49,6 +49,38 @@ internal static class FinalAuditRegression
         Check(canceled,"Canceled operation returned a result");
     }
     public static void Add(IDictionary<string,Action> tests) {
+        tests["xlsx_revalidate_after_write_preserves_previous_file"] = () => {
+            var directory = Path.Combine(Path.GetTempPath(), "imsat-publish-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(directory);
+            try {
+                var target = Path.Combine(directory, "accepted.xlsx");
+                var old = new byte[] { 1, 2, 3, 4 };
+                File.WriteAllBytes(target, old);
+                var report = new SpreadsheetReport { Title = "publication" };
+                var sheet = new ReportSheet { Name = "Data" }; sheet.Headers.Add("Volume");
+                sheet.Rows.Add(new[] { ReportCell.N2(12.5) }); report.Sheets.Add(sheet);
+                int checks = 0; bool rejected = false;
+                try {
+                    ExportWorkflowService.WriteValidatedXlsxAsync(target, report, () => {
+                        if (++checks == 2) throw new InvalidOperationException("DWG changed");
+                    }).GetAwaiter().GetResult();
+                } catch (InvalidOperationException) { rejected = true; }
+                Check(rejected && checks == 2, "No validation after file preparation");
+                Check(File.ReadAllBytes(target).SequenceEqual(old), "Stale workbook replaced accepted file");
+                Check(Directory.GetFiles(directory).Length == 1, "Rejected staging file leaked");
+                using (var cts = new System.Threading.CancellationTokenSource()) {
+                    checks = 0;
+                    ExpectCanceled(() => ExportWorkflowService.WriteValidatedXlsxAsync(target, report,
+                        () => { if (++checks == 2) cts.Cancel(); }, cts.Token).GetAwaiter().GetResult());
+                }
+                Check(File.ReadAllBytes(target).SequenceEqual(old), "Final cancellation replaced accepted file");
+                Check(Directory.GetFiles(directory).Length == 1, "Canceled staging file leaked");
+                ExportWorkflowService.WriteValidatedXlsxAsync(target, report, () => {}).GetAwaiter().GetResult();
+                using (var zip = ZipFile.OpenRead(target))
+                    Check(zip.GetEntry("xl/worksheets/sheet1.xml") != null, "Published workbook is invalid");
+                Check(Directory.GetFiles(directory).Length == 1, "Successful staging file leaked");
+            } finally { Directory.Delete(directory, true); }
+        };
         tests["edited_profile_large_merge_and_cancellation"] = () => {
             var original = Profile(1, 5);
             var ht = new[] { new EditedSectionPath(0, Enumerable.Range(0, 4097)

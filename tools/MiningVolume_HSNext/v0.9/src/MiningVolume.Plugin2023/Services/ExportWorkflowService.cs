@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Diagnostics;
 using MiningVolume.Core.Model;
 using MiningVolume.Core.Reporting;
@@ -75,6 +76,30 @@ namespace MiningVolume2023.Services
                 // REPORT-BUILD time, before any asynchronous file output.
                 sheet.Title = prefix + "\n" + sheet.OrganizationBaseTitle;
             }
+        }
+
+        // Invoke from the UI thread: await resumes its synchronization context,
+        // so validation may safely inspect the active CAD document. The worker
+        // writes only a private file; publishing never yields after validation.
+        public static async Task WriteValidatedXlsxAsync(string filePath, SpreadsheetReport report,
+            Action validateCurrent, CancellationToken cancellationToken = default(CancellationToken))
+        {
+            if (validateCurrent == null) throw new ArgumentNullException(nameof(validateCurrent));
+            cancellationToken.ThrowIfCancellationRequested();
+            validateCurrent();
+            var target = Path.GetFullPath(filePath);
+            var staging = Path.Combine(Path.GetDirectoryName(target),
+                "." + Path.GetFileName(target) + "." + Guid.NewGuid().ToString("N") + ".pending.xlsx");
+            try
+            {
+                await Task.Run(() => WriteXlsx(staging, report, cancellationToken), cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
+                validateCurrent();
+                cancellationToken.ThrowIfCancellationRequested();
+                if (File.Exists(target)) File.Replace(staging, target, null);
+                else File.Move(staging, target);
+            }
+            finally { if (File.Exists(staging)) File.Delete(staging); }
         }
 
         public static void WriteXlsx(string filePath, SpreadsheetReport report, CancellationToken cancellationToken = default(CancellationToken))
