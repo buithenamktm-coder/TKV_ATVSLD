@@ -554,7 +554,7 @@ jobs:
                   $uiaTabInteraction = "PASS"
                   $uiaTabInteractionDetail = "UIA selected Insert and restored Home using native SelectionItemPattern"
                 }
-                # Exercise the real Qt language switch through UIA InvokePattern.
+                # Exercise the installed Qt language control through UIA InvokePattern.
                 # Missing UIA exposure is NOT_TESTED; a failed invocation is FAIL.
                 $buttons = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants,
                   [System.Windows.Automation.PropertyCondition]::new(
@@ -564,7 +564,49 @@ jobs:
                 for ($bi = 0; $bi -lt $buttons.Count; $bi++) {
                   $candidate = $buttons.Item($bi)
                   if ([string]$candidate.Current.AutomationId -eq "IMSATCADRibbonLanguageSwitch" -or
-                      [string]$candidate.Current.Name -match '(?i)Switch to English|^English              } else {
+                      [string]$candidate.Current.Name -match '(?i)Switch to English|^English$') {
+                    $languageControl = $candidate
+                    break
+                  }
+                }
+                if ($null -eq $languageControl) {
+                  $uiaLanguageDetail = "Native language control is not exposed through UIA"
+                } else {
+                  $invoker = $null
+                  if (-not $languageControl.TryGetCurrentPattern(
+                      [System.Windows.Automation.InvokePattern]::Pattern, [ref]$invoker)) {
+                    $uiaLanguageDetail = "Native language control lacks UIA InvokePattern"
+                  } else {
+                    $uiaLanguageInteraction = "FAIL"
+                    try {
+                      $localeSets = @(
+                        @("Home", "Insert", "Annotate", "View", "Manage", "Output"),
+                        @("Trang chủ", "Chèn", "Ghi chú", "Hiển thị", "Quản lý", "Xuất bản"))
+                      foreach ($localeSet in $localeSets) {
+                        $invoker.Invoke()
+                        $seen = $false
+                        for ($localePoll = 0; $localePoll -lt 15; $localePoll++) {
+                          Start-Sleep -Milliseconds 200
+                          $localeItems = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants, $condition)
+                          $names = @()
+                          for ($li = 0; $li -lt $localeItems.Count; $li++) {
+                            $names += [string]$localeItems.Item($li).Current.Name
+                          }
+                          if (@($localeSet | Where-Object { $names -contains $_ }).Count -eq 6) {
+                            $seen = $true
+                            break
+                          }
+                        }
+                        if (-not $seen) { throw "Language click did not expose expected tabs: $($localeSet -join ', ')" }
+                      }
+                      $uiaLanguageInteraction = "PASS"
+                      $uiaLanguageDetail = "UIA invoked Qt language button twice; English and Vietnamese tabs verified"
+                    } catch {
+                      $uiaLanguageDetail = "Native language button UIA invocation failed: $($_.Exception.Message)"
+                    }
+                  }
+                }
+              } else {
                 $uiaDetail = "Expected 6 IMSAT tabs; observed $($matchingTabs.Count) through UIA"
               }
             } catch {
@@ -700,211 +742,6 @@ jobs:
           }
           if ($uiaLanguageInteraction -eq "FAIL") {
             throw "Native UIA Ribbon language interaction failed; inspect native-gui-uia.txt"
-          }
-      # Upload diagnostics even when compilation, installation, or GUI smoke fails.
-      # Without always(), the logs needed to fix a failed Windows build are lost.
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: imsat-cad-native-qcad-build-evidence
-          path: |
-            imsat-cad-native-windows-build.zip
-            IMSAT-CAD-V1.0-Setup.exe
-            native-installer-sha256.txt
-            native-install-smoke.txt
-            native-installed-startup.txt
-            native-gui-startup.txt
-            native-gui-uia.txt
-            native-gui-startup-output.txt
-            native-branding-audit.txt
-            native-executable-origin.txt
-            native-ribbon-probe.txt
-            native-ribbon-diagnostics.txt
-            native-ribbon-acceptance.txt
-            native-startup-output.txt
-            native-js-runtime-audit.txt
-            native-js-runtime-output.txt
-            native-commit-report.txt
-            native-qt-dependencies.txt
-            native-plugin-dependencies.txt
-            native-headless-smoke.txt
-            native-package-manifest.csv
-            native/qcad/release/*.exe
-            native/qcad/release/*.dll
-            native/qcad/release/platforms/*.dll
-            native/qcad/plugins/*qcadjsapi*.dll
-          retention-days: 7
-          if-no-files-found: warn
-# Prototype only: no rebranding, installer, or DWG feature is claimed.
-# Upstream QCAD remains GPLv3. Any distributed modified core must include corresponding source and notices.
-) {
-                    $languageControl = $candidate
-                    break
-                  }
-                }
-                if ($null -eq $languageControl) {
-                  $uiaLanguageDetail = "Native language control is not exposed through UIA"
-                } else {
-                  $invoker = $null
-                  if (-not $languageControl.TryGetCurrentPattern(
-                      [System.Windows.Automation.InvokePattern]::Pattern, [ref]$invoker)) {
-                    $uiaLanguageDetail = "Native language control lacks UIA InvokePattern"
-                  } else {
-                    $uiaLanguageInteraction = "FAIL"
-                    try {
-                      $localeSets = @(
-                        @("Home", "Insert", "Annotate", "View", "Manage", "Output"),
-                        @("Trang chủ", "Chèn", "Ghi chú", "Hiển thị", "Quản lý", "Xuất bản"))
-                      foreach ($localeSet in $localeSets) {
-                        $invoker.Invoke()
-                        $seen = $false
-                        for ($localePoll = 0; $localePoll -lt 15; $localePoll++) {
-                          Start-Sleep -Milliseconds 200
-                          $localeItems = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants, $condition)
-                          $names = @()
-                          for ($li = 0; $li -lt $localeItems.Count; $li++) {
-                            $names += [string]$localeItems.Item($li).Current.Name
-                          }
-                          if (@($localeSet | Where-Object { $names -contains $_ }).Count -eq 6) {
-                            $seen = $true
-                            break
-                          }
-                        }
-                        if (-not $seen) { throw "Language click did not expose expected tabs: $($localeSet -join ', ')" }
-                      }
-                      $uiaLanguageInteraction = "PASS"
-                      $uiaLanguageDetail = "UIA invoked Qt language button twice; English and Vietnamese tabs verified"
-                    } catch {
-                      $uiaLanguageDetail = "Native language button UIA invocation failed: $($_.Exception.Message)"
-                    }
-                  }
-                }
-              } else {
-                $uiaDetail = "Expected 6 IMSAT tabs; observed $($matchingTabs.Count) through UIA"
-              }
-            } catch {
-              $uiaDetail = "UIA inspection unavailable: $($_.Exception.Message)"
-            }
-            if (-not (Test-Path $probeFile)) {
-              Write-Warning "Native Ribbon probe did not finish before GUI exit or timeout"
-              Write-Host "GUI diagnostic window title: $windowTitle"
-              foreach ($diagnosticPath in @($guiStdout, $guiStderr)) {
-                if (Test-Path $diagnosticPath) {
-                  Write-Host "Last 60 lines from $diagnosticPath"
-                  Get-Content $diagnosticPath -Tail 60 -ErrorAction SilentlyContinue
-                }
-              }
-            }
-          } finally {
-            if (-not $gui.HasExited) { Stop-Process -Id $gui.Id -Force -ErrorAction SilentlyContinue }
-            $null = $gui.WaitForExit(5000)
-          }
-          $probeState = "NOT_TESTED"
-          if (Test-Path $probeFile) {
-            Copy-Item $probeFile "native-ribbon-probe.txt" -Force
-            $probeLines = @(Get-Content $probeFile)
-            $probeState = if ($probeLines -contains "Status=PASS") { "PASS" } else { "FAIL" }
-          } else {
-            "Status=NOT_TESTED" | Set-Content "native-ribbon-probe.txt" -Encoding UTF8
-            "Failure=Native -exec probe produced no evidence" | Add-Content "native-ribbon-probe.txt"
-            "JavaScriptRuntimePreflight=PASS" | Add-Content "native-ribbon-probe.txt"
-            "ProbeScript=$probeScript" | Add-Content "native-ribbon-probe.txt"
-          }
-          Write-Host "Native installed Ribbon probe: $probeState"
-          Write-Host "Native UIA tab interaction: $uiaTabInteraction ($uiaTabInteractionDetail)"
-          Get-Content "native-ribbon-probe.txt" | Select-Object -First 12
-          @(
-            "InstalledGUIRibbonTabsUIA=$uiaResult",
-            "UIADetail=$uiaDetail",
-            "RibbonTabInteraction=$uiaTabInteraction",
-            "RibbonTabInteractionDetail=$uiaTabInteractionDetail",
-            "UIATabNames=$($tabNames -join ' | ')",
-            "GUICommandClickTests=NOT_TESTED"
-          ) | Set-Content "native-gui-uia.txt" -Encoding UTF8
-          @(
-            "Installed GUI window creation: PASS",
-            "WindowTitle=$windowTitle",
-            "WindowTitleContainsIMSAT=" + [bool]($windowTitle -match "IMSAT"),
-            "WindowTitleContainsQCAD=" + [bool]($windowTitle -match "QCAD")
-          ) | Set-Content "native-gui-startup.txt" -Encoding UTF8
-          # GUI and headless output are independent evidence streams.
-          # Prior builds inspected headless output only, so interactive Ribbon
-          # initialization failures were invisible to the CI diagnostic report.
-          $headlessOutput = ((Get-Content $stdout -Raw -ErrorAction SilentlyContinue) + "`n" + (Get-Content $stderr -Raw -ErrorAction SilentlyContinue))
-          $guiOutput = ((Get-Content $guiStdout -Raw -ErrorAction SilentlyContinue) + "`n" + (Get-Content $guiStderr -Raw -ErrorAction SilentlyContinue))
-          $guiOutput | Set-Content "native-gui-startup-output.txt" -Encoding UTF8
-          $headlessOutput | Set-Content "native-startup-output.txt" -Encoding UTF8
-          $ribbonDiagnostics = @(
-            "RibbonInitializationInHeadlessLog=" + [bool]($headlessOutput -match 'IMSAT CAD Ribbon initialized:'),
-            "RibbonInitializationInGuiLog=" + [bool]($guiOutput -match 'IMSAT CAD Ribbon initialized:'),
-            "AliasInitializationInGuiLog=" + [bool]($guiOutput -match 'IMSAT CAD: [0-9]+/[0-9]+ aliases'),
-            "RibbonBlockedInGuiLog=" + [bool]($guiOutput -match 'IMSAT CAD RIBBON BLOCKED'),
-            "RibbonTabsObservedThroughUIA=$uiaResult",
-            "InstalledNativeRibbonProbe=$probeState"
-          )
-          $ribbonDiagnostics | Set-Content "native-ribbon-diagnostics.txt" -Encoding UTF8
-          Write-Host ($ribbonDiagnostics -join "; ")
-          if ($guiOutput -match 'IMSAT CAD RIBBON BLOCKED') {
-            throw "Native CAD GUI reported Ribbon initialization failure; inspect native-gui-startup-output.txt"
-          }
-          $ribbonLogObserved = [bool]($guiOutput -match 'IMSAT CAD Ribbon initialized:')
-          $ribbonAudit = @(
-            "GuiRibbonInitializationObserved=$ribbonLogObserved",
-            "InstalledGuiWindowCreated=$windowFound",
-            "RibbonTabAccessibility=$uiaResult",
-            "InteractiveRibbonTabSwitching=NOT_TESTED",
-            "InteractiveNativeActionInvocation=NOT_TESTED",
-            "NativeRibbonProbe=$probeState",
-            "RibbonAcceptance=NOT_READY"
-          )
-          $ribbonAudit | Set-Content "native-ribbon-acceptance.txt" -Encoding UTF8
-          # This is a diagnostic report, not a substitute for Windows GUI QA.
-          # Verify that all six expected tabs are defined in the packaged add-on.
-          $installedAddon = Join-Path $destination "scripts/IMSATCAD/IMSATCAD.js"
-          $stagedAddon = Join-Path "native/qcad" "scripts/IMSATCAD/IMSATCAD.js"
-          $addonPath = if (Test-Path $installedAddon) { $installedAddon } elseif (Test-Path $stagedAddon) { $stagedAddon } else { $null }
-          if (-not $addonPath) { throw "IMSAT CAD native Ribbon add-on missing from staging and installation" }
-          $addonSource = Get-Content $addonPath -Raw
-          foreach ($tab in @("Home", "Insert", "Annotate", "View", "Manage", "Output")) {
-            if ($addonSource -notmatch ('"' + $tab + '"')) { throw "IMSAT CAD Ribbon tab missing: $tab" }
-          }
-          "SixRibbonTabDefinitions=PASS" | Add-Content "native-ribbon-acceptance.txt"
-          "AddonSourcePath=$addonPath" | Add-Content "native-ribbon-acceptance.txt"
-
-          # Record real installed binary identity. Copying qcad.exe under a new
-          # filename is not a completed IMSAT-branded native application.
-          $installedInfo = (Get-Item $installedExe).VersionInfo
-          $identity = @(
-            "Executable=$($installedExe)",
-            "ProductName=$($installedInfo.ProductName)",
-            "FileDescription=$($installedInfo.FileDescription)",
-            "OriginalFilename=$($installedInfo.OriginalFilename)",
-            "CompanyName=$($installedInfo.CompanyName)",
-            "GUIWindowCreated=$windowFound",
-            "RibbonTabsInteractivelyVerified=NO",
-            "NativeCommandClickTests=NOT_RUN",
-            "BrandingGate=NOT_READY"
-          )
-          $identity | Set-Content "native-branding-audit.txt" -Encoding UTF8
-          Write-Host "Native branding audit saved; GUI Ribbon and branding remain unverified"
-
-                    $startupOutput = ((Get-Content $stdout -Raw -ErrorAction SilentlyContinue) + "`n" + (Get-Content $stderr -Raw -ErrorAction SilentlyContinue))
-          if ($startupOutput -match '(?i)Cannot load library.*qcadjsapi|No script handler found|Plugin loader reported error') {
-            throw "Installed CAD JavaScript plugin failed to load: $startupOutput"
-          }
-          "Installed executable headless launch: PASS" | Set-Content "native-installed-startup.txt"
-          $uninstaller = Join-Path $destination "unins000.exe"
-          if (-not (Test-Path $uninstaller)) { throw "Native CAD uninstaller missing" }
-          $uninstall = Start-Process -FilePath $uninstaller -ArgumentList @("/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART") -Wait -PassThru
-          if ($uninstall.ExitCode -ne 0) { throw "Native uninstaller exited with $($uninstall.ExitCode)" }
-          "Native installer: PASS" | Set-Content "native-install-smoke.txt"
-          "Native uninstaller: PASS" | Add-Content "native-install-smoke.txt"
-          "GUI functional test: NOT RUN" | Add-Content "native-install-smoke.txt"
-          if ($probeState -ne "PASS") {
-            throw "Native installed Ribbon probe $probeState; inspect native-ribbon-probe.txt and native-gui-startup-output.txt"
-          }
-          if ($uiaTabInteraction -eq "FAIL") {
-            throw "Native UIA Ribbon tab selection failed; inspect native-gui-uia.txt"
           }
       # Upload diagnostics even when compilation, installation, or GUI smoke fails.
       # Without always(), the logs needed to fix a failed Windows build are lost.
