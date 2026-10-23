@@ -31,6 +31,7 @@ jobs:
         shell: pwsh
         run: |
           node --check tools/IMSAT_CAD_V1/qcad_addon/IMSATCAD/IMSATCAD.js
+          node --check tools/IMSAT_CAD_V1/qcad_addon/IMSATCAD/IMSATCADDxfProbe.js
           node --check tools/IMSAT_CAD_V1/brand-native-qcad.js
           node tools/IMSAT_CAD_V1/qcad_addon/check-addon.js
           node tools/IMSAT_CAD_V1/qcad_addon/test-addon-runtime.js
