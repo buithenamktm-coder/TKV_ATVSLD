@@ -26,7 +26,7 @@ def test_installed_v2_build_is_visible_in_palette_and_about():
     assert '"V2.0 QA · " + RuntimeBuildIdentity.ShortTag()' in palette
     assert "RuntimeBuildIdentity.ShortTag()" in palette
     assert "args.Graphics.DrawString(buildLabel" in palette
-    assert '"IMSAT VOLUME V2.0 QA", new Guid(' in entry
+    assert '"IMSAT VOLUME", new Guid(' in entry
     assert "MVBUILDINFO" in entry
     assert "RuntimeBuildIdentity.ShortTag()" in ribbon
     assert "MVBUILDINFO" in ribbon
