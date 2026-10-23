@@ -150,31 +150,53 @@ IMSATCAD.populateToolBar = function(toolbar, scripts) {
         return 0;
     }
     var installed = 0;
-    var missing = 0;
+    var incomplete = 0;
     var menu = IMSATCAD.getMenu();
     for (var i = 0; i < scripts.length; ++i) {
-        var action = RGuiAction.getByScriptFile(scripts[i]);
+        var script = scripts[i];
+        var action;
+        try {
+            action = RGuiAction.getByScriptFile(script);
+        } catch (lookupError) {
+            qWarning("IMSAT CAD: toolbar action lookup failed for " + script + ": " + lookupError);
+            incomplete++;
+            continue;
+        }
         if (isNull(action)) {
-            qWarning("IMSAT CAD: toolbar action not found: " + scripts[i]);
-            missing++;
+            qWarning("IMSAT CAD: toolbar action not found: " + script);
+            incomplete++;
             continue;
         }
-        // RGuiAction is registered with QCAD; reuse its QAction in our toolbar.
-        // Keep initialization idempotent if QCAD re-runs postInit.
-        var key = toolbar.objectName + "|" + scripts[i];
-        if (IMSATCAD._installedActions[key] === true) {
-            continue;
+        // A toolbar insertion and a menu insertion are independent operations.
+        // Mark each as installed only after its own native Qt API succeeds.
+        // If menu insertion fails after toolbar insertion, postInit can retry
+        // the menu without adding a duplicate toolbar button.
+        var key = toolbar.objectName + "|" + script;
+        if (IMSATCAD._installedActions[key] !== true) {
+            try {
+                toolbar.addAction(action);
+                IMSATCAD._installedActions[key] = true;
+                installed++;
+            } catch (toolbarError) {
+                qWarning("IMSAT CAD: toolbar insertion failed for " + script + ": " + toolbarError);
+                incomplete++;
+                continue;
+            }
         }
-        toolbar.addAction(action);
-        if (!isNull(menu) && IMSATCAD._installedActions["menu|" + scripts[i]] !== true) {
-            menu.addAction(action);
-            IMSATCAD._installedActions["menu|" + scripts[i]] = true;
+        var menuKey = "menu|" + script;
+        if (!isNull(menu) && IMSATCAD._installedActions[menuKey] !== true) {
+            try {
+                menu.addAction(action);
+                IMSATCAD._installedActions[menuKey] = true;
+            } catch (menuError) {
+                qWarning("IMSAT CAD: menu insertion failed for " + script + ": " + menuError);
+                incomplete++;
+            }
         }
-        IMSATCAD._installedActions[key] = true;
-        installed++;
     }
-    if (missing > 0) {
-        qWarning("IMSAT CAD: " + missing + " toolbar actions unavailable; check native QCAD script initialization");
+    if (incomplete > 0) {
+        qWarning("IMSAT CAD: " + incomplete +
+                 " toolbar/menu registrations incomplete; check native QCAD action initialization");
     }
     return installed;
 };

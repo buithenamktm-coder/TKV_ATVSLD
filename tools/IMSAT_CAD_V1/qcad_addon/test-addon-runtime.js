@@ -342,4 +342,65 @@ context.IMSATCAD.createRibbon = originalCreateRibbon;
 context.IMSATCAD.populateToolBar = originalPopulateToolBar;
 context.IMSATCAD.hideDuplicateToolBars = originalHideToolBars;
 laterAction.setDefaultCommands = originalLaterSetter;
+// Regression: an exception in one native toolbar or menu operation must not
+// interrupt subsequent CAD commands, and retry must not duplicate actions.
+const recoveryLookup = "scripts/Test/Lookup/Lookup.js";
+const recoveryToolbar = "scripts/Test/ToolbarRetry/ToolbarRetry.js";
+const recoveryMenu = "scripts/Test/MenuRetry/MenuRetry.js";
+const recoveryBar = {
+  objectName: "IMSATCADRecoveryToolBar",
+  actions: [],
+  failedOnce: false,
+  addAction(action) {
+    if (action.script === recoveryToolbar && !this.failedOnce) {
+      this.failedOnce = true;
+      throw new Error("mock toolbar insertion failure");
+    }
+    this.actions.push(action);
+  }
+};
+const originalMenuAdd = menu.addAction;
+const originalRecoveryLookup = context.RGuiAction.getByScriptFile;
+let menuFailedOnce = false;
+menu.addAction = function(action) {
+  if (action.script === recoveryMenu && !menuFailedOnce) {
+    menuFailedOnce = true;
+    throw new Error("mock menu insertion failure");
+  }
+  return originalMenuAdd.call(this, action);
+};
+context.RGuiAction.getByScriptFile = function(script) {
+  if (script === recoveryLookup) throw new Error("mock toolbar lookup failure");
+  return originalRecoveryLookup(script);
+};
+const recoveryScripts = [recoveryLookup, recoveryToolbar, recoveryMenu];
+const recoveryWarningStart = warnings.length;
+assert.strictEqual(context.IMSATCAD.populateToolBar(recoveryBar, recoveryScripts), 1,
+  "Toolbar should continue after lookup and insertion failures");
+assert.strictEqual(recoveryBar.actions.length, 1);
+assert(!menu.actions.some(x => x.script === recoveryMenu),
+  "Failed menu insertion must not be marked as successful");
+assert.strictEqual(context.IMSATCAD.populateToolBar(recoveryBar, recoveryScripts), 1,
+  "Retry must insert only the previously failed toolbar action");
+assert.strictEqual(recoveryBar.actions.length, 2,
+  "Retry must not duplicate already inserted toolbar actions");
+assert.strictEqual(menu.actions.filter(x => x.script === recoveryMenu).length, 1,
+  "Retry must recover menu insertion without duplicating toolbar actions");
+assert.strictEqual(menu.actions.filter(x => x.script === recoveryToolbar).length, 1,
+  "Recovered toolbar action must appear in the menu once");
+assert.strictEqual(context.IMSATCAD.populateToolBar(recoveryBar, recoveryScripts), 0,
+  "Repeated initialization must be idempotent");
+assert.strictEqual(recoveryBar.actions.length, 2);
+assert.strictEqual(menu.actions.filter(x => x.script === recoveryMenu).length, 1);
+assert(warnings.slice(recoveryWarningStart).some(x =>
+  x.includes(recoveryLookup) && x.includes("mock toolbar lookup failure")),
+  "Lookup exception must identify the failing CAD action");
+assert(warnings.slice(recoveryWarningStart).some(x =>
+  x.includes(recoveryToolbar) && x.includes("mock toolbar insertion failure")),
+  "Toolbar insertion exception must identify the failing CAD action");
+assert(warnings.slice(recoveryWarningStart).some(x =>
+  x.includes(recoveryMenu) && x.includes("mock menu insertion failure")),
+  "Menu insertion exception must identify the failing CAD action");
+menu.addAction = originalMenuAdd;
+context.RGuiAction.getByScriptFile = originalRecoveryLookup;
 console.log("IMSAT CAD mocked runtime PASS:", toolbars.size, "toolbars,", menuCount, "unique menu actions");
