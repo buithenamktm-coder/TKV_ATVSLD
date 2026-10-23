@@ -493,6 +493,8 @@ jobs:
           $uiaTabInteractionDetail = "SelectionItemPattern not yet inspected"
           $uiaLanguageInteraction = "NOT_TESTED"
           $uiaLanguageDetail = "InvokePattern not yet inspected"
+          $uiaCadAction = "NOT_TESTED"
+          $uiaCadDetail = "Native LINE command button has not been invoked"
           try {
             for ($attempt = 0; $attempt -lt 30; $attempt++) {
               Start-Sleep -Seconds 1
@@ -637,6 +639,38 @@ jobs:
                     }
                   }
                 }
+                # Invoke a real QCAD drawing action from the installed Ribbon.
+                # A successful click proves Qt dispatch and process survival, NOT
+                # that any geometry was drawn or a DXF was saved.
+                $lineControl = $null
+                $lineId = "IMSATCADRibbonAction_scripts_Draw_Line_Line2P_Line2P_js"
+                for ($ci = 0; $ci -lt $buttons.Count; $ci++) {
+                  if ([string]$buttons.Item($ci).Current.AutomationId -eq $lineId) {
+                    $lineControl = $buttons.Item($ci)
+                    break
+                  }
+                }
+                if ($null -eq $lineControl) {
+                  $uiaCadDetail = "LINE Ribbon control not exposed by Windows UIA"
+                } else {
+                  $lineInvoker = $null
+                  if (-not $lineControl.TryGetCurrentPattern(
+                      [System.Windows.Automation.InvokePattern]::Pattern, [ref]$lineInvoker)) {
+                    $uiaCadDetail = "LINE Ribbon control has no native InvokePattern"
+                  } else {
+                    try {
+                      $lineInvoker.Invoke()
+                      Start-Sleep -Milliseconds 500
+                      $gui.Refresh()
+                      if ($gui.HasExited) { throw "Native CAD process exited after LINE invocation" }
+                      $uiaCadAction = "PASS"
+                      $uiaCadDetail = "Native LINE Ribbon action invoked; geometry and DXF persistence NOT_TESTED"
+                    } catch {
+                      $uiaCadAction = "FAIL"
+                      $uiaCadDetail = "Native LINE Ribbon invocation failed: $($_.Exception.Message)"
+                    }
+                  }
+                }
               } else {
                 $uiaDetail = "Expected 6 IMSAT tabs; observed $($matchingTabs.Count) through UIA"
               }
@@ -671,6 +705,7 @@ jobs:
           Write-Host "Native installed Ribbon probe: $probeState"
           Write-Host "Native UIA tab interaction: $uiaTabInteraction ($uiaTabInteractionDetail)"
           Write-Host "Native UIA language interaction: $uiaLanguageInteraction ($uiaLanguageDetail)"
+          Write-Host "Native UIA LINE action invocation: $uiaCadAction ($uiaCadDetail)"
           Get-Content "native-ribbon-probe.txt" | Select-Object -First 12
           @(
             "InstalledGUIRibbonTabsUIA=$uiaResult",
@@ -680,7 +715,9 @@ jobs:
             "RibbonLanguageInteraction=$uiaLanguageInteraction",
             "RibbonLanguageInteractionDetail=$uiaLanguageDetail",
             "UIATabNames=$($tabNames -join ' | ')",
-            "GUICommandClickTests=NOT_TESTED"
+            "GUICommandClickTests=$uiaCadAction",
+            "GUICommandClickDetail=$uiaCadDetail",
+            "CADGeometryAndDXFPersistence=NOT_TESTED"
           ) | Set-Content "native-gui-uia.txt" -Encoding UTF8
           @(
             "Installed GUI window creation: PASS",
@@ -715,7 +752,8 @@ jobs:
             "RibbonTabAccessibility=$uiaResult",
             "InteractiveRibbonTabSwitching=$uiaTabInteraction",
             "InteractiveRibbonLanguageSwitching=$uiaLanguageInteraction",
-            "InteractiveNativeActionInvocation=NOT_TESTED",
+            "InteractiveNativeActionInvocation=$uiaCadAction",
+            "InteractiveNativeActionDetail=$uiaCadDetail",
             "NativeRibbonProbe=$probeState",
             "RibbonAcceptance=NOT_READY"
           )
@@ -748,8 +786,27 @@ jobs:
             "NativeCommandClickTests=NOT_RUN",
             "BrandingGate=NOT_READY"
           )
+          # The resource patch is only meaningful if the INSTALLED binary
+          # exposes the branded VERSIONINFO. Fail closed on upstream defaults.
+          $brandingErrors = @()
+          if ($installedInfo.ProductName -cne "IMSAT CAD") {
+            $brandingErrors += "ProductName=$($installedInfo.ProductName)"
+          }
+          if ($installedInfo.OriginalFilename -cne "IMSATCAD.exe") {
+            $brandingErrors += "OriginalFilename=$($installedInfo.OriginalFilename)"
+          }
+          if ($installedInfo.FileDescription -notlike "IMSAT CAD*") {
+            $brandingErrors += "FileDescription=$($installedInfo.FileDescription)"
+          }
+          $brandingGate = if ($brandingErrors.Count -eq 0) { "PASS" } else { "FAIL" }
+          $identity = @($identity | Where-Object { $_ -notmatch '^BrandingGate=' })
+          $identity += "BrandingGate=$brandingGate"
+          $identity += "BrandingErrors=$($brandingErrors -join ' | ')"
           $identity | Set-Content "native-branding-audit.txt" -Encoding UTF8
-          Write-Host "Native branding audit saved; GUI Ribbon and branding remain unverified"
+          Write-Host "Installed native executable VERSIONINFO: $brandingGate"
+          if ($brandingGate -eq "FAIL") {
+            throw "Installed IMSAT CAD executable identity mismatch: $($brandingErrors -join '; ')"
+          }
 
                     $startupOutput = ((Get-Content $stdout -Raw -ErrorAction SilentlyContinue) + "`n" + (Get-Content $stderr -Raw -ErrorAction SilentlyContinue))
           if ($startupOutput -match '(?i)Cannot load library.*qcadjsapi|No script handler found|Plugin loader reported error') {
@@ -764,7 +821,8 @@ jobs:
           "Native uninstaller: PASS" | Add-Content "native-install-smoke.txt"
           "GUI Ribbon tab interaction: $uiaTabInteraction" | Add-Content "native-install-smoke.txt"
           "GUI Ribbon language interaction: $uiaLanguageInteraction" | Add-Content "native-install-smoke.txt"
-          "GUI CAD drawing interaction: NOT_TESTED" | Add-Content "native-install-smoke.txt"
+          "GUI LINE Ribbon invocation: $uiaCadAction" | Add-Content "native-install-smoke.txt"
+          "GUI CAD geometry and DXF persistence: NOT_TESTED" | Add-Content "native-install-smoke.txt"
           if ($probeState -ne "PASS") {
             throw "Native installed Ribbon probe $probeState; inspect native-ribbon-probe.txt and native-gui-startup-output.txt"
           }
@@ -773,6 +831,9 @@ jobs:
           }
           if ($uiaLanguageInteraction -eq "FAIL") {
             throw "Native UIA Ribbon language interaction failed; inspect native-gui-uia.txt"
+          }
+          if ($uiaCadAction -eq "FAIL") {
+            throw "Native LINE Ribbon invocation failed; inspect native-gui-uia.txt"
           }
       # Upload diagnostics even when compilation, installation, or GUI smoke fails.
       # Without always(), the logs needed to fix a failed Windows build are lost.
