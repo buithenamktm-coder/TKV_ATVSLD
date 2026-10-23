@@ -112,7 +112,7 @@ namespace MiningVolume2023.Services
                             orig.Line.Name + ". Hãy xuất lại mặt cắt hoặc khôi phục đường bị xóa.");
                     var ht = paths.Where(x => x.Role == "HT").Select(x => x.Path).ToList();
                     var tk = paths.Where(x => x.Role == "TK").Select(x => x.Path).ToList();
-                    var updated = EditedSectionProfileBuilder.Rebuild(orig, ht, tk);
+                    var updated = EditedSectionProfileBuilder.Rebuild(orig, ht, tk, pollCancellation: poll);
                     result.Add(updated);
                     progress?.Report(result.Count);
                 }

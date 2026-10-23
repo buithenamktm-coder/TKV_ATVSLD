@@ -49,6 +49,32 @@ internal static class FinalAuditRegression
         Check(canceled,"Canceled operation returned a result");
     }
     public static void Add(IDictionary<string,Action> tests) {
+        tests["edited_profile_large_merge_and_cancellation"] = () => {
+            var original = Profile(1, 5);
+            var ht = new[] { new EditedSectionPath(0, Enumerable.Range(0, 4097)
+                .Select(i => new EditedSectionVertex(10.0 * i / 4096, 5 - 10.0 * i / 4096)).ToArray()) };
+            var tk = new[] { new EditedSectionPath(0, Enumerable.Range(0, 6001)
+                .Select(i => new EditedSectionVertex(10.0 * i / 6000, 0)).ToArray()) };
+            int polls = 0;
+            var updated = EditedSectionProfileBuilder.Rebuild(original, ht, tk,
+                pollCancellation: () => polls++);
+            Near(updated.CutArea, 12.5); Near(updated.FillArea, 12.5);
+            Check(updated.Segments.Count > 6000, "Merged stations were lost");
+            foreach (var segment in updated.Segments) {
+                Near(segment.ExistingZ0, 5 - segment.S0);
+                Near(segment.ExistingZ1, 5 - segment.S1);
+                Near(segment.DesignZ0, 0); Near(segment.DesignZ1, 0);
+            }
+            Check(polls > 100, "Large rebuild did not poll within each processing stage");
+            // Every checkpoint, including final publication, must propagate cancellation.
+            for (int stop = 1; stop <= polls; stop++) {
+                int calls = 0;
+                ExpectCanceled(() => EditedSectionProfileBuilder.Rebuild(original, ht, tk,
+                    pollCancellation: () => { if (++calls == stop) throw new OperationCanceledException(); }));
+            }
+            Near(original.CutArea, 50); Near(original.FillArea, 0);
+            Check(original.Segments.Count == 1, "Canceled rebuild mutated the accepted profile");
+        };
         tests["section_axis_ticks_bounded_and_precision_safe"] = () => {
             var ticks = SectionAxisTicks.Create(-10, 10, 0.1, 250);
             Check(ticks.Count == 201, "Fractional axis lost endpoint");

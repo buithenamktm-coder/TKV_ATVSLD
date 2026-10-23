@@ -38,7 +38,7 @@ def test_user_edited_sections_feed_area_volume_and_dwg_restore():
     core = read("src/MiningVolume.Core/Sections/EditedSectionProfileBuilder.cs")
     assert "EditRegApp" in cad and "StampSection(a, section" in cad
     assert "GetXDataForApplication(SectionCadRenderer.EditRegApp)" in reader
-    assert "EditedSectionProfileBuilder.Rebuild(orig, ht, tk)" in reader
+    assert "EditedSectionProfileBuilder.Rebuild(orig, ht, tk, pollCancellation: poll)" in reader
     assert "UpdateAreaLabels" in reader
     assert "CẬP NHẬT MẶT CẮT" in page
     assert "VolumeWorkflowService.CalculateCore(" in page

@@ -32,16 +32,19 @@ namespace MiningVolume.Core.Sections
         public static SectionProfile Rebuild(SectionProfile original,
             IReadOnlyList<EditedSectionPath> existing,
             IReadOnlyList<EditedSectionPath> design,
-            double tolerance = 1e-6)
+            double tolerance = 1e-6, Action pollCancellation = null)
         {
+            pollCancellation?.Invoke();
             if (original == null || !original.HasData)
                 throw new InvalidOperationException("Mặt cắt gốc không có dữ liệu hợp lệ.");
             if (existing == null || design == null)
                 throw new ArgumentNullException("Đường mặt cắt chỉnh sửa không được rỗng.");
             if (tolerance <= 0) throw new ArgumentOutOfRangeException(nameof(tolerance));
             var ranges = new List<(double start, double end)>();
+            int scanned = 0;
             foreach (var seg in original.Segments)
             {
+                if ((scanned++ & 255) == 0) pollCancellation?.Invoke();
                 if (ranges.Count == 0 || Math.Abs(ranges[ranges.Count - 1].end - seg.S0) > tolerance)
                     ranges.Add((seg.S0, seg.S1));
                 else
@@ -62,18 +65,29 @@ namespace MiningVolume.Core.Sections
             {
                 if (!byExisting.TryGetValue(run, out var e) || !byDesign.TryGetValue(run, out var d))
                     throw new InvalidOperationException("Thiếu đường hiện trạng hoặc thiết kế tại đoạn " + (run + 1));
-                Validate(e, ranges[run], tolerance);
-                Validate(d, ranges[run], tolerance);
-                var stations = e.Vertices.Select(x => x.Station)
-                    .Concat(d.Vertices.Select(x => x.Station)).OrderBy(x => x).ToList();
-                var knots = new List<double>(stations.Count);
-                foreach (var x in stations)
+                pollCancellation?.Invoke();
+                Validate(e, ranges[run], tolerance, pollCancellation);
+                Validate(d, ranges[run], tolerance, pollCancellation);
+                // Validation guarantees strictly increasing stations. Merge the
+                // two sorted paths without a large, uncancellable LINQ sort.
+                var knots = new List<double>();
+                int ei = 0, di = 0, merged = 0;
+                while (ei < e.Vertices.Count || di < d.Vertices.Count)
+                {
+                    if ((merged++ & 255) == 0) pollCancellation?.Invoke();
+                    double x;
+                    if (di == d.Vertices.Count || (ei < e.Vertices.Count &&
+                        e.Vertices[ei].Station <= d.Vertices[di].Station))
+                        x = e.Vertices[ei++].Station;
+                    else x = d.Vertices[di++].Station;
                     if (knots.Count == 0 || x - knots[knots.Count - 1] > tolerance)
                         knots.Add(x);
+                }
                 knots[0] = ranges[run].start;
                 knots[knots.Count - 1] = ranges[run].end;
                 for (int i = 1; i < knots.Count; i++)
                 {
+                    if ((i & 255) == 1) pollCancellation?.Invoke();
                     double a = knots[i - 1], c = knots[i];
                     if (c - a <= tolerance) continue;
                     double e0 = At(e.Vertices, a, tolerance), e1 = At(e.Vertices, c, tolerance);
@@ -87,6 +101,7 @@ namespace MiningVolume.Core.Sections
             }
             if (result.Count == 0)
                 throw new InvalidOperationException("Mặt cắt chỉnh sửa không còn vùng hợp lệ để tính diện tích.");
+            pollCancellation?.Invoke();
             return new SectionProfile(original.Line, result, cut, fill,
                 new[] { "Đã cập nhật từ đường mặt cắt do người dùng hiệu chỉnh trên CAD." },true);
         }
@@ -113,7 +128,7 @@ namespace MiningVolume.Core.Sections
             return true;
         }
 
-        private static void Validate(EditedSectionPath path, (double start, double end) range, double tol)
+        private static void Validate(EditedSectionPath path, (double start, double end) range, double tol, Action pollCancellation)
         {
             if (path.Vertices.Count < 2)
                 throw new InvalidOperationException("Đường mặt cắt phải có ít nhất hai đỉnh.");
@@ -122,8 +137,10 @@ namespace MiningVolume.Core.Sections
             if (Math.Abs(a.Station - range.start) > tol || Math.Abs(z.Station - range.end) > tol)
                 throw new InvalidOperationException("Không được thay đổi hai đầu đoạn mặt cắt ngoài vùng TIN đã kiểm tra.");
             double prev = double.NegativeInfinity;
+            int scanned = 0;
             foreach (var v in path.Vertices)
             {
+                if ((scanned++ & 255) == 0) pollCancellation?.Invoke();
                 if (double.IsNaN(v.Station) || double.IsInfinity(v.Station) ||
                     double.IsNaN(v.Z) || double.IsInfinity(v.Z) ||
                     v.Station <= prev + tol || v.Station < range.start - tol ||
