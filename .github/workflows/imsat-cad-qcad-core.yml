@@ -459,6 +459,44 @@ jobs:
             throw "Installed native CAD cannot execute QCAD JavaScript; inspect native-js-runtime-output.txt"
           }
           "JavaScriptRuntime=PASS" | Set-Content "native-js-runtime-audit.txt"
+          # Run native QCAD entity creation and DXF save/reimport on the
+          # INSTALLED binary. This exercises the real QCAD engine and DXF I/O
+          # plugins, independently from the GUI LINE-button dispatch test.
+          $geometryScript = Join-Path $destination "scripts/IMSATCAD/IMSATCADDxfProbe.js"
+          if (-not (Test-Path $geometryScript)) { throw "Installed native DXF probe missing" }
+          $geometryReport = Join-Path $env:TEMP "imsat-cad-dxf-roundtrip-probe.txt"
+          $geometryFile = Join-Path $env:TEMP "imsat-cad-dxf-roundtrip.dxf"
+          Remove-Item $geometryReport, $geometryFile -Force -ErrorAction SilentlyContinue
+          $geometryStdout = Join-Path $env:RUNNER_TEMP "imsat-cad-native-dxf-stdout.txt"
+          $geometryStderr = Join-Path $env:RUNNER_TEMP "imsat-cad-native-dxf-stderr.txt"
+          $geometry = Start-Process -FilePath $installedExe -ArgumentList @("-allow-multiple-instances", "-no-gui", "-autostart", $geometryScript) -WorkingDirectory $destination -RedirectStandardOutput $geometryStdout -RedirectStandardError $geometryStderr -PassThru
+          if (-not $geometry.WaitForExit(45000)) {
+            Stop-Process -Id $geometry.Id -Force -ErrorAction SilentlyContinue
+            throw "Installed native CAD DXF round-trip probe timed out"
+          }
+          $geometry.Refresh()
+          ((Get-Content $geometryStdout -Raw -ErrorAction SilentlyContinue) + "\n" +
+            (Get-Content $geometryStderr -Raw -ErrorAction SilentlyContinue)) |
+            Set-Content "native-dxf-runtime-output.txt" -Encoding UTF8
+          if (Test-Path $geometryReport) {
+            Copy-Item $geometryReport "native-dxf-roundtrip-audit.txt" -Force
+          } else {
+            "Status=NOT_TESTED" | Set-Content "native-dxf-roundtrip-audit.txt" -Encoding UTF8
+            "Failure=Native QCAD -autostart did not write DXF probe evidence" |
+              Add-Content "native-dxf-roundtrip-audit.txt"
+          }
+          if (Test-Path $geometryFile) {
+            Copy-Item $geometryFile "native-dxf-roundtrip.dxf" -Force
+          }
+          $geometryLines = @(Get-Content "native-dxf-roundtrip-audit.txt")
+          $geometryGate = if ($geometryLines -contains "Status=PASS" -and
+              $geometryLines -contains "NativeCADGeometryAndDXFPersistence=PASS" -and
+              (Test-Path "native-dxf-roundtrip.dxf")) { "PASS" } else { "FAIL" }
+          Write-Host "Native QCAD CAD geometry and DXF round-trip: $geometryGate"
+          Get-Content "native-dxf-roundtrip-audit.txt" | Select-Object -First 16
+          if ($geometry.ExitCode -ne 0 -or $geometryGate -ne "PASS") {
+            throw "Installed QCAD DXF round-trip failed; inspect native-dxf-roundtrip-audit.txt and native-dxf-runtime-output.txt"
+          }
           # Verify that a real GUI window can be created by the installed EXE.
           # GitHub Windows runners can differ from a user's interactive desktop.
           # Capture GUI process output, not only the separate -no-gui smoke log.
@@ -761,7 +799,8 @@ jobs:
             "UIATabNames=$($tabNames -join ' | ')",
             "GUICommandClickTests=$uiaCadAction",
             "GUICommandClickDetail=$uiaCadDetail",
-            "CADGeometryAndDXFPersistence=NOT_TESTED"
+            "InteractiveCADGeometryAndDXFPersistence=NOT_TESTED",
+            "NativeOffscreenCADGeometryAndDXFPersistence=$geometryGate"
           ) | Set-Content "native-gui-uia.txt" -Encoding UTF8
           @(
             "Installed GUI window creation: PASS",
@@ -866,6 +905,7 @@ jobs:
           "GUI Ribbon tab interaction: $uiaTabInteraction" | Add-Content "native-install-smoke.txt"
           "GUI Ribbon language interaction: $uiaLanguageInteraction" | Add-Content "native-install-smoke.txt"
           "GUI LINE Ribbon invocation: $uiaCadAction" | Add-Content "native-install-smoke.txt"
+          "Native CAD geometry and DXF persistence (off-screen): $geometryGate" | Add-Content "native-install-smoke.txt"
           "GUI CAD geometry and DXF persistence: NOT_TESTED" | Add-Content "native-install-smoke.txt"
           if ($probeState -ne "PASS") {
             throw "Native installed Ribbon probe $probeState; inspect native-ribbon-probe.txt and native-gui-startup-output.txt"
@@ -902,6 +942,9 @@ jobs:
             native-startup-output.txt
             native-js-runtime-audit.txt
             native-js-runtime-output.txt
+            native-dxf-roundtrip-audit.txt
+            native-dxf-runtime-output.txt
+            native-dxf-roundtrip.dxf
             native-commit-report.txt
             native-qt-dependencies.txt
             native-plugin-dependencies.txt
