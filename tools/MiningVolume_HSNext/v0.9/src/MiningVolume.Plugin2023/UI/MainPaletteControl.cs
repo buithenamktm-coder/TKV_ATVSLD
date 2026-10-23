@@ -154,7 +154,7 @@ namespace MiningVolume2023.UI
             var header = new GlassPanel(true)
             {
                 Dock = DockStyle.Top,
-                Height = 92,
+                Height = 76,
                 BackColor = UiTheme.ChromeBottom
             };
 
@@ -190,8 +190,8 @@ namespace MiningVolume2023.UI
             // placing transparent WinForms Labels over a UserPaint panel.
             // The latter caused opaque rectangular patches behind the title
             // in AutoCAD's palette host (as shown in the field QA capture).
-            const string title = "IMSAT VOLUME V2.0";
-            string buildLabel = RuntimeBuildIdentity.ShortTag() + " · QA";
+            const string title = "IMSAT VOLUME";
+            string buildLabel = "V2.0 QA · " + RuntimeBuildIdentity.ShortTag();
             const string subtitle = "Phát triển: Bùi Thế Nam  •  ĐT/Zalo: 0967280686";
             int left = textLeft;
             header.Paint += (sender, args) =>
@@ -203,9 +203,10 @@ namespace MiningVolume2023.UI
                 using (var white = new SolidBrush(UiTheme.ChromeText))
                 using (var muted = new SolidBrush(UiTheme.ChromeMuted))
                 {
-                    args.Graphics.DrawString(title, big, white, left, 10);
-                    args.Graphics.DrawString(subtitle, small, muted, left + 1, 40);
-                    args.Graphics.DrawString(buildLabel, small, white, left + 1, 62);
+                    args.Graphics.DrawString(title, big, white, left, 12);
+                    args.Graphics.DrawString(subtitle, small, muted, left + 1, 43);
+                    using (var buildFont = new Font("Arial", 7F, FontStyle.Bold))
+                        args.Graphics.DrawString(buildLabel, buildFont, white, left + 1, 61);
                 }
             };
 
