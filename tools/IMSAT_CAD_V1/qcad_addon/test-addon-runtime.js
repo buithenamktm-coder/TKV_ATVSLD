@@ -329,6 +329,14 @@ assert(warnings.slice(warningsBeforeAliasError).some(x =>
 assert(messages.some(x => x.includes((context.IMSATCAD._aliases.length - 1) +
   "/" + context.IMSATCAD._aliases.length + " aliases")),
   "Startup status must report partial alias registration accurately");
+// The Ribbon must not advertise shortcuts when native QCAD registration failed.
+assert.strictEqual(context.IMSATCAD.commandToolTip(badAlias, "vi"), "Đường thẳng",
+  "Failed native alias must disappear from the command hint");
+assert.strictEqual(localizedCommands.find(x => x.script === badAlias).widget.tooltip, "Đường thẳng",
+  "Already mounted Ribbon must refresh stale hints after alias failure");
+assert.strictEqual(context.IMSATCAD.commandToolTip(laterAlias, "vi"),
+  "Đa tuyến (PLINE, PL, POLYLINE)",
+  "Successful later aliases must remain visible");
 context.RGuiAction.getByScriptFile = originalLookup;
 context.IMSATCAD.createRibbon = originalCreateRibbon;
 context.IMSATCAD.populateToolBar = originalPopulateToolBar;

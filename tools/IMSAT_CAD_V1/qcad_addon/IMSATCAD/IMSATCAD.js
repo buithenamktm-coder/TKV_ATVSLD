@@ -204,6 +204,8 @@ IMSATCAD.resolveCommandKey = function(key, state) {
     }
     return "pass";
 };
+// Only show shortcuts that the native QCAD action accepted during initialization.
+IMSATCAD._registeredAliases = {};
 IMSATCAD._aliases = [
     ["scripts/Draw/Line/Line2P/Line2P.js", ["line", "l", "ln"]],
     ["scripts/Draw/Polyline/DrawPolyline/DrawPolyline.js", ["pline", "pl", "polyline"]],
@@ -317,12 +319,8 @@ IMSATCAD.commandLabel = function(script, language) {
 // Show the actual registered command aliases, not speculative AutoCAD shortcuts.
 // The tooltip is a view-only hint; the underlying QCAD QAction is unchanged.
 IMSATCAD.commandAliases = function(script) {
-    for (var i = 0; i < IMSATCAD._aliases.length; ++i) {
-        if (IMSATCAD._aliases[i][0] === script) {
-            return IMSATCAD._aliases[i][1].join(", ").toUpperCase();
-        }
-    }
-    return "";
+    var aliases = IMSATCAD._registeredAliases[script];
+    return aliases ? aliases.join(", ").toUpperCase() : "";
 };
 IMSATCAD.commandToolTip = function(script, language) {
     var label = IMSATCAD.commandLabel(script, language);
@@ -597,6 +595,9 @@ IMSATCAD.postInit = function() {
     var win = RMainWindowQt.getMainWindow();
     var success = 0;
     var missingAliases = [];
+    // Rebuild from confirmed registrations: a failed native action must never
+    // leave an advertised shortcut from an earlier postInit invocation.
+    IMSATCAD._registeredAliases = {};
     for (var i=0; i<IMSATCAD._aliases.length; ++i) {
         var mapping=IMSATCAD._aliases[i];
         try {
@@ -607,6 +608,7 @@ IMSATCAD.postInit = function() {
                 continue;
             }
             action.setDefaultCommands(mapping[1]);
+            IMSATCAD._registeredAliases[mapping[0]] = mapping[1].slice(0);
             success++;
         } catch (error) {
             qWarning("IMSAT CAD: alias registration failed for " + mapping[0] + ": " + error);
@@ -618,6 +620,21 @@ IMSATCAD.postInit = function() {
     }
     var ribbonReady = IMSATCAD.createRibbon();
     if (!ribbonReady) { qWarning("IMSAT CAD: native Ribbon acceptance gate FAIL"); }
+    // QCAD can invoke postInit again while the Ribbon is already mounted.
+    // Synchronize existing button hints with the latest confirmed registrations.
+    if (ribbonReady) {
+        for (var hint = 0; hint < IMSATCAD._ribbonButtonCaptions.length; ++hint) {
+            var entry = IMSATCAD._ribbonButtonCaptions[hint];
+            try {
+                if (!isNull(entry.widget) && typeof entry.widget.setToolTip === "function") {
+                    entry.widget.setToolTip(IMSATCAD.commandToolTip(entry.script));
+                }
+            } catch (hintError) {
+                qWarning("IMSAT CAD: failed to refresh command tooltip for " +
+                         entry.script + ": " + hintError);
+            }
+        }
+    }
     var drawCount = IMSATCAD.populateToolBar(IMSATCAD.getDrawToolBar(), IMSATCAD._drawScripts);
     var modifyCount = IMSATCAD.populateToolBar(IMSATCAD.getModifyToolBar(), IMSATCAD._modifyScripts);
     var annotationCount = IMSATCAD.populateToolBar(IMSATCAD.getAnnotationToolBar(), IMSATCAD._annotationScripts);
