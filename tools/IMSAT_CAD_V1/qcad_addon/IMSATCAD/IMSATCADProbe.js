@@ -40,6 +40,37 @@
         if (isNull(line)) { throw new Error("Native LINE action unavailable"); }
         note("MainWindow", !isNull(app));
         if (isNull(app)) { throw new Error("Native main window unavailable"); }
+        // Exercise both locales against REAL QCAD Qt widgets, not the Node mock.
+        var selector = IMSATCAD._ribbonLanguageButton;
+        note("LanguageSelector", !isNull(selector));
+        if (isNull(selector) || String(selector.objectName) !== "IMSATCADRibbonLanguageSwitch") {
+            throw new Error("Native Ribbon language selector ID missing");
+        }
+        var firstButton = IMSATCAD._ribbonButtonCaptions[0].widget;
+        note("StableActionControl", !isNull(firstButton) && String(firstButton.objectName).indexOf("IMSATCADRibbonAction_") === 0);
+        if (isNull(firstButton) || String(firstButton.objectName).indexOf("IMSATCADRibbonAction_") !== 0) {
+            throw new Error("Native Ribbon command control ID missing");
+        }
+        if (!IMSATCAD.setRibbonLanguage("en")) { throw new Error("Native English Ribbon switch failed"); }
+        var english = ["Home", "Insert", "Annotate", "View", "Manage", "Output"];
+        var actualEnglish = [];
+        for (var e = 0; e < count; e++) { actualEnglish.push(String(tabs.tabText(e))); }
+        note("EnglishRibbonTabs", actualEnglish.join("|"));
+        for (var et = 0; et < english.length; et++) {
+            if (actualEnglish[et] !== english[et]) {
+                throw new Error("Native English Ribbon tab mismatch at " + et);
+            }
+        }
+        if (!IMSATCAD.setRibbonLanguage("vi")) { throw new Error("Native Vietnamese Ribbon restore failed"); }
+        var restored = [];
+        for (var v = 0; v < count; v++) { restored.push(String(tabs.tabText(v))); }
+        note("VietnameseRibbonRestored", restored.join("|"));
+        for (var vt = 0; vt < expected.length; vt++) {
+            if (restored[vt] !== expected[vt]) {
+                throw new Error("Native Vietnamese Ribbon restore mismatch at " + vt);
+            }
+        }
+        note("BilingualNativeQtSwitch", "PASS");
         status = "PASS";
     } catch (error) {
         note("Failure", String(error).replace(/[\r\n]+/g, " "));

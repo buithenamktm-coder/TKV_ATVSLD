@@ -470,6 +470,19 @@ jobs:
               }
             }
             if (-not $windowFound) { throw "Native CAD did not create a main window within 30 seconds" }
+            # QCAD creates its native window before postInit and -exec have
+            # necessarily finished. Previous CI killed the process immediately
+            # after finding a window, then waited for the probe file: that
+            # terminated the very script whose result was required.
+            # Keep the installed GUI alive until the native probe writes its
+            # verdict, exits, or reaches the bounded 30-second deadline.
+            for ($probeAttempt = 0; $probeAttempt -lt 60 -and -not (Test-Path $probeFile); $probeAttempt++) {
+              Start-Sleep -Milliseconds 500
+              $gui.Refresh()
+              if ($gui.HasExited) { break }
+            }
+            # Query UI Automation only AFTER -exec has finished creating the Ribbon.
+            # Earlier inspection raced against QCAD postInit and produced false negatives.
             # Inspect the real installed window using Windows UI Automation.
             # Missing Qt accessibility support is NOT_TESTED, never a fabricated PASS.
             try {
@@ -494,17 +507,6 @@ jobs:
               }
             } catch {
               $uiaDetail = "UIA inspection unavailable: $($_.Exception.Message)"
-            }
-            # QCAD creates its native window before postInit and -exec have
-            # necessarily finished. Previous CI killed the process immediately
-            # after finding a window, then waited for the probe file: that
-            # terminated the very script whose result was required.
-            # Keep the installed GUI alive until the native probe writes its
-            # verdict, exits, or reaches the bounded 30-second deadline.
-            for ($probeAttempt = 0; $probeAttempt -lt 60 -and -not (Test-Path $probeFile); $probeAttempt++) {
-              Start-Sleep -Milliseconds 500
-              $gui.Refresh()
-              if ($gui.HasExited) { break }
             }
             if (-not (Test-Path $probeFile)) {
               Write-Warning "Native Ribbon probe did not finish before GUI exit or timeout"

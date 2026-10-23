@@ -109,6 +109,12 @@ assert.strictEqual(ribbonHostWidgets.length, 1,
 assert.strictEqual(ribbonHostWidgets[0].objectName, "IMSATCADRibbonShell");
 assert.strictEqual(context.IMSATCAD._ribbonTabsWidget.parent, ribbonHostWidgets[0],
   "Ribbon tabs must belong to the single toolbar shell");
+assert.strictEqual(context.IMSATCAD._ribbonLanguageButton.objectName, "IMSATCADRibbonLanguageSwitch");
+assert.strictEqual(ribbonPages[0].page.objectName, "IMSATCADRibbonPage_Home");
+assert(actionButtons.every(b => /^IMSATCADRibbonAction_scripts_/.test(b.objectName)),
+  "Native CAD command controls require stable UI Automation identifiers");
+assert.strictEqual(new Set(actionButtons.map(b => b.objectName)).size, actionButtons.length,
+  "Native Ribbon action identifiers must be unique");
 assert.strictEqual(context.IMSATCAD._ribbonLanguageButton.parent, ribbonHostWidgets[0],
   "Language selector must belong to the same toolbar shell");
 // The visible Qt selector must switch both tabs and panel labels, twice.

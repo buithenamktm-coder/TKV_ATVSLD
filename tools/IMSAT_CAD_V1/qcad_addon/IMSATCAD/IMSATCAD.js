@@ -543,11 +543,14 @@ IMSATCAD.createRibbon = function() {
         for (var t = 0; t < IMSATCAD._ribbonTabs.length; ++t) {
             var spec = IMSATCAD._ribbonTabs[t];
             var page = new QWidget(tabs);
+            // Stable native widget IDs survive locale changes and allow UIA targeting.
+            page.objectName = "IMSATCADRibbonPage_" + spec[0];
             var row = new QHBoxLayout(page);
             var panels = spec[1];
             var tabActions = 0;
             for (var g = 0; g < panels.length; ++g) {
                 var panel = new QWidget(page);
+                panel.objectName = "IMSATCADRibbonPanel_" + spec[0] + "_" + panels[g][0].replace(/[^A-Za-z0-9]/g, "_");
                 var column = new QVBoxLayout(panel);
                 var buttons = new QWidget(panel);
                 var buttonGrid = new QGridLayout(buttons);
@@ -557,6 +560,7 @@ IMSATCAD.createRibbon = function() {
                     var action = RGuiAction.getByScriptFile(scripts[i]);
                     if (isNull(action)) { continue; }
                     var button = new QToolButton(buttons);
+                    button.objectName = "IMSATCADRibbonAction_" + scripts[i].replace(/[^A-Za-z0-9]/g, "_");
                     button.setDefaultAction(action);
                     button.toolButtonStyle = Qt.ToolButtonTextUnderIcon;
                     // Avoid truncated script aliases in the native Ribbon.
@@ -592,6 +596,7 @@ IMSATCAD.createRibbon = function() {
         }
         // Reject a decorative selector with no native Qt signal.
         var languageButton = new QToolButton(ribbonShell);
+        languageButton.objectName = "IMSATCADRibbonLanguageSwitch";
         if (isNull(languageButton.clicked) ||
                 typeof languageButton.clicked.connect !== "function") {
             qWarning("IMSAT CAD RIBBON BLOCKED: language button has no Qt click signal");
