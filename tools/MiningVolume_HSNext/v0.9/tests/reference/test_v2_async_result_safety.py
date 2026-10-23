@@ -123,7 +123,7 @@ def test_section_export_blocks_cad_grip_changes_and_dwg_switch():
     assert "await Task.Run(() => ExportWorkflowService.WriteXlsx(" in start
     assert "var actual = ReadEditedProfiles(db, approved, allowMissingUnedited: true)" in cad
     assert "if (originals.Any(p => p != null && p.IsUserEdited))" in cad
-    assert "Decode(poly, data)" in cad
+    assert "Decode(poly, data, poll)" in cad
     assert "EditedSectionProfileBuilder.SameGeometry(approved, actual)" in cad
 
 def test_saveas_copies_with_same_fingerprint_still_switch_projects():

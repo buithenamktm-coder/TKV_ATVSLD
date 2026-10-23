@@ -49,7 +49,7 @@ def test_edited_profile_preflight_is_one_scan_and_skips_cad_faces():
     assert scan.index("id.ObjectClass.IsDerivedFrom(polyClass)") < scan.index(
         "tr.GetObject(id, OpenMode.ForRead)"
     )
-    assert "Decode(poly, data)" in scan
+    assert "Decode(poly, data, poll)" in scan
     assert "p.IsUserEdited" in scan
     assert "if (grouped.Count == 0 && allowMissingUnedited)" in scan
     assert "Không tìm thấy đường CAD hiệu chỉnh" in scan
@@ -61,3 +61,15 @@ def test_edited_profile_preflight_is_one_scan_and_skips_cad_faces():
     assert label_update.index("id.ObjectClass.IsDerivedFrom(textClass)") < label_update.index(
         "tr.GetObject(id,OpenMode.ForRead)"
     )
+
+
+def test_edited_cad_read_and_label_write_poll_before_skipping_dense_faces():
+    code = source("src/MiningVolume.Plugin2023/Services/EditableSectionCadService.cs")
+    reader = code.split("internal static IReadOnlyList<SectionProfile> ReadEditedProfiles(", 1)[1].split("internal static void UpdateAreaLabels(", 1)[0]
+    labels = code.split("internal static void UpdateAreaLabels(", 1)[1].split("private static Tagged Decode(", 1)[0]
+    for block, kind in [(reader, "polyClass"), (labels, "textClass")]:
+        assert "Action pollCancellation = null" in block
+        assert block.index("if ((scanned++ & 255) == 0) poll();") < block.index("id.ObjectClass.IsDerivedFrom(" + kind + ")")
+    assert "poll();\n                tr.Commit();" in labels
+    decode = code.split("private static Tagged Decode(", 1)[1]
+    assert "if ((i & 255) == 0) poll();" in decode

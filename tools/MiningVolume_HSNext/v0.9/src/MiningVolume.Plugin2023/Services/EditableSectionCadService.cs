@@ -58,67 +58,85 @@ namespace MiningVolume2023.Services
 
         internal static IReadOnlyList<SectionProfile> ReadEditedProfiles(
             Database db, IReadOnlyList<SectionProfile> originals,
-            bool allowMissingUnedited = false)
+            bool allowMissingUnedited = false, Action pollCancellation = null)
         {
             if (originals == null || originals.Count == 0)
                 throw new InvalidOperationException("Chưa có mặt cắt được tính từ TIN.");
-            var grouped = new Dictionary<string, List<Tagged>>(StringComparer.OrdinalIgnoreCase);
-            using (var tr = db.TransactionManager.StartOpenCloseTransaction())
+            using (var progress = pollCancellation == null
+                ? new SectionCadProgress(originals.Count, "đọc mặt cắt đã chỉnh") : null)
             {
-                var ms = GetModelSpace(db, tr);
-                var polyClass = Autodesk.AutoCAD.Runtime.RXObject.GetClass(typeof(Polyline));
-                foreach (ObjectId id in ms)
+                Action poll = pollCancellation ?? progress.Poll;
+                poll();
+                var grouped = new Dictionary<string, List<Tagged>>(StringComparer.OrdinalIgnoreCase);
+                using (var tr = db.TransactionManager.StartOpenCloseTransaction())
                 {
-                    // Only open polylines: mine TINs can contain millions
-                    // of 3DFACEs that must not be opened for this check.
-                    if (!id.ObjectClass.IsDerivedFrom(polyClass)) continue;
-                    var poly = tr.GetObject(id, OpenMode.ForRead) as Polyline;
-                    if (poly == null) continue;
-                    using (var data = poly.GetXDataForApplication(SectionCadRenderer.EditRegApp))
+                    var ms = GetModelSpace(db, tr);
+                    var polyClass = Autodesk.AutoCAD.Runtime.RXObject.GetClass(typeof(Polyline));
+                    int scanned = 0;
+                    foreach (ObjectId id in ms)
                     {
-                        if (data == null) continue;
-                        var record = Decode(poly, data);
-                        if (!grouped.TryGetValue(record.Section, out var list))
-                            grouped.Add(record.Section, list = new List<Tagged>());
-                        list.Add(record);
+                        if ((scanned++ & 255) == 0) poll();
+                        // Only open polylines: mine TINs can contain millions
+                        // of 3DFACEs that must not be opened for this check.
+                        if (!id.ObjectClass.IsDerivedFrom(polyClass)) continue;
+                        var poly = tr.GetObject(id, OpenMode.ForRead) as Polyline;
+                        if (poly == null) continue;
+                        using (var data = poly.GetXDataForApplication(SectionCadRenderer.EditRegApp))
+                        {
+                            if (data == null) continue;
+                            var record = Decode(poly, data, poll);
+                            if (!grouped.TryGetValue(record.Section, out var list))
+                                grouped.Add(record.Section, list = new List<Tagged>());
+                            list.Add(record);
+                        }
                     }
                 }
+                // No tagged CAD sections is valid only for untouched profiles
+                // that have never been exported for manual editing.
+                if (grouped.Count == 0 && allowMissingUnedited)
+                {
+                    if (originals.Any(p => p != null && p.IsUserEdited))
+                        throw new InvalidOperationException(
+                            "Hệ mặt cắt đã hiệu chỉnh không còn tồn tại trên CAD. " +
+                            "Không xuất số liệu cũ; hãy khôi phục đường đã chỉnh.");
+                    poll();
+                    return originals;
+                }
+                var result = new List<SectionProfile>(originals.Count);
+                foreach (var orig in originals)
+                {
+                    poll();
+                    if (orig == null || !orig.HasData) { result.Add(orig); continue; }
+                    if (!grouped.TryGetValue(orig.Line.Name, out var paths))
+                        throw new InvalidOperationException("Không tìm thấy đường CAD hiệu chỉnh của " +
+                            orig.Line.Name + ". Hãy xuất lại mặt cắt hoặc khôi phục đường bị xóa.");
+                    var ht = paths.Where(x => x.Role == "HT").Select(x => x.Path).ToList();
+                    var tk = paths.Where(x => x.Role == "TK").Select(x => x.Path).ToList();
+                    var updated = EditedSectionProfileBuilder.Rebuild(orig, ht, tk);
+                    result.Add(updated);
+                    progress?.Report(result.Count);
+                }
+                poll();
+                return result;
             }
-            // No tagged CAD sections is valid only for untouched profiles
-            // that have never been exported for manual editing.
-            if (grouped.Count == 0 && allowMissingUnedited)
-            {
-                if (originals.Any(p => p != null && p.IsUserEdited))
-                    throw new InvalidOperationException(
-                        "Hệ mặt cắt đã hiệu chỉnh không còn tồn tại trên CAD. " +
-                        "Không xuất số liệu cũ; hãy khôi phục đường đã chỉnh.");
-                return originals;
-            }
-            var result = new List<SectionProfile>(originals.Count);
-            foreach (var orig in originals)
-            {
-                if (orig == null || !orig.HasData) { result.Add(orig); continue; }
-                if (!grouped.TryGetValue(orig.Line.Name, out var paths))
-                    throw new InvalidOperationException("Không tìm thấy đường CAD hiệu chỉnh của " +
-                        orig.Line.Name + ". Hãy xuất lại mặt cắt hoặc khôi phục đường bị xóa.");
-                var ht = paths.Where(x => x.Role == "HT").Select(x => x.Path).ToList();
-                var tk = paths.Where(x => x.Role == "TK").Select(x => x.Path).ToList();
-                var updated = EditedSectionProfileBuilder.Rebuild(orig, ht, tk);
-                result.Add(updated);
-            }
-            return result;
         }
 
-        internal static void UpdateAreaLabels(Database db, IReadOnlyList<SectionProfile> profiles)
+        internal static void UpdateAreaLabels(Database db, IReadOnlyList<SectionProfile> profiles, Action pollCancellation = null)
         {
             var areas = profiles.Where(x => x != null && x.HasData)
                 .ToDictionary(x => x.Line.Name, StringComparer.OrdinalIgnoreCase);
+            using (var progress = pollCancellation == null
+                ? new SectionCadProgress(areas.Count, "cập nhật nhãn diện tích") : null)
             using (var tr = db.TransactionManager.StartTransaction())
             {
+                Action poll = pollCancellation ?? progress.Poll;
+                poll();
                 var ms = GetModelSpace(db, tr);
                 var labels=new Dictionary<string,List<DBText>>(StringComparer.OrdinalIgnoreCase);
                 var textClass = Autodesk.AutoCAD.Runtime.RXObject.GetClass(typeof(DBText));
+                int scanned = 0;
                 foreach(ObjectId id in ms) {
+                    if ((scanned++ & 255) == 0) poll();
                     // Avoid opening every TIN face to find a handful of labels.
                     if (!id.ObjectClass.IsDerivedFrom(textClass)) continue;
                     var text=tr.GetObject(id,OpenMode.ForRead) as DBText;
@@ -140,16 +158,20 @@ namespace MiningVolume2023.Services
                     if(!labels.TryGetValue(pair.Key,out var list)||list.Count!=1)
                         throw new InvalidOperationException("Thiếu/trùng nhãn diện tích có ID của "+pair.Key+
                             ". Giữ nguyên hình chỉnh sửa; cần khôi phục nhãn hoặc xuất lại sau khi lưu bản sao.");
+                int completed = 0;
                 foreach(var pair in areas) {
+                    poll();
                     var label=labels[pair.Key][0];label.UpgradeOpen();
                     label.TextString="F đào = "+pair.Value.CutArea.ToString("0.00")+
                         " m²   F đắp = "+pair.Value.FillArea.ToString("0.00")+" m²";
+                    progress?.Report(++completed);
                 }
+                poll();
                 tr.Commit();
             }
         }
 
-        private static Tagged Decode(Polyline poly, ResultBuffer buf)
+        private static Tagged Decode(Polyline poly, ResultBuffer buf, Action poll)
         {
             var v = buf.AsArray();
             if (v.Length != 10 ||
@@ -177,6 +199,7 @@ namespace MiningVolume2023.Services
             var vertices = new List<EditedSectionVertex>(poly.NumberOfVertices);
             for (int i = 0; i < poly.NumberOfVertices; i++)
             {
+                if ((i & 255) == 0) poll();
                 if (Math.Abs(poly.GetBulgeAt(i)) > 1e-10)
                     throw new InvalidOperationException("Mặt cắt đang có cung tròn. Hãy chuyển thành các đoạn thẳng: " + poly.Handle);
                 Point3d pt = poly.GetPoint3dAt(i);

@@ -90,6 +90,37 @@ namespace MiningVolume2023.Services
                 SectionCadRenderer.ReplaceProfilesBatched(whole, profiles, Point3d.Origin,
                     1000, 500, 5, 0, profiles.Count, true, pollCancellation: () => directPolls++);
                 string directBefore = Snapshot(whole, true);
+                int readPolls = 0;
+                var reread = EditableSectionCadService.ReadEditedProfiles(whole, profiles,
+                    pollCancellation: () => readPolls++);
+                if (!EditedSectionProfileBuilder.SameGeometry(profiles, reread))
+                    throw new InvalidOperationException("CAD edit reader changed accepted geometry.");
+                foreach (int stop in new[] { 1, readPolls / 2, readPolls })
+                {
+                    int calls = 0; bool canceled = false;
+                    try { EditableSectionCadService.ReadEditedProfiles(whole, profiles,
+                        pollCancellation: () => { if (++calls == stop) throw new OperationCanceledException(); }); }
+                    catch (OperationCanceledException) { canceled = true; }
+                    if (!canceled || Snapshot(whole, true) != directBefore)
+                        throw new InvalidOperationException("Canceled edit read changed CAD geometry.");
+                }
+                // Different areas ensure rollback is checked after real writes.
+                var changedAreas = new List<SectionProfile>();
+                foreach (var profile in profiles)
+                    changedAreas.Add(new SectionProfile(profile.Line, profile.Segments,
+                        profile.CutArea + 123, profile.FillArea + 45, new string[0]));
+                int labelPolls = 0;
+                EditableSectionCadService.UpdateAreaLabels(whole, profiles, () => labelPolls++);
+                foreach (int stop in new[] { 1, labelPolls / 2, labelPolls })
+                {
+                    int calls = 0; bool canceled = false;
+                    try { EditableSectionCadService.UpdateAreaLabels(whole, changedAreas,
+                        () => { if (++calls == stop) throw new OperationCanceledException(); }); }
+                    catch (OperationCanceledException) { canceled = true; }
+                    if (!canceled || Snapshot(whole, true) != directBefore)
+                        throw new InvalidOperationException("Canceled area update left partial labels.");
+                }
+
                 int directCount = 0; bool directCanceled = false;
                 try {
                     SectionCadRenderer.ReplaceProfilesBatched(whole, profiles, Point3d.Origin,
