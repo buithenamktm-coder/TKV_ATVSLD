@@ -14,6 +14,11 @@ IMSATCAD.getMenu = function() {
     return EAction.getMenu("IMSAT CAD", "IMSATCADMenu");
 };
 
+// AutoCAD-style Quick Access toolbar: native QCAD QAction objects, never copied
+// drawing implementations. The toolbar stays visible when legacy bars are hidden.
+IMSATCAD.getQuickAccessToolBar = function() {
+    return EAction.getToolBar(qsTr("IMSAT CAD - Quick Access"), "IMSATCADQuickAccessToolBar", Qt.TopToolBarArea);
+};
 IMSATCAD.getDrawToolBar = function() {
     return EAction.getToolBar(qsTr("IMSAT CAD - Draw"), "IMSATCADDrawToolBar", Qt.TopToolBarArea);
 };
@@ -64,6 +69,7 @@ IMSATCAD.configureWorkspace = function() {
 };
 IMSATCAD.init = function() {
     IMSATCAD.getMenu();
+    IMSATCAD.getQuickAccessToolBar();
     IMSATCAD.getDrawToolBar();
     IMSATCAD.getModifyToolBar();
     IMSATCAD.getAnnotationToolBar();
@@ -130,6 +136,13 @@ IMSATCAD._fileScripts = [
     "scripts/File/Save/Save.js",
     "scripts/File/SaveAs/SaveAs.js",
     "scripts/File/Print/Print.js"
+];
+// Compact, always-accessible Save / Undo / Redo commands use the very same
+// native actions as the Ribbon and keyboard command aliases.
+IMSATCAD._quickAccessScripts = [
+    "scripts/File/Save/Save.js",
+    "scripts/Edit/Undo/Undo.js",
+    "scripts/Edit/Redo/Redo.js"
 ];
 IMSATCAD._blockScripts = [
     "scripts/Block/CreateBlock/CreateBlock.js",
@@ -696,6 +709,7 @@ IMSATCAD.postInit = function() {
     var blockCount = IMSATCAD.populateToolBar(IMSATCAD.getBlocksToolBar(), IMSATCAD._blockScripts);
     var selectionCount = IMSATCAD.populateToolBar(IMSATCAD.getSelectionToolBar(), IMSATCAD._selectionScripts);
     var fileCount = IMSATCAD.populateToolBar(IMSATCAD.getFileToolBar(), IMSATCAD._fileScripts);
+    var quickAccessCount = IMSATCAD.populateToolBar(IMSATCAD.getQuickAccessToolBar(), IMSATCAD._quickAccessScripts);
     if (ribbonReady) {
         IMSATCAD.hideDuplicateToolBars();
         // QCAD's original toolbars remain available from View > Toolbars.
@@ -713,7 +727,7 @@ IMSATCAD.postInit = function() {
     }
     if (!isNull(win)) {
         win.handleUserMessage("IMSAT CAD: " + success + "/" + IMSATCAD._aliases.length +
-                              " aliases, Ribbon=" + (ribbonReady ? "CREATED_NOT_GUI_TESTED" : "BLOCKED") + ", " + drawCount + " draw tools, " + modifyCount + " modify tools, " + annotationCount + " annotation, " + layerCount + " layer, " + utilityCount + " utilities, " + blockCount + " blocks, " + selectionCount + " selection, " + fileCount + " file");
+                              " aliases, Ribbon=" + (ribbonReady ? "CREATED_NOT_GUI_TESTED" : "BLOCKED") + ", " + drawCount + " draw tools, " + modifyCount + " modify tools, " + annotationCount + " annotation, " + layerCount + " layer, " + utilityCount + " utilities, " + blockCount + " blocks, " + selectionCount + " selection, " + fileCount + " file, " + quickAccessCount + " quick access");
     }
 };
 // AutoCAD-style aliases map to the closest native QCAD action; command prompts

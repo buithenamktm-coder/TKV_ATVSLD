@@ -66,7 +66,7 @@ vm.runInNewContext(source, context, { filename: "IMSATCAD.js" });
 assert(context.IMSATCAD, "Add-on not loaded");
 context.IMSATCAD.init();
 context.IMSATCAD.postInit();
-assert.strictEqual(toolbars.size, 9, "Expected eight legacy toolbars and IMSAT Ribbon");
+assert.strictEqual(toolbars.size, 10, "Expected eight legacy toolbars, Quick Access and IMSAT Ribbon");
 assert.strictEqual(ribbonPages.length, 6, "Missing IMSAT Ribbon tabs");
 const actionButtons = ribbonButtons.filter(b => b.action);
 assert(actionButtons.length > 30, "Expected actual Ribbon command buttons");
@@ -216,7 +216,16 @@ context.IMSATCAD._ribbonTabsWidget = actualTabWidget;
 // QTabWidget.count is a non-configurable getter in the Qt mock.
 // Do not mutate it; the native count guard is exercised by integration checks.
 const first = [...toolbars.values()].map(x => x.actions.length);
-assert(first.filter(x => x >= 2).length === 8, "Legacy CAD toolbar missing");
+assert(first.filter(x => x >= 2).length === 9, "CAD toolbars and Quick Access toolbar missing");
+const quickAccess = toolbars.get("IMSATCADQuickAccessToolBar");
+assert(quickAccess, "Native Quick Access toolbar missing");
+assert.deepStrictEqual(quickAccess.actions.map(x => x.script), [
+  "scripts/File/Save/Save.js",
+  "scripts/Edit/Undo/Undo.js",
+  "scripts/Edit/Redo/Redo.js"
+], "Quick Access must reuse exactly three existing QCAD commands");
+assert(quickAccess.actions.every(x => menu.actions.includes(x)),
+  "Quick Access actions must share their native QCAD action with the menu");
 assert.strictEqual(menu.actions.length, new Set(menu.actions).size, "Duplicate menu actions");
 const menuCount = menu.actions.length;
 context.IMSATCAD.postInit();
