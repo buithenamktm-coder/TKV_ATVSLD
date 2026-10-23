@@ -157,7 +157,11 @@ namespace MiningVolume2023
                         EntryPoint.Open(AppPage.Export);
                         break;
                     case RibbonAction.About:
-                        AcApp.ShowAlertDialog("IMSAT VOLUME\nMine Survey & Earthwork for AutoCAD\nPhát triển: Bùi Thế Nam\nĐT/Zalo: 0967280686");
+                        AcApp.ShowAlertDialog("IMSAT VOLUME V2.0 QA\n" +
+                            RuntimeBuildIdentity.ShortTag() + "\n" +
+                            "Mine Survey & Earthwork for AutoCAD\n" +
+                            "Phát triển: Bùi Thế Nam\nĐT/Zalo: 0967280686\n" +
+                            "Dùng lệnh MVBUILDINFO để xác minh DLL đang nạp.");
                         break;
                 }
             }
