@@ -599,14 +599,19 @@ IMSATCAD.postInit = function() {
     var missingAliases = [];
     for (var i=0; i<IMSATCAD._aliases.length; ++i) {
         var mapping=IMSATCAD._aliases[i];
-        var action=RGuiAction.getByScriptFile(mapping[0]);
-        if (isNull(action)) {
-            qWarning("IMSAT CAD: native action not found: " + mapping[0]);
+        try {
+            var action=RGuiAction.getByScriptFile(mapping[0]);
+            if (isNull(action) || typeof action.setDefaultCommands !== "function") {
+                qWarning("IMSAT CAD: native alias action unavailable: " + mapping[0]);
+                missingAliases.push(mapping[0]);
+                continue;
+            }
+            action.setDefaultCommands(mapping[1]);
+            success++;
+        } catch (error) {
+            qWarning("IMSAT CAD: alias registration failed for " + mapping[0] + ": " + error);
             missingAliases.push(mapping[0]);
-            continue;
         }
-        action.setDefaultCommands(mapping[1]);
-        success++;
     }
     if (missingAliases.length > 0) {
         qWarning("IMSAT CAD: missing native alias actions: " + missingAliases.join(", "));

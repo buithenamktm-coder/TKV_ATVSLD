@@ -296,4 +296,42 @@ vm.runInNewContext(source, blockedContext, { filename: "IMSATCAD.js" });
 assert.strictEqual(blockedContext.IMSATCAD.createRibbon(), false, "Missing Qt widget must fail Ribbon creation");
 assert(missingWidgetWarnings.some(x => x.includes("RIBBON BLOCKED") && x.includes("Qt widgets unavailable")),
   "Missing Qt widget must emit its own explicit blocker diagnostic");
+// Regression: one throwing native QCAD alias lookup must not interrupt the
+// remaining command registrations or Ribbon/workspace initialization.
+const badAlias = "scripts/Draw/Line/Line2P/Line2P.js";
+const laterAlias = "scripts/Draw/Polyline/DrawPolyline/DrawPolyline.js";
+const originalLookup = context.RGuiAction.getByScriptFile;
+const originalCreateRibbon = context.IMSATCAD.createRibbon;
+const originalPopulateToolBar = context.IMSATCAD.populateToolBar;
+const originalHideToolBars = context.IMSATCAD.hideDuplicateToolBars;
+const laterAction = actions.get(laterAlias);
+const originalLaterSetter = laterAction.setDefaultCommands;
+let laterRegistrations = 0;
+let ribbonReached = false;
+laterAction.setDefaultCommands = function(commands) {
+  laterRegistrations++;
+  return originalLaterSetter.call(this, commands);
+};
+context.RGuiAction.getByScriptFile = function(script) {
+  if (script === badAlias) throw new Error("simulated native alias lookup failure");
+  return originalLookup(script);
+};
+context.IMSATCAD.createRibbon = function() { ribbonReached = true; return true; };
+context.IMSATCAD.populateToolBar = function() { return 0; };
+context.IMSATCAD.hideDuplicateToolBars = function() {};
+const warningsBeforeAliasError = warnings.length;
+context.IMSATCAD.postInit();
+assert(ribbonReached, "One native alias failure must not block Ribbon initialization");
+assert.strictEqual(laterRegistrations, 1, "Later aliases must still be registered");
+assert(warnings.slice(warningsBeforeAliasError).some(x =>
+  x.includes(badAlias) && x.includes("simulated native alias lookup failure")),
+  "Native alias exception must include script path and original error");
+assert(messages.some(x => x.includes((context.IMSATCAD._aliases.length - 1) +
+  "/" + context.IMSATCAD._aliases.length + " aliases")),
+  "Startup status must report partial alias registration accurately");
+context.RGuiAction.getByScriptFile = originalLookup;
+context.IMSATCAD.createRibbon = originalCreateRibbon;
+context.IMSATCAD.populateToolBar = originalPopulateToolBar;
+context.IMSATCAD.hideDuplicateToolBars = originalHideToolBars;
+laterAction.setDefaultCommands = originalLaterSetter;
 console.log("IMSAT CAD mocked runtime PASS:", toolbars.size, "toolbars,", menuCount, "unique menu actions");
