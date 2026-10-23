@@ -85,15 +85,13 @@ func install() {
         if err := os.Rename(target, backup); err != nil { msg("Không sao lưu được bản cũ: "+err.Error(), 0x10); return }
     }
     if err := copyDir(source, target); err != nil {
-        os.RemoveAll(target); _ = restoreBackup(backup, target)
-        msg("Không cài được bundle: "+err.Error(), 0x10); return
+        reportInstallRollback("copyBundle", err, target, backup); return
     }
     // Check the actual INSTALLED files, not just the embedded payload.
     // This catches partial/stale copies and prevents a success message if
     // AutoCAD would pick up an outdated or corrupted main DLL.
     if err := validatePrebuiltBundle(target); err != nil {
-        os.RemoveAll(target); _ = restoreBackup(backup, target)
-        msg("DLL sau cài đặt không khớp bộ V2 QA; đã khôi phục bản trước:\n"+err.Error(), 0x10); return
+        reportInstallRollback("validateInstalledBundle", err, target, backup); return
     }
     sourceSHA := installedBundleSourceSHA(target)
 
@@ -102,14 +100,12 @@ func install() {
     // QA packaging is not evidence of AutoCAD runtime acceptance.
     undoRegistration, err := captureRegistration(programData, temp)
     if err != nil {
-        os.RemoveAll(target); _ = restoreBackup(backup, target)
-        msg("Không sao lưu được đăng ký cài đặt: "+err.Error(), 0x10); return
+        reportInstallRollback("captureRegistration", err, target, backup); return
     }
     if err := registerUninstall(target, cad); err != nil {
-        os.RemoveAll(target)
-        restoreErr := restoreBackup(backup, target)
+        restoreErr := rollbackBundle(target, backup, os.RemoveAll, restoreBackup)
         registryErr := undoRegistration()
-        details := fmt.Sprintf("Status=FAILED\\r\\nStage=registerUninstall\\r\\nError=%v\\r\\nRestoreBundle=%v\\r\\nRestoreRegistration=%v", err, restoreErr, registryErr)
+        details := fmt.Sprintf("Status=FAILED\r\nStage=registerUninstall\r\nError=%v\r\nRestoreBundle=%v\r\nRestoreRegistration=%v", err, restoreErr, registryErr)
         writePersistentLog("install_error", details)
         msg(fmt.Sprintf("Cài đặt chưa hoàn tất: %v. Khôi phục bundle: %v; đăng ký: %v", err, restoreErr, registryErr) + "\n\nChi tiết: " + filepath.Join(programData,"MiningVolume2023","Logs","install_error.txt"), 0x10); return
     }
@@ -695,8 +691,32 @@ func preserveBundle(source,recovery string) error {
     }
     return nil
 }
+// Do not attempt restoration over a partially removed/locked destination.
+// Preserve both the cleanup error and the backup location for manual recovery.
+func rollbackBundle(target, backup string, remove func(string) error, restore func(string,string) error) error {
+    if err := remove(target); err != nil {
+        return fmt.Errorf("Không dọn được bundle cài dở %s; bản sao lưu tại %s: %w", target, backup, err)
+    }
+    if err := restore(backup, target); err != nil {
+        return fmt.Errorf("Không khôi phục được bundle; giữ bản sao lưu tại %s: %w", backup, err)
+    }
+    return nil
+}
+func reportInstallRollback(stage string, cause error, target, backup string) {
+    restoreErr := rollbackBundle(target, backup, os.RemoveAll, restoreBackup)
+    writePersistentLog("install_error", fmt.Sprintf(
+        "Status=FAILED\r\nStage=%s\r\nError=%v\r\nRestoreBundle=%v\r\nBackup=%s", stage, cause, restoreErr, backup))
+    status := "Đã dọn phần cài đặt lỗi; bản cũ (nếu có) đã được khôi phục."
+    if restoreErr != nil { status = "Khôi phục chưa hoàn tất: " + restoreErr.Error() }
+    msg(fmt.Sprintf("Cài đặt thất bại tại %s: %v\n\n%s", stage, cause, status), 0x10)
+}
 func restoreBackup(backup,target string) error {
-    if !exists(backup) { return nil }
+    info, err := os.Lstat(backup)
+    if os.IsNotExist(err) { return nil }
+    if err != nil { return fmt.Errorf("Không đọc được bản sao lưu %s: %w", backup, err) }
+    if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+        return fmt.Errorf("Bản sao lưu không phải thư mục thông thường: %s", backup)
+    }
     if _, err := os.Lstat(target); !os.IsNotExist(err) {
         return fmt.Errorf("Không ghi đè thư mục đích khi khôi phục: %s", target)
     }

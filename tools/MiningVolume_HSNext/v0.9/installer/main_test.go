@@ -256,3 +256,40 @@ func TestAcad2023UsesProductVersionNotFileVersion(t *testing.T) {
     }
 }
 
+
+func TestRollbackBundleReportsCleanupAndRestoreFailures(t *testing.T) {
+    restored := false
+    cleanupErr := os.ErrPermission
+    err := rollbackBundle("target", "saved-backup", func(string) error { return cleanupErr },
+        func(string,string) error { restored=true; return nil })
+    if err==nil || restored || !strings.Contains(err.Error(),"saved-backup") {
+        t.Fatal("Cleanup failure must retain backup and stop restoration", err)
+    }
+    removed := false
+    err = rollbackBundle("target", "saved-backup", func(string) error { removed=true; return nil },
+        func(backup,target string) error {
+            if !removed || backup!="saved-backup" || target!="target" {t.Fatal("Wrong rollback ordering/paths")}
+            return os.ErrPermission
+        })
+    if err==nil || !strings.Contains(err.Error(),"saved-backup") {t.Fatal("Restore failure hidden",err)}
+    err = rollbackBundle("target", "saved-backup", func(string) error { return nil },
+        func(string,string) error { return nil })
+    if err!=nil {t.Fatal("Successful rollback rejected",err)}
+}
+
+func TestRestoreBackupRejectsInvalidBackupAndPreservesTarget(t *testing.T) {
+    dir:=t.TempDir()
+    backup:=filepath.Join(dir,"backup")
+    target:=filepath.Join(dir,"target")
+    if err:=os.WriteFile(backup,[]byte("keep"),0600);err!=nil {t.Fatal(err)}
+    if restoreBackup(backup,target)==nil {t.Fatal("Non-directory backup accepted")}
+    if data,err:=os.ReadFile(backup);err!=nil || string(data)!="keep" {t.Fatal("Invalid backup was changed")}
+    if err:=os.Remove(backup);err!=nil {t.Fatal(err)}
+    if err:=os.Mkdir(backup,0700);err!=nil {t.Fatal(err)}
+    if err:=os.Mkdir(target,0700);err!=nil {t.Fatal(err)}
+    if restoreBackup(backup,target)==nil {t.Fatal("Existing destination overwritten")}
+    if err:=os.Remove(target);err!=nil {t.Fatal(err)}
+    if err:=restoreBackup(backup,target);err!=nil {t.Fatal("Valid backup restore failed",err)}
+    if info,err:=os.Stat(target);err!=nil || !info.IsDir() {t.Fatal("Restored directory missing")}
+    if err:=restoreBackup(backup,target);err!=nil {t.Fatal("Absent backup should be harmless",err)}
+}
