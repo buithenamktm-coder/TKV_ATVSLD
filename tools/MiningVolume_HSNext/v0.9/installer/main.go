@@ -88,6 +88,14 @@ func install() {
         os.RemoveAll(target); _ = restoreBackup(backup, target)
         msg("Không cài được bundle: "+err.Error(), 0x10); return
     }
+    // Check the actual INSTALLED files, not just the embedded payload.
+    // This catches partial/stale copies and prevents a success message if
+    // AutoCAD would pick up an outdated or corrupted main DLL.
+    if err := validatePrebuiltBundle(target); err != nil {
+        os.RemoveAll(target); _ = restoreBackup(backup, target)
+        msg("DLL sau cài đặt không khớp bộ V2 QA; đã khôi phục bản trước:\n"+err.Error(), 0x10); return
+    }
+    sourceSHA := installedBundleSourceSHA(target)
 
     // Keep the previous bundle until registration and shortcuts also succeed.
     // Runtime verification is a release-pipeline responsibility.
@@ -108,8 +116,13 @@ func install() {
     if err := preserveBundle(backup, bundleRecoveryDirectory()); err != nil {
         msg("Đã cài bản mới; bản sao lưu vẫn được giữ tại "+backup+". Không chuyển được vào thư mục khôi phục: "+err.Error(), 0x30); return
     }
-    writePersistentLog("install", "Status=INSTALLED\r\nAutoCAD="+filepath.Join(cad,"acad.exe"))
-    msg("Cài đặt IMSAT VOLUME thành công.\n\nPhần mềm đang được tiếp tục cải tiến và hoàn thiện.\nMọi ý kiến đóng góp vui lòng liên hệ:\n\nBùi Thế Nam\nĐT/Zalo: 0967280686", 0x40)
+    writePersistentLog("install", "Status=INSTALLED\r\nVersion="+version+
+        "\r\nSourceSHA="+sourceSHA+"\r\nInstalledBundle="+target+
+        "\r\nAutoCAD="+filepath.Join(cad,"acad.exe"))
+    msg("Đã cài IMSAT VOLUME V"+version+" QA\nBUILD "+shortSHA(sourceSHA)+
+        "\n\nAutoCAD phải được khởi động lại để nạp đúng DLL.\n"+
+        "Trong AutoCAD gõ MVBUILDINFO để kiểm tra đường dẫn và commit.\n\n"+
+        "Bùi Thế Nam - ĐT/Zalo: 0967280686", 0x40)
 }
 
 func validatePrebuiltBundle(root string) error {
@@ -696,6 +709,27 @@ func elevate(extra string) { exe,_:=os.Executable(); ps:=fmt.Sprintf("Start-Proc
 func psQuote(s string) string { return "'"+strings.ReplaceAll(s,"'","''")+"'" }
 func msg(text string, icon uintptr) { user32:=syscall.NewLazyDLL("user32.dll"); proc:=user32.NewProc("MessageBoxW"); t,_:=syscall.UTF16PtrFromString(text); c,_:=syscall.UTF16PtrFromString(productName); proc.Call(0,uintptr(unsafe.Pointer(t)),uintptr(unsafe.Pointer(c)),0x0|icon) }
 // Public bundle metadata is parsed, never guessed from a filename.
+// Installed build evidence is read from the exact bundle that AutoCAD loads.
+// Never display the downloaded Setup filename as proof of a successful upgrade.
+func installedBundleSourceSHA(bundleDir string) string {
+    manifest := filepath.Join(bundleDir,"Contents","Windows","BUILD_IDENTITY.txt")
+    data,err := os.ReadFile(manifest)
+    if err!=nil { return "UNVERIFIED" }
+    for _,line:=range strings.Split(string(data),"\n") {
+        line=strings.TrimSpace(line)
+        if !strings.HasPrefix(line,"SOURCE_SHA=") { continue }
+        sha:=strings.TrimPrefix(line,"SOURCE_SHA=")
+        if len(sha)!=40 { return "UNVERIFIED" }
+        if _,err:=hex.DecodeString(sha); err!=nil { return "UNVERIFIED" }
+        return strings.ToLower(sha)
+    }
+    return "UNVERIFIED"
+}
+func shortSHA(sha string) string {
+    if len(sha)==40 { return sha[:8] }
+    return "UNVERIFIED"
+}
+
 func bundleVersion(root string) (string, error) {
     data, err := os.ReadFile(filepath.Join(root,"PackageContents.xml")); if err != nil { return "",err }
     var p struct { Version string `xml:"AppVersion,attr"` }
