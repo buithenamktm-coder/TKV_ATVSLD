@@ -458,6 +458,8 @@ jobs:
           $tabNames = @()
           $uiaResult = "NOT_TESTED"
           $uiaDetail = "GUI did not expose an accessible tab hierarchy"
+          $uiaTabInteraction = "NOT_TESTED"
+          $uiaTabInteractionDetail = "SelectionItemPattern not yet inspected"
           try {
             for ($attempt = 0; $attempt -lt 30; $attempt++) {
               Start-Sleep -Seconds 1
@@ -502,6 +504,54 @@ jobs:
               if ($matchingTabs.Count -eq $expectedTabs.Count) {
                 $uiaResult = "PASS"
                 $uiaDetail = "Six Vietnamese Ribbon tabs exposed through native Windows UIA"
+                # Exercise REAL native tab selection instead of accepting tab names
+                # as proof of mouse / keyboard interaction. Qt accessibility may
+                # omit SelectionItemPattern: record NOT_TESTED in that case.
+                $targets = @("Chèn", "Trang chủ")
+                $supported = $true
+                foreach ($targetName in $targets) {
+                  $target = $null
+                  for ($index = 0; $index -lt $items.Count; $index++) {
+                    if ($items.Item($index).Current.Name -eq $targetName) {
+                      $target = $items.Item($index)
+                      break
+                    }
+                  }
+                  if ($null -eq $target) {
+                    $uiaTabInteraction = "FAIL"
+                    $uiaTabInteractionDetail = "Native tab not found: $targetName"
+                    break
+                  }
+                  $selection = $null
+                  if (-not $target.TryGetCurrentPattern(
+                      [System.Windows.Automation.SelectionItemPattern]::Pattern,
+                      [ref]$selection)) {
+                    $supported = $false
+                    $uiaTabInteractionDetail = "Qt did not expose SelectionItemPattern for $targetName"
+                    break
+                  }
+                  try {
+                    $selection.Select()
+                    $selected = $false
+                    for ($poll = 0; $poll -lt 10; $poll++) {
+                      Start-Sleep -Milliseconds 200
+                      if ($selection.Current.IsSelected) { $selected = $true; break }
+                    }
+                    if (-not $selected) {
+                      $uiaTabInteraction = "FAIL"
+                      $uiaTabInteractionDetail = "UIA Select() did not activate $targetName"
+                      break
+                    }
+                  } catch {
+                    $uiaTabInteraction = "FAIL"
+                    $uiaTabInteractionDetail = "Native UIA tab selection threw for ${targetName}: $($_.Exception.Message)"
+                    break
+                  }
+                }
+                if ($supported -and $uiaTabInteraction -ne "FAIL") {
+                  $uiaTabInteraction = "PASS"
+                  $uiaTabInteractionDetail = "UIA selected Insert and restored Home using native SelectionItemPattern"
+                }
               } else {
                 $uiaDetail = "Expected 6 IMSAT tabs; observed $($matchingTabs.Count) through UIA"
               }
@@ -534,10 +584,13 @@ jobs:
             "ProbeScript=$probeScript" | Add-Content "native-ribbon-probe.txt"
           }
           Write-Host "Native installed Ribbon probe: $probeState"
+          Write-Host "Native UIA tab interaction: $uiaTabInteraction ($uiaTabInteractionDetail)"
           Get-Content "native-ribbon-probe.txt" | Select-Object -First 12
           @(
             "InstalledGUIRibbonTabsUIA=$uiaResult",
             "UIADetail=$uiaDetail",
+            "RibbonTabInteraction=$uiaTabInteraction",
+            "RibbonTabInteractionDetail=$uiaTabInteractionDetail",
             "UIATabNames=$($tabNames -join ' | ')",
             "GUICommandClickTests=NOT_TESTED"
           ) | Set-Content "native-gui-uia.txt" -Encoding UTF8
@@ -622,6 +675,9 @@ jobs:
           "GUI functional test: NOT RUN" | Add-Content "native-install-smoke.txt"
           if ($probeState -ne "PASS") {
             throw "Native installed Ribbon probe $probeState; inspect native-ribbon-probe.txt and native-gui-startup-output.txt"
+          }
+          if ($uiaTabInteraction -eq "FAIL") {
+            throw "Native UIA Ribbon tab selection failed; inspect native-gui-uia.txt"
           }
       # Upload diagnostics even when compilation, installation, or GUI smoke fails.
       # Without always(), the logs needed to fix a failed Windows build are lost.
