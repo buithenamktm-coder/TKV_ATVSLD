@@ -47,7 +47,7 @@ jobs:
           if (!(Test-Path (Join-Path $dir 'acad.exe')) -or !(Test-Path (Join-Path $dir 'AcMgd.dll'))) {
             throw 'BLOCKED: no AutoCAD 2023 host installation.'
           }
-          $ver=(Get-Item (Join-Path $dir 'acad.exe')).VersionInfo.FileVersion
+          $ver=(Get-Item (Join-Path $dir 'acad.exe')).VersionInfo.ProductVersion
           if ($ver -notmatch '^R?24\.2') { throw "BLOCKED: AutoCAD host version $ver is not R24.2." }
           "AUTOCAD2023_DIR=$dir" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
 

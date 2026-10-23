@@ -55,9 +55,10 @@ function Copy-Directory([string]$Source, [string]$Destination) {
 
 $cadDir = Find-AutoCAD2023
 $acad = Join-Path $cadDir 'acad.exe'
-$acadVersion = (Get-Item $acad).VersionInfo.FileVersion
+$acadVersion = (Get-Item $acad).VersionInfo.ProductVersion
+$acadFileVersion = (Get-Item $acad).VersionInfo.FileVersion
 if ($acadVersion -notmatch '^R?24\.2') {
-    throw "acad.exe không phải AutoCAD 2023 R24.2. FileVersion=$acadVersion"
+    throw "acad.exe không phải AutoCAD 2023 R24.2. ProductVersion=$acadVersion"
 }
 if (Get-Process acad -ErrorAction SilentlyContinue) {
     throw 'AutoCAD đang chạy. Runtime gate yêu cầu đóng toàn bộ acad.exe trước khi kiểm thử.'
@@ -217,7 +218,8 @@ $startupDetail"
             'Status=PASS',
             ('SourceCommit=' + $sourceCommit),
             ('AutoCADPath=' + $acad),
-            ('AutoCADFileVersion=' + $acadVersion)
+            ('AutoCADFileVersion=' + $acadFileVersion),
+            ('AutoCADProductVersion=' + $acadVersion)
         ) + $hashLines + @('', '--- MVSELFTEST ---', $result)
         $lines | Set-Content -Path $OutputPath -Encoding UTF8
         Write-Host '[PASS] AutoCAD 2023 runtime verification.'
