@@ -377,8 +377,16 @@ jobs:
           }
           # Verify that a real GUI window can be created by the installed EXE.
           # GitHub Windows runners can differ from a user's interactive desktop.
-          $gui = Start-Process -FilePath $installedExe -WorkingDirectory $destination -PassThru
+          # Capture GUI process output, not only the separate -no-gui smoke log.
+          # The interactive Qt add-on may initialize only after a document window opens.
+          $guiStdout = Join-Path $env:RUNNER_TEMP "imsat-cad-gui-stdout.txt"
+          $guiStderr = Join-Path $env:RUNNER_TEMP "imsat-cad-gui-stderr.txt"
+          $gui = Start-Process -FilePath $installedExe -WorkingDirectory $destination -RedirectStandardOutput $guiStdout -RedirectStandardError $guiStderr -PassThru
           $windowFound = $false
+          $windowTitle = ""
+          $tabNames = @()
+          $uiaResult = "NOT_TESTED"
+          $uiaDetail = "GUI did not expose an accessible tab hierarchy"
           try {
             for ($attempt = 0; $attempt -lt 30; $attempt++) {
               Start-Sleep -Seconds 1
@@ -386,42 +394,76 @@ jobs:
               if ($gui.HasExited) { throw "Native CAD GUI exited early with code $($gui.ExitCode)" }
               if ($gui.MainWindowHandle -ne [IntPtr]::Zero) {
                 $windowFound = $true
+                $windowTitle = $gui.MainWindowTitle
                 break
               }
             }
             if (-not $windowFound) { throw "Native CAD did not create a main window within 30 seconds" }
+            # Inspect the real installed window using Windows UI Automation.
+            # Missing Qt accessibility support is NOT_TESTED, never a fabricated PASS.
+            try {
+              Add-Type -AssemblyName UIAutomationClient -ErrorAction Stop
+              Add-Type -AssemblyName UIAutomationTypes -ErrorAction Stop
+              $root = [System.Windows.Automation.AutomationElement]::FromHandle($gui.MainWindowHandle)
+              if ($null -eq $root) { throw "UIA root element unavailable" }
+              $condition = [System.Windows.Automation.PropertyCondition]::new(
+                [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
+                [System.Windows.Automation.ControlType]::TabItem)
+              $items = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants, $condition)
+              for ($itemIndex = 0; $itemIndex -lt $items.Count; $itemIndex++) {
+                $tabNames += [string]$items.Item($itemIndex).Current.Name
+              }
+              $expectedTabs = @("Trang chủ", "Chèn", "Ghi chú", "Hiển thị", "Quản lý", "Xuất bản")
+              $matchingTabs = @($expectedTabs | Where-Object { $tabNames -contains $_ })
+              if ($matchingTabs.Count -eq $expectedTabs.Count) {
+                $uiaResult = "PASS"
+                $uiaDetail = "Six Vietnamese Ribbon tabs exposed through native Windows UIA"
+              } else {
+                $uiaDetail = "Expected 6 IMSAT tabs; observed $($matchingTabs.Count) through UIA"
+              }
+            } catch {
+              $uiaDetail = "UIA inspection unavailable: $($_.Exception.Message)"
+            }
           } finally {
             if (-not $gui.HasExited) { Stop-Process -Id $gui.Id -Force -ErrorAction SilentlyContinue }
+            $null = $gui.WaitForExit(5000)
           }
-          $gui.Refresh()
-          $windowTitle = $gui.MainWindowTitle
+          @(
+            "InstalledGUIRibbonTabsUIA=$uiaResult",
+            "UIADetail=$uiaDetail",
+            "UIATabNames=$($tabNames -join ' | ')",
+            "GUICommandClickTests=NOT_TESTED"
+          ) | Set-Content "native-gui-uia.txt" -Encoding UTF8
           @(
             "Installed GUI window creation: PASS",
             "WindowTitle=$windowTitle",
             "WindowTitleContainsIMSAT=" + [bool]($windowTitle -match "IMSAT"),
             "WindowTitleContainsQCAD=" + [bool]($windowTitle -match "QCAD")
           ) | Set-Content "native-gui-startup.txt" -Encoding UTF8
-          # A GUI window alone does not prove the IMSAT add-on initialized.
-          # Capture native startup output separately from GUI acceptance.
-          $startupOutput = ((Get-Content $stdout -Raw -ErrorAction SilentlyContinue) + "`n" + (Get-Content $stderr -Raw -ErrorAction SilentlyContinue))
+          # GUI and headless output are independent evidence streams.
+          # Prior builds inspected headless output only, so interactive Ribbon
+          # initialization failures were invisible to the CI diagnostic report.
+          $headlessOutput = ((Get-Content $stdout -Raw -ErrorAction SilentlyContinue) + "`n" + (Get-Content $stderr -Raw -ErrorAction SilentlyContinue))
+          $guiOutput = ((Get-Content $guiStdout -Raw -ErrorAction SilentlyContinue) + "`n" + (Get-Content $guiStderr -Raw -ErrorAction SilentlyContinue))
+          $guiOutput | Set-Content "native-gui-startup-output.txt" -Encoding UTF8
+          $headlessOutput | Set-Content "native-startup-output.txt" -Encoding UTF8
           $ribbonDiagnostics = @(
-            "RibbonInitializationInHeadlessLog=" + [bool]($startupOutput -match 'IMSAT CAD Ribbon initialized:'),
-            "AliasInitializationInHeadlessLog=" + [bool]($startupOutput -match 'IMSAT CAD: [0-9]+/[0-9]+ aliases'),
-            "RibbonBlockedInHeadlessLog=" + [bool]($startupOutput -match 'IMSAT CAD RIBBON BLOCKED')
+            "RibbonInitializationInHeadlessLog=" + [bool]($headlessOutput -match 'IMSAT CAD Ribbon initialized:'),
+            "RibbonInitializationInGuiLog=" + [bool]($guiOutput -match 'IMSAT CAD Ribbon initialized:'),
+            "AliasInitializationInGuiLog=" + [bool]($guiOutput -match 'IMSAT CAD: [0-9]+/[0-9]+ aliases'),
+            "RibbonBlockedInGuiLog=" + [bool]($guiOutput -match 'IMSAT CAD RIBBON BLOCKED'),
+            "RibbonTabsObservedThroughUIA=$uiaResult"
           )
           $ribbonDiagnostics | Set-Content "native-ribbon-diagnostics.txt" -Encoding UTF8
           Write-Host ($ribbonDiagnostics -join "; ")
-          # Preserve the captured output for diagnosis when add-on startup is silent.
-          $startupOutput | Set-Content "native-startup-output.txt" -Encoding UTF8
-          if ($startupOutput -match 'IMSAT CAD RIBBON BLOCKED') {
-            throw "Native CAD reported Ribbon initialization failure; inspect native-startup-output.txt"
+          if ($guiOutput -match 'IMSAT CAD RIBBON BLOCKED') {
+            throw "Native CAD GUI reported Ribbon initialization failure; inspect native-gui-startup-output.txt"
           }
-          # Headless output is diagnostic only; do not claim Ribbon acceptance
-          # when Qt does not initialize an interactive document window.
-          $ribbonLogObserved = [bool]($startupOutput -match 'IMSAT CAD Ribbon initialized:')
+          $ribbonLogObserved = [bool]($guiOutput -match 'IMSAT CAD Ribbon initialized:')
           $ribbonAudit = @(
-            "HeadlessRibbonInitializationObserved=$ribbonLogObserved",
+            "GuiRibbonInitializationObserved=$ribbonLogObserved",
             "InstalledGuiWindowCreated=$windowFound",
+            "RibbonTabAccessibility=$uiaResult",
             "InteractiveRibbonTabSwitching=NOT_TESTED",
             "InteractiveNativeActionInvocation=NOT_TESTED",
             "RibbonAcceptance=NOT_READY"
@@ -482,6 +524,8 @@ jobs:
             native-install-smoke.txt
             native-installed-startup.txt
             native-gui-startup.txt
+            native-gui-uia.txt
+            native-gui-startup-output.txt
             native-branding-audit.txt
             native-executable-origin.txt
             native-ribbon-diagnostics.txt
