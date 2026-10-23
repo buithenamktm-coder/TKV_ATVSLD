@@ -349,6 +349,25 @@ IMSATCAD.commandToolTip = function(script, language) {
     var aliases = IMSATCAD.commandAliases(script);
     return aliases.length > 0 ? label + " (" + aliases + ")" : label;
 };
+// Give real Qt Ribbon controls accessible names for screen readers and
+// Windows UI Automation. The QCAD QtScript bridge differs by version, so
+// accessibility metadata must never prevent native CAD actions from loading.
+IMSATCAD.setAccessibleLabel = function(widget, label) {
+    if (isNull(widget)) { return false; }
+    try {
+        if (typeof widget.setAccessibleName === "function") {
+            widget.setAccessibleName(label);
+            return true;
+        }
+        if (typeof widget.accessibleName !== "undefined") {
+            widget.accessibleName = label;
+            return true;
+        }
+    } catch (error) {
+        qWarning("IMSAT CAD: native accessibility label unavailable: " + error);
+    }
+    return false;
+};
 IMSATCAD._ribbonTabs = [
     ["Home", [["Draw", "_drawScripts"], ["Modify", "_modifyScripts"], ["Layers", "_layerScripts"]]],
     ["Insert", [["Blocks", "_blockScripts"]]],
@@ -424,11 +443,14 @@ IMSATCAD.setRibbonLanguage = function(language) {
             var entry = IMSATCAD._ribbonButtonCaptions[b2];
             entry.widget.setText(IMSATCAD.commandLabel(entry.script, locale));
             entry.widget.setToolTip(IMSATCAD.commandToolTip(entry.script, locale));
+            IMSATCAD.setAccessibleLabel(entry.widget, "IMSAT CAD: " + IMSATCAD.commandToolTip(entry.script, locale));
         }
         if (!isNull(IMSATCAD._ribbonLanguageButton)) {
             IMSATCAD._ribbonLanguageButton.setText(locale === "vi" ? "English" : "Tiếng Việt");
             IMSATCAD._ribbonLanguageButton.setToolTip(locale === "vi" ?
                 "Switch Ribbon to English" : "Chuyển Ribbon sang tiếng Việt");
+            IMSATCAD.setAccessibleLabel(IMSATCAD._ribbonLanguageButton,
+                locale === "vi" ? "IMSAT CAD: Switch to English" : "IMSAT CAD: Chuyển sang tiếng Việt");
         }
     }
     try {
@@ -514,6 +536,7 @@ IMSATCAD.createRibbon = function() {
         var shellLayout = new QHBoxLayout(ribbonShell);
         var tabs = new QTabWidget(ribbonShell);
         tabs.objectName = "IMSATCADRibbonTabs";
+        IMSATCAD.setAccessibleLabel(tabs, "IMSAT CAD Ribbon");
         var totalActions = 0;
         var panelCaptions = [];
         var commandCaptions = [];
@@ -543,6 +566,7 @@ IMSATCAD.createRibbon = function() {
                     commandCaptions.push({ widget: button, script: scripts[i] });
                     if (typeof button.setText === "function") { button.setText(label); }
                     if (typeof button.setToolTip === "function") { button.setToolTip(IMSATCAD.commandToolTip(scripts[i])); }
+                    IMSATCAD.setAccessibleLabel(button, "IMSAT CAD: " + IMSATCAD.commandToolTip(scripts[i]));
                     if (typeof button.setMinimumWidth === "function") { button.setMinimumWidth(84); }
                     // Ribbon groups use three compact rows, expanding horizontally as needed.
                     // This avoids very tall panels when a group has many actions.
@@ -576,6 +600,8 @@ IMSATCAD.createRibbon = function() {
         languageButton.setText(IMSATCAD._ribbonLanguage === "vi" ? "English" : "Tiếng Việt");
         languageButton.setToolTip(IMSATCAD._ribbonLanguage === "vi" ?
             "Switch Ribbon to English" : "Chuyển Ribbon sang tiếng Việt");
+        IMSATCAD.setAccessibleLabel(languageButton,
+            IMSATCAD._ribbonLanguage === "vi" ? "IMSAT CAD: Switch to English" : "IMSAT CAD: Chuyển sang tiếng Việt");
         languageButton.clicked.connect(function() {
             IMSATCAD.setRibbonLanguage(IMSATCAD._ribbonLanguage === "vi" ? "en" : "vi");
         });
