@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
 using System.Windows.Forms;
+using MiningVolume2023.Services;
 
 namespace MiningVolume2023.UI
 {
@@ -190,6 +191,7 @@ namespace MiningVolume2023.UI
             // The latter caused opaque rectangular patches behind the title
             // in AutoCAD's palette host (as shown in the field QA capture).
             const string title = "IMSAT VOLUME";
+            string buildLabel = "V2.0 QA · " + RuntimeBuildIdentity.ShortTag();
             const string subtitle = "Phát triển: Bùi Thế Nam  •  ĐT/Zalo: 0967280686";
             int left = textLeft;
             header.Paint += (sender, args) =>
@@ -203,6 +205,8 @@ namespace MiningVolume2023.UI
                 {
                     args.Graphics.DrawString(title, big, white, left, 12);
                     args.Graphics.DrawString(subtitle, small, muted, left + 1, 43);
+                    using (var buildFont = new Font("Arial", 7F, FontStyle.Bold))
+                        args.Graphics.DrawString(buildLabel, buildFont, white, left + 1, 61);
                 }
             };
 

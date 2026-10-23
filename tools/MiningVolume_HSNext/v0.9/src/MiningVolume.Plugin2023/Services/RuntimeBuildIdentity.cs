@@ -9,6 +9,28 @@ namespace MiningVolume2023.Services
 {
     internal static class RuntimeBuildIdentity
     {
+        // Show the actual installed bundle SHA, not a hardcoded product label.
+        // This lets operators identify a stale DLL or a duplicate installation
+        // from the palette itself, without needing to find its EXE filename.
+        internal static string ShortTag()
+        {
+            try
+            {
+                string dir = Path.GetDirectoryName(typeof(RuntimeBuildIdentity).Assembly.Location);
+                string file = Path.Combine(dir, "BUILD_IDENTITY.txt");
+                if (!File.Exists(file)) return "BUILD UNVERIFIED";
+                foreach (string line in File.ReadLines(file))
+                {
+                    if (!line.StartsWith("SOURCE_SHA=", StringComparison.Ordinal)) continue;
+                    string sha = line.Substring("SOURCE_SHA=".Length).Trim();
+                    if (sha.Length == 40 && sha.All(Uri.IsHexDigit))
+                        return "BUILD " + sha.Substring(0, 8).ToLowerInvariant();
+                }
+            }
+            catch { }
+            return "BUILD UNVERIFIED";
+        }
+
         internal static string Describe()
         {
             var result=new StringBuilder("IMSAT MiningVolume V2.0 — Bùi Thế Nam — ĐT/Zalo: 0967280686\r\n");
