@@ -6,6 +6,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using AcApp = Autodesk.AutoCAD.ApplicationServices.Application;
 using MiningVolume2023.UI;
+using MiningVolume2023.Services;
 
 namespace MiningVolume2023
 {
