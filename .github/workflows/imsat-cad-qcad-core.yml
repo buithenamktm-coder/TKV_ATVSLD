@@ -642,21 +642,65 @@ jobs:
                 # Invoke a real QCAD drawing action from the installed Ribbon.
                 # A successful click proves Qt dispatch and process survival, NOT
                 # that any geometry was drawn or a DXF was saved.
+                # Re-select Home after language changes: Qt exposes only the
+                # active tab's controls in the Windows accessibility tree.
+                $homeTabs = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants, $condition)
+                for ($hi = 0; $hi -lt $homeTabs.Count; $hi++) {
+                  if ([string]$homeTabs.Item($hi).Current.Name -ne "Trang chủ") { continue }
+                  $homeSelection = $null
+                  if ($homeTabs.Item($hi).TryGetCurrentPattern(
+                      [System.Windows.Automation.SelectionItemPattern]::Pattern, [ref]$homeSelection)) {
+                    $homeSelection.Select()
+                    Start-Sleep -Milliseconds 300
+                  }
+                  break
+                }
+                # Qt versions do not always map QObject.objectName to the UIA
+                # AutomationId of QAction-backed QToolButton controls. Match
+                # both the stable ID and the accessible localized action name.
+                # Refresh the collection after switching tabs/languages.
                 $lineControl = $null
                 $lineId = "IMSATCADRibbonAction_scripts_Draw_Line_Line2P_Line2P_js"
-                for ($ci = 0; $ci -lt $buttons.Count; $ci++) {
-                  if ([string]$buttons.Item($ci).Current.AutomationId -eq $lineId) {
-                    $lineControl = $buttons.Item($ci)
+                $freshButtons = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants,
+                  [System.Windows.Automation.PropertyCondition]::new(
+                    [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
+                    [System.Windows.Automation.ControlType]::Button))
+                $visibleButtonNames = @()
+                for ($ci = 0; $ci -lt $freshButtons.Count; $ci++) {
+                  $candidate = $freshButtons.Item($ci)
+                  $candidateId = [string]$candidate.Current.AutomationId
+                  $candidateName = [string]$candidate.Current.Name
+                  if ($candidateName) { $visibleButtonNames += $candidateName }
+                  if ($candidateId -eq $lineId -or
+                      $candidateName -match '(?i)^(IMSAT CAD:\s*)?(Đường thẳng|Line)(\s*\(|$)') {
+                    $lineControl = $candidate
                     break
                   }
                 }
                 if ($null -eq $lineControl) {
-                  $uiaCadDetail = "LINE Ribbon control not exposed by Windows UIA"
+                  # Some Qt accessibility backends classify QToolButton as
+                  # Custom rather than Button. Search the live UIA tree once.
+                  $allControls = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants,
+                    [System.Windows.Automation.Condition]::TrueCondition)
+                  for ($ci = 0; $ci -lt $allControls.Count; $ci++) {
+                    $candidate = $allControls.Item($ci)
+                    $candidateId = [string]$candidate.Current.AutomationId
+                    $candidateName = [string]$candidate.Current.Name
+                    if ($candidateId -eq $lineId -or
+                        $candidateName -match '(?i)^(IMSAT CAD:\s*)?(Đường thẳng|Line)(\s*\(|$)') {
+                      $lineControl = $candidate
+                      break
+                    }
+                  }
+                }
+                if ($null -eq $lineControl) {
+                  $sample = ($visibleButtonNames | Select-Object -First 15) -join ' | '
+                  $uiaCadDetail = "LINE Ribbon control not exposed through UIA; visible buttons: $sample"
                 } else {
                   $lineInvoker = $null
                   if (-not $lineControl.TryGetCurrentPattern(
                       [System.Windows.Automation.InvokePattern]::Pattern, [ref]$lineInvoker)) {
-                    $uiaCadDetail = "LINE Ribbon control has no native InvokePattern"
+                    $uiaCadDetail = "LINE Ribbon control found but lacks native InvokePattern"
                   } else {
                     try {
                       $lineInvoker.Invoke()
@@ -783,7 +827,7 @@ jobs:
             "GUIWindowCreated=$windowFound",
             "RibbonTabsInteractivelyVerified=$uiaTabInteraction",
             "RibbonLanguageInteractivelyVerified=$uiaLanguageInteraction",
-            "NativeCommandClickTests=NOT_RUN",
+            "NativeCommandClickTests=$uiaCadAction",
             "BrandingGate=NOT_READY"
           )
           # The resource patch is only meaningful if the INSTALLED binary
