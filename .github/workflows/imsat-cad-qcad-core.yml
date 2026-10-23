@@ -381,7 +381,11 @@ jobs:
           # The interactive Qt add-on may initialize only after a document window opens.
           $guiStdout = Join-Path $env:RUNNER_TEMP "imsat-cad-gui-stdout.txt"
           $guiStderr = Join-Path $env:RUNNER_TEMP "imsat-cad-gui-stderr.txt"
-          $gui = Start-Process -FilePath $installedExe -WorkingDirectory $destination -RedirectStandardOutput $guiStdout -RedirectStandardError $guiStderr -PassThru
+          # Run an actual QCAD JavaScript probe after add-on postInit.
+          # A created window alone is not proof that the IMSAT Ribbon works.
+          $probeFile = Join-Path $env:TEMP "imsat-cad-native-probe.txt"
+          Remove-Item $probeFile -Force -ErrorAction SilentlyContinue
+          $gui = Start-Process -FilePath $installedExe -ArgumentList @("-allow-multiple-instances", "-exec", "scripts/IMSATCAD/IMSATCADProbe.js") -WorkingDirectory $destination -RedirectStandardOutput $guiStdout -RedirectStandardError $guiStderr -PassThru
           $windowFound = $false
           $windowTitle = ""
           $tabNames = @()
@@ -428,6 +432,20 @@ jobs:
             if (-not $gui.HasExited) { Stop-Process -Id $gui.Id -Force -ErrorAction SilentlyContinue }
             $null = $gui.WaitForExit(5000)
           }
+          $probeState = "NOT_TESTED"
+          for ($probeAttempt = 0; $probeAttempt -lt 20 -and -not (Test-Path $probeFile); $probeAttempt++) {
+            Start-Sleep -Milliseconds 500
+          }
+          if (Test-Path $probeFile) {
+            Copy-Item $probeFile "native-ribbon-probe.txt" -Force
+            $probeLines = @(Get-Content $probeFile)
+            $probeState = if ($probeLines -contains "Status=PASS") { "PASS" } else { "FAIL" }
+          } else {
+            "Status=NOT_TESTED" | Set-Content "native-ribbon-probe.txt" -Encoding UTF8
+            "Failure=Native -exec probe produced no evidence" | Add-Content "native-ribbon-probe.txt"
+          }
+          Write-Host "Native installed Ribbon probe: $probeState"
+          Get-Content "native-ribbon-probe.txt" | Select-Object -First 12
           @(
             "InstalledGUIRibbonTabsUIA=$uiaResult",
             "UIADetail=$uiaDetail",
@@ -452,7 +470,8 @@ jobs:
             "RibbonInitializationInGuiLog=" + [bool]($guiOutput -match 'IMSAT CAD Ribbon initialized:'),
             "AliasInitializationInGuiLog=" + [bool]($guiOutput -match 'IMSAT CAD: [0-9]+/[0-9]+ aliases'),
             "RibbonBlockedInGuiLog=" + [bool]($guiOutput -match 'IMSAT CAD RIBBON BLOCKED'),
-            "RibbonTabsObservedThroughUIA=$uiaResult"
+            "RibbonTabsObservedThroughUIA=$uiaResult",
+            "InstalledNativeRibbonProbe=$probeState"
           )
           $ribbonDiagnostics | Set-Content "native-ribbon-diagnostics.txt" -Encoding UTF8
           Write-Host ($ribbonDiagnostics -join "; ")
@@ -466,6 +485,7 @@ jobs:
             "RibbonTabAccessibility=$uiaResult",
             "InteractiveRibbonTabSwitching=NOT_TESTED",
             "InteractiveNativeActionInvocation=NOT_TESTED",
+            "NativeRibbonProbe=$probeState",
             "RibbonAcceptance=NOT_READY"
           )
           $ribbonAudit | Set-Content "native-ribbon-acceptance.txt" -Encoding UTF8
@@ -511,6 +531,9 @@ jobs:
           "Native installer: PASS" | Set-Content "native-install-smoke.txt"
           "Native uninstaller: PASS" | Add-Content "native-install-smoke.txt"
           "GUI functional test: NOT RUN" | Add-Content "native-install-smoke.txt"
+          if ($probeState -ne "PASS") {
+            throw "Native installed Ribbon probe $probeState; inspect native-ribbon-probe.txt and native-gui-startup-output.txt"
+          }
       # Upload diagnostics even when compilation, installation, or GUI smoke fails.
       # Without always(), the logs needed to fix a failed Windows build are lost.
       - uses: actions/upload-artifact@v4
@@ -528,6 +551,7 @@ jobs:
             native-gui-startup-output.txt
             native-branding-audit.txt
             native-executable-origin.txt
+            native-ribbon-probe.txt
             native-ribbon-diagnostics.txt
             native-ribbon-acceptance.txt
             native-startup-output.txt
