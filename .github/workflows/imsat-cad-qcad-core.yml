@@ -440,8 +440,19 @@ jobs:
           Remove-Item $probeFile -Force -ErrorAction SilentlyContinue
           $probeScript = Join-Path $destination "scripts/IMSATCAD/IMSATCADProbe.js"
           if (-not (Test-Path $probeScript)) { throw "Installed QCAD Ribbon probe script missing: $probeScript" }
+          # Validate the pinned upstream startup gate so future QCAD upgrades
+          # cannot silently restore a blocking FirstStart dialog in CI.
+          $autostart = Join-Path $destination "scripts/autostart.js"
+          if (-not (Test-Path $autostart)) { throw "Installed QCAD autostart missing" }
+          if ((Get-Content $autostart -Raw) -notmatch 'isFirstStart\s*&&\s*!args\.contains\("-locale"\)') {
+            throw "QCAD first-start behavior changed; re-evaluate GUI test launch"
+          }
           # An absolute path rules out a working-directory mismatch in -exec.
-          $gui = Start-Process -FilePath $installedExe -ArgumentList @("-allow-multiple-instances", "-exec", $probeScript) -WorkingDirectory $destination -RedirectStandardOutput $guiStdout -RedirectStandardError $guiStderr -PassThru
+          # Pinned QCAD v3.32.2.0 autostart.js opens a modal FirstStart dialog
+          # on a clean profile unless -locale is supplied. That dialog can be
+          # mistaken for the CAD main window and prevents -exec from running.
+          # -rescan also ensures the newly installed IMSAT add-on is discovered.
+          $gui = Start-Process -FilePath $installedExe -ArgumentList @("-allow-multiple-instances", "-locale", "vi", "-rescan", "-exec", $probeScript) -WorkingDirectory $destination -RedirectStandardOutput $guiStdout -RedirectStandardError $guiStderr -PassThru
           $windowFound = $false
           $windowTitle = ""
           $tabNames = @()
@@ -497,6 +508,13 @@ jobs:
             }
             if (-not (Test-Path $probeFile)) {
               Write-Warning "Native Ribbon probe did not finish before GUI exit or timeout"
+              Write-Host "GUI diagnostic window title: $windowTitle"
+              foreach ($diagnosticPath in @($guiStdout, $guiStderr)) {
+                if (Test-Path $diagnosticPath) {
+                  Write-Host "Last 60 lines from $diagnosticPath"
+                  Get-Content $diagnosticPath -Tail 60 -ErrorAction SilentlyContinue
+                }
+              }
             }
           } finally {
             if (-not $gui.HasExited) { Stop-Process -Id $gui.Id -Force -ErrorAction SilentlyContinue }
