@@ -49,10 +49,47 @@ jobs:
           git -C native/qcad rev-parse HEAD | Out-File -Append native-commit-report.txt
           git -C native/qtjsapi rev-parse HEAD | Out-File -Append native-commit-report.txt
           git -C native/qcadjsapi rev-parse HEAD | Out-File -Append native-commit-report.txt
-      - name: Validate and install IMSAT CAD command aliases
+      - name: Install IMSAT CAD add-on and deterministic native startup
         shell: pwsh
         run: |
           Copy-Item -Recurse tools/IMSAT_CAD_V1/qcad_addon/IMSATCAD native/qcad/scripts/IMSATCAD
+          # QCAD CE autostart loads plug-ins dynamically. A copied add-on
+          # directory alone does not prove its postInit was invoked in the
+          # packaged executable. Install an idempotent fallback at the actual
+          # upstream postInit point so the Ribbon can initialize on every
+          # normal installed GUI launch, not only under the test runner.
+          $startup = "native/qcad/scripts/autostart.js"
+          $source = [IO.File]::ReadAllText($startup)
+          $anchor = "    postInitAddOns(addOns);"
+          if ($source.Split([string[]]@($anchor), [StringSplitOptions]::None).Length -ne 2) {
+            throw "Pinned QCAD autostart changed: cannot safely install IMSAT bootstrap"
+          }
+          $bootstrap = @'
+              postInitAddOns(addOns);
+              // IMSAT CAD GPLv3 integration: initialize only if upstream add-on
+              // discovery has not already mounted the native Ribbon.
+              try {
+                  if (typeof IMSATCAD === "undefined") {
+                      include("scripts/IMSATCAD/IMSATCAD.js");
+                      if (typeof IMSATCAD !== "undefined") {
+                          IMSATCAD.init();
+                      }
+                  }
+                  if (typeof IMSATCAD !== "undefined" && IMSATCAD._ribbonCreated !== true) {
+                      IMSATCAD.postInit();
+                  }
+                  qWarning("IMSAT CAD bootstrap: loaded=" + (typeof IMSATCAD !== "undefined") +
+                           " ribbon=" + (typeof IMSATCAD !== "undefined" && IMSATCAD._ribbonCreated === true));
+              } catch (imsatBootstrapError) {
+                  qWarning("IMSAT CAD bootstrap failed: " + imsatBootstrapError);
+              }
+          '@
+          $bootstrap = ($bootstrap -split "`r?`n" | ForEach-Object { $_ -replace '^ {14}', '' }) -join "`n"
+          $source = $source.Replace($anchor, $bootstrap.TrimEnd())
+          [IO.File]::WriteAllText($startup, $source)
+          if (-not ([IO.File]::ReadAllText($startup).Contains("IMSAT CAD bootstrap: loaded="))) {
+            throw "IMSAT native bootstrap was not installed"
+          }
       - name: Validate IMSAT aliases against pinned QCAD script tree
         shell: pwsh
         run: |
