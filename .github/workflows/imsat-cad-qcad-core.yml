@@ -7,6 +7,7 @@ on:
       - "tools/IMSAT_CAD_V1/qcad_addon/**"
       - "tools/IMSAT_CAD_V1/imsatcad-native-v1.iss"
       - "tools/IMSAT_CAD_V1/generate-brand.py"
+      - "tools/IMSAT_CAD_V1/brand-native-qcad.js"
       - "tools/IMSAT_CAD_V1/assets/**"
   push:
     branches: [imsat-cad-foundation]
@@ -15,6 +16,7 @@ on:
       - "tools/IMSAT_CAD_V1/qcad_addon/**"
       - "tools/IMSAT_CAD_V1/imsatcad-native-v1.iss"
       - "tools/IMSAT_CAD_V1/generate-brand.py"
+      - "tools/IMSAT_CAD_V1/brand-native-qcad.js"
       - "tools/IMSAT_CAD_V1/assets/**"
 concurrency:
   group: imsat-cad-native-${{ github.ref }}
@@ -29,6 +31,7 @@ jobs:
         shell: pwsh
         run: |
           node --check tools/IMSAT_CAD_V1/qcad_addon/IMSATCAD/IMSATCAD.js
+          node --check tools/IMSAT_CAD_V1/brand-native-qcad.js
           node tools/IMSAT_CAD_V1/qcad_addon/check-addon.js
           node tools/IMSAT_CAD_V1/qcad_addon/test-addon-runtime.js
       - name: Install Qt 6 for MSVC
@@ -49,6 +52,18 @@ jobs:
           git -C native/qcad rev-parse HEAD | Out-File -Append native-commit-report.txt
           git -C native/qtjsapi rev-parse HEAD | Out-File -Append native-commit-report.txt
           git -C native/qcadjsapi rev-parse HEAD | Out-File -Append native-commit-report.txt
+      - name: Brand native QCAD CE executable before compilation
+        shell: pwsh
+        run: |
+          # Patch the pinned GPLv3 source, not just the installer or filename.
+          # DLL resource metadata and upstream copyright notices stay unchanged.
+          python -m pip install --disable-pip-version-check Pillow
+          if ($LASTEXITCODE -ne 0) { throw "Pillow installation failed" }
+          python tools/IMSAT_CAD_V1/generate-brand.py
+          if ($LASTEXITCODE -ne 0) { throw "IMSAT icon generation failed" }
+          $icon = "tools/IMSAT_CAD_V1/assets/imsatcad.ico"
+          node tools/IMSAT_CAD_V1/brand-native-qcad.js native/qcad $icon
+          if ($LASTEXITCODE -ne 0) { throw "Native IMSAT CAD source branding failed" }
       - name: Install IMSAT CAD add-on and deterministic native startup
         shell: pwsh
         run: |
@@ -367,7 +382,23 @@ jobs:
           $stagedExeHash = (Get-FileHash "native-cad-stage/IMSATCAD.exe" -Algorithm SHA256).Hash
           $upstreamExeHash = (Get-FileHash "native-cad-stage/qcad.exe" -Algorithm SHA256).Hash
           "ExecutableIsUpstreamCopy=$($stagedExeHash -eq $upstreamExeHash)" | Set-Content "native-executable-origin.txt"
-          "NativeBrandingRequiresSourceChanges=YES" | Add-Content "native-executable-origin.txt"
+          $nativeInfo = (Get-Item "native-cad-stage/IMSATCAD.exe").VersionInfo
+          $expectedIdentity = @{
+            ProductName = "IMSAT CAD"
+            FileDescription = "IMSAT CAD V1.0 (QCAD CE GPLv3)"
+            InternalName = "IMSATCAD"
+            OriginalFilename = "IMSATCAD.exe"
+            CompanyName = "IMSAT"
+          }
+          foreach ($field in $expectedIdentity.Keys) {
+            $actual = [string]$nativeInfo.$field
+            if ($actual -ne $expectedIdentity[$field]) {
+              throw "Native IMSAT CAD VERSIONINFO $field mismatch: '$actual' (expected '$($expectedIdentity[$field])')"
+            }
+            "$field=$actual" | Add-Content "native-executable-origin.txt"
+          }
+          "NativeBrandingResourceIdentity=PASS" | Add-Content "native-executable-origin.txt"
+          Write-Host "Native IMSAT CAD VERSIONINFO identity PASS (upstream GPLv3 license preserved)"
           Copy-Item "tools/IMSAT_CAD_V1/imsatcad-native-v1.iss" "imsatcad-native-build.iss" -Force
           & $compiler "imsatcad-native-build.iss"
           if ($LASTEXITCODE -ne 0) { throw "Native Inno Setup compilation failed" }
