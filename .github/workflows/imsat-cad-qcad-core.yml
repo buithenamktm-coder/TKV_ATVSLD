@@ -375,6 +375,22 @@ jobs:
           } finally {
             $env:PATH = $oldPath
           }
+          # A headless -help launch does not initialize the QCAD ECMAScript
+          # engine. Prove that the INSTALLED executable can execute JavaScript
+          # before treating a missing Ribbon probe as a Ribbon defect.
+          $runtimeScript = Join-Path $env:RUNNER_TEMP "imsat-cad-js-runtime-probe.js"
+          'print("IMSAT_CAD_JS_ENGINE_PASS");' | Set-Content $runtimeScript -Encoding ascii
+          $runtimeStdout = Join-Path $env:RUNNER_TEMP "imsat-cad-js-runtime-stdout.txt"
+          $runtimeStderr = Join-Path $env:RUNNER_TEMP "imsat-cad-js-runtime-stderr.txt"
+          $runtime = Start-Process -FilePath $installedExe -ArgumentList @("-allow-multiple-instances", "-no-gui", "-autostart", $runtimeScript) -WorkingDirectory $destination -RedirectStandardOutput $runtimeStdout -RedirectStandardError $runtimeStderr -Wait -PassThru
+          $runtimeText = ((Get-Content $runtimeStdout -Raw -ErrorAction SilentlyContinue) + "`n" + (Get-Content $runtimeStderr -Raw -ErrorAction SilentlyContinue))
+          $runtimeText | Set-Content "native-js-runtime-output.txt" -Encoding UTF8
+          if ($runtime.ExitCode -ne 0 -or $runtimeText -notmatch "IMSAT_CAD_JS_ENGINE_PASS") {
+            "JavaScriptRuntime=FAIL" | Set-Content "native-js-runtime-audit.txt"
+            "ExitCode=$($runtime.ExitCode)" | Add-Content "native-js-runtime-audit.txt"
+            throw "Installed native CAD cannot execute QCAD JavaScript; inspect native-js-runtime-output.txt"
+          }
+          "JavaScriptRuntime=PASS" | Set-Content "native-js-runtime-audit.txt"
           # Verify that a real GUI window can be created by the installed EXE.
           # GitHub Windows runners can differ from a user's interactive desktop.
           # Capture GUI process output, not only the separate -no-gui smoke log.
@@ -385,7 +401,10 @@ jobs:
           # A created window alone is not proof that the IMSAT Ribbon works.
           $probeFile = Join-Path $env:TEMP "imsat-cad-native-probe.txt"
           Remove-Item $probeFile -Force -ErrorAction SilentlyContinue
-          $gui = Start-Process -FilePath $installedExe -ArgumentList @("-allow-multiple-instances", "-exec", "scripts/IMSATCAD/IMSATCADProbe.js") -WorkingDirectory $destination -RedirectStandardOutput $guiStdout -RedirectStandardError $guiStderr -PassThru
+          $probeScript = Join-Path $destination "scripts/IMSATCAD/IMSATCADProbe.js"
+          if (-not (Test-Path $probeScript)) { throw "Installed QCAD Ribbon probe script missing: $probeScript" }
+          # An absolute path rules out a working-directory mismatch in -exec.
+          $gui = Start-Process -FilePath $installedExe -ArgumentList @("-allow-multiple-instances", "-exec", $probeScript) -WorkingDirectory $destination -RedirectStandardOutput $guiStdout -RedirectStandardError $guiStderr -PassThru
           $windowFound = $false
           $windowTitle = ""
           $tabNames = @()
@@ -443,6 +462,8 @@ jobs:
           } else {
             "Status=NOT_TESTED" | Set-Content "native-ribbon-probe.txt" -Encoding UTF8
             "Failure=Native -exec probe produced no evidence" | Add-Content "native-ribbon-probe.txt"
+            "JavaScriptRuntimePreflight=PASS" | Add-Content "native-ribbon-probe.txt"
+            "ProbeScript=$probeScript" | Add-Content "native-ribbon-probe.txt"
           }
           Write-Host "Native installed Ribbon probe: $probeState"
           Get-Content "native-ribbon-probe.txt" | Select-Object -First 12
@@ -555,6 +576,8 @@ jobs:
             native-ribbon-diagnostics.txt
             native-ribbon-acceptance.txt
             native-startup-output.txt
+            native-js-runtime-audit.txt
+            native-js-runtime-output.txt
             native-commit-report.txt
             native-qt-dependencies.txt
             native-plugin-dependencies.txt
