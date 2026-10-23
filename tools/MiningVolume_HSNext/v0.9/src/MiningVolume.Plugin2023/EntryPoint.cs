@@ -177,7 +177,7 @@ namespace MiningVolume2023
             LicenseService.GetStatus();
             if (Palette == null)
             {
-                Palette = new PaletteSet("IMSAT VOLUME V2.0 QA", new Guid("8C96DC13-BC65-4A2C-8B34-2D7644FD1C62"))
+                Palette = new PaletteSet("IMSAT VOLUME", new Guid("8C96DC13-BC65-4A2C-8B34-2D7644FD1C62"))
                 {
                     Style = PaletteSetStyles.ShowAutoHideButton | PaletteSetStyles.ShowCloseButton | PaletteSetStyles.ShowPropertiesMenu,
                     MinimumSize = new System.Drawing.Size(360, 450),
