@@ -122,6 +122,7 @@ func install() {
     msg("Đã cài IMSAT VOLUME V"+version+" QA\nBUILD "+shortSHA(sourceSHA)+
         "\n\nAutoCAD phải được khởi động lại để nạp đúng DLL.\n"+
         "Trong AutoCAD gõ MVBUILDINFO để kiểm tra đường dẫn và commit.\n\n"+
+        "Phần mềm đang được tiếp tục cải tiến và hoàn thiện.\n"+
         "Bùi Thế Nam - ĐT/Zalo: 0967280686", 0x40)
 }
 
