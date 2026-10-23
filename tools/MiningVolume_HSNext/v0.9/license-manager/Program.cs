@@ -66,6 +66,10 @@ namespace ImsatLicenseManager
                         if (args.Length != 1) return Usage();
                         Console.WriteLine(File.ReadAllText(PublicPath,Encoding.UTF8));
                         break;
+                    case "fingerprint":
+                        if (args.Length != 1) return Usage();
+                        PrintPublicFingerprint();
+                        break;
                     case "issue":
                         if (args.Length != 5) return Usage();
                         Issue(args[1],args[2],args[3],args[4]);
@@ -96,8 +100,9 @@ namespace ImsatLicenseManager
             Console.WriteLine("  backup <absolute path to encrypted .imsbackup>");
             Console.WriteLine("  restore <absolute path to encrypted .imsbackup>");
             Console.WriteLine("  selftest");
-            Console.WriteLine("  issue <MachineId64hex> <INTERNAL|UNIT> <Customer> <YYYY-MM-DD|PERMANENT>");
+            Console.WriteLine("  issue <MachineId64hex> <INTERNAL|UNIT> <Customer> <1M|3M|6M|1Y|YYYY-MM-DD|PERMANENT>");
             Console.WriteLine("  public");
+            Console.WriteLine("  fingerprint  (SHA-256 of RSA public-only XML; no private key)");
             Console.WriteLine("  provision <full path to plugin LicenseService.cs>");
             Console.WriteLine("  verify <full path to .mvlic>");
             Console.WriteLine("All issuing keys stay in the admin Windows profile, never in the CAD plugin.");
@@ -119,7 +124,7 @@ namespace ImsatLicenseManager
                 new DataContractJsonSerializer(typeof(SignedLicensePayload)).WriteObject(ms, payload);
                 data = ms.ToArray();
             }
-            using (var issuer = new RSACryptoServiceProvider(2048))
+            using (var issuer = new RSACryptoServiceProvider(3072))
             using (var verifier = new RSACryptoServiceProvider())
             {
                 issuer.PersistKeyInCsp = false;
@@ -134,6 +139,23 @@ namespace ImsatLicenseManager
             }
             IssuerBackup.SelfTest();
             Console.WriteLine("LICENSE MANAGER SELFTEST PASS");
+        }
+
+        private static void PrintPublicFingerprint()
+        {
+            if (!File.Exists(PublicPath))
+                throw new FileNotFoundException("Chưa init issuer.public.xml trên máy quản trị.");
+            using (var rsa = new RSACryptoServiceProvider())
+            {
+                rsa.PersistKeyInCsp = false;
+                rsa.FromXmlString(File.ReadAllText(PublicPath, Encoding.UTF8).Trim());
+                if (!rsa.PublicOnly || rsa.KeySize < 3072)
+                    throw new InvalidOperationException("RSA public-only 3072-bit required.");
+                byte[] canonical = Encoding.UTF8.GetBytes(rsa.ToXmlString(false));
+                using (var sha = SHA256.Create())
+                    Console.WriteLine("IMSAT_VOLUME_V2_RSA_PUBLIC_SHA256=" +
+                        BitConverter.ToString(sha.ComputeHash(canonical)).Replace("-", "").ToLowerInvariant());
+            }
         }
 
         private static void BackupIssuer(string destination)
@@ -263,13 +285,22 @@ namespace ImsatLicenseManager
                 throw new ArgumentException("Giấy phép người dùng chỉ có INTERNAL hoặc UNIT.");
             if (customer.Length<3 || customer.Length>160)
                 throw new ArgumentException("Tên đơn vị phải dài 3–160 ký tự.");
-            DateTime expires;
-            if (expiryText.Equals("PERMANENT",StringComparison.OrdinalIgnoreCase))
-                expires=new DateTime(9999,12,31,0,0,0,DateTimeKind.Utc);
-            else
-                expires=DateTime.SpecifyKind(DateTime.ParseExact(expiryText,"yyyy-MM-dd",
-                    CultureInfo.InvariantCulture,DateTimeStyles.None).AddDays(1),DateTimeKind.Utc);
             var now=DateTime.UtcNow;
+            DateTime expires;
+            switch ((expiryText ?? "").Trim().ToUpperInvariant())
+            {
+                case "1M": expires=now.AddMonths(1); break;
+                case "3M": expires=now.AddMonths(3); break;
+                case "6M": expires=now.AddMonths(6); break;
+                case "1Y": expires=now.AddYears(1); break;
+                case "PERMANENT":
+                    expires=new DateTime(9999,12,31,0,0,0,DateTimeKind.Utc);
+                    break;
+                default:
+                    expires=DateTime.SpecifyKind(DateTime.ParseExact(expiryText,"yyyy-MM-dd",
+                        CultureInfo.InvariantCulture,DateTimeStyles.None).AddDays(1),DateTimeKind.Utc);
+                    break;
+            }
             if(expires<=now)throw new ArgumentException("Ngày hết hạn phải ở tương lai.");
 
             var payload=new SignedLicensePayload

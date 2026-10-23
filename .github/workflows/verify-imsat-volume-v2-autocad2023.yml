@@ -1,0 +1,176 @@
+name: IMSAT VOLUME V2.0 AutoCAD 2023 Host QA (NOT RELEASE)
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: V2.0 branch or authorized commit
+        required: true
+        type: string
+        default: miningvolume-v2-chatgpt-p0-continuation
+
+permissions:
+  contents: read
+
+concurrency:
+  group: imsat-volume-v2-autocad2023-runtime
+  cancel-in-progress: false
+
+jobs:
+  host-qa:
+    runs-on: [self-hosted, Windows, X64, autocad2023]
+    timeout-minutes: 60
+    env:
+      MV_ROOT: tools/MiningVolume_HSNext/v0.9
+      PUBLIC_RSA_B64: ${{ secrets.IMSAT_VOLUME_V2_RSA_PUBLIC_XML_B64 }}
+      APPROVED_RSA_SHA256: ${{ vars.IMSAT_VOLUME_V2_RSA_PUBLIC_SHA256 }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_ref }}
+          fetch-depth: 0
+
+      - name: Verify V2 source and exact commit
+        shell: pwsh
+        run: |
+          $sha=(git rev-parse HEAD).Trim()
+          git fetch origin miningvolume-v2-chatgpt-p0-continuation --no-tags
+          if ($LASTEXITCODE -ne 0) { throw 'V2 branch not available.' }
+          git merge-base --is-ancestor $sha origin/miningvolume-v2-chatgpt-p0-continuation
+          if ($LASTEXITCODE -ne 0) { throw 'BLOCKED: supplied source is not part of V2.' }
+          "SOURCE_SHA=$sha" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Require real licensed AutoCAD 2023 installation
+        shell: pwsh
+        run: |
+          $dir=Join-Path $env:ProgramFiles 'Autodesk/AutoCAD 2023'
+          if (!(Test-Path (Join-Path $dir 'acad.exe')) -or !(Test-Path (Join-Path $dir 'AcMgd.dll'))) {
+            throw 'BLOCKED: no AutoCAD 2023 host installation.'
+          }
+          $ver=(Get-Item (Join-Path $dir 'acad.exe')).VersionInfo.ProductVersion
+          if ($ver -notmatch '^R?24\.2') { throw "BLOCKED: AutoCAD host version $ver is not R24.2." }
+          "AUTOCAD2023_DIR=$dir" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.x'
+
+      - name: Check C# algorithms, Python tests and RSA issuer self-test
+        shell: pwsh
+        run: |
+          Set-Location $env:MV_ROOT
+          python -m pip install --disable-pip-version-check pytest shapely
+          python -m pytest -q tests/reference
+          if ($LASTEXITCODE -ne 0) { throw 'V2 QA tests failed.' }
+          python tests/core/run_core.py
+          if ($LASTEXITCODE -ne 0) { throw 'Core volume regression failed.' }
+          dotnet restore license-manager/IMSAT.LicenseManager.csproj
+          if ($LASTEXITCODE -ne 0) { throw 'Issuer restore failed.' }
+          dotnet build license-manager/IMSAT.LicenseManager.csproj -c Release --no-restore
+          if ($LASTEXITCODE -ne 0) { throw 'Issuer build failed.' }
+          & 'license-manager/bin/Release/net48/IMSAT.LicenseManager.exe' selftest
+          if ($LASTEXITCODE -ne 0) { throw 'RSA issuer tamper regression failed.' }
+
+      - name: Inject ONLY pinned public RSA verifier from admin issuer
+        shell: pwsh
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:PUBLIC_RSA_B64) -or [string]::IsNullOrWhiteSpace($env:APPROVED_RSA_SHA256)) {
+            throw 'BLOCKED: set IMSAT_VOLUME_V2_RSA_PUBLIC_XML_B64 secret and IMSAT_VOLUME_V2_RSA_PUBLIC_SHA256 variable. Never use a CI-generated issuer key.'
+          }
+          $path=Join-Path $env:RUNNER_TEMP 'imsat-v2-public.xml'
+          try {
+            [IO.File]::WriteAllBytes($path,[Convert]::FromBase64String($env:PUBLIC_RSA_B64))
+            & "$env:MV_ROOT/release/provision_v2_public_key.ps1" -PublicKeyFile $path -ExpectedPublicKeySha256 $env:APPROVED_RSA_SHA256
+            if ($LASTEXITCODE -ne 0) { throw 'RSA public verifier provision failed.' }
+          } finally {
+            Remove-Item $path -Force -ErrorAction SilentlyContinue
+            Remove-Item Env:PUBLIC_RSA_B64 -ErrorAction SilentlyContinue
+          }
+
+      - name: Compile with installed AutoCAD 2023 assemblies
+        shell: pwsh
+        run: |
+          Set-Location $env:MV_ROOT
+          dotnet restore MiningVolume.HSNext.sln -p:UseAutoCADNuGet=false
+          if ($LASTEXITCODE -ne 0) { throw 'Restore failed.' }
+          dotnet build MiningVolume.HSNext.sln -c Release --no-restore -p:UseAutoCADNuGet=false -p:AutoCAD2023Dir="$env:AUTOCAD2023_DIR" -p:SourceRevisionId="$env:SOURCE_SHA"
+          if ($LASTEXITCODE -ne 0) { throw 'Real host compile failed.' }
+
+      - name: Build separate V2 native bundle with provisioned RSA key
+        shell: pwsh
+        run: |
+          Set-Location $env:MV_ROOT
+          $w='bundle/MiningVolume2023.bundle/Contents/Windows'
+          New-Item -ItemType Directory -Force "$w/Assets" | Out-Null
+          Copy-Item 'src/MiningVolume.Plugin2023/bin/Release/net48/MiningVolume2023.dll' "$w/MiningVolume2023.dll" -Force
+          Copy-Item 'src/MiningVolume.Core/bin/Release/net48/MiningVolume.Core.dll' "$w/MiningVolume.Core.dll" -Force
+          Copy-Item 'src/MiningVolume.Surface/bin/Release/net48/MiningVolume.Surface.dll' "$w/MiningVolume.Surface.dll" -Force
+          Copy-Item 'src/MiningVolume.Cad2023/bin/Release/net48/MiningVolume.Cad2023.dll' "$w/MiningVolume.Cad2023.dll" -Force
+          Copy-Item 'src/MiningVolume.Surface/bin/Release/net48/MiningVolume.Cdt.Native.dll' "$w/MiningVolume.Cdt.Native.dll" -Force
+          Copy-Item 'src/MiningVolume.Surface/Native/LICENSE-CDT.txt' "$w/LICENSE-CDT.txt" -Force
+          Copy-Item 'src/MiningVolume.Surface/Native/NOTICE.txt' "$w/NOTICE.txt" -Force
+          Copy-Item 'src/MiningVolume.Plugin2023/Assets/imsat_logo_64.png' "$w/Assets/imsat_logo_64.png" -Force
+          "SOURCE_SHA=$env:SOURCE_SHA" | Set-Content "$w/BUILD_IDENTITY.txt" -Encoding ascii
+          & './release/verify_release.ps1'
+          if ($LASTEXITCODE -ne 0) { throw 'Bundle contents invalid.' }
+          & './release/prepare_v2_runtime_bundle.ps1'
+          if ($LASTEXITCODE -ne 0) { throw 'V2 bundle staging failed.' }
+
+      - name: V2 host smoke on actual AutoCAD 2023 desktop
+        shell: pwsh
+        run: |
+          Set-Location $env:MV_ROOT
+          & './release/verify_autocad2023_runtime.ps1' -ProductVersion '2.0' -BundlePath 'dist/v2-host/MiningVolume2023.bundle' -OutputPath 'dist/V2_RUNTIME_VERIFICATION.txt' -SelfTestPath 'dist/V2_MVSELFTEST_RUNTIME.txt'
+          if ($LASTEXITCODE -ne 0) { throw 'V2 AutoCAD runtime smoke failed.' }
+          $proof=Get-Content 'dist/V2_RUNTIME_VERIFICATION.txt' -Raw
+          if ($proof -notmatch 'ProductVersion=2.0' -or $proof -notmatch 'Status=PASS') {
+            throw 'BLOCKED: V2.0 host smoke proof missing.'
+          }
+
+      - name: Build ONLY V2 QA candidate after host smoke
+        shell: pwsh
+        run: |
+          Set-Location $env:MV_ROOT
+          go install github.com/akavel/rsrc@latest
+          if ($LASTEXITCODE -ne 0) { throw 'IMSAT icon tool failed.' }
+          & './installer/build_v2_qa.ps1'
+          if ($LASTEXITCODE -ne 0) { throw 'V2 QA installer build failed.' }
+          $exe='dist/IMSAT_MiningVolume_V2_0_QA_CANDIDATE.exe'
+          if (!(Test-Path $exe)) { throw 'V2 Setup missing.' }
+          $hash=(Get-FileHash $exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          @(
+            'IMSAT VOLUME V2.0 HOST QA ONLY - NOT AN OFFICIAL RELEASE'
+            ('SourceSHA='+$env:SOURCE_SHA)
+            ('PublicKeySHA256='+$env:APPROVED_RSA_SHA256.ToLowerInvariant())
+            ('SetupSHA256='+$hash)
+            'AutoCAD2023Smoke=PASS'
+            'RealSignedPassActivation=NOT_TESTED'
+            'T01_T22_EndToEnd=NOT_TESTED'
+            'UpgradeUninstall=NOT_TESTED'
+            'ReleaseStatus=BLOCKED'
+          ) | Set-Content 'dist/V2_HOST_QA_NOT_RELEASE.txt' -Encoding UTF8
+
+      - name: Upload version-correct V2 QA evidence only
+        uses: actions/upload-artifact@v4
+        with:
+          name: IMSAT-VOLUME-V2.0-AutoCAD2023-HOST-QA-NOT-RELEASE
+          retention-days: 30
+          if-no-files-found: error
+          path: |
+            tools/MiningVolume_HSNext/v0.9/dist/IMSAT_MiningVolume_V2_0_QA_CANDIDATE.exe
+            tools/MiningVolume_HSNext/v0.9/dist/V2_LICENSE_PUBLIC_KEY_PROOF.txt
+            tools/MiningVolume_HSNext/v0.9/dist/V2_RUNTIME_VERIFICATION.txt
+            tools/MiningVolume_HSNext/v0.9/dist/V2_MVSELFTEST_RUNTIME.txt
+            tools/MiningVolume_HSNext/v0.9/dist/V2_HOST_QA_NOT_RELEASE.txt
+
+      - name: Remove temporary public XML
+        if: always()
+        shell: pwsh
+        run: |
+          Remove-Item (Join-Path $env:RUNNER_TEMP 'imsat-v2-public.xml') -Force -ErrorAction SilentlyContinue

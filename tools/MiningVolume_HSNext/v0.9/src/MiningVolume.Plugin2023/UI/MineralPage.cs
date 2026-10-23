@@ -39,8 +39,9 @@ namespace MiningVolume2023.UI
 
             var commands = new FlowLayoutPanel
             {
-                Dock = DockStyle.Top, Height = 146,
-                WrapContents = true, Padding = new Padding(4, 3, 4, 3)
+                Dock = DockStyle.Top, Height = 212,
+                WrapContents = true, AutoScroll = true,
+                Padding = new Padding(11, 7, 11, 7), BackColor = UiTheme.Canvas
             };
             commands.Controls.Add(Action("THÊM VỈA", AddBody));
             commands.Controls.Add(Action("ĐỔI TÊN", RenameBody));
@@ -60,7 +61,8 @@ namespace MiningVolume2023.UI
 
             var attrs = new TableLayoutPanel
             {
-                Dock = DockStyle.Top, Height = 44, ColumnCount = 4, Padding = new Padding(4)
+                Dock = DockStyle.Top, Height = 54, ColumnCount = 4,
+                Padding = new Padding(10, 6, 10, 6)
             };
             attrs.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 125));
             attrs.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 105));
@@ -115,7 +117,12 @@ namespace MiningVolume2023.UI
 
         private static Button Action(string text, EventHandler handler)
         {
-            var button = new Button { Text = text, AutoSize = true, Height = 29, Margin = new Padding(2) };
+            var button = new Button {
+                Text = text, AutoSize = true, Height = 40,
+                MinimumSize = new Size(100, 40),
+                Margin = new Padding(5, 5, 5, 5),
+                TextAlign = ContentAlignment.MiddleCenter
+            };
             button.Click += handler;
             return button;
         }

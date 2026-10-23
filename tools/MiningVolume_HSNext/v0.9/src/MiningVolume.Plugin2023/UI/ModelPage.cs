@@ -24,13 +24,17 @@ namespace MiningVolume2023.UI
         private readonly Label _info;
         private readonly ProgressBar _progress;
         private readonly Button _build;
-        private readonly Button _buildBoth;
         private readonly Button _toggleTin;
         private readonly Button _view3D;
         private readonly Button _meanZBuild;
         private readonly Button _meanZCancel;
         private CancellationTokenSource _meanZCts;
-        private readonly List<RowRef> _rows = new List<RowRef>();
+        private CancellationTokenSource _buildCts;
+        // DataGridView.VirtualMode must not allocate one RowRef per point:
+        // mine surveys may contain millions of vertices. Cache only entity
+        // boundaries and resolve a visible/selected vertex on demand.
+        private ModelVertexRowIndex _rowIndex;
+        private ModelRole _rowRole;
         private bool _busy;
 
         public ModelPage()
@@ -69,19 +73,19 @@ namespace MiningVolume2023.UI
             };
             _build = Button("TẠO / CẬP NHẬT TIN", async (s, e) => await BuildTinAsync());
             _build.Width = 220;
-            _buildBoth = Button("TẠO / CẬP NHẬT CẢ HAI TIN", async (s, e) => await BuildBothTinAsync());
-            _buildBoth.Width = 205;
             _toggleTin = Button("Ẩn TIN", (s, e) => ToggleTin());
             _toggleTin.Width = 90;
             _view3D = Button("VIEW TIN 3D", (s, e) => ViewTin3D());
             _view3D.Width = 115;
             second.Controls.Add(_build);
-            second.Controls.Add(_buildBoth);
+            var deleteTin = Button("Xóa TIN đã tạo", (s, e) => DeleteCurrentTin());
+            deleteTin.Width = 140;
+            second.Controls.Add(deleteTin);
             second.Controls.Add(_toggleTin);
             second.Controls.Add(_view3D);
             _meanZBuild = Button("TIN Z TRUNG BÌNH – THỬ", async (s,e) => await BuildMeanZPreviewAsync());
             _meanZBuild.Width = 224;
-            _meanZCancel = Button("HỦY TIN THỬ", (s,e) => _meanZCts?.Cancel());
+            _meanZCancel = Button("HỦY DỰNG TIN", (s,e) => { _meanZCts?.Cancel(); _buildCts?.Cancel(); });
             _meanZCancel.Width = 118;
             _meanZCancel.Enabled = false;
             second.Controls.Add(_meanZBuild);
@@ -94,7 +98,7 @@ namespace MiningVolume2023.UI
             _info = new Label
             {
                 Dock = DockStyle.Bottom,
-                Height = 58,
+                Height = 82,
                 Text = "Chưa có dữ liệu.",
                 ForeColor = Color.DimGray,
                 AutoEllipsis = true
@@ -151,15 +155,42 @@ namespace MiningVolume2023.UI
 
         private void RebuildRows()
         {
-            _rows.Clear();
-            var s = CurrentSession;
-            if (s.Source != null)
-                foreach (var entity in s.Source.Entities)
-                    foreach (var vertex in entity.Vertices)
-                        _rows.Add(new RowRef { Entity = entity, Vertex = vertex });
-            _grid.RowCount = _rows.Count;
+            var source = CurrentSession.Source;
+            var role = CurrentRole;
+            bool switched = _rowRole != role ||
+                !ReferenceEquals(_rowIndex?.Source, source);
+            bool rebuild = switched || (source != null &&
+                (_rowIndex == null || _rowIndex.Revision != source.Revision ||
+                 _rowIndex.EntityCount != source.Entities.Count));
+
+            if (rebuild)
+            {
+                // Preserve selection on simple Z/enabled edits (same model),
+                // but never carry row selection across different data sources.
+                if (switched) _grid.ClearSelection();
+                _rowIndex = source == null ? null : new ModelVertexRowIndex(source);
+                _rowRole = role;
+            }
+            int count = _rowIndex?.RowCount ?? 0;
+            if (_grid.RowCount != count) _grid.RowCount = count;
             _grid.Invalidate();
             UpdateInfo();
+        }
+
+        private RowRef RowAt(int row)
+        {
+            var index = _rowIndex;
+            var source = CurrentSession.Source;
+            // Fail closed if the model has changed but the UI refresh has not
+            // yet arrived; never edit or zoom a vertex from another revision.
+            if (index == null || !ReferenceEquals(index.Source, source) ||
+                index.Revision != source.Revision || _rowRole != CurrentRole)
+                return null;
+            SourceEntity entity;
+            ModelVertex vertex;
+            return index.TryGet(row, out entity, out vertex)
+                ? new RowRef { Entity = entity, Vertex = vertex }
+                : null;
         }
 
         private void UpdateInfo()
@@ -170,26 +201,30 @@ namespace MiningVolume2023.UI
                 : "TẠO / CẬP NHẬT TIN THIẾT KẾ";
 
             _info.Text =
-                $"{s.Name} • nguồn: {s.Layer ?? "-"} • {s.EntityCount:n0} đối tượng • {s.ActiveVertexCount:n0}/{s.VertexCount:n0} đỉnh đang dùng" +
+                $"{s.Name} • nguồn: {s.Layer ?? "-"} • {s.EntityCount:n0} đối tượng • {_rowIndex?.ActiveVertexCount ?? 0:n0}/{_rowIndex?.RowCount ?? 0:n0} đỉnh đang dùng" +
                 Environment.NewLine +
                 SurfaceWorkflowService.TinStatusText(ModelRole.Existing) + "   |   " +
-                SurfaceWorkflowService.TinStatusText(ModelRole.Design);
+                SurfaceWorkflowService.TinStatusText(ModelRole.Design) +
+                Environment.NewLine +
+                (ProjectState.Current.HasTinRegion
+                    ? "PHẠM VI TIN: ĐÃ GIỚI HẠN theo đường bao CAD " +
+                      ProjectState.Current.TinRegionHandle +
+                      " (áp dụng cho cả HT/TK)."
+                    : "PHẠM VI TIN: TOÀN BỘ NGUỒN. Đường bao MẶT CẮT không cắt TIN; " +
+                      "muốn giới hạn: DỮ LIỆU → Phạm vi tạo TIN → Chọn vùng trên CAD.");
 
             _toggleTin.Text = s.TinVisible ? "Ẩn TIN" : "Hiện TIN";
             _toggleTin.Enabled = s.Tin != null && !_busy;
             _view3D.Enabled = s.IsTinCurrent && !_busy;
             _build.Enabled = !_busy && s.Source != null && s.Source.Entities.Count > 0;
             _meanZBuild.Enabled = !_busy && s.Source != null && s.Source.Entities.Count > 0;
-            _meanZCancel.Enabled = _busy && _meanZCts != null;
-            _buildBoth.Enabled = !_busy &&
-                ProjectState.Current.Existing.Source != null && ProjectState.Current.Existing.Source.Entities.Count > 0 &&
-                ProjectState.Current.Design.Source != null && ProjectState.Current.Design.Source.Entities.Count > 0;
+            _meanZCancel.Enabled = _busy && (_meanZCts != null || _buildCts != null);
         }
 
         private void GridCellValueNeeded(object sender, DataGridViewCellValueEventArgs e)
         {
-            if (e.RowIndex < 0 || e.RowIndex >= _rows.Count) return;
-            var r = _rows[e.RowIndex];
+            var r = RowAt(e.RowIndex);
+            if (r == null) return;
             bool enabled = r.Entity.IsEnabled && r.Vertex.IsEnabled;
             switch (_grid.Columns[e.ColumnIndex].Name)
             {
@@ -221,8 +256,8 @@ namespace MiningVolume2023.UI
         private IEnumerable<RowRef> SelectedRows()
         {
             return _grid.SelectedRows.Cast<DataGridViewRow>()
-                .Where(x => x.Index >= 0 && x.Index < _rows.Count)
-                .Select(x => _rows[x.Index]);
+                .Select(x => RowAt(x.Index))
+                .Where(x => x != null);
         }
 
         private void DisableSelectedVertices()
@@ -236,39 +271,55 @@ namespace MiningVolume2023.UI
                 string.Join("\r\n",rows.Take(8).Select(r=>"Handle "+r.Entity.Handle+" / đỉnh "+r.Vertex.Index+
                     " / Z "+r.Vertex.Position.Z))+"\r\nChỉ loại khỏi mô hình; CAD gốc giữ nguyên."))return;
             if(!ReferenceEquals(source,CurrentSession.Source)||source.Revision!=revision)return;
-            foreach (var r in rows) CurrentSession.Source.SetVertexEnabled(r.Entity.Id, r.Vertex.Index, false);
+            var selection = rows.Select(r =>
+                new KeyValuePair<string, int>(r.Entity.Id, r.Vertex.Index)).ToList();
+            source.ValidateVertexSelection(selection);
+            // Invalidate the prior CAD surface before altering model vertices.
+            // If AutoCAD refuses to clear a locked layer, source stays untouched.
             SurfaceWorkflowService.InvalidateTin(CurrentRole, clearCadLayer: true);
+            source.SetVerticesEnabled(selection, false);
+            ProjectState.Current.NotifyChanged();
         }
 
         private void DisableSelectedEntities()
         {
             var ids = SelectedRows().Select(r => r.Entity.Id).Distinct().ToList();
             if (ids.Count == 0) return;
-            foreach (var id in ids) CurrentSession.Source.RemoveEntityFromModel(id);
+            var source = CurrentSession.Source;
+            if (source == null) return;
             SurfaceWorkflowService.InvalidateTin(CurrentRole, clearCadLayer: true);
+            source.SetEntitiesEnabled(ids, false);
+            ProjectState.Current.NotifyChanged();
         }
 
         private void RestoreSelected()
         {
-            foreach(var row in SelectedRows().ToList()) {
-                CurrentSession.Source.RestoreEntity(row.Entity.Id);
-                CurrentSession.Source.RestoreVertex(row.Entity.Id,row.Vertex.Index);
-            }
+            var rows = SelectedRows().ToList();
+            if (rows.Count == 0) return;
+            var source = CurrentSession.Source;
+            if (source == null) return;
+            var selection = rows.Select(row =>
+                new KeyValuePair<string, int>(row.Entity.Id, row.Vertex.Index)).ToList();
+            source.ValidateVertexSelection(selection);
             SurfaceWorkflowService.InvalidateTin(CurrentRole, clearCadLayer: true);
+            source.RestoreSelectedVertices(selection);
+            ProjectState.Current.NotifyChanged();
         }
 
         private void RestoreAll()
         {
             if (CurrentSession.Source == null) return;
-            foreach (var entity in CurrentSession.Source.Entities)
+            var source = CurrentSession.Source;
+            SurfaceWorkflowService.InvalidateTin(CurrentRole, clearCadLayer: true);
+            foreach (var entity in source.Entities)
             {
                 entity.SetEnabled(true);
             }
-            CurrentSession.Source.RestoreVertices(CurrentSession.Source.Entities.SelectMany(e=>e.Vertices
+            source.RestoreVertices(source.Entities.SelectMany(e=>e.Vertices
                 .Where(v=>!v.IsEnabled||v.Position.Z!=v.Original.Z)
                 .Select(v=>new KeyValuePair<string,int>(e.Id,v.Index))));
-            CurrentSession.Source.Touch();
-            SurfaceWorkflowService.InvalidateTin(CurrentRole, clearCadLayer: true);
+            source.Touch();
+            ProjectState.Current.NotifyChanged();
         }
 
         private void EditZ()
@@ -283,8 +334,9 @@ namespace MiningVolume2023.UI
                     "Handle "+row.Entity.Handle+" / đỉnh "+row.Vertex.Index+"\r\nZ cũ "+row.Vertex.Position.Z+
                     " → Z mới "+form.Value+"\r\nChỉ sửa mô hình; CAD gốc giữ nguyên."))return;
                 if(CurrentRole!=role || !ReferenceEquals(source,CurrentSession.Source) || source.Revision!=revision)return;
+                SurfaceWorkflowService.InvalidateTin(role, clearCadLayer: true);
                 source.OverrideVertexZ(row.Entity.Id, row.Vertex.Index, form.Value);
-                SurfaceWorkflowService.InvalidateTin(CurrentRole, clearCadLayer: true);
+                ProjectState.Current.NotifyChanged();
             }
         }
 
@@ -294,16 +346,70 @@ namespace MiningVolume2023.UI
             if (row != null) CadViewService.ZoomToHandle(row.Entity.Handle);
         }
 
+        private void DeleteCurrentTin()
+        {
+            if (_busy) return;
+            var state = ProjectState.Current;
+            var role = CurrentRole;
+            var session = state.Get(role);
+            if (session.Tin == null && session.TinCadFaceCount == 0) {
+                MessageBox.Show(this, "Mô hình TIN đang chọn chưa được tạo.",
+                    "IMSAT VOLUME", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            var document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument;
+            if (document == null) {
+                MessageBox.Show(this, "Không có bản vẽ AutoCAD đang hoạt động.",
+                    "IMSAT VOLUME", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            string modelName = role == ModelRole.Existing ? "hiện trạng" : "thiết kế";
+            if (MessageBox.Show(this,
+                "Xóa TIN " + modelName + " đã tạo khỏi bản vẽ và mô hình đang lưu?\r\n\r\n" +
+                "Các mặt cắt và kết quả khối lượng phụ thuộc sẽ không còn hợp lệ và bị xóa khỏi phiên tính.\r\n" +
+                "Điểm, đường đồng mức, đường bao và đối tượng CAD nguồn vẫn được giữ nguyên.\r\n\r\n" +
+                "Tiếp tục xóa?",
+                "Xác nhận xóa TIN " + modelName,
+                MessageBoxButtons.YesNo, MessageBoxIcon.Warning,
+                MessageBoxDefaultButton.Button2) != DialogResult.Yes) return;
+            if (!ReferenceEquals(document, Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument)
+                || !ReferenceEquals(state, ProjectState.Current)
+                || role != CurrentRole) return;
+            try {
+                SurfaceWorkflowService.InvalidateTin(role, clearCadLayer: true);
+                _info.Text = "Đã xóa TIN " + modelName +
+                    ". Dữ liệu địa hình nguồn được giữ nguyên.";
+            }
+            catch (OperationCanceledException) {
+                _info.Text = "Đã hủy xóa TIN " + modelName +
+                    ". TIN và kết quả khối lượng trước thao tác được giữ nguyên.";
+            }
+            catch (Exception ex) {
+                MessageBox.Show(this, "Không thể xóa TIN. Mô hình được giữ lại nếu thao tác CAD thất bại.\r\n" + ex.Message,
+                    "IMSAT VOLUME", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
         private async Task BuildTinAsync()
         {
             if (_busy || !LicenseUiGuard.Check()) return;
             var role = CurrentRole;
+            var originalState=ProjectState.Current;
+            var startingDocument=Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument;
+            _buildCts=new CancellationTokenSource();
+            SurfaceBuildResult build=null;
+            IDisposable operation=null;
             try
             {
+                operation=SurfaceWorkflowService.EnterInteractiveBuild();
                 SetBusy(true, $"Đang kiểm tra dữ liệu và dựng TIN {ProjectState.Current.Get(role).Name}...");
-                SurfaceBuildResult build;
-                try { build = await Task.Run(() => SurfaceWorkflowService.BuildCoreDetailed(role)); }
-                catch (DuplicateXYConflictException ex) { DuplicateXYConflictUi.Show(role, ex.Report); return; }
+                IProgress<string> progress=new Progress<string>(text=>{if(!IsDisposed)_info.Text=text;});
+                try { build = await Task.Run(() => SurfaceWorkflowService.BuildCoreDetailed(role,progress.Report,_buildCts.Token)); }
+                catch (DuplicateXYConflictException ex) { MessageBox.Show("Không thể dựng topology TIN an toàn. Không yêu cầu loại từng điểm trùng thủ công.\r\n"+ex.Message,"Kiểm tra topology nguồn",MessageBoxButtons.OK,MessageBoxIcon.Warning); return; }
+                if(!ReferenceEquals(startingDocument,Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument)) {
+                    throw new InvalidOperationException("Bản vẽ đã đổi trong lúc dựng TIN. Hãy chạy lại trên đúng bản vẽ.");
+                }
+                _buildCts.Token.ThrowIfCancellationRequested();
                 SurfaceWorkflowService.DrawTin(role, build);
                 MessageBox.Show(
                     $"TIN {ProjectState.Current.Get(role).Name} đã tạo thành công.\r\n\r\n" +
@@ -321,59 +427,22 @@ namespace MiningVolume2023.UI
             {
                 MessageBox.Show(ex.Message, "Không tạo được TIN", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
-            finally { SetBusy(false, null); }
-        }
-
-        private async Task BuildBothTinAsync()
-        {
-            if (_busy || !LicenseUiGuard.Check()) return;
-            var st = ProjectState.Current;
-            if (st.Existing.Source == null || st.Existing.Source.Entities.Count == 0 ||
-                st.Design.Source == null || st.Design.Source.Entities.Count == 0)
-            {
-                MessageBox.Show(
-                    "Phải nạp đủ dữ liệu Hiện trạng và Thiết kế trước khi tạo cặp TIN.",
-                    "IMSAT VOLUME - TIN",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Warning);
-                return;
+            finally {
+                if(build!=null && !ReferenceEquals(build.Tin,originalState.Get(role).Tin))
+                    (build.Tin.Triangles as IDisposable)?.Dispose();
+                operation?.Dispose();
+                _buildCts?.Dispose();_buildCts=null;SetBusy(false,null);
             }
-
-            try
-            {
-                SetBusy(true, "Đang dựng đồng thời cặp TIN hiện trạng / thiết kế...");
-                SurfaceBuildResult[] builds;
-                try { builds = await Task.Run(() => SurfaceWorkflowService.BuildPairCoreDetailed()); }
-                catch (DuplicateXYConflictException ex) { DuplicateXYConflictUi.Ask(this, ex); return; }
-
-                SurfaceWorkflowService.DrawTinPair(builds);
-                MessageBox.Show(
-                    "ĐÃ TẠO ĐỦ 2 TIN DÙNG CHO TÍNH KHỐI LƯỢNG\r\n\r\n" +
-                    $"Hiện trạng → {st.Existing.TinLayer}: {builds[0].Summary}\r\n" +
-                    $"Thiết kế → {st.Design.TinLayer}: {builds[1].Summary}",
-                    "IMSAT VOLUME - Cặp TIN hợp lệ",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Information);
-            }
-            catch (SurfaceValidationException ex)
-            {
-                ShowValidation(ex.ModelName, ex.Issues);
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show(ex.Message, "Không tạo được cặp TIN", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
-            finally { SetBusy(false, null); }
         }
 
         /// <summary>
         /// Experimental mean-Z TIN does not alter either verified TIN or any
         /// official section/volume state. Only writes a TEST_ONLY preview layer.
         /// </summary>
-        private async Task BuildMeanZPreviewAsync()
+        private async Task BuildMeanZPreviewAsync(ModelRole? requestedRole=null)
         {
             if (_busy || !LicenseUiGuard.Check()) return;
-            var role=CurrentRole;
+            var role=requestedRole??CurrentRole;
             var startingDocument=Autodesk.AutoCAD.ApplicationServices.Application
                 .DocumentManager.MdiActiveDocument;
             if(startingDocument==null)
@@ -383,10 +452,10 @@ namespace MiningVolume2023.UI
                 return;
             }
             if (MessageBox.Show(this,
-                "TIN THỬ NGHIỆM – TRUNG BÌNH Z\\r\\n\\r\\n"+
+                "TIN THỬ NGHIỆM – TRUNG BÌNH Z\r\n\r\n"+
                 "Gộp tất cả đỉnh trùng XY từ đối tượng đang dùng bằng Z trung bình. "+
                 "Đường breakline KHÔNG được giữ như cạnh bắt buộc. "+
-                "Chỉ vẽ trên layer riêng TEST_ONLY, không thay TIN hiện trạng/thiết kế chính thức.\\r\\n\\r\\n"+
+                "Chỉ vẽ trên layer riêng TEST_ONLY, không thay TIN hiện trạng/thiết kế chính thức.\r\n\r\n"+
                 "KẾT QUẢ KHÔNG DÙNG TÍNH KHỐI LƯỢNG. Tiếp tục?",
                 "IMSAT VOLUME – TIN thử nghiệm",
                 MessageBoxButtons.YesNo,MessageBoxIcon.Warning,
@@ -414,16 +483,16 @@ namespace MiningVolume2023.UI
                 int count=MeanZPreviewWorkflowService.Draw(result);
                 string info=
                     "Đã tạo TIN THỬ NGHIỆM trên layer: "+result.Layer+
-                    "\\r\\nĐỉnh nguồn: "+result.Analysis.OriginalVertexCount.ToString("n0")+
+                    "\r\nĐỉnh nguồn: "+result.Analysis.OriginalVertexCount.ToString("n0")+
                     "; đỉnh sau gộp: "+result.Analysis.Prepared.Sites.Count.ToString("n0")+
-                    "\\r\\nNhóm XY trùng: "+result.Analysis.DuplicateGroupCount.ToString("n0")+
+                    "\r\nNhóm XY trùng: "+result.Analysis.DuplicateGroupCount.ToString("n0")+
                     "; nhóm khác Z: "+result.Analysis.Conflicts.Count.ToString("n0")+
-                    "\\r\\nBreakline KHÔNG ràng buộc: "+result.Analysis.IgnoredBreaklineSegments.ToString("n0")+
-                    "\\r\\nSố tam giác toàn bộ: "+result.TotalTriangles.ToString("n0")+
+                    "\r\nBreakline KHÔNG ràng buộc: "+result.Analysis.IgnoredBreaklineSegments.ToString("n0")+
+                    "\r\nSố tam giác toàn bộ: "+result.TotalTriangles.ToString("n0")+
                     "; số mặt CAD minh họa: "+count.ToString("n0")+
                     (result.DrawIsSampled?" (đã lấy mẫu hiển thị để không treo CAD)":"")+
-                    "\\r\\n\\r\\nKHÔNG DÙNG LƯỚI NÀY ĐỂ TÍNH KHỐI LƯỢNG."+
-                    "\\r\\nCó xuất báo cáo chi tiết các vị trí Z đã gộp sang CSV không?";
+                    "\r\n\r\nKHÔNG DÙNG LƯỚI NÀY ĐỂ TÍNH KHỐI LƯỢNG."+
+                    "\r\nCó xuất báo cáo chi tiết các vị trí Z đã gộp sang CSV không?";
                 if(MessageBox.Show(this,info,"TIN Z TB – chỉ so sánh HSMo",
                     MessageBoxButtons.YesNo,MessageBoxIcon.Information)==DialogResult.Yes)
                 {
@@ -436,6 +505,36 @@ namespace MiningVolume2023.UI
                     })
                         if(dlg.ShowDialog(this)==DialogResult.OK)
                             MeanZPreviewWorkflowService.ExportCsv(result,dlg.FileName);
+                }
+            }
+            catch(MeanZReviewRequiredException ex)
+            {
+                // A >3 m conflict is a REVIEW result, not a triangulation crash.
+                // Open the grouped source-vertex editor on the same drawing.
+                // Its own asynchronous rescan verifies current model revision
+                // before enabling any Edit-Z or Exclude-Vertex action.
+                if (!IsDisposed &&
+                    Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
+                        == startingDocument)
+                {
+                    Autodesk.AutoCAD.ApplicationServices.Application.ShowModelessDialog(
+                        new MeanZConflictReviewForm(role, ex.Analysis, () =>
+                        {
+                            if(IsDisposed || !IsHandleCreated ||
+                               Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
+                                   != startingDocument)return;
+                            // Queue after the modeless conflict form finishes closing.
+                            // Build() scans current data and reapplies the >3m hard gate.
+                            BeginInvoke(new Action(async () => await BuildMeanZPreviewAsync(role)));
+                        }));
+                }
+                else if(!IsDisposed)
+                {
+                    MessageBox.Show(this,
+                        "Bản vẽ CAD đã chuyển khi phát hiện chênh Z > 3 m. " +
+                        "Hãy trở lại đúng DWG và quét lại dữ liệu.",
+                        "TIN thử nghiệm – cần kiểm tra cao độ",
+                        MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 }
             }
             catch(OperationCanceledException)
@@ -475,7 +574,15 @@ namespace MiningVolume2023.UI
             if (_busy) return;
             try
             {
-                Tin3DViewService.Start(CurrentRole);
+                if (Tin3DViewService.IsActive)
+                    Tin3DViewService.Stop();
+                else
+                    Tin3DViewService.Start(CurrentRole);
+                _view3D.Text = Tin3DViewService.IsActive
+                    ? "Trở về 2D" : "View TIN 3D";
+                _info.Text = Tin3DViewService.IsActive
+                    ? "Đang xem TIN 3D khung dây, không tự chạy 3DORBIT. Bấm TRỞ VỀ 2D để khôi phục."
+                    : "Đã khôi phục góc nhìn trước khi xem TIN 3D.";
             }
             catch (Exception ex)
             {
@@ -495,13 +602,11 @@ namespace MiningVolume2023.UI
         {
             _busy = busy;
             _build.Enabled = !busy && CurrentSession.Source != null && CurrentSession.Source.Entities.Count > 0;
-            _buildBoth.Enabled = !busy &&
-                ProjectState.Current.Existing.Source != null && ProjectState.Current.Existing.Source.Entities.Count > 0 &&
-                ProjectState.Current.Design.Source != null && ProjectState.Current.Design.Source.Entities.Count > 0;
             _toggleTin.Enabled = !busy && CurrentSession.Tin != null;
             _meanZBuild.Enabled = !busy && CurrentSession.Source != null && CurrentSession.Source.Entities.Count > 0;
-            _meanZCancel.Enabled = busy && _meanZCts != null;
-            _view3D.Enabled = !busy && CurrentSession.IsTinCurrent;
+            _meanZCancel.Enabled = busy && (_meanZCts != null || _buildCts != null);
+            _view3D.Enabled = !busy && (Tin3DViewService.IsActive || CurrentSession.IsTinCurrent);
+            _view3D.Text = Tin3DViewService.IsActive ? "Trở về 2D" : "View TIN 3D";
             _model.Enabled = !busy;
             _grid.Enabled = !busy;
             _progress.Visible = busy;

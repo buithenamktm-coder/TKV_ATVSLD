@@ -104,6 +104,16 @@ namespace MiningVolume2023.Services
                         drawSections.Bounds.Right <= drawSections.Parent.ClientSize.Width &&
                         drawSections.Bounds.Bottom <= drawSections.Parent.ClientSize.Height,
                         "Nút XUẤT / VẼ MẶT CẮT hiển thị trong palette tối thiểu");
+
+                    // Owner's left-docked workflow: verify that the compact
+                    // vertical layout still exposes the update action.
+                    ui.Size = new System.Drawing.Size(360, 700);
+                    ui.ShowPage(AppPage.Section);
+                    ui.PerformLayout();
+                    var updateEdited = FindByName(ui, "btnUpdateEditedSections");
+                    Check(r, updateEdited != null && updateEdited.Visible &&
+                        updateEdited.Width > 120 && updateEdited.Height > 20,
+                        "Nút CẬP NHẬT MẶT CẮT tồn tại khi ghim palette bên trái");
                 }
                 Check(r, string.IsNullOrWhiteSpace(EntryPoint.StartupUiError),
                     "Giao diện startup không phát sinh exception");
@@ -140,6 +150,8 @@ namespace MiningVolume2023.Services
                 }
 
                 RunCadTinLayerSmoke(r, existing, design);
+                SectionCadRegression.Run(name => Check(r, true, "CAD: " + name));
+                Check(r, true, "Bố trí mặt cắt theo lô không đổi; hủy xuất khôi phục đối tượng cũ trong side database");
             }
             catch (Exception ex)
             {
@@ -199,8 +211,26 @@ namespace MiningVolume2023.Services
                     TinCadRenderer.Clear(doc.Database, existingLayer);
                     TinCadRenderer.Clear(doc.Database, designLayer);
 
+                    // Exact runtime regression for the former Area2D <= 1e-12 gate.
+                    var tiny=new MiningVolume.Core.Geometry.Triangle3(
+                        new Vec3(2500000,450000,10),new Vec3(2500000.000001,450000,10),new Vec3(2500000,450000.000001,10));
+                    var tinyTin=new TinSurface("tiny-positive-runtime",new[]{tiny},MiningVolume.Core.Compatibility.EmptyArray<ValidationIssue>.Value);
+                    Check(r,TinCadRenderer.Replace(doc.Database,existingLayer,tinyTin,1)==1 &&
+                        TinCadRenderer.CountFaces(doc.Database,existingLayer)==1,
+                        "AutoCAD 3DFACE giữ tam giác XY dương nhỏ hơn 1e-12 tại tọa độ mỏ lớn");
+
                     int writtenExisting = TinCadRenderer.Replace(doc.Database, existingLayer, existing, 1);
                     int writtenDesign = TinCadRenderer.Replace(doc.Database, designLayer, design, 3);
+
+                    var invalidFace = new Triangle3(new Vec3(0,0,0),new Vec3(1,0,0),new Vec3(2,0,0));
+                    var invalidTin = new TinSurface("invalid-runtime",new[]{invalidFace},MiningVolume.Core.Compatibility.EmptyArray<ValidationIssue>.Value);
+                    bool pairRejected=false;
+                    try { TinCadRenderer.ReplacePair(doc.Database,existingLayer,tinyTin,designLayer,invalidTin); }
+                    catch(InvalidOperationException) { pairRejected=true; }
+                    Check(r,pairRejected &&
+                        TinCadRenderer.CountFaces(doc.Database,existingLayer)==existing.Triangles.Count &&
+                        TinCadRenderer.CountFaces(doc.Database,designLayer)==design.Triangles.Count,
+                        "TIN thứ hai lỗi: transaction giữ nguyên cả HT và TK trước thao tác");
 
                     int countExisting = TinCadRenderer.CountFaces(doc.Database, existingLayer);
                     int countDesign = TinCadRenderer.CountFaces(doc.Database, designLayer);
@@ -336,7 +366,10 @@ namespace MiningVolume2023.Services
             {
                 var lines = new List<string>
                 {
-                    "MiningVolume HS-Next v1.0 runtime self-test",
+                    string.Equals(Environment.GetEnvironmentVariable("MININGVOLUME_RUNTIME_PRODUCT_VERSION"),
+                        "2.0", StringComparison.Ordinal)
+                        ? "IMSAT VOLUME V2.0 runtime self-test"
+                        : "MiningVolume HS-Next v1.0 runtime self-test",
                     "Timestamp=" + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture),
                     "Status=" + (r.Passed ? "PASS" : "FAIL")
                 };

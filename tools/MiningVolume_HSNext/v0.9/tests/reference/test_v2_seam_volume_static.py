@@ -36,9 +36,10 @@ def test_4_sheet_excel_has_linked_seam_tonnage_and_stripping():
     for title in ("THAM SỐ VỈA","CHI TIẾT VỈA","TỔNG HỢP VỈA","ĐẤT ĐÁ VÀ HSB"):
         assert title in s
     assert 'ReportCell.Formula3("J"+row+"*K"+row)' in s
-    assert 'ReportCell.Formula3("B4-B5")' in s
+    assert 'ReportCell.Formula3("B"+DataStart+"-B"+(DataStart+1))' in s  # Actual B4-B5 verified in FinalAuditRegression
     assert "SUMIF(" in s
-    assert "SQRT(" in s
+    assert "AdaptiveVolumeFormula(row" in s
+    assert "SQRT(" in read("src/MiningVolume.Plugin2023/Services/ExportWorkflowService.cs")
 
 def test_real_core_regressions_cover_multi_seam_tons_and_missing_area():
     s=read("tests/core/CoreRegression.cs")

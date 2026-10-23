@@ -1,7 +1,9 @@
 using System;
 using System.Drawing;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Threading;
 using System.Windows.Forms;
 using MiningVolume.Core.Volumes;
 using MiningVolume2023.Services;
@@ -11,25 +13,46 @@ namespace MiningVolume2023.UI
     public sealed class VolumePage : UserControl
     {
         private readonly Label _scope;
-        private readonly Label _formula;
+        private readonly ProfessionalFormulaPanel _formula;
         private readonly Label _totals;
         private readonly Label _status;
         private readonly DataGridView _detail;
         private readonly DataGridView _levels;
         private readonly Button _calculate;
+        private CancellationTokenSource _calculationCts;
 
         public VolumePage()
         {
             Font = new Font("Arial", 9F); BackColor = Color.White;
             Controls.Add(new Label { Text = "TÍNH KHỐI LƯỢNG", Dock = DockStyle.Top, Height = 32, Font = new Font("Arial", 11F, FontStyle.Bold) });
 
-            var info = new TableLayoutPanel { Dock = DockStyle.Top, Height = 84, ColumnCount = 2, RowCount = 3, Padding = new Padding(5) };
+            var info = new TableLayoutPanel { Dock = DockStyle.Top, Height = 202, ColumnCount = 2, RowCount = 3,
+                Padding = new Padding(10, 7, 10, 10), Margin = new Padding(0, 4, 0, 10) };
+            info.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
+            info.RowStyles.Add(new RowStyle(SizeType.Absolute, 126));
+            info.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
             info.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 145)); info.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            _scope = InfoLabel(); _formula = InfoLabel(); _totals = InfoLabel(true);
+            _scope = InfoLabel(); _formula = new ProfessionalFormulaPanel(); _totals = InfoLabel(true);
             AddInfo(info, 0, "Phạm vi tính", _scope);
             AddInfo(info, 1, "Công thức", _formula);
             AddInfo(info, 2, "Tổng khối", _totals);
+            // Keep mathematical transparency available on demand, but do not
+            // overwhelm the default workflow with a large formula pane.
+            var formulaToggle = new CheckBox
+            {
+                Text = "Xem công thức tính", AutoSize = true,
+                Dock = DockStyle.Top, Checked = false,
+                Padding = new Padding(10, 3, 0, 3)
+            };
+            info.RowStyles[1].Height = 0;
+            info.Height = 76;
+            formulaToggle.CheckedChanged += (sender, args) =>
+            {
+                info.RowStyles[1].Height = formulaToggle.Checked ? 126 : 0;
+                info.Height = formulaToggle.Checked ? 202 : 76;
+            };
             Controls.Add(info); info.BringToFront();
+            Controls.Add(formulaToggle); formulaToggle.BringToFront();
 
             var tabs = new TabControl { Dock = DockStyle.Fill };
             _detail = Grid(new[] { "Đoạn", "MC đầu", "MC cuối", "L, m", "Fđ đầu", "Fđ giữa", "Fđ cuối", "V đào, m³", "Fđp đầu", "Fđp giữa", "Fđp cuối", "V đắp, m³", "Công thức" });
@@ -42,7 +65,9 @@ namespace MiningVolume2023.UI
             bottom.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             bottom.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 245));
             _status = new Label { Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, ForeColor = Color.DimGray, Padding = new Padding(2, 0, 0, 0), Text = "Chưa tính khối lượng." };
-            _calculate = new Button { Text = "TÍNH / CẬP NHẬT KHỐI LƯỢNG", Dock = DockStyle.Top, Height = 34, Font = new Font("Arial", 9F, FontStyle.Bold) };
+            _calculate = new Button { Text = "Tính / cập nhật khối lượng", Dock = DockStyle.Top,
+                Height = 40, Margin = new Padding(8, 5, 8, 5),
+                Font = new Font("Arial", 9.5F, FontStyle.Bold) };
             _calculate.Click += CalculateClicked;
             bottom.Controls.Add(_status, 0, 0); bottom.Controls.Add(_calculate, 1, 0);
             Controls.Add(bottom); bottom.BringToFront();
@@ -53,41 +78,110 @@ namespace MiningVolume2023.UI
 
         protected override void Dispose(bool disposing)
         {
-            if (disposing) ProjectState.Current.Changed -= OnStateChanged;
+            if (disposing) { _calculationCts?.Cancel(); ProjectState.Current.Changed -= OnStateChanged; }
             base.Dispose(disposing);
         }
 
         private async void CalculateClicked(object sender, EventArgs e)
         {
+            if (_calculationCts != null) { _calculationCts.Cancel(); return; }
             if (!LicenseUiGuard.Check()) return;
+            var cts = new CancellationTokenSource();
+            _calculationCts = cts;
+            var token = cts.Token;
             var st = ProjectState.Current;
             try
             {
-                _calculate.Enabled = false;
+                _calculate.Text = "Hủy tính khối lượng";
                 UseWaitCursor = true;
                 _status.Text = "Đang tính diện tích theo tầng và khối lượng giữa các mặt cắt...";
                 // Hard gate: calculation is allowed only when BOTH TINs are current
                 // and their CAD layers are synchronized with the verified core surfaces.
                 SurfaceWorkflowService.EnsureBothTinsReady(synchronizeCadLayers: true);
 
+                var doc = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument;
+                if (doc == null)
+                    throw new InvalidOperationException("Không có bản vẽ AutoCAD đang hoạt động.");
                 double from = st.FromLevel, to = st.ToLevel, step = st.LevelStep;
+                double calculationFrom = from, calculationTo = to;
+                string autoLevelNote = "";
+                // Keep candidate levels local: cancel/failure must preserve the accepted result.
+                // Repair an old/stale Project default (e.g. 0..+100) without
+                // requiring the operator to redraw all CAD sections first.
+                // Change only if the complete requested range misses the
+                // measured TIN elevation extent; ordinary custom bands remain.
+                var measured=st.SectionProfiles.Where(p=>p!=null && p.HasData).ToArray();
+                if (measured.Length>0 && step>0 &&
+                    !double.IsNaN(step) && !double.IsInfinity(step))
+                {
+                    double minZ=measured.Min(p=>p.MinZ);
+                    double maxZ=measured.Max(p=>p.MaxZ);
+                    double low=Math.Min(calculationFrom,calculationTo);
+                    double high=Math.Max(calculationFrom,calculationTo);
+                    if (high<minZ-1e-7 || low>maxZ+1e-7 ||
+                        Math.Abs(calculationFrom-calculationTo)<1e-7)
+                    {
+                        calculationFrom=Math.Floor(minZ/step)*step;
+                        calculationTo=Math.Ceiling(maxZ/step)*step;
+                        if(calculationTo<=calculationFrom)calculationTo=calculationFrom+step;
+                        autoLevelNote=$"Đã điều chỉnh mức tính theo TIN: {calculationFrom:0.###} đến {calculationTo:0.###} m. ";
+                    }
+                }
                 var system = st.SectionSystem;
                 var profiles = st.SectionProfiles.ToArray();
                 var existing = st.Existing.Tin;
                 var design = st.Design.Tin;
-                var result = await Task.Run(() => VolumeWorkflowService.CalculateCore(system, profiles, existing, design, from, to, step));
-                VolumeWorkflowService.Commit(result, from, to, step);
-                BindResult(result);
-                _status.Text = result.Warnings.Count == 0
-                    ? $"Hoàn thành: {result.Intervals.Count:n0} khoảng mặt cắt; {result.Levels.Count:n0} tầng/mức."
-                    : $"Hoàn thành, có {result.Warnings.Count:n0} cảnh báo kiểm soát.";
+                long revisionExisting = st.Existing.Source.Revision;
+                long revisionDesign = st.Design.Source.Revision;
+                var watch = Stopwatch.StartNew();
+                var result = await Task.Run(() => VolumeWorkflowService.CalculateCore(system, profiles, existing, design, calculationFrom, calculationTo, step, token));
+                token.ThrowIfCancellationRequested();
+                // Never commit an asynchronous volume result to a different DWG,
+                // TIN revision, section geometry or level parameter set.
+                if (!ReferenceEquals(doc, Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument) ||
+                    !ReferenceEquals(system, st.SectionSystem) ||
+                    !ReferenceEquals(existing, st.Existing.Tin) ||
+                    !ReferenceEquals(design, st.Design.Tin) ||
+                    !st.Existing.IsTinCurrent || !st.Design.IsTinCurrent ||
+                    revisionExisting != st.Existing.Source.Revision ||
+                    revisionDesign != st.Design.Source.Revision ||
+                    from != st.FromLevel || to != st.ToLevel || step != st.LevelStep ||
+                    profiles.Length != st.SectionProfiles.Count ||
+                    profiles.Where((p, i) => !ReferenceEquals(p, st.SectionProfiles[i])).Any())
+                    throw new InvalidOperationException(
+                        "DWG, dữ liệu TIN hoặc mặt cắt đã thay đổi khi tính. Đã giữ nguyên kết quả cũ; hãy tính lại.");
+                VolumeWorkflowService.Commit(result, calculationFrom, calculationTo, step);
+                watch.Stop();
+                st.VolumeCalculatedUtc = DateTime.UtcNow;
+                st.VolumeCalculationSeconds = watch.Elapsed.TotalSeconds;
+                // Commit notifies RefreshView; do not rebuild both tables a second time.
+                _status.Text = !result.IsComplete
+                    ? autoLevelNote+$"CHƯA ĐẦY ĐỦ: {result.ExcludedIntervals:n0} khoảng chưa xác nhận; chỉ hiển thị phần khối lượng hợp lệ."
+                    : result.Warnings.Count == 0
+                        ? autoLevelNote + "Đã tính khối lượng thành công."
+                        : autoLevelNote + "Đã tính khối lượng, cần kiểm tra cảnh báo.";
+            }
+            catch (OperationCanceledException)
+            {
+                if (!IsDisposed) _status.Text = "Đã hủy; không ghi kết quả tính dở.";
             }
             catch (Exception ex)
             {
+                if (IsDisposed) return;
                 _status.Text = "Chưa tính được khối lượng.";
                 MessageBox.Show(ex.Message, "Tính khối lượng", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
-            finally { UseWaitCursor = false; _calculate.Enabled = true; }
+            finally
+            {
+                _calculationCts = null;
+                cts.Dispose();
+                if (!IsDisposed)
+                {
+                    UseWaitCursor = false;
+                    _calculate.Text = "Tính / cập nhật khối lượng";
+                    _calculate.Enabled = true;
+                }
+            }
         }
 
         private void OnStateChanged(object sender, EventArgs e)
@@ -100,7 +194,7 @@ namespace MiningVolume2023.UI
         {
             var st = ProjectState.Current;
             _scope.Text = $"{FmtLevel(st.FromLevel)} → {FmtLevel(st.ToLevel)}; bước tầng {st.LevelStep:0.###} m";
-            _formula.Text = "Tự chọn theo F1-F2: 1 đầu = 0 → hình chóp; chênh ≤ 40% → TB hai đầu; chênh > 40% → hình chóp cụt";
+            // The live formula panel typesets exact stacked fractions/case labels.
             if (st.VolumeResult == null)
             {
                 _totals.Text = "Chưa có kết quả";
@@ -124,7 +218,8 @@ namespace MiningVolume2023.UI
             foreach (var x in r.Levels)
                 _levels.Rows.Add(x.Band.Name, F3(x.Band.LowerZ), F3(x.Band.UpperZ), F2(x.CutVolume), F2(x.FillVolume), F2(x.NetVolume));
 
-            _totals.Text = $"Đào: {r.TotalCutVolume:n2} m³   |   Đắp: {r.TotalFillVolume:n2} m³   |   Chênh: {r.NetVolume:n2} m³";
+            _totals.Text = (r.IsComplete ? "" : "CHỈ PHẦN HỢP LỆ – CHƯA CHỐT  |  ") +
+                $"Đào: {r.TotalCutVolume:n2} m³   |   Đắp: {r.TotalFillVolume:n2} m³   |   Chênh: {r.NetVolume:n2} m³";
         }
 
         private static DataGridView Grid(string[] columns)

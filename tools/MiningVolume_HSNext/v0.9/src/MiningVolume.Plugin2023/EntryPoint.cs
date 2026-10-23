@@ -16,20 +16,61 @@ namespace MiningVolume2023
         internal static PaletteSet Palette;
         internal static MainPaletteControl MainControl;
         private static bool _idleHooked;
+        private static bool _documentHooked;
         private static bool _startupUiOpened;
         internal static string StartupUiError { get; private set; }
         private static string _loadedDrawingFingerprint;
+        private static Autodesk.AutoCAD.ApplicationServices.Document _loadedDocument;
 
         public void Initialize()
         {
-            StartupLog("Initialize: MiningVolume v1.0");
+            StartupLog("Initialize: MiningVolume V2.0 QA");
+            try { StartupLog(RuntimeBuildIdentity.Describe()); } catch(System.Exception ex) { StartupLog("Build identity: "+ex.Message); }
             TryRibbon();
             HookIdle();
+            AcApp.DocumentManager.DocumentActivated += OnDocumentActivated;
+            _documentHooked = true;
         }
 
         public void Terminate()
         {
             if (_idleHooked) AcApp.Idle -= OnIdle;
+            if (_documentHooked)
+            {
+                AcApp.DocumentManager.DocumentActivated -= OnDocumentActivated;
+                _documentHooked = false;
+            }
+        }
+
+        private static void OnDocumentActivated(
+            object sender,
+            Autodesk.AutoCAD.ApplicationServices.DocumentCollectionEventArgs e)
+        {
+            // Never leave the globally shared palette active with another
+            // drawing's HT/TK sources or accepted volume result. Defer costly
+            // DWG/TIN restoration until the user next opens IMSAT.
+            if (_loadedDocument == null) return;
+            var current = CurrentFingerprint();
+            // SaveAs and copies can share a FingerprintGuid. The in-session
+            // Document reference is the actual boundary between projects.
+            if (ReferenceEquals(e.Document, _loadedDocument) &&
+                string.Equals(current, _loadedDrawingFingerprint,
+                    StringComparison.OrdinalIgnoreCase)) return;
+
+            _loadedDocument = null;
+            _loadedDrawingFingerprint = null;
+            GridWorkflowService.Invalidate();
+            if (Palette != null && Palette.Visible)
+            {
+                Palette.Visible = false;
+                try
+                {
+                    e.Document?.Editor.WriteMessage(
+                        "\\nIMSAT VOLUME: đã đổi bản vẽ. Mở lại Ribbon IMSAT để nạp Project của DWG hiện tại; không dùng kết quả của DWG trước.");
+                }
+                catch { }
+            }
+            StartupLog("Active DWG changed; old palette hidden and grid invalidated.");
         }
 
         private static void OnIdle(object sender, EventArgs e)
@@ -139,7 +180,7 @@ namespace MiningVolume2023
                 Palette = new PaletteSet("IMSAT VOLUME", new Guid("8C96DC13-BC65-4A2C-8B34-2D7644FD1C62"))
                 {
                     Style = PaletteSetStyles.ShowAutoHideButton | PaletteSetStyles.ShowCloseButton | PaletteSetStyles.ShowPropertiesMenu,
-                    MinimumSize = new System.Drawing.Size(620, 540),
+                    MinimumSize = new System.Drawing.Size(360, 450),
                     Size = new System.Drawing.Size(800, 650)
                 };
                 MainControl = new MainPaletteControl();
@@ -149,18 +190,29 @@ namespace MiningVolume2023
             MainControl.ShowPage(page);
         }
 
+        [CommandMethod("MVBUILDINFO", CommandFlags.Session)]
+        public static void BuildInfo()
+        {
+            string report=RuntimeBuildIdentity.Describe();
+            AcApp.DocumentManager.MdiActiveDocument?.Editor.WriteMessage("\n"+report);
+            System.Windows.Forms.MessageBox.Show(report,"IMSAT — Kiểm tra DLL đang nạp");
+        }
+
         [CommandMethod("MVOPEN", CommandFlags.Session)] public static void OpenPalette() => Open(AppPage.Project);
 
         internal static void TogglePalette()
         {
-            if (Palette == null)
+            if (Palette == null || !Palette.Visible)
             {
+                // A new active DWG must restore its own project before Palette
+                // becomes interactive again.
                 Open(AppPage.Project);
+                StartupLog("Palette visibility toggled: ON");
                 return;
             }
 
-            Palette.Visible = !Palette.Visible;
-            StartupLog("Palette visibility toggled: " + (Palette.Visible ? "ON" : "OFF"));
+            Palette.Visible = false;
+            StartupLog("Palette visibility toggled: OFF");
         }
 
         [CommandMethod("TKL", CommandFlags.Session)]
@@ -182,9 +234,18 @@ namespace MiningVolume2023
         [CommandMethod("MV_PROJECT", CommandFlags.Session)] public static void OpenProject() => Open(AppPage.Project);
         [CommandMethod("MV_DATA", CommandFlags.Session)] public static void OpenData() => Open(AppPage.Data);
         [CommandMethod("MV_MODEL", CommandFlags.Session)] public static void OpenModel() => Open(AppPage.Model);
-        [CommandMethod("MV_VIEW3D_HT", CommandFlags.Session)] public static void View3DExisting() => Tin3DViewService.Start(ModelRole.Existing);
-        [CommandMethod("MV_VIEW3D_TK", CommandFlags.Session)] public static void View3DDesign() => Tin3DViewService.Start(ModelRole.Design);
+        [CommandMethod("MV_VIEW3D_HT", CommandFlags.Session)] public static void View3DExisting()
+        {
+            EnsureCurrentDrawingProjectLoaded();
+            Tin3DViewService.Start(ModelRole.Existing);
+        }
+        [CommandMethod("MV_VIEW3D_TK", CommandFlags.Session)] public static void View3DDesign()
+        {
+            EnsureCurrentDrawingProjectLoaded();
+            Tin3DViewService.Start(ModelRole.Design);
+        }
         [CommandMethod("MV_SECTION", CommandFlags.Session)] public static void OpenSection() => Open(AppPage.Section);
+        [CommandMethod("MV_QUICKSECTION", CommandFlags.Session)] public static void OpenQuickSection() => Open(AppPage.QuickSection);
         [CommandMethod("MV_VOLUME", CommandFlags.Session)] public static void OpenVolume() => Open(AppPage.Volume);
         [CommandMethod("MV_GRID", CommandFlags.Session)] public static void OpenGrid() => Open(AppPage.Grid);
         [CommandMethod("MV_MINERAL", CommandFlags.Session)] public static void OpenMineral() => Open(AppPage.Mineral);
@@ -194,6 +255,7 @@ namespace MiningVolume2023
         [CommandMethod("MV_PROJECT_SAVE", CommandFlags.Session)]
         public static void SaveProject()
         {
+            EnsureCurrentDrawingProjectLoaded();
             var saved = Services.ProjectPersistenceService.SaveCurrentProject();
             AcApp.DocumentManager.MdiActiveDocument?.Editor.WriteMessage("\nIMSAT VOLUME: đã lưu Project vào DWG lúc " + saved.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss") + ".");
         }
@@ -203,6 +265,7 @@ namespace MiningVolume2023
         {
             var r = Services.ProjectPersistenceService.LoadCurrentProject(true);
             AcApp.DocumentManager.MdiActiveDocument?.Editor.WriteMessage("\nIMSAT VOLUME: " + r.Message);
+            _loadedDocument = AcApp.DocumentManager.MdiActiveDocument;
             _loadedDrawingFingerprint = CurrentFingerprint();
             Open(AppPage.Project);
         }
@@ -212,7 +275,9 @@ namespace MiningVolume2023
             var doc = AcApp.DocumentManager.MdiActiveDocument;
             if (doc == null) return;
             string fingerprint = CurrentFingerprint();
-            if (string.Equals(_loadedDrawingFingerprint, fingerprint, StringComparison.OrdinalIgnoreCase)) return;
+            if (ReferenceEquals(_loadedDocument, doc) &&
+                string.Equals(_loadedDrawingFingerprint, fingerprint,
+                    StringComparison.OrdinalIgnoreCase)) return;
 
             ProjectState.Current.Reset();
             try
@@ -228,6 +293,7 @@ namespace MiningVolume2023
             {
                 doc.Editor.WriteMessage("\nIMSAT VOLUME: chưa tự nạp được Project - " + ex.Message);
             }
+            _loadedDocument = doc;
             _loadedDrawingFingerprint = fingerprint;
         }
 
@@ -253,7 +319,7 @@ namespace MiningVolume2023
         [CommandMethod("MVABOUT")]
         public void About()
         {
-            AcApp.ShowAlertDialog("IMSAT VOLUME\nMine Survey & Earthwork for AutoCAD\nPhát triển: Bùi Thế Nam\nĐiện thoại: 0967280686\nPhiên bản v1.0");
+            AcApp.ShowAlertDialog("IMSAT VOLUME\nMine Survey & Earthwork for AutoCAD\nPhát triển: Bùi Thế Nam\nĐT/Zalo: 0967280686\nPhiên bản V2.0 (QA)");
         }
     }
 }

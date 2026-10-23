@@ -1,0 +1,10 @@
+  MiningVolume.Core -> /workspace/scratch/84289221c180/repo/tools/MiningVolume_HSNext/v0.9/src/MiningVolume.Core/bin/Release/net48/MiningVolume.Core.dll
+  MiningVolume.Surface -> /workspace/scratch/84289221c180/repo/tools/MiningVolume_HSNext/v0.9/src/MiningVolume.Surface/bin/Release/net48/MiningVolume.Surface.dll
+  MiningVolume.Cad2023 -> /workspace/scratch/84289221c180/repo/tools/MiningVolume_HSNext/v0.9/src/MiningVolume.Cad2023/bin/Release/net48/MiningVolume.Cad2023.dll
+  MiningVolume.Plugin2023 -> /workspace/scratch/84289221c180/repo/tools/MiningVolume_HSNext/v0.9/src/MiningVolume.Plugin2023/bin/Release/net48/MiningVolume2023.dll
+
+Build succeeded.
+    0 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:09.72

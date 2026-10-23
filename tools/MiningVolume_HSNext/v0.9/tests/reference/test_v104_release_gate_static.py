@@ -5,6 +5,12 @@ ROOT = Path(__file__).resolve().parents[2]
 def read(rel):
     return (ROOT / rel).read_text(encoding="utf-8")
 
+def test_installer_vet_failure_cannot_be_masked_by_following_test_command():
+    workflow = read("../../../.github/workflows/build-miningvolume-autocad2023.yml")
+    commands = [line.strip() for line in workflow.splitlines() if line.strip()]
+    index = commands.index("go vet main.go host_install_plan.go")
+    assert commands[index + 1] == 'if ($LASTEXITCODE -ne 0) { throw "Installer go vet failed." }'
+
 def test_project_restore_rebuilds_saved_tin_pair_atomically():
     s = read("src/MiningVolume.Plugin2023/Services/ProjectPersistenceService.cs")
     assert "RebuildSavedTins" in s
@@ -34,7 +40,7 @@ def test_runtime_selftest_verifies_tin_color_lock_and_visibility():
 
 def test_release_pipeline_emits_build_verification_and_vets_installer():
     s = read("../../../.github/workflows/build-miningvolume-autocad2023.yml")
-    assert "go vet main.go" in s
+    assert "go vet main.go host_install_plan.go" in s
     assert "BUILD_VERIFICATION.txt" in s
     assert "Source commit: $env:SOURCE_SHA" in s
     assert "Compile errors: 0" in s
@@ -129,7 +135,13 @@ def test_palette_has_direct_show_hide_toggle_and_startup_default_off():
     project = read("src/MiningVolume.Plugin2023/UI/ProjectPage.cs")
     settings = read("src/MiningVolume.Plugin2023/Services/UserSettingsService.cs")
     assert "internal static void TogglePalette()" in entry
-    assert "Palette.Visible = !Palette.Visible" in entry
+    # Showing an existing palette must reload the active DWG before making
+    # controls interactive; hiding is direct and preserves the saved preference.
+    toggle = entry.split("internal static void TogglePalette()", 1)[1].split(
+        '[CommandMethod("TKL"', 1)[0]
+    assert "if (Palette == null || !Palette.Visible)" in toggle
+    assert "Open(AppPage.Project);" in toggle
+    assert "Palette.Visible = false;" in toggle
     assert 'CommandMethod("MV_TOGGLE"' in entry
     assert 'Btn("Ẩn / Hiện bảng", RibbonAction.TogglePalette)' in ribbon
     assert "EntryPoint.TogglePalette();" in ribbon
@@ -179,7 +191,7 @@ def test_installer_admin_check_and_success_message_match_palette_policy():
     assert 'exec.Command("fltmc").Run()==nil' in installer
     assert 'exec.Command("net","session")' not in installer
     assert "Phần mềm đang được tiếp tục cải tiến và hoàn thiện." in installer
-    assert "Điện thoại: 0967280686" in installer
+    assert "ĐT/Zalo: 0967280686" in installer
     assert "Setup không tự mở AutoCAD" not in installer
 
 
@@ -194,10 +206,13 @@ def test_installer_rejects_foreign_dlls_and_wrong_package_metadata():
     ]:
         assert dll in installer
     assert "Bundle chứa DLL ngoài danh sách cho phép" in installer
-    assert 'AppVersion="1.0.0"' in installer
-    assert 'SeriesMin="R24.2"' in installer
-    assert 'SeriesMax="R24.2"' in installer
-    assert 'LoadOnAutoCADStartup="True"' in installer
+    # Validate the parsed loader tree; text tokens may occur in XML comments.
+    assert 'return validatePackageXML(xmlBytes)' in installer
+    assert 'xml.Unmarshal(data, &p)' in installer
+    assert 'p.Version!=version' in installer
+    assert 'r[0].Min=="R24.2"' in installer
+    assert 'r[0].Max=="R24.2"' in installer
+    assert 'e.Startup!="True"' in installer
 
 
 def test_autocad2023_version_accepts_autodesk_r24_2_prefix():
@@ -226,8 +241,9 @@ def test_palette_primary_command_is_tkl_with_legacy_alias():
 def test_main_palette_shows_fixed_developer_name():
     ui = read("src/MiningVolume.Plugin2023/UI/MainPaletteControl.cs")
     assert 'Phát triển: Bùi Thế Nam' in ui
-    assert 'Điện thoại: 0967280686' in ui
-    assert 'Height = 66' in ui
+    assert 'ĐT/Zalo: 0967280686' in ui
+    assert 'Height = 76' in ui
+    assert 'UiTheme.ChromeText' in ui
 
 
 def test_palette_uses_shared_professional_ui_theme():
@@ -270,7 +286,8 @@ def test_imsat_branding_is_packaged_for_ribbon_excel_and_setup():
     assert "imsat_logo_64.png" in ribbon
     assert "imsat_logo.png" in branding
     assert "Thông tin" in branding and "Tổng khối" in branding
-    assert "logo IMSAT" in export_ui
+    assert "logo IMSAT" not in export_ui
+    assert "ExportClicked" in export_ui  # export formatting and logo still handled in writer
     assert "DisplayIcon" in installer
     assert "IMSAT VOLUME.lnk" in installer
     assert "rsrc -ico imsat.ico" in hosted

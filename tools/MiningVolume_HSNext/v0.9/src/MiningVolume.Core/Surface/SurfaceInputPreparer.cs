@@ -22,6 +22,15 @@ namespace MiningVolume.Core.Surface
     /// </summary>
     public sealed class SurfaceInputPreparer
     {
+        private readonly struct XYCell : IEquatable<XYCell>
+        {
+            private readonly long _x, _y;
+            public XYCell(long x, long y) { _x=x; _y=y; }
+            public bool Equals(XYCell other) => _x==other._x && _y==other._y;
+            public override bool Equals(object obj) => obj is XYCell other && Equals(other);
+            public override int GetHashCode() { unchecked { return _x.GetHashCode()*397 ^ _y.GetHashCode(); } }
+        }
+
         public PreparedSurfaceInput Prepare(SurfaceModel model, SurfaceBuildOptions options,
             Action<string> progress = null, CancellationToken cancellationToken = default(CancellationToken))
         {
@@ -34,8 +43,27 @@ namespace MiningVolume.Core.Surface
             result.ConflictReport = new ConflictScanner().Scan(model, options, progress, cancellationToken);
             if (result.ConflictReport.HasBlockingConflicts)
             {
-                result.Issues.AddRange(result.ConflictReport.ToException().Issues);
-                return result;
+                if (options.PreserveDuplicateXYVerticalFaces)
+                {
+                    // Survey vertices AND breakline intersections/overlaps
+                    // can produce incompatible Z at one XY. Both must be
+                    // retained as real 3D vertical-face provenance: the old
+                    // >=2 original-vertices gate stranded large contour files.
+                    var groups = result.ConflictReport.Groups
+                        .Where(g => g.DeltaZ > options.ZConflictTolerance).ToList();
+                    result.VerticalConflictGroups.AddRange(groups);
+                    result.Issues.Add(new ValidationIssue(ValidationSeverity.Warning,
+                        "VERTICAL_XY_SOURCE_REVIEW",
+                        $"Có {groups.Count:n0} nhóm X,Y nhiều cao độ, " +
+                        $"{result.ConflictReport.SourceRecordCount:n0} bản ghi nguồn. " +
+                        "Không loại điểm thủ công; tự dựng mặt đứng 3D và " +
+                        "đề nghị kiểm tra điểm, đồng mức cùng mặt cắt trước khi chốt khối lượng."));
+                }
+                else
+                {
+                    result.Issues.AddRange(result.ConflictReport.ToException().Issues);
+                    return result;
+                }
             }
             if (options.LegacyElevationPolicyIgnored)
                 result.Issues.Add(new ValidationIssue(ValidationSeverity.Warning,"LEGACY_Z_POLICY_REQUIRES_REVIEW",
@@ -62,7 +90,65 @@ namespace MiningVolume.Core.Surface
                 }
             }
 
+            if (options.PreserveDuplicateXYVerticalFaces &&
+                result.VerticalConflictGroups.Count > 0)
+            {
+                // Include *generated* intersection/overlap elevations as sites.
+                // A breakline crossing has no original vertex at that XY.
+                foreach (var group in result.VerticalConflictGroups)
+                    foreach (var z in group.Sources.Select(source => source.Z).Distinct())
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+                        result.Sites.Add(new Vec3(group.Position.X, group.Position.Y, z));
+                    }
+
+                // Native CDT requires a planar, non-crossing PSLG. Relax only
+                // constraints touching contradictory-Z coordinates, retaining
+                // unaffected contour segments. Original CAD entities remain
+                // unchanged and every Z is still carried in vertical faces.
+                RelaxConflictedBreaklines(result, options, cancellationToken);
+            }
             return NormalizePreparedInput(result, options, progress, cancellationToken);
+        }
+
+        private static void RelaxConflictedBreaklines(
+            PreparedSurfaceInput result, SurfaceBuildOptions options,
+            CancellationToken cancellationToken)
+        {
+            if (result.Breaklines.Count == 0 || result.VerticalConflictGroups.Count == 0) return;
+            var points = result.VerticalConflictGroups.Select(g =>
+                new Vec3(g.Position.X, g.Position.Y, 0)).ToList();
+            var index = new PointGridIndex(points, options.XyTolerance, cancellationToken);
+            int removed = 0;
+            var safe = new List<Segment3>(result.Breaklines.Count);
+            foreach (var segment in result.Breaklines)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                bool incompatible = false;
+                foreach (int id in index.Query(
+                    segment.A.X, segment.A.Y, segment.B.X, segment.B.Y,
+                    options.XyTolerance))
+                {
+                    if (Geometry2D.PointOnSegment(
+                        points[id].XY, segment.A.XY, segment.B.XY,
+                        options.XyTolerance))
+                    {
+                        incompatible = true;
+                        break;
+                    }
+                }
+                if (incompatible) removed++;
+                else safe.Add(segment);
+            }
+            if (removed == 0) return;
+            result.Breaklines.Clear();
+            result.Breaklines.AddRange(safe);
+            result.RelaxedBreaklineConstraints += removed;
+            result.Issues.Add(new ValidationIssue(ValidationSeverity.Warning,
+                "RELAXED_CONFLICTING_CONTOUR_CONSTRAINTS",
+                $"Đã nới {removed:n0} đoạn ràng buộc đồng mức cắt/chồng ở Z mâu thuẫn " +
+                "chỉ trong lưới hỗ trợ 2,5D; CAD gốc và mọi Z vẫn giữ nguyên. " +
+                "TIN này cần kiểm tra/chỉnh mặt cắt trước khi dùng khối lượng."));
         }
 
         /// <summary>
@@ -157,8 +243,11 @@ namespace MiningVolume.Core.Surface
             // Conflicting elevations require a user decision before expensive topology work.
             if (result.HasErrors) return result;
             NormalizeBreaklineTopology(result, options, progress, cancellationToken);
+            RecoverConflictingContourTopology(result, options, cancellationToken);
+            if (result.HasErrors) return result;
             ResolveDuplicateSites(result, options, progress, cancellationToken);
             ValidateNormalizedTopology(result, options, progress, cancellationToken);
+            RecoverConflictingContourTopology(result, options, cancellationToken);
 
             if (result.Sites.Count < 3)
                 result.Issues.Add(new ValidationIssue(
@@ -167,6 +256,103 @@ namespace MiningVolume.Core.Surface
                     "Mô hình cần ít nhất 3 điểm XY hợp lệ để dựng TIN."));
 
             return result;
+        }
+
+        private static void RecoverConflictingContourTopology(
+            PreparedSurfaceInput result, SurfaceBuildOptions options, CancellationToken token)
+        {
+            // Automatic 3D support may relax only constraints directly involved in
+            // an unresolved planar conflict. Never clear all remaining breaklines
+            // just because one incompatible Z crossing was reported.
+            if (!options.PreserveDuplicateXYVerticalFaces ||
+                result.VerticalConflictGroups.Count == 0 || !result.HasErrors)
+                return;
+            var errors = result.Issues.Where(x => x.Severity == ValidationSeverity.Error).ToList();
+            var allowed = new HashSet<string>(StringComparer.Ordinal) {
+                "POINT_ON_BREAKLINE_Z_CONFLICT",
+                "BREAKLINE_CROSSING_Z_CONFLICT",
+                "BREAKLINE_OVERLAP_Z_CONFLICT",
+                "BREAKLINE_NODE_Z_CONFLICT",
+                "BREAKLINE_DUPLICATE_Z_CONFLICT",
+                "BREAKLINE_NORMALIZE_CROSSING_FAILED",
+                "BREAKLINE_NORMALIZE_OVERLAP_FAILED"
+            };
+            if (errors.Count == 0 || errors.Any(x => !allowed.Contains(x.Code))) return;
+            token.ThrowIfCancellationRequested();
+            var constraints = result.Breaklines;
+            int total = constraints.Count;
+            var unsafeEdges = new HashSet<int>();
+
+            // Only calculate the expensive site/segment incidence when point-on-
+            // breakline or conflicting node errors were actually detected.
+            bool needsSiteReview = errors.Any(x =>
+                x.Code == "POINT_ON_BREAKLINE_Z_CONFLICT" ||
+                x.Code == "BREAKLINE_NODE_Z_CONFLICT");
+            if (needsSiteReview && result.Sites.Count > 0 && total > 0)
+            {
+                var sites = new PointGridIndex(result.Sites, options.XyTolerance, token);
+                for (int i = 0; i < total; i++)
+                {
+                    token.ThrowIfCancellationRequested();
+                    var seg = constraints[i];
+                    foreach (int j in sites.Query(seg.A.X, seg.A.Y, seg.B.X, seg.B.Y,
+                        options.XyTolerance))
+                    {
+                        var site = result.Sites[j];
+                        if (!Geometry2D.PointOnSegment(
+                            site.XY, seg.A.XY, seg.B.XY, options.XyTolerance)) continue;
+                        var expected = Geometry2D.InterpolateZOnSegment(site.XY, seg);
+                        if (Math.Abs(expected - site.Z) <= options.ZConflictTolerance) continue;
+                        unsafeEdges.Add(i);
+                        break;
+                    }
+                }
+            }
+
+            // After normalization no two constrained edges may cross or overlap:
+            // both edges of a surviving conflict are unsafe for the planar CDT.
+            // Use spatial candidate indexing; never scan all N*N edge pairs.
+            if (total > 1)
+            {
+                var index = new SegmentGridIndex(constraints, options.XyTolerance, token);
+                for (int i = 0; i < total; i++)
+                {
+                    token.ThrowIfCancellationRequested();
+                    var left = constraints[i];
+                    foreach (int j in index.Query(i))
+                    {
+                        if (j <= i) continue;
+                        var right = constraints[j];
+                        if (!Geometry2D.ProperIntersection(left.A.XY, left.B.XY,
+                                right.A.XY, right.B.XY, options.XyTolerance) &&
+                            !CollinearOverlap(left, right, options.XyTolerance))
+                            continue;
+                        unsafeEdges.Add(i);
+                        unsafeEdges.Add(j);
+                    }
+                }
+            }
+
+            // A reported topology error without any identifiable offending
+            // edge is NOT proof of a safe TIN. Retain the blocking error so the
+            // caller can inspect the source, rather than silently approving a
+            // surface after removing zero constraints.
+            if (unsafeEdges.Count == 0) return;
+
+            int retained = total - unsafeEdges.Count;
+            var safe = new List<Segment3>(retained);
+            for (int i = 0; i < total; i++)
+                if (!unsafeEdges.Contains(i)) safe.Add(constraints[i]);
+            constraints.Clear();
+            constraints.AddRange(safe);
+            result.RelaxedBreaklineConstraints += unsafeEdges.Count;
+            result.Issues.RemoveAll(x => x.Severity == ValidationSeverity.Error);
+            result.Issues.Add(new ValidationIssue(ValidationSeverity.Warning,
+                "LOCALLY_RELAXED_UNRESOLVED_TOPOLOGY",
+                $"Đã kiểm tra {total:n0} ràng buộc còn lại; chỉ nới {unsafeEdges.Count:n0} " +
+                $"đoạn trực tiếp xung đột, giữ {retained:n0} đoạn khác. " +
+                $"Còn {errors.Count:n0} vấn đề Z/topology nguồn cần kiểm tra mặt cắt " +
+                "trước khi xác nhận khối lượng. CAD gốc không thay đổi."));
         }
 
         private sealed class SplitMark
@@ -500,11 +686,24 @@ namespace MiningVolume.Core.Surface
                         result.Sites.Add(node.Point);
                     }
             var unique = new List<Vec3>();
-            var grid = new Dictionary<string, List<int>>();
+            var grid = new Dictionary<XYCell, List<int>>();
+            int verticalPairs = 0;
+            // Raw/tiled sources have no ConflictScanner entity provenance.
+            // Still retain EVERY elevation in a synthetic vertical group
+            // instead of silently collapsing high-Z measurements.
+            var rawGroups = options.PreserveDuplicateXYVerticalFaces &&
+                result.VerticalConflictGroups.Count == 0
+                ? new Dictionary<int, ConflictGroup>() : null;
 
+            int processed=0;
+            var progressWatch=System.Diagnostics.Stopwatch.StartNew();
             foreach (var p in result.Sites)
             {
                 cancellationToken.ThrowIfCancellationRequested();
+                if ((++processed & 4095)==0 && progressWatch.ElapsedMilliseconds>=500) {
+                    progress?.Invoke($"Chuẩn hóa tọa độ {processed:n0}/{result.Sites.Count:n0}...");
+                    progressWatch.Restart();
+                }
                 long ix = (long)Math.Floor(p.X / options.XyTolerance);
                 long iy = (long)Math.Floor(p.Y / options.XyTolerance);
                 int match = -1;
@@ -513,7 +712,7 @@ namespace MiningVolume.Core.Surface
                 for (long dy = -1; dy <= 1 && match < 0; dy++)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    string k = (ix + dx) + ":" + (iy + dy);
+                    var k = new XYCell(ix + dx, iy + dy);
                     List<int> ids;
                     if (!grid.TryGetValue(k, out ids)) continue;
                     foreach (int id in ids)
@@ -529,7 +728,7 @@ namespace MiningVolume.Core.Surface
 
                 if (match < 0)
                 {
-                    string key = ix + ":" + iy;
+                    var key = new XYCell(ix, iy);
                     List<int> ids;
                     if (!grid.TryGetValue(key, out ids))
                     {
@@ -544,13 +743,41 @@ namespace MiningVolume.Core.Surface
                     var old = unique[match];
                     if (Math.Abs(old.Z - p.Z) > options.ZConflictTolerance)
                     {
-
+                        if (!options.PreserveDuplicateXYVerticalFaces)
                             result.Issues.Add(new ValidationIssue(
                                 ValidationSeverity.Error,
                                 "DUPLICATE_XY_CONFLICT_Z",
                                 $"Hai điểm trùng XY nhưng khác Z: ({p.X:0.###}, {p.Y:0.###}) " +
                                 $"có Z={old.Z:0.###} và Z={p.Z:0.###}."));
-
+                        else
+                        {
+                            verticalPairs++;
+                            if (rawGroups != null)
+                            {
+                                if (!rawGroups.TryGetValue(match, out var group))
+                                {
+                                    group = new ConflictGroup {
+                                        Id = "RAW-XY-" + (rawGroups.Count + 1).ToString("000"),
+                                        Position = old.XY
+                                    };
+                                    group.Sources.Add(new ConflictSource {
+                                        Z = old.Z, Generated = true, VertexIndex = -1,
+                                        Origin = "Dữ liệu tọa độ nguồn thô trước khi chuẩn hóa"
+                                    });
+                                    rawGroups.Add(match, group);
+                                }
+                                group.Sources.Add(new ConflictSource {
+                                    Z = p.Z, Generated = true, VertexIndex = -1,
+                                    Origin = "Dữ liệu tọa độ nguồn thô trước khi chuẩn hóa"
+                                });
+                            }
+                            // One CDT node is mathematically unavoidable; select
+                            // the minimum Z consistently for the 2.5D support.
+                            // Every other source Z is retained by the separate
+                            // 3D vertical faces + source conflict metadata.
+                            // Never average elevations or mutate the CAD source.
+                            if (p.Z < old.Z) unique[match] = new Vec3(old.X, old.Y, p.Z);
+                        }
                     }
                 }
             }
@@ -562,12 +789,18 @@ namespace MiningVolume.Core.Surface
                         cancellationToken.ThrowIfCancellationRequested();
                         node.Point = FindCanonicalNode(node.Point, unique, grid, options.XyTolerance);
                     }
+            if (rawGroups != null && rawGroups.Count > 0)
+                result.VerticalConflictGroups.AddRange(rawGroups.Values);
+            // One summary warning rather than millions of per-point records.
+            if (verticalPairs > 0 && result.ConflictReport == null)
+                result.Issues.Add(new ValidationIssue(ValidationSeverity.Warning,
+                    "VERTICAL_XY_REVIEW", "Có đỉnh trùng XY khác Z trong dữ liệu nội suy; kiểm tra mặt cắt sau khi dựng TIN."));
             result.Sites.Clear();
             result.Sites.AddRange(unique);
         }
 
         private static Vec3 FindCanonicalNode(Vec3 p, IReadOnlyList<Vec3> sites,
-            Dictionary<string, List<int>> grid, double tolerance)
+            Dictionary<XYCell, List<int>> grid, double tolerance)
         {
             long ix = (long)Math.Floor(p.X / tolerance);
             long iy = (long)Math.Floor(p.Y / tolerance);
@@ -576,7 +809,7 @@ namespace MiningVolume.Core.Surface
             for (long dy = -1; dy <= 1; dy++)
             {
                 List<int> ids;
-                if (!grid.TryGetValue((ix + dx) + ":" + (iy + dy), out ids)) continue;
+                if (!grid.TryGetValue(new XYCell(ix + dx, iy + dy), out ids)) continue;
                 foreach (int id in ids)
                     if (sites[id].XY.DistanceTo(p.XY) <= tolerance) return sites[id];
             }
@@ -736,6 +969,24 @@ namespace MiningVolume.Core.Surface
         {
             private readonly Dictionary<long, List<int>> _cells = new Dictionary<long, List<int>>();
             private readonly List<List<long>> _segmentCells = new List<List<long>>();
+            // Cell sharing is only a coarse test: dense contours in one cell may
+            // be far apart. Keep padded endpoint bounds to reject only disjoint
+            // boxes before the expensive intersection/overlap predicates.
+            private readonly SegmentBounds[] _bounds;
+            private readonly struct SegmentBounds
+            {
+                public readonly double MinX, MinY, MaxX, MaxY;
+                public SegmentBounds(Segment3 s, double pad)
+                {
+                    MinX = Math.Min(s.A.X, s.B.X) - pad;
+                    MinY = Math.Min(s.A.Y, s.B.Y) - pad;
+                    MaxX = Math.Max(s.A.X, s.B.X) + pad;
+                    MaxY = Math.Max(s.A.Y, s.B.Y) + pad;
+                }
+                public bool Intersects(SegmentBounds b) =>
+                    MinX <= b.MaxX && MaxX >= b.MinX &&
+                    MinY <= b.MaxY && MaxY >= b.MinY;
+            }
             private readonly int[] _visited;
             private int _visitToken;
             private readonly CancellationToken _cancellationToken;
@@ -753,15 +1004,20 @@ namespace MiningVolume.Core.Surface
                 double span = Math.Max(maxX - _minX, maxY - _minY);
                 _cell = Math.Max(tol * 100.0,
                     span / Math.Max(8.0, Math.Sqrt(Math.Max(1, segments.Count))));
+                _bounds = new SegmentBounds[segments.Count];
                 _visited = new int[Math.Max(1, segments.Count)];
                 for (int i = 0; i < segments.Count; i++)
                 {
-                    _cancellationToken.ThrowIfCancellationRequested(); cancellationToken.ThrowIfCancellationRequested(); IndexSegment(i, segments[i], tol); }
+                    cancellationToken.ThrowIfCancellationRequested();
+                    _bounds[i] = new SegmentBounds(segments[i], tol);
+                    IndexSegment(i, segments[i], tol);
+                }
             }
 
             public IEnumerable<int> Query(int segmentIndex)
             {
                 int token = NextVisitToken();
+                var bounds = _bounds[segmentIndex];
                 foreach (var key in _segmentCells[segmentIndex])
                 {
                     _cancellationToken.ThrowIfCancellationRequested();
@@ -772,7 +1028,7 @@ namespace MiningVolume.Core.Surface
                         _cancellationToken.ThrowIfCancellationRequested();
                         if (_visited[id] == token) continue;
                         _visited[id] = token;
-                        yield return id;
+                        if (bounds.Intersects(_bounds[id])) yield return id;
                     }
                 }
             }

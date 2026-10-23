@@ -2,6 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Diagnostics;
 using MiningVolume.Core.Model;
 using MiningVolume.Core.Reporting;
 using MiningVolume.Core.Sections;
@@ -12,7 +15,7 @@ namespace MiningVolume2023.Services
     public sealed class ExportOptions
     {
         public const string FixedDeveloperName = "Bùi Thế Nam";
-        public const string FixedDeveloperContact = "Điện thoại: 0967280686";
+        public const string FixedDeveloperContact = "ĐT/Zalo: 0967280686";
 
         public bool IncludeSourceXyz { get; set; } = true;
         public bool IncludeSectionData { get; set; } = true;
@@ -39,14 +42,118 @@ namespace MiningVolume2023.Services
             WriteXlsx(filePath, report);
         }
 
-        public static void WriteXlsx(string filePath, SpreadsheetReport report)
+        public const string TkvParentHeading = "TẬP ĐOÀN CÔNG NGHIỆP THAN - KHOÁNG SẢN VIỆT NAM";
+
+        // Stacks the organizational hierarchy in the existing first title row
+        // instead of inserting rows: ALL Excel formula addresses remain intact.
+        // Do not falsely affiliate users selecting "outside TKV" with the group.
+        public static void ApplyOrganizationHeader(SpreadsheetReport report, ProjectState state)
         {
-            SimpleXlsxWriter.Write(filePath, report);
-            XlsxBrandingInjector.Apply(filePath, report);
+            if (state == null) throw new ArgumentNullException(nameof(state));
+            ApplyOrganizationHeader(report, state.MiningUnitGroup, state.MiningUnitName);
         }
 
-        public static SpreadsheetReport BuildReport(ProjectState state, ExportOptions options)
+        public static void ApplyOrganizationHeader(SpreadsheetReport report,
+            string unitGroup, string unitName)
         {
+            if (report == null) throw new ArgumentNullException(nameof(report));
+            string unit = (unitName ?? string.Empty).Trim();
+            if (string.Equals(unitGroup, MiningUnitCatalog.OutsideTkv,
+                    StringComparison.Ordinal) && unit.Length == 0)
+                throw new InvalidOperationException(
+                    "Đã chọn 'Đơn vị khác (ngoài TKV)'. Hãy nhập tên đơn vị trước khi xuất Excel.");
+            if (unit.Length == 0) return;
+            bool outside = string.Equals(unitGroup, MiningUnitCatalog.OutsideTkv,
+                StringComparison.Ordinal);
+            report.IncludeImsatLogo = !outside;
+            string prefix = outside ? unit : TkvParentHeading + "\n" + unit;
+            foreach (var sheet in report.Sheets)
+            {
+                if (sheet == null || string.IsNullOrWhiteSpace(sheet.Title)) continue;
+                if (string.IsNullOrWhiteSpace(sheet.OrganizationBaseTitle))
+                    sheet.OrganizationBaseTitle = sheet.Title;
+                // Each workbook receives a fixed organization snapshot at
+                // REPORT-BUILD time, before any asynchronous file output.
+                sheet.Title = prefix + "\n" + sheet.OrganizationBaseTitle;
+            }
+        }
+
+        // Invoke from the UI thread: await resumes its synchronization context,
+        // so validation may safely inspect the active CAD document. The worker
+        // writes only a private file; publishing never yields after validation.
+        public static async Task WriteValidatedXlsxAsync(string filePath, SpreadsheetReport report,
+            Action validateCurrent, CancellationToken cancellationToken = default(CancellationToken))
+        {
+            if (validateCurrent == null) throw new ArgumentNullException(nameof(validateCurrent));
+            cancellationToken.ThrowIfCancellationRequested();
+            validateCurrent();
+            var target = Path.GetFullPath(filePath);
+            var staging = Path.Combine(Path.GetDirectoryName(target),
+                "." + Path.GetFileName(target) + "." + Guid.NewGuid().ToString("N") + ".pending.xlsx");
+            try
+            {
+                await Task.Run(() => WriteXlsx(staging, report, cancellationToken), cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
+                validateCurrent();
+                cancellationToken.ThrowIfCancellationRequested();
+                if (File.Exists(target)) File.Replace(staging, target, null);
+                else File.Move(staging, target);
+            }
+            finally { if (File.Exists(staging)) File.Delete(staging); }
+        }
+
+        public static void WriteXlsx(string filePath, SpreadsheetReport report, CancellationToken cancellationToken = default(CancellationToken))
+        {
+            // Applies to section volumes, grid volumes and seam/mineral reports,
+            // including their formula-linked detail/summary worksheets.
+            // Never consult mutable ProjectState.Current on the Excel I/O thread:
+            // an AutoCAD DWG switch could silently relabel an approved report.
+            var target=Path.GetFullPath(filePath);
+            var directory=Path.GetDirectoryName(target);
+            Directory.CreateDirectory(directory);
+            var staging=Path.Combine(directory,"."+Path.GetFileName(target)+"."+Guid.NewGuid().ToString("N")+".tmp");
+            try {
+                SimpleXlsxWriter.Write(staging, report, cancellationToken);
+                // Failure to add a decorative logo must never discard a
+                // complete workbook (including all linked Excel formulas).
+                cancellationToken.ThrowIfCancellationRequested();
+                if (report.IncludeImsatLogo)
+                {
+                    try { XlsxBrandingInjector.Apply(staging, report); }
+                    catch (Exception ex) when (!(ex is OutOfMemoryException) &&
+                        !(ex is StackOverflowException) &&
+                        !(ex is System.Threading.ThreadAbortException))
+                    // Logo is only a decorative workbook enhancement. Missing
+                    // image assets, unreadable zip metadata or a malformed logo
+                    // must never turn valid volume results into an export error.
+                    {
+                        Trace.TraceWarning("IMSAT logo could not be injected; " +
+                            "continuing with full Excel workbook: " + ex.Message);
+                        // A partial ZIP edit may have occurred: regenerate
+                        // pristine XLSX, preserving all source formulas.
+                        SimpleXlsxWriter.Write(staging, report, cancellationToken);
+                    }
+                }
+                cancellationToken.ThrowIfCancellationRequested();
+                if(File.Exists(target))File.Replace(staging,target,null);
+                else File.Move(staging,target);
+            } finally {if(File.Exists(staging))File.Delete(staging);}
+        }
+
+        public static SpreadsheetReport BuildReport(ProjectState state, ExportOptions options,
+            CancellationToken cancellationToken = default(CancellationToken))
+        {
+            if (state == null) throw new ArgumentNullException(nameof(state));
+            if (options == null) throw new ArgumentNullException(nameof(options));
+            cancellationToken.ThrowIfCancellationRequested();
+            // Both fields come from the Project selection and must be preserved
+            // verbatim in Excel, including a user-entered non-TKV organization.
+            if (string.Equals(state.MiningUnitGroup, MiningUnitCatalog.OutsideTkv, StringComparison.Ordinal) &&
+                string.IsNullOrWhiteSpace(state.MiningUnitName))
+                throw new InvalidOperationException(
+                    "Đã chọn 'Đơn vị khác (ngoài TKV)'. Hãy nhập tên đơn vị trước khi xuất báo cáo Excel.");
+            string frozenGroup = state.MiningUnitGroup;
+            string frozenUnit = state.MiningUnitName;
             var now = DateTime.Now;
             var report = new SpreadsheetReport
             {
@@ -55,25 +162,54 @@ namespace MiningVolume2023.Services
                 CreatedAt = now
             };
 
-            report.Sheets.Add(BuildInfoSheet(state, options, now));
-            if (options.IncludeSourceXyz) report.Sheets.Add(BuildSourceXyzSheet(state));
-            if (options.IncludeSectionData) report.Sheets.Add(BuildSectionDataSheet(state));
-            if (options.IncludeSectionAreas) report.Sheets.Add(BuildSectionParameterSheet(state));
-            if (options.IncludeIntervals) report.Sheets.Add(BuildIntervalSheet(state.VolumeResult));
-            if (options.IncludeLevels) report.Sheets.Add(BuildLevelSheet(state.VolumeResult));
-            if (options.IncludeSummary) report.Sheets.Add(BuildSummarySheet(state, options));
-            if (options.IncludeWarnings) report.Sheets.Add(BuildWarningSheet(state));
+            report.Sheets.Add(BuildInfoSheet(state, options, now, frozenGroup, frozenUnit));
+            cancellationToken.ThrowIfCancellationRequested();
+            if (options.IncludeSourceXyz) report.Sheets.Add(BuildSourceXyzSheet(state, cancellationToken));
+            if (options.IncludeSectionData) report.Sheets.Add(BuildSectionDataSheet(state, cancellationToken));
+            if (options.IncludeSectionAreas) report.Sheets.Add(BuildSectionParameterSheet(state, cancellationToken));
+            cancellationToken.ThrowIfCancellationRequested();
+            if ((options.IncludeIntervals || options.IncludeLevels) && state.VolumeResult.Intervals.Any(x=>x.BandVolumes.Count>0))
+                report.Sheets.Add(BuildBandIntervalSheet(state.VolumeResult, cancellationToken));
+            if (options.IncludeIntervals) report.Sheets.Add(BuildIntervalSheet(state.VolumeResult, cancellationToken));
+            if (options.IncludeLevels) report.Sheets.Add(BuildLevelSheet(state.VolumeResult, cancellationToken));
+            cancellationToken.ThrowIfCancellationRequested();
+            if (options.IncludeSummary) report.Sheets.Add(BuildSummarySheet(state, options, frozenGroup, frozenUnit));
+            if (options.IncludeWarnings) report.Sheets.Add(BuildWarningSheet(state, cancellationToken));
+            cancellationToken.ThrowIfCancellationRequested();
+            ApplyOrganizationHeader(report, frozenGroup, frozenUnit);
+            cancellationToken.ThrowIfCancellationRequested();
             return report;
         }
 
-        private static ReportSheet BuildInfoSheet(ProjectState st, ExportOptions opt, DateTime now)
+        private static ReportSheet BuildInfoSheet(ProjectState st, ExportOptions opt,
+            DateTime now, string unitGroup, string unitName)
         {
-            var s = NewSheet("Thông tin", "THÔNG TIN BÁO CÁO IMSAT VOLUME", new[] { "Nội dung", "Giá trị" }, 32, 60);
+            var s = NewSheet("Thông tin", "THÔNG TIN BÁO CÁO IMSAT VOLUME", new[] { "Nội dung", "Giá trị" }, 45, 45);
             s.Landscape = false;
+            s.AutoFilter = false;
             s.Notes.Add("Báo cáo được xuất tự động từ IMSAT VOLUME.");
-            AddKV(s, "Thời gian xuất", now.ToString("dd/MM/yyyy HH:mm:ss"));
+            if (unitGroup != MiningUnitCatalog.OutsideTkv)
+                AddKV(s, "Đơn vị cấp trên", TkvParentHeading);
+            AddKV(s, "Đơn vị tính toán", EmptyAsNotSet(unitName));
+            AddKV(s, "Loại đơn vị", unitGroup);
+            AddKV(s, "Thông số mặt cắt", st.SectionParameterMode);
+            AddKV(s, "Tỷ lệ mặt cắt (ngang / đứng)",
+                "1:" + st.HorizontalScale.ToString("N0") +
+                " / 1:" + st.VerticalScale.ToString("N0"));
+            AddKV(s, "Bước tuyến thiết lập, m", st.SectionSpacing.ToString("0.###"));
+            double? observedGap = MaxActualSectionGap(st.SectionSystem);
+            if (observedGap.HasValue)
+                AddKV(s, "Khoảng cách tuyến lớn nhất thực tế, m",
+                    observedGap.Value.ToString("0.###"));
+            AddKV(s, "Bước chia trục Z, m", st.SectionAxisElevationInterval.ToString("0.###"));
+            AddKV(s, "Mức chia tầng tính khối lượng, m", st.LevelStep.ToString("0.###"));
+            AddKV(s, "Kỳ tính khối lượng", st.VolumePeriodLabel);
+            AddKV(s, "Mã phiên tính (CalculationId)", st.VolumeResult.CalculationId);
+            AddKV(s, "Thời điểm tính khối lượng", FormatCalculationTime(st.VolumeCalculatedUtc));
+            AddKV(s, "Thời gian thực tính khối lượng, giây", FormatDuration(st.VolumeCalculationSeconds));
+            AddKV(s, "Thời gian xuất Excel", now.ToString("dd/MM/yyyy HH:mm:ss"));
             AddKV(s, "Người phát triển phần mềm", ExportOptions.FixedDeveloperName);
-            AddKV(s, "Điện thoại", "0967280686");
+            AddKV(s, "ĐT/Zalo", "0967280686");
             AddKV(s, "Layer hiện trạng", EmptyAsNotSet(st.Existing.Layer));
             AddKV(s, "Layer thiết kế", EmptyAsNotSet(st.Design.Layer));
             AddKV(s, "Số đối tượng hiện trạng", st.Existing.EntityCount.ToString("n0"));
@@ -87,29 +223,50 @@ namespace MiningVolume2023.Services
             AddKV(s, "Mức tính từ", FormatLevel(st.FromLevel));
             AddKV(s, "Mức tính đến", FormatLevel(st.ToLevel));
             AddKV(s, "Bước chia tầng, m", st.LevelStep.ToString("0.###"));
-            AddKV(s, "Quy tắc công thức V1.0", "1 đầu bằng 0: hình chóp; chênh F1-F2 ≤ 40%: TB hai đầu; chênh > 40%: hình chóp cụt");
+            AddKV(s, "Quy tắc công thức theo từng dải cao độ", "1 đầu bằng 0: hình chóp; chênh F1-F2 ≤ 40%: TB hai đầu; chênh > 40%: hình chóp cụt");
             AddKV(s, "Nguyên tắc Excel", "Công thức tham chiếu trực tiếp các ô L, F1, F2 và tự đổi nhánh khi dữ liệu ô thay đổi");
             return s;
         }
 
-        private static ReportSheet BuildSourceXyzSheet(ProjectState st)
+        // Do not mislabel a manually moved/deleted section system by only
+        // showing the originally requested station step. Include the actual
+        // maximum projected gap, including both polygon-boundary margins.
+        private static double? MaxActualSectionGap(SectionSystem system)
+        {
+            if (system == null || system.Lines == null ||
+                system.Lines.Count == 0 || system.Boundary == null ||
+                system.Boundary.Count == 0)
+                return null;
+            var stations = system.Lines.Select(x => x.Offset).OrderBy(x => x).ToArray();
+            var projected = system.Boundary.Select(x =>
+                x.X * system.Normal.X + x.Y * system.Normal.Y).ToArray();
+            double gap = Math.Max(stations[0] - projected.Min(),
+                projected.Max() - stations[stations.Length - 1]);
+            for (int i = 1; i < stations.Length; i++)
+                gap = Math.Max(gap, stations[i] - stations[i - 1]);
+            return Math.Max(0.0, gap);
+        }
+
+        private static ReportSheet BuildSourceXyzSheet(ProjectState st, CancellationToken cancellationToken)
         {
             var s = NewSheet("Dữ liệu XYZ", "DỮ LIỆU X-Y-Z ĐÃ NẠP VÀO MÔ HÌNH",
                 new[] { "Mô hình", "Loại đối tượng", "Layer", "Handle", "Đỉnh", "X", "Y", "Z", "Đang sử dụng" },
                 14, 18, 22, 14, 9, 16, 16, 14, 15);
             s.Notes.Add("Các dòng 'Không' không tham gia dựng mô hình TIN tại thời điểm xuất báo cáo.");
-            AddModelRows(s, "Hiện trạng", st.Existing.Source);
-            AddModelRows(s, "Thiết kế", st.Design.Source);
+            AddModelRows(s, "Hiện trạng", st.Existing.Source, cancellationToken);
+            AddModelRows(s, "Thiết kế", st.Design.Source, cancellationToken);
             return s;
         }
 
-        private static void AddModelRows(ReportSheet s, string modelName, SurfaceModel model)
+        private static void AddModelRows(ReportSheet s, string modelName, SurfaceModel model,
+            CancellationToken cancellationToken)
         {
             if (model == null) return;
             foreach (var e in model.Entities)
             {
                 foreach (var v in e.Vertices)
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     bool active = e.IsEnabled && v.IsEnabled;
                     s.Rows.Add(new[]
                     {
@@ -120,7 +277,7 @@ namespace MiningVolume2023.Services
             }
         }
 
-        private static ReportSheet BuildSectionDataSheet(ProjectState st)
+        private static ReportSheet BuildSectionDataSheet(ProjectState st, CancellationToken cancellationToken)
         {
             var s = NewSheet("Dữ liệu mặt cắt", "DỮ LIỆU HÌNH HỌC CÁC MẶT CẮT",
                 new[] { "Mặt cắt", "Đoạn", "S0, m", "X0", "Y0", "Z hiện trạng 0", "Z thiết kế 0", "S1, m", "X1", "Y1", "Z hiện trạng 1", "Z thiết kế 1" },
@@ -131,6 +288,7 @@ namespace MiningVolume2023.Services
                 int n = 1;
                 foreach (var g in p.Segments)
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     s.Rows.Add(new[]
                     {
                         ReportCell.Text(p.Line.Name), ReportCell.Int(n++), ReportCell.N3(g.S0), ReportCell.N3(g.Map0.X), ReportCell.N3(g.Map0.Y),
@@ -142,7 +300,7 @@ namespace MiningVolume2023.Services
             return s;
         }
 
-        private static ReportSheet BuildSectionParameterSheet(ProjectState st)
+        private static ReportSheet BuildSectionParameterSheet(ProjectState st, CancellationToken cancellationToken)
         {
             var s = NewSheet("Thông số mặt cắt", "BẢNG THÔNG SỐ VÀ DIỆN TÍCH MẶT CẮT",
                 new[] { "STT", "Tên mặt cắt", "Lý trình / offset, m", "Chiều dài tuyến, m", "Số đoạn ranh", "Cao độ min", "Cao độ max", "F đào, m²", "F đắp, m²", "Cảnh báo" },
@@ -150,6 +308,7 @@ namespace MiningVolume2023.Services
             int i = 1;
             foreach (var p in st.SectionProfiles.OrderBy(x => x.Line.Index))
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 s.Rows.Add(new[]
                 {
                     ReportCell.Int(i++), ReportCell.Text(p.Line.Name), ReportCell.N3(p.Line.Offset), ReportCell.N3(p.Line.TotalLength),
@@ -160,26 +319,36 @@ namespace MiningVolume2023.Services
             return s;
         }
 
-        private static ReportSheet BuildIntervalSheet(VolumeResult r)
+        private static ReportSheet BuildIntervalSheet(VolumeResult r, CancellationToken cancellationToken)
         {
             var s = NewSheet("Khối lượng chi tiết", "KHỐI LƯỢNG CHI TIẾT GIỮA CÁC MẶT CẮT",
                 new[] { "Đoạn", "MC đầu", "MC cuối", "L, m", "F đào đầu", "F đào giữa", "F đào cuối", "V đào, m³", "F đắp đầu", "F đắp giữa", "F đắp cuối", "V đắp, m³", "Công thức đào", "Công thức đắp", "Ghi chú" },
                 9, 13, 13, 12, 14, 14, 14, 16, 14, 14, 14, 16, 16, 16, 32);
             s.Notes.Add("Các ô V đào/V đắp là công thức Excel thực: 1 đầu bằng 0 dùng hình chóp; chênh diện tích ≤ 40% dùng TB hai đầu; chênh > 40% dùng hình chóp cụt.");
-            s.Notes.Add("Công thức tham chiếu trực tiếp L, F1, F2 nên khi sửa số liệu trong Excel, khối lượng tự tính lại và tự chuyển nhánh công thức.");
+            s.Notes.Add("Sửa L/F1/F2 tại Chi tiết tầng: tổng theo khoảng và theo tầng cùng liên kết, không nội suy lại TIN cho mặt cắt đã sửa tay. F giữa để trống khi không có số đo phù hợp.");
             const int firstDataRow = 4; // tiêu đề + ghi chú + hàng tiêu đề cột
             int excelRow = firstDataRow;
+            int bandRow=4;
             foreach (var x in r.Intervals)
             {
+                cancellationToken.ThrowIfCancellationRequested();
+                int bandLast=bandRow+x.BandVolumes.Count-1;
+                string BandSum(string column)=>"SUM('Chi tiết tầng'!"+column+bandRow+":"+column+bandLast+")";
                 s.Rows.Add(new[]
                 {
                     ReportCell.Int(x.Index), ReportCell.Text(x.StartSection), ReportCell.Text(x.EndSection), ReportCell.N3(x.Distance),
-                    ReportCell.N2(x.CutAreaStart), ReportCell.N2(x.CutAreaMid), ReportCell.N2(x.CutAreaEnd),
-                    ReportCell.Formula2(AdaptiveVolumeFormula(excelRow, "D", "E", "G")),
-                    ReportCell.N2(x.FillAreaStart), ReportCell.N2(x.FillAreaMid), ReportCell.N2(x.FillAreaEnd),
-                    ReportCell.Formula2(AdaptiveVolumeFormula(excelRow, "D", "I", "K")),
-                    ReportCell.Text(FormulaName(x.CutFormula)), ReportCell.Text(FormulaName(x.FillFormula)), ReportCell.Text(x.Note ?? string.Empty)
+                    x.BandVolumes.Count>0?ReportCell.Formula2(BandSum("F")):ReportCell.N2(x.CutAreaStart),
+                    x.HasMidArea?ReportCell.N2(x.CutAreaMid):ReportCell.Text(""),
+                    x.BandVolumes.Count>0?ReportCell.Formula2(BandSum("G")):ReportCell.N2(x.CutAreaEnd),
+                    ReportCell.Formula2(x.BandVolumes.Count>0?BandSum("H"):AdaptiveVolumeFormula(excelRow, "D", "E", "G")),
+                    x.BandVolumes.Count>0?ReportCell.Formula2(BandSum("I")):ReportCell.N2(x.FillAreaStart),
+                    x.HasMidArea?ReportCell.N2(x.FillAreaMid):ReportCell.Text(""),
+                    x.BandVolumes.Count>0?ReportCell.Formula2(BandSum("J")):ReportCell.N2(x.FillAreaEnd),
+                    ReportCell.Formula2(x.BandVolumes.Count>0?BandSum("K"):AdaptiveVolumeFormula(excelRow, "D", "I", "K")),
+                    ReportCell.Text(x.BandVolumes.Count>0?"Tổng các tầng":FormulaName(x.CutFormula)),
+                    ReportCell.Text(x.BandVolumes.Count>0?"Tổng các tầng":FormulaName(x.FillFormula)), ReportCell.Text(x.Note ?? string.Empty)
                 });
+                bandRow+=x.BandVolumes.Count;
                 excelRow++;
             }
 
@@ -196,7 +365,30 @@ namespace MiningVolume2023.Services
             return s;
         }
 
-        private static ReportSheet BuildLevelSheet(VolumeResult r)
+        private static ReportSheet BuildBandIntervalSheet(VolumeResult r, CancellationToken cancellationToken)
+        {
+            var s=NewSheet("Chi tiết tầng","KHỐI LƯỢNG TỪNG KHOẢNG VÀ DẢI CAO ĐỘ",
+                new[]{"Khoảng","Mã tầng","MC đầu","MC cuối","L (m)","F đào đầu","F đào cuối","V đào (m³)","F đắp đầu","F đắp cuối","V đắp (m³)"},
+                10,10,15,15,12,16,16,18,16,16,18);
+            s.Notes.Add("Khối lượng chính thức là tổng đóng góp của từng dải. Sửa tham số tại đây để tính lại các bảng tổng hợp.");
+            int row=4;
+            foreach(var interval in r.Intervals)foreach(var b in interval.BandVolumes) {
+                cancellationToken.ThrowIfCancellationRequested();
+                s.Rows.Add(new[]{ReportCell.Int(interval.Index),ReportCell.Int(b.Index),ReportCell.Text(b.StartSection),
+                    ReportCell.Text(b.EndSection),ReportCell.N3(b.Distance),ReportCell.N3(b.CutAreaStart),ReportCell.N3(b.CutAreaEnd),
+                    ReportCell.Formula3(AdaptiveVolumeFormula(row,"E","F","G")),ReportCell.N3(b.FillAreaStart),ReportCell.N3(b.FillAreaEnd),
+                    ReportCell.Formula3(AdaptiveVolumeFormula(row,"E","I","J"))});row++;
+            }
+            return s;
+        }
+
+        private static ReportCell LevelCell(LevelVolumeSummary level,string column,double fallback,int bandCount)
+        {
+            return bandCount==0?ReportCell.N2(fallback):ReportCell.Formula2("SUMIF('Chi tiết tầng'!$B$4:$B$"+(3+bandCount)+","+
+                level.Band.Index+",'Chi tiết tầng'!$"+column+"$4:$"+column+"$"+(3+bandCount)+")");
+        }
+
+        private static ReportSheet BuildLevelSheet(VolumeResult r, CancellationToken cancellationToken)
         {
             var s = NewSheet("Tổng hợp theo tầng", "TỔNG HỢP KHỐI LƯỢNG THEO TẦNG / MỨC",
                 new[] { "STT", "Tầng / mức", "Cao độ dưới", "Cao độ trên", "V đào, m³", "V đắp, m³", "Chênh lệch, m³" },
@@ -204,12 +396,14 @@ namespace MiningVolume2023.Services
             const int firstDataRow = 3; // tiêu đề + hàng tiêu đề cột
             int excelRow = firstDataRow;
             int i = 1;
+            int bandCount = r.Intervals.Sum(x => x.BandVolumes.Count);
             foreach (var x in r.Levels)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 s.Rows.Add(new[]
                 {
                     ReportCell.Int(i++), ReportCell.Text(x.Band.Name), ReportCell.N3(x.Band.LowerZ), ReportCell.N3(x.Band.UpperZ),
-                    ReportCell.N2(x.CutVolume), ReportCell.N2(x.FillVolume), ReportCell.Formula2("=E" + excelRow + "-F" + excelRow)
+                    LevelCell(x,"H",x.CutVolume,bandCount), LevelCell(x,"K",x.FillVolume,bandCount), ReportCell.Formula2("=E" + excelRow + "-F" + excelRow)
                 });
                 excelRow++;
             }
@@ -225,14 +419,17 @@ namespace MiningVolume2023.Services
             return s;
         }
 
-        private static ReportSheet BuildSummarySheet(ProjectState st, ExportOptions opt)
+        private static ReportSheet BuildSummarySheet(ProjectState st, ExportOptions opt,
+            string unitGroup, string unitName)
         {
             var r = st.VolumeResult;
             double levelCut = r.Levels.Sum(x => x.CutVolume);
             double levelFill = r.Levels.Sum(x => x.FillVolume);
             var s = NewSheet("Tổng khối", "BẢNG TỔNG HỢP KHỐI LƯỢNG",
-                new[] { "Chỉ tiêu", "Đơn vị", "Giá trị" }, 40, 14, 22);
+                new[] { "Chỉ tiêu", "Đơn vị", "Giá trị" }, 45, 15, 45);
             s.Landscape = false;
+            s.AutoFilter = false;
+            s.HasSignatures = true;
             s.Notes.Add("Người phát triển: " + ExportOptions.FixedDeveloperName);
             s.Notes.Add(ExportOptions.FixedDeveloperContact);
 
@@ -248,19 +445,62 @@ namespace MiningVolume2023.Services
             s.Rows.Add(new[] { ReportCell.Text("Sai lệch kiểm soát đắp (chi tiết - theo tầng)"), ReportCell.Text("m³"), ReportCell.Formula3("=C6-C9") });
             s.Rows.Add(new[] { ReportCell.Text("Số khoảng mặt cắt"), ReportCell.Text("khoảng"), opt.IncludeIntervals ? ReportCell.FormulaInt("=COUNTA('Khối lượng chi tiết'!A4:A" + (3 + r.Intervals.Count) + ")") : ReportCell.Int(r.Intervals.Count) });
             s.Rows.Add(new[] { ReportCell.Text("Số tầng / mức"), ReportCell.Text("tầng"), opt.IncludeLevels ? ReportCell.FormulaInt("=COUNTA('Tổng hợp theo tầng'!A3:A" + (2 + r.Levels.Count) + ")") : ReportCell.Int(r.Levels.Count) });
+
+            // Keep C5:C9 and all existing linked volume formulas unchanged.
+            // Append the project metadata and sign-off block after the fixed
+            // calculation rows. Do not put extra Notes above the table.
+            s.Rows.Add(new[] { ReportCell.Text(""), ReportCell.Text(""), ReportCell.Text("") });
+            s.Rows.Add(new[] { ReportCell.Text("Mã phiên tính (CalculationId)"),
+                ReportCell.Text(""), ReportCell.Text(r.CalculationId) });
+            if (unitGroup != MiningUnitCatalog.OutsideTkv)
+                s.Rows.Add(new[] { ReportCell.Text("Đơn vị cấp trên", true),
+                    ReportCell.Text(""), ReportCell.Text(TkvParentHeading) });
+            s.Rows.Add(new[] { ReportCell.Text("Đơn vị tính toán", true), ReportCell.Text(""),
+                ReportCell.Text(EmptyAsNotSet(unitName)) });
+            s.Rows.Add(new[] { ReportCell.Text("Loại đơn vị", true), ReportCell.Text(""),
+                ReportCell.Text(unitGroup) });
+            s.Rows.Add(new[] { ReportCell.Text("Kỳ tính khối lượng", true), ReportCell.Text(""),
+                ReportCell.Text(st.VolumePeriodLabel) });
+            s.Rows.Add(new[] { ReportCell.Text("Thời điểm tính", true), ReportCell.Text(""),
+                ReportCell.Text(FormatCalculationTime(st.VolumeCalculatedUtc)) });
+            s.Rows.Add(new[] { ReportCell.Text("Thời gian thực tính (giây)", true), ReportCell.Text(""),
+                ReportCell.Text(FormatDuration(st.VolumeCalculationSeconds)) });
+            s.Rows.Add(new[] { ReportCell.Text(""), ReportCell.Text(""), ReportCell.Text("") });
+            s.Rows.Add(new[] { ReportCell.Text("NGƯỜI TÍNH TOÁN", true),
+                ReportCell.Text(""), ReportCell.Text("NGƯỜI KIỂM TRA", true) });
+            s.Rows.Add(new[] { ReportCell.Text("(Ký, ghi rõ họ tên)"),
+                ReportCell.Text(""), ReportCell.Text("(Ký, ghi rõ họ tên)") });
+            s.Rows.Add(new[] { ReportCell.Text(""), ReportCell.Text(""), ReportCell.Text("") });
+            s.Rows.Add(new[] { ReportCell.Text(""), ReportCell.Text(""), ReportCell.Text("") });
+            s.Rows.Add(new[] { ReportCell.Text(""), ReportCell.Text(""), ReportCell.Text("") });
             return s;
         }
 
-        private static ReportSheet BuildWarningSheet(ProjectState st)
+        private static ReportSheet BuildWarningSheet(ProjectState st, CancellationToken cancellationToken)
         {
             var s = NewSheet("Cảnh báo", "CẢNH BÁO VÀ GHI CHÚ KIỂM SOÁT",
                 new[] { "Nhóm", "Đối tượng", "Nội dung" }, 20, 20, 80);
             if (st.SectionSystem?.Warnings != null)
-                foreach (var w in st.SectionSystem.Warnings) s.Rows.Add(new[] { ReportCell.Text("Hệ mặt cắt"), ReportCell.Text(string.Empty), ReportCell.Text(w) });
+                foreach (var w in st.SectionSystem.Warnings)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    s.Rows.Add(new[] { ReportCell.Text("Hệ mặt cắt"), ReportCell.Text(string.Empty), ReportCell.Text(w) });
+                }
             foreach (var p in st.SectionProfiles)
-                if (p.Warnings != null) foreach (var w in p.Warnings) s.Rows.Add(new[] { ReportCell.Text("Mặt cắt"), ReportCell.Text(p.Line.Name), ReportCell.Text(w) });
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (p.Warnings != null) foreach (var w in p.Warnings)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    s.Rows.Add(new[] { ReportCell.Text("Mặt cắt"), ReportCell.Text(p.Line.Name), ReportCell.Text(w) });
+                }
+            }
             if (st.VolumeResult?.Warnings != null)
-                foreach (var w in st.VolumeResult.Warnings) s.Rows.Add(new[] { ReportCell.Text("Khối lượng"), ReportCell.Text(string.Empty), ReportCell.Text(w) });
+                foreach (var w in st.VolumeResult.Warnings)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    s.Rows.Add(new[] { ReportCell.Text("Khối lượng"), ReportCell.Text(string.Empty), ReportCell.Text(w) });
+                }
             if (s.Rows.Count == 0) s.Rows.Add(new[] { ReportCell.Text("Kiểm soát"), ReportCell.Text(string.Empty), ReportCell.Text("Không có cảnh báo tại thời điểm xuất báo cáo.") });
             return s;
         }
@@ -274,6 +514,12 @@ namespace MiningVolume2023.Services
         }
         private static void AddKV(ReportSheet s, string key, string value) => s.Rows.Add(new[] { ReportCell.Text(key, true), ReportCell.Text(value) });
         private static string EmptyAsNotSet(string s) => string.IsNullOrWhiteSpace(s) ? "Chưa thiết lập" : s.Trim();
+        private static string FormatCalculationTime(DateTime? utc) =>
+            utc.HasValue ? utc.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss")
+                         : "Chưa xác nhận trong phiên hiện tại";
+        private static string FormatDuration(double? seconds) =>
+            seconds.HasValue && !double.IsNaN(seconds.Value) && !double.IsInfinity(seconds.Value)
+                ? seconds.Value.ToString("0.000") : "Chưa xác nhận trong phiên hiện tại";
         private static string FormulaName(VolumeFormulaKind x)
         {
             switch (x)
@@ -285,7 +531,7 @@ namespace MiningVolume2023.Services
             }
         }
 
-        private static string AdaptiveVolumeFormula(
+        internal static string AdaptiveVolumeFormula(
             int row,
             string lengthCol,
             string startCol,

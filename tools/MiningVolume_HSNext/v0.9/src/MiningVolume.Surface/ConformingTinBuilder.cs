@@ -112,25 +112,55 @@ namespace MiningVolume.Surface
                 var indices = new int[checked(count * 3)];
                 if (mv_cdt_copy(mesh, indices, indices.Length) != 0)
                     throw new InvalidOperationException("Không đọc được kết quả lưới ràng buộc.");
+                TinTriangleQuality.VerifyZeroAreaRemoval(input.Sites, indices, edges, cancellationToken);
+                var originalVerticalFaces = VerticalFaceBuilder.Build(
+                    input.Sites, indices, input.VerticalConflictGroups,
+                    options.XyTolerance, options.ZConflictTolerance, cancellationToken);
+                var verticalFaces = options.ClipBoundary == null
+                    ? originalVerticalFaces
+                    : VerticalFaceBuilder.ClipToBoundary(
+                        originalVerticalFaces, options.ClipBoundary,
+                        options.XyTolerance, cancellationToken);
                 if (fileBacked)
                 {
-                    int retainedSmall;
+                    int retainedSmall, skippedDegenerate;
                     var store = AdaptiveTinStore.Create(input.Sites, indices, options, progress,
-                        cancellationToken, out retainedSmall);
+                        cancellationToken, out retainedSmall, out skippedDegenerate);
                     var storedIssues = input.Issues.ToList();
+                    if (skippedDegenerate > 0) storedIssues.Add(new ValidationIssue(ValidationSeverity.Warning,
+                        "SKIPPED_DEGENERATE_TRIANGLES", $"Bỏ qua {skippedDegenerate:n0} tam giác suy biến có diện tích XY bằng 0 chính xác; diện tích loại 0 m², đã kiểm bảo toàn đỉnh/breakline; giữ nguyên dữ liệu CAD gốc. Kiểm tra chất lượng TIN trước khi tính khối lượng."));
                     if (retainedSmall > 0) storedIssues.Add(new ValidationIssue(ValidationSeverity.Warning,
                         "RETAIN_SMALL_TRIANGLES", $"Giữ {retainedSmall:n0} tam giác diện tích nhỏ dương để bảo toàn điểm và breakline."));
-                    return new TinSurface(name, store, storedIssues);
+                    try
+                    {
+                        var result = new TinSurface(name, store, storedIssues,
+                            verticalFaces, input.VerticalConflictGroups,
+                            input.ConflictReport?.SameXYZDuplicates ?? 0,
+                            input.RelaxedBreaklineConstraints);
+                        if (options.ClipBoundary != null)
+                            TinRegionIntegrityVerifier.Verify(result,
+                                options.ClipBoundary, options.XyTolerance * 10,
+                                cancellationToken);
+                        return result;
+                    }
+                    catch
+                    {
+                        store.Dispose(); // never retain an invalid file-backed mesh
+                        throw;
+                    }
                 }
                 var output = new List<Triangle3>(count);
                 var clipper = options.ClipBoundary == null ? null : new TinPolygonClipper(options.ClipBoundary, cancellationToken);
-                int small = 0;
+                int small = 0, skippedDegenerateInMemory = 0;
                 for (int i = 0; i < count; i++)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
                     var t = new Triangle3(input.Sites[indices[3 * i]], input.Sites[indices[3 * i + 1]], input.Sites[indices[3 * i + 2]]);
-                    if (t.Area2D <= 0 || double.IsInfinity(t.Area2D) || double.IsNaN(t.Area2D))
-                        throw new InvalidOperationException("Lưới có tam giác suy biến; không xuất kết quả thiếu dữ liệu.");
+                    if (TinTriangleQuality.CheckedArea(t) == 0)
+                    {
+                        skippedDegenerateInMemory++;
+                        continue;
+                    }
                     // A small positive-area triangle can be the only owner of a survey vertex.
                     // Keep it, report it, and never silently remove its point or constraint.
                     if (t.Area2D <= options.MinimumTriangleArea) small++;
@@ -139,9 +169,19 @@ namespace MiningVolume.Surface
                 }
                 if (output.Count == 0) throw new InvalidOperationException("TIN không tạo được tam giác hợp lệ trong phạm vi tính.");
                 var issues = input.Issues.ToList();
+                if (skippedDegenerateInMemory > 0) issues.Add(new ValidationIssue(ValidationSeverity.Warning,
+                    "SKIPPED_DEGENERATE_TRIANGLES", $"Bỏ qua {skippedDegenerateInMemory:n0} tam giác suy biến có diện tích XY bằng 0 chính xác; diện tích loại 0 m², đã kiểm bảo toàn đỉnh/breakline; giữ nguyên dữ liệu CAD gốc. Kiểm tra chất lượng TIN trước khi tính khối lượng."));
                 if (small > 0) issues.Add(new ValidationIssue(ValidationSeverity.Warning, "RETAIN_SMALL_TRIANGLES",
                     $"Giữ {small:n0} tam giác diện tích nhỏ dương để bảo toàn điểm và breakline."));
-                return new TinSurface(name, output, issues);
+                var clippedSurface = new TinSurface(name, output, issues,
+                    verticalFaces, input.VerticalConflictGroups,
+                    input.ConflictReport?.SameXYZDuplicates ?? 0,
+                    input.RelaxedBreaklineConstraints);
+                if (options.ClipBoundary != null)
+                    TinRegionIntegrityVerifier.Verify(clippedSurface,
+                        options.ClipBoundary, options.XyTolerance * 10,
+                        cancellationToken);
+                return clippedSurface;
             }
             catch (DllNotFoundException ex) { throw new InvalidOperationException("Thiếu thư viện dựng TIN. Hãy cài lại đầy đủ bộ cài IMSAT VOLUME.", ex); }
             finally { if (mesh != IntPtr.Zero) mv_cdt_free(mesh); }

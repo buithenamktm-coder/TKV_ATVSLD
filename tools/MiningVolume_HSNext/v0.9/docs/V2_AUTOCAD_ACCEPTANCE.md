@@ -1,3 +1,14 @@
+# Trạng thái mới nhất — QA TIN/Excel 12/10/2026
+
+**QA CANDIDATE — NOT OFFICIAL RELEASE.** Báo cáo hiện hành: [V2_FINAL_TRACEABILITY_20261012.md](V2_FINAL_TRACEABILITY_20261012.md); nguyên nhân và bằng chứng P0: [P0_TIN_RENDER_AUDIT_20261012.md](P0_TIN_RENDER_AUDIT_20261012.md); [hướng dẫn cài/gỡ/kiểm DLL](V2_QA_INSTALL_VERIFY_20261012.md).
+
+Lỗi renderer từ chối tam giác dương nhỏ đã sửa ở `c13f321`; SQ HT đúng **1.681.755** và TK **1.672.875** support faces qua native/core/shared renderer validation. HT có **14** face dương dưới ngưỡng cũ, không bị loại. Windows CI c13 run38212838355 PASS (88 C#,249 Python,5 Go). Sau sửa Excel/danh mục: local **89 C# +249 Python PASS**, clip GEOS4/4 và3 workbook recalc độc lập PASS. CI/checksum final HEAD được đóng trong `FINAL_BUILD_EVIDENCE.json` của gói tải, không tái sử dụng hash lịch sử.
+
+**G1:** bằng chứng build/test/Setup ở mốc c13 có thật; final HEAD phải CI lại. **G2/G3:** lõi và fixture SQ PASS, AutoCAD/DWG/HSMo NOT TESTED. **G4:** toàn luồng CAD/Excel Desktop/UI NOT TESTED. **G5:** Windows GUI install/uninstall NOT TESTED, khóa RSA sản xuất BLOCKED, Setup unsigned. **G6:** hồ sơ QA có, chưa biên bản nghiệm thu ký xác nhận. Không được công bố hoàn thành toàn bộ V2.0.
+
+---
+## Hồ sơ lịch sử dưới đây — số test, SHA, hash và trạng thái chỉ đúng tại mốc ghi rõ, không phải kết quả final HEAD
+
 # Checklist nghiệm thu tương tác AutoCAD 2023 — CHƯA CHẠY
 
 Dùng Windows x64 + AutoCAD 2023 có bản quyền, phiên tương tác. Sao chép DWG/DXF mỏ sang thư mục thử riêng, giữ nguyên bản gốc. Ghi CPU/RAM, DPI, bản Windows/CAD, commit và SHA256 Setup từ artifact.
@@ -19,6 +30,28 @@ Dùng Windows x64 + AutoCAD 2023 có bản quyền, phiên tương tác. Sao ch�
 15. `MV_EXPORT`: CAD TABLE native, Excel và cả hai; Excel desktop tính lại công thức khi sửa tham số; Arial12/viền/không tô/logo/tên liên hệ đúng, không tràn chữ.
 16. `MV_LICENSE`: 15 ngày, hết hạn không mất DWG, rollback/corrupt ledger; provision public key thực, kích hoạt đúng/sai mã máy/tamper. Máy quản trị thứ hai khôi phục encrypted issuer backup; không đưa private key vào artifact.
 17. Cài nâng cấp V1→V2, lỗi cài đặt/rollback, gỡ; kiểm tra DWG/license khách hàng còn nguyên. Test mở DWG sau gỡ. Không công bố hỗ trợ AutoCAD 2012+.
+
+
+18. **Chống mất sửa tay khi xuất lại MC:** sau khi đã Grip chỉnh đường HT hoặc TK nhưng CHƯA bấm CẬP NHẬT MẶT CẮT, bấm thành lập/xuất mặt cắt lần nữa: phải hiện hộp xác nhận thay thế; mặc định **Không**, Esc/Không giữ nguyên hình CAD, diện tích, khối lượng; chọn Đồng ý chỉ trên bản sao DWG rồi kiểm tra bản mới được vẽ đúng.
+19. **Hủy chọn điểm chèn:** sau khi đã có bộ mặt cắt/chỉ tiêu đã tính, bấm thành lập mặt cắt mới rồi Cancel khi AutoCAD hỏi điểm chèn. Hệ MC có thẩm quyền và kết quả volume trong Palette/Excel phải còn nguyên. Thử vừa thay DPI/dock trái.
+20. **DWG save/reopen bảo toàn sửa tay:** trên bản sao, chỉnh Grip để cả đoạn 10 m tăng Z 1 m → F đào tăng 10 m²; thử chỉ một đầu +1m → F tăng 5 m². Bấm CẬP NHẬT MẶT CẮT, kiểm V chi tiết/vùng tầng và Excel. Lưu IMSAT Project rồi SAVE/SAVEAS/đóng/mở và so cùng giá trị. Trên bản sao khác, xóa TẤT CẢ polyline mặt cắt CAD đã lưu rồi thử nạp Project: phải cảnh báo **không tìm thấy CAD đã chỉnh**, không khôi phục âm thầm volume từ TIN và không sửa source.
+21. **Đổi DWG/TIN khi đang tính:** với ít nhất hai bản vẽ riêng, khởi tạo chạy tính mặt cắt lâu ở A, chuyển B hoặc đổi dữ liệu TIN: phép tính của A không được vẽ vào B, không ghi đè dữ liệu B; phải có thông báo yêu cầu tính lại. Lặp lại khi đang chọn điểm chèn. Kiểm thử hiệu năng ở bộ dữ liệu lớn, không để UI vẽ sai tài liệu. **Bổ sung:** mở Palette trên A rồi chuyển sang B khi đang mở: Palette A phải tự ẩn, không còn các nút sử dụng mô hình A; bấm Ribbon/TKL trong B phải nạp đúng Project B. Thử lệnh MV_VIEW3D_HT/TK và MV_PROJECT_SAVE trên B để chứng minh không lấy TIN hoặc dự án từ A. Lưu Project trước khi rời bản vẽ A để không mất các chỉnh sửa chưa lưu; không được tự khẳng định chức năng chuyển qua lại nhiều DWG đã PASS chỉ dựa vào CI.
+22. **Trọn gói Excel và cài đặt:** xuất workbook mặt cắt, lưới, khoáng sản từ đúng một lần tính thành công; Excel Desktop kiểm metadata đơn vị khai thác THAN/QUẶNG, Tháng/Quý/Năm, thời điểm tính, thời gian tính, 2 ô ký, logo IMSAT, font Arial12 không tô nền và công thức thực; đổi tham số cho phép và xác nhận recalc. Test V1→V2 QA Setup và Uninstall: chỉ xóa tệp Setup/bundle/shortcut/registry do IMSAT cài, vẫn giữ DWG/Project/Excel/license khách hàng. Khởi động CAD sau gỡ, không tự nạp. Chỉ dùng bộ QA trên máy thử.
+
+**Ca bắt buộc bổ sung sau vòng audit 12/10:**
+
+- Sau khi tính lưới, sửa Grip **một đỉnh** đường bao khép kín nhưng vẫn giữ nguyên handle. Thử **Vẽ lưới CAD** và **Xuất Excel**: cả hai phải từ chối dùng kết quả đã tính, báo phải tính lại. Tính lại thì chấp nhận và thể tích phải theo polygon mới.
+- Vẽ MC, bấm **CẬP NHẬT MẶT CẮT** thành công, sau đó sửa Grip tăng một đầu đường HT thêm **0,001 m**. Chưa cập nhật lần hai, thử xuất Excel và bảng CAD: phải chặn. Cập nhật lại rồi xuất: đúng F/V đã sửa. Không được chặn sai chỉ vì sai số làm tròn khi CAD đọc lại đường không thay đổi.
+- Sao chép DWG A thành B bằng **SAVEAS** (có thể giữ cùng `FingerprintGuid`), mở **cả hai DWG** trong cùng AutoCAD. Trên A và B đặt Project khác nhau, kiểm tra chuyển tab, Palette tự ẩn, mở lại đúng đơn vị/TIN/kỳ báo cáo của mỗi DWG. Lưu, đóng và mở lại từng bản vẽ để bảo đảm không có dữ liệu chéo. Không dùng mỗi `FingerprintGuid` làm kết luận phân biệt hai bản vẽ.
+- Trong lúc cửa sổ chọn tên Excel còn mở, hoặc lúc phần mềm đang kết xuất workbook, đổi DWG hoặc chỉnh đường HT/TK. Báo cáo phải bị từ chối nếu dữ liệu đã thay đổi, không được ghi đè Excel chốt từ lần trước.
+
+### Bổ sung ca nghiệm thu HSMo trùng XY khác Z — 12/10/2026
+
+- **V-01 Point:** dựng bộ thử 4 điểm khung + hai Point trùng XY tại (5,5), cao độ 10 m và 20 m. Không yêu cầu loại điểm. Báo đúng một nhóm XY trùng và hai đỉnh nguồn; dựng đủ TIN 3DFACE gồm phần mặt đứng, giữ nguyên bản vẽ gốc. Kiểm tra hình 3D bằng góc nhìn isometric.
+- **V-02 Đường đồng mức:** hai Polyline/Contour có đỉnh tại cùng XY nhưng cao độ khác; có các đoạn breakline đi ra. Không bắt sửa từng điểm; đường đồng mức hợp lệ khác vẫn được giữ trong ràng buộc CDT, hình chóp/mặt đứng hiển thị ở 3D. Đối chiếu với mẫu HSMo tại đúng XY/Z.
+- **V-03 Mặt cắt:** tuyến MC cắt qua vị trí nhiều Z phải hiện CẦN KIỂM TRA MC; thử Grip đường HT/TK rồi bấm CẬP NHẬT MẶT CẮT, so F đào/đắp và V theo tầng/khoảng MC, lưu SAVE/SAVEAS, mở lại phải giữ kết quả theo nguồn.
+- **V-04 Không chốt sai:** trước khi xác nhận MC, bấm TÍNH KHỐI LƯỢNG phải cảnh báo và không tạo kết quả chốt. Khi có mặt đứng, ô lưới 2,5D phải từ chối tính tự động do không có duy nhất Z(X,Y), không tạo Excel khối lượng giả. Sau khi duyệt MC thì Excel MC mới được phát hành.
+- **V-05 Dữ liệu thực:** chạy SQ thực, báo đúng thống kê số nhóm XY trùng/số đỉnh, không treo, không xóa CAD nguồn; đối chứng 3D và profile với HSMo. Nếu xảy ra giao điểm breakline khác Z **không trùng đỉnh nguồn** và chưa dựng được topology, ghi FAIL có log/dữ liệu mẫu, không tự xóa và không tuyên bố hoàn thành.
 
 Mỗi ca ghi Expected, Actual, PASS/FAIL/NOT TESTED, ảnh/log, commit, máy chạy và người xác nhận. Mọi mục trên hiện **NOT TESTED trong AutoCAD**; yêu cầu người nghiệm thu ký duyệt trước Release.
 

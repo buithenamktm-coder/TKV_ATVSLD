@@ -73,3 +73,40 @@ def test_persisted_edits_require_matching_original_geometry():
     assert "rebuildDerived=false" in persistence
     assert "s.EditHistory.AddRange(session.Source.EditHistory)" in persistence
     assert "128L*1024*1024" in snapshot
+
+def test_z_mean_review_opens_grouped_editor_instead_of_generic_error():
+    ui=code("src/MiningVolume.Plugin2023/UI/ModelPage.cs")
+    editor=code("src/MiningVolume.Plugin2023/UI/DuplicateXYConflictUi.cs")
+    review=code("src/MiningVolume.Plugin2023/UI/MeanZConflictReviewForm.cs")
+    first=ui.index("catch(MeanZReviewRequiredException ex)")
+    fallback=ui.index("catch(Exception ex)",first)
+    assert first<fallback
+    assert "new MeanZConflictReviewForm(role, ex.Analysis," in ui[first:fallback]
+    assert "_document" in editor and "await ScanAsync();" in editor
+    assert "ConflictReviewForm" in review
+    assert 'if(_highDeltaOnly.Checked && !(g.DeltaZ>HighDeltaZMetres))continue;' in editor
+    assert '"Bạn có chắc chắn muốn loại điểm này khỏi mô hình không?"' in editor
+    assert "MeanZPreviewPreparer.Prepare(source,1e-6,1e-4,token,polygon)" in editor
+
+def test_preview_review_memory_is_allocated_only_for_conflicting_xy():
+    core=code("src/MiningVolume.Core/Surface/MeanZPreviewPreparer.cs")
+    assert "internal List<Member> Members;" in core
+    assert "if(Members==null)" in core
+    assert "FirstEntity=entity,FirstVertexIndex=vertex.Index" in core
+    assert "next.Members.Add(" not in core
+
+def test_mean_z_review_can_rebuild_only_after_all_groups_over_three_metres_resolved():
+    ui=code("src/MiningVolume.Plugin2023/UI/ModelPage.cs")
+    review=code("src/MiningVolume.Plugin2023/UI/DuplicateXYConflictUi.cs")
+    wrapper=code("src/MiningVolume.Plugin2023/UI/MeanZConflictReviewForm.cs")
+    svc=code("src/MiningVolume.Plugin2023/Services/MeanZPreviewWorkflowService.cs")
+    assert "DỰNG TIN THỬ SAU KHI XỬ LÝ" in review
+    assert "int remaining=_report.Groups.Count(g=>g.DeltaZ>HighDeltaZMetres)" in review
+    assert "_buildPreview.Enabled=_meanPreview" in review
+    assert "valid && _report!=null && !_report.Groups.Any" in review
+    assert "_requestBuildPreview();" in review
+    assert "Action requestBuildPreview=null" in review
+    assert "System.Action requestBuildPreview=null" in wrapper
+    assert "BuildMeanZPreviewAsync(ModelRole? requestedRole=null)" in ui
+    assert "await BuildMeanZPreviewAsync(role)" in ui
+    assert svc.index("if (prepared.HasBlockingConflicts)") < svc.index(".BuildPrepared(")

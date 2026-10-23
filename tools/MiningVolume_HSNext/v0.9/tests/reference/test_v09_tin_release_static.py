@@ -42,7 +42,14 @@ def test_autocad2023_official_nuget_reference_is_pinned_for_ci():
         'src/MiningVolume.Plugin2023/MiningVolume.Plugin2023.csproj',
     ]:
         s = read(rel)
-        assert 'AutoCAD.NET" Version="24.2.0"' in s
+        # Default 2023 is pinned through shared compatibility properties.
+        # A modern flavor MUST NOT silently inherit the 2023 Autodesk API.
+        compat = read('compat/IMSAT.CadCompatibility.props')
+        assert '<IMSATCadFlavor Condition=' in compat
+        assert '<IMSATCadPackageVersion Condition=' in compat
+        assert '>24.2.0</IMSATCadPackageVersion>' in compat
+        assert '<TargetFramework>$(IMSATCadFramework)</TargetFramework>' in s
+        assert 'AutoCAD.NET" Version="$(IMSATCadPackageVersion)"' in s
         assert 'UseAutoCADNuGet' in s
         assert 'ExcludeAssets="runtime"' in s
     for rel in [

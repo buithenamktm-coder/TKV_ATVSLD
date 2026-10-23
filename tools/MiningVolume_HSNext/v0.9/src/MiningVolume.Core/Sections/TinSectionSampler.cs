@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using MiningVolume.Core.Geometry;
@@ -14,20 +15,38 @@ namespace MiningVolume.Core.Sections
     /// </summary>
     public sealed class TinSectionSampler
     {
-        private TinSurface _cachedTin1;
-        private TinSurface _cachedTin2;
-        private TriangleGridIndex _cachedIndex1;
-        private TriangleGridIndex _cachedIndex2;
+        // A rebuilt surface is a new identity. Weak keys release the index when
+        // its surface is no longer retained by a project/snapshot. All samplers
+        // (normal, quick and interval-midpoint) share the same completed index.
+        private static readonly ConditionalWeakTable<TinSurface, IndexSlot> IndexCache =
+            new ConditionalWeakTable<TinSurface, IndexSlot>();
+        private sealed class LocalIndex
+        {
+            internal readonly TinSurface Tin;
+            internal readonly TriangleGridIndex Index;
+            internal LocalIndex(TinSurface tin, TriangleGridIndex index) { Tin = tin; Index = index; }
+        }
+        private LocalIndex _firstIndex, _secondIndex;
 
-        public SectionProfile BuildProfile(SectionLine line, TinSurface existing, TinSurface design, double tol = 1e-7)
+        private sealed class IndexSlot
+        {
+            internal readonly object Sync = new object();
+            internal TriangleGridIndex Index;
+        }
+
+        public SectionProfile BuildProfile(SectionLine line, TinSurface existing, TinSurface design, double tol = 1e-7, CancellationToken cancellationToken = default(CancellationToken))
         {
             if (line == null) throw new ArgumentNullException(nameof(line));
             if (existing == null) throw new ArgumentNullException(nameof(existing));
             if (design == null) throw new ArgumentNullException(nameof(design));
 
-            var existingIndex = IndexFor(existing);
-            var designIndex = IndexFor(design);
-            return BuildProfileIndexed(line, existingIndex, designIndex, tol);
+            var existingIndex = IndexFor(existing, cancellationToken);
+            var designIndex = IndexFor(design, cancellationToken);
+            var profile = AnnotateVerticalConflicts(
+                BuildProfileIndexed(line, existingIndex, designIndex, tol, cancellationToken),
+                existing, design, tol);
+            cancellationToken.ThrowIfCancellationRequested();
+            return profile;
         }
 
         public IReadOnlyList<SectionProfile> BuildProfiles(
@@ -35,7 +54,7 @@ namespace MiningVolume.Core.Sections
             TinSurface existing,
             TinSurface design,
             Action<int, int, string> progress = null,
-            double tol = 1e-7)
+            double tol = 1e-7, CancellationToken cancellationToken = default(CancellationToken))
         {
             if (lines == null) throw new ArgumentNullException(nameof(lines));
             if (existing == null) throw new ArgumentNullException(nameof(existing));
@@ -44,23 +63,32 @@ namespace MiningVolume.Core.Sections
             // Build each spatial index once, then reuse it for the whole section system.
             // Profiles are independent and both triangle indices are immutable after
             // construction, so large section systems can use multiple CPU cores safely.
-            var existingIndex = IndexFor(existing);
-            var designIndex = IndexFor(design);
+            var existingIndex = IndexFor(existing, cancellationToken);
+            var designIndex = IndexFor(design, cancellationToken);
             var result = new SectionProfile[lines.Count];
             int completed = 0;
 
             var options = new ParallelOptions
             {
-                MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount - 1)
+                CancellationToken = cancellationToken,
+                // File-backed tiles share a bounded cache and disk. Unrestricted
+                // core-count parallelism evicts hot tiles and serializes reads.
+                MaxDegreeOfParallelism =
+                    existingIndex.IsTiled || designIndex.IsTiled
+                        ? Math.Max(1, Math.Min(4, Environment.ProcessorCount - 1))
+                        : Math.Max(1, Environment.ProcessorCount - 1)
             };
 
             Parallel.For(0, lines.Count, options, i =>
             {
-                result[i] = BuildProfileIndexed(lines[i], existingIndex, designIndex, tol);
+                result[i] = AnnotateVerticalConflicts(
+                    BuildProfileIndexed(lines[i], existingIndex, designIndex, tol, cancellationToken),
+                    existing, design, tol);
                 int done = Interlocked.Increment(ref completed);
                 progress?.Invoke(done, lines.Count, lines[i].Name);
             });
 
+            cancellationToken.ThrowIfCancellationRequested();
             return result;
         }
 
@@ -70,11 +98,29 @@ namespace MiningVolume.Core.Sections
             return IndexFor(tin).TryElevation(p, tol, out z);
         }
 
+        private static SectionProfile AnnotateVerticalConflicts(SectionProfile profile,
+            TinSurface existing, TinSurface design, double tol)
+        {
+            if (!existing.RequiresSectionReview && !design.RequiresSectionReview)
+                return profile;
+            // Remote double-Z points must not force review of unrelated
+            // sections. Only projected 3D curtains crossing a route matter.
+            if (!VerticalConflictFootprint.TouchesSection(
+                profile.Line, existing, design, tol))
+                return profile;
+            var warnings = profile.Warnings.ToList();
+            warnings.Add("MẶT ĐỨNG NHIỀU Z: tuyến " + profile.Line.Name +
+                " giao vùng nhiều cao độ tại cùng XY. Kiểm tra hình học CAD và " +
+                "bấm Cập nhật mặt cắt nếu cần; dữ liệu Z gốc được giữ nguyên.");
+            return new SectionProfile(profile.Line, profile.Segments,
+                profile.CutArea, profile.FillArea, warnings, profile.IsUserEdited);
+        }
+
         private SectionProfile BuildProfileIndexed(
             SectionLine line,
             TriangleGridIndex existing,
             TriangleGridIndex design,
-            double tol)
+            double tol, CancellationToken cancellationToken)
         {
             var segments = new List<SectionProfileSegment>();
             var warnings = new List<string>();
@@ -83,14 +129,16 @@ namespace MiningVolume.Core.Sections
 
             foreach (var span in line.Spans)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var knots = new List<double> { span.StartT, span.EndT };
-                CollectTriangleEdgeIntersections(line, span, existing, knots, tol);
-                CollectTriangleEdgeIntersections(line, span, design, knots, tol);
+                CollectTriangleEdgeIntersections(line, span, existing, knots, tol, cancellationToken);
+                CollectTriangleEdgeIntersections(line, span, design, knots, tol, cancellationToken);
                 knots.Sort();
                 knots = Deduplicate(knots, tol * 10);
 
                 for (int i = 0; i < knots.Count - 1; i++)
                 {
+                    if ((i & 255) == 0) cancellationToken.ThrowIfCancellationRequested();
                     double t0 = knots[i], t1 = knots[i + 1];
                     if (t1 - t0 <= tol) continue;
                     double tm = (t0 + t1) * 0.5;
@@ -98,7 +146,12 @@ namespace MiningVolume.Core.Sections
                     double dummy;
                     if (!existing.TryElevation(pm, tol * 20, out dummy) ||
                         !design.TryElevation(pm, tol * 20, out dummy))
+                    {
+                        warnings.Add(line.Name +
+                            ": có đoạn thiếu giao TIN hiện trạng/thiết kế; " +
+                            "không được coi phần mặt cắt còn lại là đã tính đủ.");
                         continue;
+                    }
 
                     Vec2 p0 = line.PointAt(t0), p1 = line.PointAt(t1);
                     double eh0, eh1, dh0, dh1;
@@ -123,23 +176,35 @@ namespace MiningVolume.Core.Sections
             return new SectionProfile(line, segments, cut, fill, warnings);
         }
 
-        private TriangleGridIndex IndexFor(TinSurface tin)
+        private TriangleGridIndex IndexFor(TinSurface tin, CancellationToken cancellationToken = default(CancellationToken))
         {
-            if (ReferenceEquals(tin, _cachedTin1)) return _cachedIndex1;
-            if (ReferenceEquals(tin, _cachedTin2)) return _cachedIndex2;
-
-            var index = new TriangleGridIndex(tin);
-            if (_cachedTin1 == null)
+            cancellationToken.ThrowIfCancellationRequested();
+            // Keep the per-sampler two-surface hot path lock-free for hundreds
+            // of interval midpoint queries; publish identity/index as one object.
+            var first = _firstIndex;
+            if (first != null && ReferenceEquals(first.Tin, tin)) return first.Index;
+            var second = _secondIndex;
+            if (second != null && ReferenceEquals(second.Tin, tin)) return second.Index;
+            var slot = IndexCache.GetValue(tin, _ => new IndexSlot());
+            // Waiting for another build is cancelable too. Never cache Lazy<T>
+            // exceptions: a canceled build must be retryable by the next caller.
+            while (!Monitor.TryEnter(slot.Sync, 50))
+                cancellationToken.ThrowIfCancellationRequested();
+            try
             {
-                _cachedTin1 = tin;
-                _cachedIndex1 = index;
+                cancellationToken.ThrowIfCancellationRequested();
+                if (slot.Index == null)
+                {
+                    var index = new TriangleGridIndex(tin, cancellationToken);
+                    cancellationToken.ThrowIfCancellationRequested();
+                    slot.Index = index;
+                }
+                var local = new LocalIndex(tin, slot.Index);
+                if (_firstIndex == null) _firstIndex = local;
+                else _secondIndex = local;
+                return local.Index;
             }
-            else
-            {
-                _cachedTin2 = tin;
-                _cachedIndex2 = index;
-            }
-            return index;
+            finally { Monitor.Exit(slot.Sync); }
         }
 
         private static void CollectTriangleEdgeIntersections(
@@ -147,12 +212,14 @@ namespace MiningVolume.Core.Sections
             SectionSpan span,
             TriangleGridIndex index,
             List<double> output,
-            double tol)
+            double tol, CancellationToken cancellationToken)
         {
             Vec2 a = line.PointAt(span.StartT);
             Vec2 b = line.PointAt(span.EndT);
+            int visited = 0;
             foreach (var tri in index.QuerySegmentTriangles(a, b))
             {
+                if ((visited++ & 255) == 0) cancellationToken.ThrowIfCancellationRequested();
                 AddEdgeIntersection(a, b, tri.A.XY, tri.B.XY, span.StartT, span.EndT, output, tol);
                 AddEdgeIntersection(a, b, tri.B.XY, tri.C.XY, span.StartT, span.EndT, output, tol);
                 AddEdgeIntersection(a, b, tri.C.XY, tri.A.XY, span.StartT, span.EndT, output, tol);
@@ -212,13 +279,10 @@ namespace MiningVolume.Core.Sections
 
         private static bool TryElevationOnTriangle(Triangle3 t, Vec2 p, double tol, out double z)
         {
-            double den = (t.B.Y - t.C.Y) * (t.A.X - t.C.X) +
-                         (t.C.X - t.B.X) * (t.A.Y - t.C.Y);
-            if (Math.Abs(den) <= tol) { z = 0; return false; }
-            double w1 = ((t.B.Y - t.C.Y) * (p.X - t.C.X) +
-                         (t.C.X - t.B.X) * (p.Y - t.C.Y)) / den;
-            double w2 = ((t.C.Y - t.A.Y) * (p.X - t.C.X) +
-                         (t.A.X - t.C.X) * (p.Y - t.C.Y)) / den;
+            double den = RobustOrientation.Determinant(t.A.XY,t.B.XY,t.C.XY);
+            if (den == 0) { z = 0; return false; }
+            double w1 = RobustOrientation.Determinant(p,t.B.XY,t.C.XY)/den;
+            double w2 = RobustOrientation.Determinant(t.A.XY,p,t.C.XY)/den;
             double w3 = 1.0 - w1 - w2;
             if (w1 < -tol || w2 < -tol || w3 < -tol) { z = 0; return false; }
             z = w1 * t.A.Z + w2 * t.B.Z + w3 * t.C.Z;
@@ -262,6 +326,14 @@ namespace MiningVolume.Core.Sections
         {
             private readonly IReadOnlyList<Triangle3> _triangles;
             private readonly ITiledTriangleSource _tiled;
+            // Only hot tiles are retained for this section-sampling operation.
+            // Unlike rereading all ~8192 triangles at EACH elevation knot,
+            // each hot tile has a small XY bounding-box index.
+            private const int MaxHotTiles = 24;
+            private readonly object _tileSync = new object();
+            private readonly Dictionary<int, TilePointIndex> _hotTiles =
+                new Dictionary<int, TilePointIndex>();
+            private readonly LinkedList<int> _hotTileLru = new LinkedList<int>();
             private readonly Dictionary<long, List<int>> _cells =
                 new Dictionary<long, List<int>>();
             private readonly double[] _minX;
@@ -272,9 +344,9 @@ namespace MiningVolume.Core.Sections
             private readonly double _originY;
             private readonly double _cell;
 
-            public TriangleGridIndex(TinSurface tin)
+            public TriangleGridIndex(TinSurface tin, CancellationToken cancellationToken)
             {
-                _triangles = tin.Triangles ?? Array.Empty<Triangle3>();
+                _triangles = tin.Triangles ?? MiningVolume.Core.Compatibility.EmptyArray<Triangle3>.Value;
                 _tiled = _triangles as ITiledTriangleSource;
                 int count = _triangles.Count;
 
@@ -283,7 +355,7 @@ namespace MiningVolume.Core.Sections
                 // of faces; query only intersecting tiles on demand.
                 if (_tiled != null)
                 {
-                    _minX = _maxX = _minY = _maxY = Array.Empty<double>();
+                    _minX = _maxX = _minY = _maxY = MiningVolume.Core.Compatibility.EmptyArray<double>.Value;
                     _originX = _originY = 0;
                     _cell = 1;
                     return;
@@ -304,6 +376,7 @@ namespace MiningVolume.Core.Sections
                 double maxX = double.NegativeInfinity, maxY = double.NegativeInfinity;
                 for (int i = 0; i < count; i++)
                 {
+                    if ((i & 255) == 0) cancellationToken.ThrowIfCancellationRequested();
                     var t = _triangles[i];
                     double ax = Math.Min(t.A.X, Math.Min(t.B.X, t.C.X));
                     double bx = Math.Max(t.A.X, Math.Max(t.B.X, t.C.X));
@@ -322,6 +395,7 @@ namespace MiningVolume.Core.Sections
 
                 for (int i = 0; i < count; i++)
                 {
+                    if ((i & 255) == 0) cancellationToken.ThrowIfCancellationRequested();
                     int ix0 = Ix(_minX[i]), ix1 = Ix(_maxX[i]);
                     int iy0 = Iy(_minY[i]), iy1 = Iy(_maxY[i]);
                     for (int ix = ix0; ix <= ix1; ix++)
@@ -340,6 +414,32 @@ namespace MiningVolume.Core.Sections
             }
 
             public IReadOnlyList<Triangle3> Triangles => _triangles;
+            public bool IsTiled => _tiled != null;
+
+            private TilePointIndex GetTile(int index)
+            {
+                lock (_tileSync)
+                {
+                    TilePointIndex item;
+                    if (_hotTiles.TryGetValue(index, out item))
+                    {
+                        _hotTileLru.Remove(index);
+                        _hotTileLru.AddLast(index);
+                        return item;
+                    }
+                    item = new TilePointIndex(
+                        _tiled.ReadTile(index), _tiled.Tiles[index]);
+                    _hotTiles.Add(index, item);
+                    _hotTileLru.AddLast(index);
+                    while (_hotTiles.Count > MaxHotTiles)
+                    {
+                        int victim = _hotTileLru.First.Value;
+                        _hotTileLru.RemoveFirst();
+                        _hotTiles.Remove(victim);
+                    }
+                    return item;
+                }
+            }
 
             public bool TryElevation(Vec2 p, double tol, out double z)
             {
@@ -349,10 +449,8 @@ namespace MiningVolume.Core.Sections
                     foreach (int tileIndex in _tiled.QueryTiles(
                         p.X - pad, p.Y - pad, p.X + pad, p.Y + pad))
                     {
-                        var tris = _tiled.ReadTile(tileIndex);
-                        foreach (var tri in tris)
-                            if (TryElevationOnTriangle(tri, p, tol, out z))
-                                return true;
+                        if (GetTile(tileIndex).TryElevation(p, tol, out z))
+                            return true;
                     }
                     z = 0;
                     return false;
@@ -393,23 +491,184 @@ namespace MiningVolume.Core.Sections
 
                     foreach (int tileIndex in _tiled.QueryTiles(minX, minY, maxX, maxY))
                     {
-                        var tris = _tiled.ReadTile(tileIndex);
-                        foreach (var tri in tris)
-                        {
-                            double tMinX = Math.Min(tri.A.X, Math.Min(tri.B.X, tri.C.X));
-                            double tMaxX = Math.Max(tri.A.X, Math.Max(tri.B.X, tri.C.X));
-                            double tMinY = Math.Min(tri.A.Y, Math.Min(tri.B.Y, tri.C.Y));
-                            double tMaxY = Math.Max(tri.A.Y, Math.Max(tri.B.Y, tri.C.Y));
-                            if (tMaxX < minX || tMinX > maxX || tMaxY < minY || tMinY > maxY)
-                                continue;
+                        // Reuse the hot tile's exact triangle AABBs and 32x32
+                        // spatial bins. Previously EVERY triangle in a touched
+                        // ~8192-face tile was revisited for EACH section span.
+                        // Candidate selection is conservative; edge-intersection
+                        // and elevation formulae remain completely unchanged.
+                        foreach (var tri in GetTile(tileIndex).QuerySegmentTriangles(a, b))
                             yield return tri;
-                        }
                     }
                     yield break;
                 }
 
                 foreach (int triIndex in QuerySegment(a, b))
                     yield return _triangles[triIndex];
+            }
+
+            // Exact geometry: candidate bins only filter triangle bounding
+            // rectangles. Elevation still uses the original robust barycentric
+            // test, with no thinning, interpolation shortcuts or skipped faces.
+            private sealed class TilePointIndex
+            {
+                private const int GridSide = 32;
+                private const int MaxCoveredCells = 64;
+                private readonly IReadOnlyList<Triangle3> _triangles;
+                private readonly Dictionary<int, List<int>> _bins =
+                    new Dictionary<int, List<int>>();
+                private readonly List<int> _broad = new List<int>();
+                private readonly double _x, _y, _dx, _dy;
+                private readonly double[] _minX, _maxX, _minY, _maxY;
+
+                public TilePointIndex(IReadOnlyList<Triangle3> triangles, TinTileInfo tile)
+                {
+                    _triangles = triangles;
+                    _x = tile.MinX;
+                    _y = tile.MinY;
+                    _dx = Math.Max(1e-9, (tile.MaxX - tile.MinX) / GridSide);
+                    _dy = Math.Max(1e-9, (tile.MaxY - tile.MinY) / GridSide);
+                    _minX = new double[triangles.Count];
+                    _maxX = new double[triangles.Count];
+                    _minY = new double[triangles.Count];
+                    _maxY = new double[triangles.Count];
+                    for (int i = 0; i < triangles.Count; i++)
+                    {
+                        var t = triangles[i];
+                        double x0 = Math.Min(t.A.X, Math.Min(t.B.X, t.C.X));
+                        double x1 = Math.Max(t.A.X, Math.Max(t.B.X, t.C.X));
+                        double y0 = Math.Min(t.A.Y, Math.Min(t.B.Y, t.C.Y));
+                        double y1 = Math.Max(t.A.Y, Math.Max(t.B.Y, t.C.Y));
+                        _minX[i] = x0; _maxX[i] = x1;
+                        _minY[i] = y0; _maxY[i] = y1;
+                        int ix0 = Bin(x0, _x, _dx), ix1 = Bin(x1, _x, _dx);
+                        int iy0 = Bin(y0, _y, _dy), iy1 = Bin(y1, _y, _dy);
+                        if ((ix1 - ix0 + 1) * (iy1 - iy0 + 1) > MaxCoveredCells)
+                        {
+                            // Very wide triangles are tested globally: never
+                            // silently omit one that spans several cells.
+                            _broad.Add(i);
+                            continue;
+                        }
+                        for (int ix = ix0; ix <= ix1; ix++)
+                        for (int iy = iy0; iy <= iy1; iy++)
+                        {
+                            int key = ix * GridSide + iy;
+                            List<int> list;
+                            if (!_bins.TryGetValue(key, out list))
+                            {
+                                list = new List<int>();
+                                _bins[key] = list;
+                            }
+                            list.Add(i);
+                        }
+                    }
+                }
+
+                public IReadOnlyList<Triangle3> Triangles => _triangles;
+
+                // A line can cross only a thin corridor of the tile. Walk
+                // that corridor with at least two samples per cell, including
+                // neighboring cells for corner/tangent intersections. Very
+                // large triangles are always considered via _broad.
+                // Importantly, clip the LINE to the tile first: a long mine
+                // section may be millions of metres from this tiny tile.
+                public IEnumerable<Triangle3> QuerySegmentTriangles(Vec2 a, Vec2 b)
+                {
+                    double dx = b.X - a.X, dy = b.Y - a.Y;
+                    double lo = 0, hi = 1;
+                    double pad = Math.Max(1e-7, Math.Max(_dx, _dy) * 1e-8);
+                    if (!Clip(-dx, a.X - (_x - pad), ref lo, ref hi) ||
+                        !Clip(dx, (_x + GridSide * _dx + pad) - a.X, ref lo, ref hi) ||
+                        !Clip(-dy, a.Y - (_y - pad), ref lo, ref hi) ||
+                        !Clip(dy, (_y + GridSide * _dy + pad) - a.Y, ref lo, ref hi))
+                        yield break;
+
+                    double ax = a.X + lo * dx, ay = a.Y + lo * dy;
+                    double bx = a.X + hi * dx, by = a.Y + hi * dy;
+                    double cells = Math.Max(Math.Abs(bx - ax) / _dx,
+                        Math.Abs(by - ay) / _dy);
+                    int steps = Math.Max(1, (int)Math.Ceiling(cells * 2.0));
+                    var candidates = new HashSet<int>();
+                    for (int step = 0; step <= steps; step++)
+                    {
+                        double u = step / (double)steps;
+                        int ix = Bin(ax + (bx - ax) * u, _x, _dx);
+                        int iy = Bin(ay + (by - ay) * u, _y, _dy);
+                        for (int ox = -1; ox <= 1; ox++)
+                        for (int oy = -1; oy <= 1; oy++)
+                        {
+                            int cx = ix + ox, cy = iy + oy;
+                            if (cx < 0 || cx >= GridSide || cy < 0 || cy >= GridSide)
+                                continue;
+                            List<int> ids;
+                            if (!_bins.TryGetValue(cx * GridSide + cy, out ids))
+                                continue;
+                            foreach (int id in ids) candidates.Add(id);
+                        }
+                    }
+                    foreach (int id in _broad) candidates.Add(id);
+
+                    // The original code also required triangle AABB overlap
+                    // with the entire source segment. Keep that exact filter:
+                    // the bins must NEVER become a geometry approximation.
+                    double minX = Math.Min(a.X, b.X), maxX = Math.Max(a.X, b.X);
+                    double minY = Math.Min(a.Y, b.Y), maxY = Math.Max(a.Y, b.Y);
+                    foreach (int id in candidates)
+                    {
+                        if (_maxX[id] < minX || _minX[id] > maxX ||
+                            _maxY[id] < minY || _minY[id] > maxY)
+                            continue;
+                        yield return _triangles[id];
+                    }
+                }
+
+                private static bool Clip(double p, double q, ref double lo, ref double hi)
+                {
+                    if (p == 0) return q >= 0;
+                    double v = q / p;
+                    if (p < 0)
+                    {
+                        if (v > hi) return false;
+                        if (v > lo) lo = v;
+                    }
+                    else
+                    {
+                        if (v < lo) return false;
+                        if (v < hi) hi = v;
+                    }
+                    return true;
+                }
+
+                public bool TryElevation(Vec2 p, double tol, out double z)
+                {
+                    int ix0 = Bin(p.X - tol, _x, _dx), ix1 = Bin(p.X + tol, _x, _dx);
+                    int iy0 = Bin(p.Y - tol, _y, _dy), iy1 = Bin(p.Y + tol, _y, _dy);
+                    for (int ix = ix0; ix <= ix1; ix++)
+                    for (int iy = iy0; iy <= iy1; iy++)
+                    {
+                        List<int> candidates;
+                        if (!_bins.TryGetValue(ix * GridSide + iy, out candidates))
+                            continue;
+                        foreach (int i in candidates)
+                            if (ContainsXY(i, p, tol) &&
+                                TryElevationOnTriangle(_triangles[i], p, tol, out z))
+                                return true;
+                    }
+                    foreach (int i in _broad)
+                        if (ContainsXY(i, p, tol) &&
+                            TryElevationOnTriangle(_triangles[i], p, tol, out z))
+                            return true;
+                    z = 0;
+                    return false;
+                }
+
+                private bool ContainsXY(int index, Vec2 p, double tol)
+                    => p.X >= _minX[index] - tol && p.X <= _maxX[index] + tol &&
+                       p.Y >= _minY[index] - tol && p.Y <= _maxY[index] + tol;
+
+                private static int Bin(double point, double origin, double cell)
+                    => Math.Max(0, Math.Min(GridSide - 1,
+                        (int)Math.Floor((point - origin) / cell)));
             }
 
             public HashSet<int> QuerySegment(Vec2 a, Vec2 b)

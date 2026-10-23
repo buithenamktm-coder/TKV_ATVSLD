@@ -51,6 +51,9 @@ namespace MiningVolume.Core.Volumes
 
     public sealed class MineralVolumeSummary
     {
+        public double AreaDifferenceThreshold { get; internal set; } = .40;
+        public DateTime? CalculatedUtc { get; set; }
+        public double? CalculationSeconds { get; set; }
         public IReadOnlyList<MineralIntervalResult> Intervals { get; internal set; }
         public IReadOnlyList<MineralBodyResult> Bodies { get; internal set; }
         public double TotalCutCubicMetres { get; internal set; }
@@ -146,7 +149,7 @@ namespace MiningVolume.Core.Volumes
             // Validated section areas must be bounded by the actual excavated
             // section, including all bodies. This does not replace polygon
             // overlap validation in AutoCAD: that gate happens before this call.
-            var cutAreas = (excavation.SectionAreas ?? Array.Empty<SectionBandAreas>())
+            var cutAreas = (excavation.SectionAreas ?? MiningVolume.Core.Compatibility.EmptyArray<SectionBandAreas>.Value)
                 .Where(x=>x != null)
                 .GroupBy(x=>x.SectionName,StringComparer.OrdinalIgnoreCase)
                 .ToDictionary(x=>x.Key,x=>x.First().CutArea,StringComparer.OrdinalIgnoreCase);
@@ -203,6 +206,7 @@ namespace MiningVolume.Core.Volumes
             }).ToList();
             return new MineralVolumeSummary
             {
+                AreaDifferenceThreshold=relativeAreaDifferenceThreshold,
                 Intervals=results,
                 Bodies=bodies,
                 TotalCutCubicMetres=excavation.TotalCutVolume

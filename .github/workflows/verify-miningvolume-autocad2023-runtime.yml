@@ -179,14 +179,14 @@ jobs:
           }
 
           $acad = Join-Path $cadDir 'acad.exe'
-          $version = (Get-Item $acad).VersionInfo.FileVersion
+          $version = (Get-Item $acad).VersionInfo.ProductVersion
           if ($version -notmatch '^R?24\.2') {
-            throw "acad.exe không phải AutoCAD 2023 R24.2. FileVersion=$version"
+            throw "acad.exe không phải AutoCAD 2023 R24.2. ProductVersion=$version"
           }
 
           "AUTOCAD2023_DIR=$cadDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           Write-Host "AutoCAD 2023: $acad"
-          Write-Host "FileVersion: $version"
+          Write-Host "ProductVersion: $version"
 
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@v4

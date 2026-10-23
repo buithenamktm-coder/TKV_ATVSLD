@@ -13,7 +13,7 @@ namespace MiningVolume2023.Services
     public sealed class ProjectSnapshot
     {
         [DataMember(Order = 1)] public int FormatVersion { get; set; } = 2;
-        [DataMember(Order = 2)] public string ProductVersion { get; set; } = "1.0.0";
+        [DataMember(Order = 2)] public string ProductVersion { get; set; } = "2.0.0";
         [DataMember(Order = 3)] public DateTime SavedUtc { get; set; }
         [DataMember(Order = 4)] public ModelSnapshot Existing { get; set; }
         [DataMember(Order = 5)] public ModelSnapshot Design { get; set; }
@@ -41,6 +41,23 @@ namespace MiningVolume2023.Services
         [DataMember(Order = 27)] public double GridSizeX { get; set; }
         [DataMember(Order = 28)] public double GridSizeY { get; set; }
         [DataMember(Order = 29)] public double GridRotationDegrees { get; set; }
+        // Additive fields in format V2: older DWGs still deserialize correctly.
+        [DataMember(Order = 30)] public string MiningUnitGroup { get; set; }
+        [DataMember(Order = 31)] public string MiningUnitName { get; set; }
+        [DataMember(Order = 32)] public DateTime? VolumeCalculatedUtc { get; set; }
+        [DataMember(Order = 33)] public double? VolumeCalculationSeconds { get; set; }
+        [DataMember(Order = 34)] public DateTime? GridCalculatedUtc { get; set; }
+        [DataMember(Order = 35)] public double? GridCalculationSeconds { get; set; }
+        [DataMember(Order = 36)] public string VolumePeriodType { get; set; }
+        [DataMember(Order = 37)] public int VolumePeriodNumber { get; set; }
+        [DataMember(Order = 38)] public int VolumePeriodYear { get; set; }
+        [DataMember(Order = 42)] public string SectionParameterMode { get; set; }
+        [DataMember(Order = 43)] public int SectionMapScale { get; set; }
+        [DataMember(Order = 44)] public double SectionAxisElevationInterval { get; set; }
+        // True if exported CAD section geometry or an accepted manual edit
+        // existed when this project was saved. Missing geometry on reload
+        // must block reconstruction rather than silently using raw TIN.
+        [DataMember(Order = 39)] public bool HadEditableSectionCad { get; set; }
     }
 
     [DataContract]
@@ -67,6 +84,7 @@ namespace MiningVolume2023.Services
         [DataMember(Order = 6)] public int SourceMode { get; set; }
         [DataMember(Order = 7)] public List<string> SelectedHandles { get; set; } = new List<string>();
         [DataMember(Order = 8)] public List<ModelEditRecord> EditHistory { get; set; } = new List<ModelEditRecord>();
+        [DataMember(Order = 9)] public string FullSourceFingerprint { get; set; }
     }
 
     [DataContract]

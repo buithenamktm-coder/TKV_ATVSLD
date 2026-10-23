@@ -1,0 +1,6 @@
+{"stage":"band_area_15_profiles_1000_segments_200_bands","ms":[2.7933,2.4274,3.2919,2.4256,3.0477],"allocated_bytes":[202896,202840,202840,202840,202928],"scope":"Linux .NET 8 core only; HOST_RUNTIME_BLOCKED"}
+{"stage":"band_area_85_profiles_1000_segments_200_bands","ms":[17.738,20.6808,18.764,15.4359,16.6243],"allocated_bytes":[1149632,1149576,1149576,1149576,1149664],"scope":"Linux .NET 8 core only; HOST_RUNTIME_BLOCKED"}
+{"stage":"band_area_300_profiles_1000_segments_200_bands","ms":[60.541,62.9357,66.7359,56.6377,64.1754],"allocated_bytes":[4056432,4056376,4056376,4056376,4056464],"scope":"Linux .NET 8 core only; HOST_RUNTIME_BLOCKED"}
+{"stage":"sample_15_profiles_20000_triangles_per_tin","ms":[6.3156,6.0775,6.0829,6.1363,5.6077],"allocated_bytes":[4238256,4238136,4238264,4238184,4238224],"scope":"Linux .NET 8 core only; HOST_RUNTIME_BLOCKED"}
+{"stage":"sample_85_profiles_20000_triangles_per_tin","ms":[29.9009,29.8288,30.9216,34.1056,29.4978],"allocated_bytes":[22768992,22769064,22769000,22769064,22769088],"scope":"Linux .NET 8 core only; HOST_RUNTIME_BLOCKED"}
+{"stage":"sample_300_profiles_20000_triangles_per_tin","ms":[99.5835,96.5367,96.7545,96.0508,96.9693],"allocated_bytes":[78686648,78686480,78686480,78686480,78686568],"scope":"Linux .NET 8 core only; HOST_RUNTIME_BLOCKED"}

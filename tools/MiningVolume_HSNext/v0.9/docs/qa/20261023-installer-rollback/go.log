@@ -1,0 +1,8 @@
+COMPILE_PASS: full Windows installer test binary (placeholder payload; NOT RUN)
+=== RUN   TestRollbackBundleReportsCleanupAndRestoreFailures
+--- PASS: TestRollbackBundleReportsCleanupAndRestoreFailures (0.00s)
+=== RUN   TestRestoreBackupRejectsInvalidBackupAndPreservesTarget
+--- PASS: TestRestoreBackupRejectsInvalidBackupAndPreservesTarget (0.00s)
+PASS
+ok  	_/tmp/imsat-installer-_7hd29xc/portable	0.002s
+Portable tests execute extracted production functions unchanged; Windows Setup runtime remains BLOCKED.

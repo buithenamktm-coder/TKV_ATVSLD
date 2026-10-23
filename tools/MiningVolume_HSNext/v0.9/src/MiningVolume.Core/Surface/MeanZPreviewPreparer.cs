@@ -44,9 +44,21 @@ namespace MiningVolume.Core.Surface
             internal int N;
             internal double AverageZ, MinZ, MaxZ;
             internal string FirstHandle, LastHandle;
-            internal List<Member> Members = new List<Member>();
+            internal SourceEntity FirstEntity;
+            internal int FirstVertexIndex;
+            // Almost every XY in million-vertex mine surveys occurs once.
+            // Allocate per-member audit objects only for duplicate XY groups;
+            // otherwise ~1m lists + member objects needlessly fill AutoCAD RAM.
+            internal List<Member> Members;
             internal void Add(double z,string handle,SourceEntity entity,int vertexIndex)
             {
+                if(Members==null)
+                {
+                    Members=new List<Member>(2) {
+                        new Member { EntityId=FirstEntity.Id,VertexIndex=FirstVertexIndex,
+                            Handle=FirstHandle,Layer=FirstEntity.Layer,Type=FirstEntity.Type,Z=MinZ }
+                    };
+                }
                 N++;
                 AverageZ += (z-AverageZ)/N;
                 if (z<MinZ) MinZ=z;
@@ -117,7 +129,11 @@ namespace MiningVolume.Core.Surface
                 ? SurfaceRegionClipper.BuildSupportRectangle(tinRegion,0.10,xyTolerance)
                 : null;
             var groups=new List<Group>();
-            var cells=new Dictionary<Cell,List<int>>();
+            // A CAD survey has mostly one unique point in each 1µm XY bucket.
+            // Two-level storage avoids allocating ~1 million List<int>
+            // instances for buckets that contain only one distinct site.
+            var firstInCell=new Dictionary<Cell,int>();
+            var extraInCell=new Dictionary<Cell,List<int>>();
             int total=0,ignoredSegments=0;
             Cell At(double x,double y)
             {
@@ -152,11 +168,20 @@ namespace MiningVolume.Core.Surface
                     for(long dx=-1;dx<=1&&found<0;dx++)
                         for(long dy=-1;dy<=1&&found<0;dy++)
                         {
-                            if(!cells.TryGetValue(new Cell(key.X+dx,key.Y+dy),out var ids))continue;
-                            foreach(int id in ids)
+                            var neighbor=new Cell(key.X+dx,key.Y+dy);
+                            if(!firstInCell.TryGetValue(neighbor,out int first))continue;
+                            var xy=groups[first].XY;
+                            double vx=xy.X-point.X,vy=xy.Y-point.Y;
+                            if(vx*vx+vy*vy<=xyTolerance*xyTolerance)
                             {
-                                var xy=groups[id].XY;
-                                double vx=xy.X-point.X,vy=xy.Y-point.Y;
+                                found=first;
+                                break;
+                            }
+                            if(!extraInCell.TryGetValue(neighbor,out var more))continue;
+                            foreach(int id in more)
+                            {
+                                xy=groups[id].XY;
+                                vx=xy.X-point.X;vy=xy.Y-point.Y;
                                 if(vx*vx+vy*vy<=xyTolerance*xyTolerance){found=id;break;}
                             }
                         }
@@ -169,13 +194,18 @@ namespace MiningVolume.Core.Surface
                     {
                         XY=new Vec2(point.X,point.Y),N=1,
                         AverageZ=point.Z,MinZ=point.Z,MaxZ=point.Z,
-                        FirstHandle=entity.Handle,LastHandle=entity.Handle
+                        FirstHandle=entity.Handle,LastHandle=entity.Handle,
+                        FirstEntity=entity,FirstVertexIndex=vertex.Index
                     };
-                    next.Members.Add(new Member {EntityId=entity.Id,VertexIndex=vertex.Index,
-                        Handle=entity.Handle,Layer=entity.Layer,Type=entity.Type,Z=point.Z});
                     int index=groups.Count;groups.Add(next);
-                    if(!cells.TryGetValue(key,out var bucket))cells[key]=bucket=new List<int>();
-                    bucket.Add(index);
+                    if(!firstInCell.ContainsKey(key))
+                        firstInCell.Add(key,index);
+                    else
+                    {
+                        if(!extraInCell.TryGetValue(key,out var more))
+                            extraInCell.Add(key,more=new List<int>(2));
+                        more.Add(index);
+                    }
                 }
             }
             var prepared=new PreparedSurfaceInput();

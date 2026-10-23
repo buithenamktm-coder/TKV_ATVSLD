@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using MiningVolume.Core.Geometry;
 
 namespace MiningVolume.Core.Grid
@@ -12,6 +13,11 @@ namespace MiningVolume.Core.Grid
         public double NetVolume => CutVolume - FillVolume;
         public double CalculationArea { get; internal set; }
         public double CoveredArea { get; internal set; }
+        // Area of each planar TIN independently. A genuine overlapping
+        // multi-sheet has surface area SUM greater than the cell XY area,
+        // unlike a zero-area vertical curtain separating two planar sheets.
+        public double ExistingSurfaceArea { get; internal set; }
+        public double DesignSurfaceArea { get; internal set; }
         public double NoDataArea => Math.Max(0, CalculationArea - CoveredArea);
         public bool IsComplete => NoDataArea <= Math.Max(1e-8, CalculationArea * 1e-8);
     }
@@ -28,6 +34,31 @@ namespace MiningVolume.Core.Grid
     {
         private const double Eps = 1e-9;
 
+        public sealed class PreparedBoundary
+        {
+            internal readonly List<List<Vec2>> Outer;
+            internal readonly List<List<Vec2>> Exclusions;
+            internal PreparedBoundary(List<List<Vec2>> outer,
+                List<List<Vec2>> exclusions)
+            {
+                Outer = outer;
+                Exclusions = exclusions;
+            }
+        }
+
+        // Boundary ear-clipping is independent of grid cell position.
+        // Prepare ONCE per 5,000–100,000-cell calculation, not once per cell.
+        public static PreparedBoundary PrepareBoundary(
+            IReadOnlyList<Vec2> outerBoundary,
+            IReadOnlyList<IReadOnlyList<Vec2>> holes = null)
+        {
+            var outer = outerBoundary == null ? null : Triangulate(outerBoundary);
+            var exclusions = new List<List<Vec2>>();
+            if (holes != null)
+                foreach (var hole in holes) exclusions.AddRange(Triangulate(hole));
+            return new PreparedBoundary(outer, exclusions);
+        }
+
         public static GridCellVolume Calculate(
             IReadOnlyList<Triangle3> existing,
             IReadOnlyList<Triangle3> design,
@@ -35,20 +66,27 @@ namespace MiningVolume.Core.Grid
             IReadOnlyList<Vec2> outerBoundary = null,
             IReadOnlyList<IReadOnlyList<Vec2>> holes = null)
         {
+            return CalculatePrepared(existing, design, cellPolygon,
+                PrepareBoundary(outerBoundary, holes));
+        }
+
+        public static GridCellVolume CalculatePrepared(
+            IReadOnlyList<Triangle3> existing,
+            IReadOnlyList<Triangle3> design,
+            IReadOnlyList<Vec2> cellPolygon,
+            PreparedBoundary boundary,
+            CancellationToken cancellationToken = default(CancellationToken))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
             if (existing == null) throw new ArgumentNullException(nameof(existing));
             if (design == null) throw new ArgumentNullException(nameof(design));
+            if (boundary == null) throw new ArgumentNullException(nameof(boundary));
             var cell = Normalize(cellPolygon);
             if (cell.Count < 3 || !Convex(cell))
                 throw new ArgumentException("Ô lưới phải là đa giác lồi hợp lệ, có diện tích dương.", nameof(cellPolygon));
 
-            var outer = outerBoundary == null
-                ? new List<List<Vec2>> { cell }
-                : Triangulate(outerBoundary);
-            var exclusions = new List<List<Vec2>>();
-            if (holes != null)
-                foreach (var hole in holes)
-                    exclusions.AddRange(Triangulate(hole));
-
+            var outer = boundary.Outer ?? new List<List<Vec2>> { cell };
+            var exclusions = boundary.Exclusions;
             var result = new GridCellVolume();
             foreach (var polygon in outer)
                 result.CalculationArea += Area(Clip(cell, polygon));
@@ -59,13 +97,18 @@ namespace MiningVolume.Core.Grid
             result.CalculationArea = Math.Max(0, result.CalculationArea);
             if (result.CalculationArea <= Eps) return result;
 
+            ValidateSingleSheet(existing,cell,boundary,"hiện trạng",cancellationToken);
+            ValidateSingleSheet(design,cell,boundary,"thiết kế",cancellationToken);
+
             foreach (var tn in existing)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 if (tn.Area2D <= Eps || !Overlaps(cell, tn)) continue;
                 var inExisting = Clip(cell, Triangle(tn));
                 if (Area(inExisting) <= Eps) continue;
                 foreach (var tk in design)
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     if (tk.Area2D <= Eps || !Overlaps(inExisting, tk)) continue;
                     var intersection = Clip(inExisting, Triangle(tk));
                     if (Area(intersection) <= Eps) continue;
@@ -88,6 +131,20 @@ namespace MiningVolume.Core.Grid
             }
 
             double tol = Math.Max(1e-7, result.CalculationArea * 1e-7);
+            // Crucial invariant: each TIN must be a single planar sheet
+            // almost everywhere. A vertical 3DFACE of zero area is harmless,
+            // but two planar triangles occupying the same XY region with
+            // different Z must NEVER be double-counted as one elevation.
+            result.ExistingSurfaceArea =
+                MeasureSurfaceCoveragePrepared(existing, cell, boundary);
+            result.DesignSurfaceArea =
+                MeasureSurfaceCoveragePrepared(design, cell, boundary);
+            if (result.ExistingSurfaceArea > result.CalculationArea + tol ||
+                result.DesignSurfaceArea > result.CalculationArea + tol)
+                throw new InvalidOperationException(
+                    "TIN hiện trạng/thiết kế có mặt tam giác nằm chồng nhau trên cùng diện tích XY " +
+                    "(nhiều lớp cao độ). Không thể tính đúng theo phương pháp lưới 2,5D; " +
+                    "kiểm tra và chọn bề mặt thiết kế/hiện trạng phù hợp.");
             if (result.CoveredArea > result.CalculationArea + tol)
                 throw new InvalidOperationException("Hai TIN có tam giác chồng lấn hoặc đường bao không hợp lệ; diện tích tính bị đếm trùng.");
             if (result.CoveredArea < -tol || result.CutVolume < -tol || result.FillVolume < -tol)
@@ -96,6 +153,102 @@ namespace MiningVolume.Core.Grid
             result.CutVolume = Math.Max(0, result.CutVolume);
             result.FillVolume = Math.Max(0, result.FillVolume);
             return result;
+        }
+
+        /// <summary>
+        /// Diagnose individual surface coverage only for cells with an
+        /// incomplete two-TIN overlap. This does not estimate cut/fill and does
+        /// not modify the accepted signed-volume integration algorithm.
+        /// A triangle's area is clipped by the SAME prepared outer boundary
+        /// and holes as used for two-TIN volume calculation.
+        /// </summary>
+        public static double MeasureSurfaceCoveragePrepared(
+            IReadOnlyList<Triangle3> surface,
+            IReadOnlyList<Vec2> cellPolygon,
+            PreparedBoundary boundary)
+        {
+            if (surface == null) throw new ArgumentNullException(nameof(surface));
+            if (boundary == null) throw new ArgumentNullException(nameof(boundary));
+            var cell = Normalize(cellPolygon);
+            if (cell.Count < 3 || !Convex(cell))
+                throw new ArgumentException("Ô lưới chẩn đoán phải có diện tích dương.", nameof(cellPolygon));
+            var outer = boundary.Outer ?? new List<List<Vec2>> { cell };
+            double coverage = 0;
+            foreach (var triangle in surface)
+            {
+                if (triangle.Area2D <= Eps || !Overlaps(cell, triangle)) continue;
+                var intersection = Clip(cell, Triangle(triangle));
+                if (Area(intersection) <= Eps) continue;
+                foreach (var piece in outer)
+                    coverage += Area(Clip(intersection, piece));
+                foreach (var exclusion in boundary.Exclusions)
+                    coverage -= Area(Clip(intersection, exclusion));
+            }
+            return Math.Max(0, coverage);
+        }
+
+        /// <summary>
+        /// Unlike a vertical 3DFACE (zero XY area), two planar TIN triangles
+        /// occupying a positive common XY area represent multiple surface
+        /// heights and cannot be integrated as one accepted 2.5D surface.
+        /// Only candidate triangles and their intersection WITHIN this grid
+        /// cell are inspected. Sorting bounding boxes avoids full pairwise
+        /// clipping for dense TINs; edge-sharing CDT neighbors have zero area.
+        /// </summary>
+        private sealed class PlanarBox
+        {
+            public Triangle3 Triangle;
+            public double MinX,MaxX,MinY,MaxY;
+        }
+
+        private static void ValidateSingleSheet(IReadOnlyList<Triangle3> candidates,
+            IReadOnlyList<Vec2> cell,PreparedBoundary boundary,string source,
+            CancellationToken cancellationToken)
+        {
+            if(candidates == null || candidates.Count < 2)return;
+            var boxes=new List<PlanarBox>();
+            foreach(var tri in candidates)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if(tri.Area2D<=Eps || !Overlaps(cell,tri))continue;
+                boxes.Add(new PlanarBox {
+                    Triangle=tri,
+                    MinX=Math.Min(tri.A.X,Math.Min(tri.B.X,tri.C.X)),
+                    MaxX=Math.Max(tri.A.X,Math.Max(tri.B.X,tri.C.X)),
+                    MinY=Math.Min(tri.A.Y,Math.Min(tri.B.Y,tri.C.Y)),
+                    MaxY=Math.Max(tri.A.Y,Math.Max(tri.B.Y,tri.C.Y))
+                });
+            }
+            boxes.Sort((a,b)=>a.MinX.CompareTo(b.MinX));
+            for(int i=0;i<boxes.Count;i++)
+            {
+                var a=boxes[i];
+                for(int j=i+1;j<boxes.Count;j++)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var b=boxes[j];
+                    if(b.MinX >= a.MaxX - Eps)break;
+                    if(a.MaxY <= b.MinY+Eps || b.MaxY <= a.MinY+Eps)continue;
+                    var first=Clip(cell,Triangle(a.Triangle));
+                    if(Area(first)<=Eps)continue;
+                    var overlap=Clip(first,Triangle(b.Triangle));
+                    // A cell can straddle the selected boundary or a hole.
+                    // Reject only ambiguous area that actually participates
+                    // in the integral; outside geometry is not project data.
+                    double intersection=0;
+                    if(boundary.Outer==null) intersection=Area(overlap);
+                    else foreach(var piece in boundary.Outer)
+                        intersection+=Area(Clip(overlap,piece));
+                    foreach(var hole in boundary.Exclusions)
+                        intersection-=Area(Clip(overlap,hole));
+                    double tol=Math.Max(1e-9,
+                        Math.Min(a.Triangle.Area2D,b.Triangle.Area2D)*1e-9);
+                    if(intersection>tol)
+                        throw new InvalidOperationException(
+                            "TIN "+source+" có hai tam giác phẳng chồng lên cùng diện tích XY " +
+                            "(hai lớp cao độ); không thể tính khối lượng lưới 2,5D chính xác.");
+                }
+            }
         }
 
         private static void Accumulate(List<Vec2> poly, Triangle3 tn, Triangle3 tk,
@@ -124,14 +277,17 @@ namespace MiningVolume.Core.Grid
             var output = new List<SignedPoint>();
             if (vertices.Count == 0) return output;
             var previous = vertices[vertices.Count - 1];
-            bool previousIn = positive ? previous.Delta >= -Eps : previous.Delta <= Eps;
+            // Delta is metres, unlike the XY area/edge tolerance. Expanding
+            // BOTH half-planes by Eps integrates opposite signs together
+            // and can silently cancel real cut/fill on nearly level surfaces.
+            bool previousIn = positive ? previous.Delta >= 0 : previous.Delta <= 0;
             foreach (var next in vertices)
             {
-                bool nextIn = positive ? next.Delta >= -Eps : next.Delta <= Eps;
+                bool nextIn = positive ? next.Delta >= 0 : next.Delta <= 0;
                 if (nextIn != previousIn)
                 {
                     double den = previous.Delta - next.Delta;
-                    if (Math.Abs(den) > 1e-15)
+                    if (den != 0)
                     {
                         double alpha = previous.Delta / den;
                         alpha = Math.Max(0, Math.Min(1, alpha));
@@ -162,11 +318,11 @@ namespace MiningVolume.Core.Grid
 
         private static double Elevation(Triangle3 t, Vec2 p)
         {
-            double det = Vec2.Cross(t.A.XY, t.B.XY, t.C.XY);
-            if (Math.Abs(det) <= 1e-15)
+            double det = RobustOrientation.Determinant(t.A.XY, t.B.XY, t.C.XY);
+            if (det == 0)
                 throw new InvalidOperationException("Tam giác TIN bị suy biến.");
-            double a = Vec2.Cross(p, t.B.XY, t.C.XY) / det;
-            double b = Vec2.Cross(t.A.XY, p, t.C.XY) / det;
+            double a = RobustOrientation.Determinant(p, t.B.XY, t.C.XY) / det;
+            double b = RobustOrientation.Determinant(t.A.XY, p, t.C.XY) / det;
             double c = 1.0 - a - b;
             return a * t.A.Z + b * t.B.Z + c * t.C.Z;
         }

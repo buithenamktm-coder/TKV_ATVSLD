@@ -1,0 +1,15 @@
+test_2023_package_stays_restricted_to_2023 (test_compatibility.CompatibilityBuildContracts.test_2023_package_stays_restricted_to_2023) ... ok
+test_all_four_existing_projects_use_shared_platform_manifest (test_compatibility.CompatibilityBuildContracts.test_all_four_existing_projects_use_shared_platform_manifest) ... ok
+test_candidate_artifacts_cannot_impersonate_approved_release (test_compatibility.CompatibilityBuildContracts.test_candidate_artifacts_cannot_impersonate_approved_release) ... ok
+test_compile_candidate_preserves_dependencies_and_provenance (test_compatibility.CompatibilityBuildContracts.test_compile_candidate_preserves_dependencies_and_provenance) ... ok
+test_desktop_ui_framework_is_not_inherited_by_math_core (test_compatibility.CompatibilityBuildContracts.test_desktop_ui_framework_is_not_inherited_by_math_core) ... ok
+test_five_supported_compile_flavors_are_unique (test_compatibility.CompatibilityBuildContracts.test_five_supported_compile_flavors_are_unique) ... ok
+test_missing_or_green_ci_never_becomes_host_acceptance (test_compatibility.CompatibilityBuildContracts.test_missing_or_green_ci_never_becomes_host_acceptance) ... ok
+test_net45_sources_do_not_use_net46_empty_array_api (test_compatibility.CompatibilityBuildContracts.test_net45_sources_do_not_use_net46_empty_array_api) ... ok
+test_package_accepts_dll_names_and_rolls_back_unsafe_names (test_compatibility.CompatibilityBuildContracts.test_package_accepts_dll_names_and_rolls_back_unsafe_names) ... ok
+test_unknown_legacy_flavor_does_not_fall_back_to_net48 (test_compatibility.CompatibilityBuildContracts.test_unknown_legacy_flavor_does_not_fall_back_to_net48) ... ok
+
+----------------------------------------------------------------------
+Ran 10 tests in 3.496s
+
+OK

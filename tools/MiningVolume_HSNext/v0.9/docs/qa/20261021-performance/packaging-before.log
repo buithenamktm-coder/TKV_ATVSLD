@@ -1,0 +1,18 @@
+F
+======================================================================
+FAIL: test_package_accepts_dll_names_and_rolls_back_unsafe_names (compat.test_compatibility.CompatibilityBuildContracts.test_package_accepts_dll_names_and_rolls_back_unsafe_names)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/84289221c180/repo/tools/MiningVolume_HSNext/v0.9/compat/test_compatibility.py", line 42, in test_package_accepts_dll_names_and_rolls_back_unsafe_names
+    self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
+AssertionError: 1 != 0 : Exception: /workspace/scratch/84289221c180/repo/tools/MiningVolume_HSNext/v0.9/compat/package_qa_bundle.ps1:37
+Line |
+  37 |  …  -notmatch '^[A-Za-z0-9_.-]+\\.dll$'){throw "Unsafe DLL path: $name"}
+     |                                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | Unsafe DLL path: MiningVolume2023.dll
+
+
+----------------------------------------------------------------------
+Ran 1 test in 0.601s
+
+FAILED (failures=1)

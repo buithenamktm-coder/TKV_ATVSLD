@@ -55,7 +55,7 @@ namespace MiningVolume.Core.Volumes
         {
             SectionName = sectionName;
             Offset = offset;
-            Bands = bands ?? Array.Empty<BandArea>();
+            Bands = bands ?? MiningVolume.Core.Compatibility.EmptyArray<BandArea>.Value;
             double c = 0, f = 0;
             foreach (var b in Bands) { c += b.CutArea; f += b.FillArea; }
             CutArea = c;
@@ -87,6 +87,9 @@ namespace MiningVolume.Core.Volumes
         public double FillVolume { get; set; }
         public VolumeFormulaKind FillFormula { get; set; }
         public string Note { get; set; }
+        // One authoritative contribution per elevation band; summaries sum these values.
+        public List<SectionIntervalVolume> BandVolumes { get; } = new List<SectionIntervalVolume>();
+        public bool HasMidArea { get; set; } = true;
     }
 
     public sealed class LevelVolumeSummary
@@ -115,17 +118,23 @@ namespace MiningVolume.Core.Volumes
 
     public sealed class VolumeResult
     {
+        // Identity belongs to a calculation result, never to an export attempt.
+        // Re-exporting this object preserves the ID; recalculation creates a new one.
+        public string CalculationId { get; } = Guid.NewGuid().ToString("N");
+
         public VolumeResult(IReadOnlyList<LevelBand> bands,
             IReadOnlyList<SectionIntervalVolume> intervals,
             IReadOnlyList<LevelVolumeSummary> levels,
             IReadOnlyList<SectionBandAreas> sectionAreas,
-            IReadOnlyList<string> warnings)
+            IReadOnlyList<string> warnings,
+            int skippedIntervals = 0)
         {
-            Bands = bands ?? Array.Empty<LevelBand>();
-            Intervals = intervals ?? Array.Empty<SectionIntervalVolume>();
-            Levels = levels ?? Array.Empty<LevelVolumeSummary>();
-            SectionAreas = sectionAreas ?? Array.Empty<SectionBandAreas>();
-            Warnings = warnings ?? Array.Empty<string>();
+            ExcludedIntervals = skippedIntervals;
+            Bands = bands ?? MiningVolume.Core.Compatibility.EmptyArray<LevelBand>.Value;
+            Intervals = intervals ?? MiningVolume.Core.Compatibility.EmptyArray<SectionIntervalVolume>.Value;
+            Levels = levels ?? MiningVolume.Core.Compatibility.EmptyArray<LevelVolumeSummary>.Value;
+            SectionAreas = sectionAreas ?? MiningVolume.Core.Compatibility.EmptyArray<SectionBandAreas>.Value;
+            Warnings = warnings ?? MiningVolume.Core.Compatibility.EmptyArray<string>.Value;
             double c = 0, f = 0;
             foreach (var x in Intervals) { c += x.CutVolume; f += x.FillVolume; }
             TotalCutVolume = c;
@@ -137,6 +146,9 @@ namespace MiningVolume.Core.Volumes
         public IReadOnlyList<LevelVolumeSummary> Levels { get; }
         public IReadOnlyList<SectionBandAreas> SectionAreas { get; }
         public IReadOnlyList<string> Warnings { get; }
+        public int ExcludedIntervals { get; }
+        public bool IsComplete => ExcludedIntervals == 0 && Intervals.Count > 0;
+        // Partial valid intervals are informative, not a mine-wide certified total.
         public double TotalCutVolume { get; }
         public double TotalFillVolume { get; }
         public double NetVolume => TotalCutVolume - TotalFillVolume;

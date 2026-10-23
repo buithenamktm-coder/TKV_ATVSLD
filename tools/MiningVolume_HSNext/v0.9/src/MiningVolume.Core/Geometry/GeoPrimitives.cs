@@ -45,7 +45,7 @@ namespace MiningVolume.Core.Geometry
         public Vec3 A { get; }
         public Vec3 B { get; }
         public Vec3 C { get; }
-        public double Area2D => Math.Abs(Vec2.Cross(A.XY, B.XY, C.XY)) * 0.5;
+        public double Area2D => Math.Abs(RobustOrientation.Determinant(A.XY, B.XY, C.XY)) * 0.5;
         public Vec2 Centroid2D => new Vec2((A.X + B.X + C.X) / 3.0, (A.Y + B.Y + C.Y) / 3.0);
     }
 }

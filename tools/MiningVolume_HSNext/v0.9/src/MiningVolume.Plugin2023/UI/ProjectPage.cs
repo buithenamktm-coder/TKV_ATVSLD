@@ -16,6 +16,14 @@ namespace MiningVolume2023.UI
         private readonly Button _load;
         private readonly Button _delete;
         private readonly CheckBox _autoOpen;
+        private readonly ComboBox _miningGroup;
+        private readonly ComboBox _miningUnit;
+        private readonly Label _miningUnitLabel;
+        private readonly ComboBox _periodType;
+        private readonly NumericUpDown _periodNumber;
+        private readonly NumericUpDown _periodYear;
+        private readonly Label _periodNumberLabel;
+        private bool _syncingMetadata;
 
         public ProjectPage()
         {
@@ -36,10 +44,51 @@ namespace MiningVolume2023.UI
             box.Controls.Add(t);
             Controls.Add(box); box.BringToFront();
 
-            var buttons = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 52, FlowDirection = FlowDirection.LeftToRight, Padding = new Padding(4, 7, 4, 4) };
-            _save = Btn("LƯU PROJECT VÀO DWG", SaveProject); _save.Width = 175;
-            _load = Btn("NẠP LẠI PROJECT", LoadProject); _load.Width = 145;
-            _delete = Btn("XÓA PROJECT ĐÃ LƯU", DeleteProject); _delete.Width = 165;
+            var metadata = new GroupBox { Text = "Đơn vị và kỳ tính khối lượng", Dock = DockStyle.Top, Height = 184 };
+            var m = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 4,
+                Padding = new Padding(8, 6, 8, 6) };
+            m.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120));
+            m.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            for (int k = 0; k < 4; k++) m.RowStyles.Add(new RowStyle(SizeType.Percent, 25));
+            _miningGroup = new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList };
+            _miningGroup.Items.AddRange(new object[] { MiningUnitCatalog.Coal, MiningUnitCatalog.Mineral,
+                MiningUnitCatalog.TkvOther, MiningUnitCatalog.OutsideTkv });
+            _miningUnit = new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDown,
+                AutoCompleteMode = AutoCompleteMode.SuggestAppend,
+                AutoCompleteSource = AutoCompleteSource.ListItems };
+            _periodType = new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList };
+            _periodType.Items.AddRange(new object[] { VolumePeriodCatalog.Month,
+                VolumePeriodCatalog.Quarter, VolumePeriodCatalog.Year });
+            _periodNumber = new NumericUpDown { Minimum = 1, Maximum = 12, Width = 70, Value = 1 };
+            _periodYear = new NumericUpDown { Minimum = 1900, Maximum = 2200, Width = 84, Value = DateTime.Now.Year };
+            _periodNumberLabel = new Label { Text = "Tháng", AutoSize = true, Padding = new Padding(0, 5, 0, 0) };
+            var periodValues = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false };
+            periodValues.Controls.Add(_periodNumberLabel);
+            periodValues.Controls.Add(_periodNumber);
+            periodValues.Controls.Add(new Label { Text = "Năm", AutoSize = true,
+                Padding = new Padding(5, 5, 0, 0) });
+            periodValues.Controls.Add(_periodYear);
+            m.Controls.Add(KeyLabel("Loại đơn vị"), 0, 0); m.Controls.Add(_miningGroup, 1, 0);
+            _miningUnitLabel = KeyLabel("Tên đơn vị");
+            m.Controls.Add(_miningUnitLabel, 0, 1); m.Controls.Add(_miningUnit, 1, 1);
+            m.Controls.Add(KeyLabel("Khối lượng kỳ"), 0, 2); m.Controls.Add(_periodType, 1, 2);
+            m.Controls.Add(KeyLabel("Kỳ / năm"), 0, 3); m.Controls.Add(periodValues, 1, 3);
+            metadata.Controls.Add(m);
+            Controls.Add(metadata); metadata.BringToFront();
+            _miningGroup.SelectedIndexChanged += MiningGroupChanged;
+            _miningUnit.TextChanged += MiningUnitChanged;
+            _periodType.SelectedIndexChanged += PeriodChanged;
+            _periodNumber.ValueChanged += PeriodChanged;
+            _periodYear.ValueChanged += PeriodChanged;
+
+            var buttons = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 62,
+                FlowDirection = FlowDirection.LeftToRight, WrapContents = true,
+                Padding = new Padding(9, 9, 9, 7) };
+            // Three toolbar actions stack vertically in a 360px docked Palette.
+            SizeChanged += (sender, args) => buttons.Height = ClientSize.Width < 650 ? 140 : 62;
+            _save = Btn("Lưu dự án vào DWG", SaveProject); _save.Width = 190;
+            _load = Btn("Nạp lại dự án", LoadProject); _load.Width = 165;
+            _delete = Btn("Xóa dự án đã lưu", DeleteProject); _delete.Width = 190;
             buttons.Controls.Add(_save); buttons.Controls.Add(_load); buttons.Controls.Add(_delete);
             Controls.Add(buttons); buttons.BringToFront();
 
@@ -69,11 +118,74 @@ namespace MiningVolume2023.UI
             base.Dispose(disposing);
         }
 
+        private void MiningGroupChanged(object sender, EventArgs e)
+        {
+            if (_syncingMetadata) return;
+            var state = ProjectState.Current;
+            var group = _miningGroup.SelectedItem as string ?? MiningUnitCatalog.Coal;
+            state.MiningUnitGroup = group;
+            _syncingMetadata = true;
+            try
+            {
+                PopulateMiningUnits(group);
+                _miningUnit.Text = string.Empty;
+                state.MiningUnitName = string.Empty;
+            }
+            finally { _syncingMetadata = false; }
+            state.NotifyChanged();
+        }
+
+        private void PopulateMiningUnits(string group)
+        {
+            bool outside = string.Equals(group, MiningUnitCatalog.OutsideTkv, StringComparison.Ordinal);
+            _miningUnit.BeginUpdate();
+            try
+            {
+                _miningUnit.Items.Clear();
+                foreach (string unit in MiningUnitCatalog.ForCategory(group))
+                    _miningUnit.Items.Add(unit);
+            }
+            finally { _miningUnit.EndUpdate(); }
+            _miningUnit.AutoCompleteMode = outside ? AutoCompleteMode.None : AutoCompleteMode.SuggestAppend;
+            _miningUnitLabel.Text = outside ? "Tên đơn vị (nhập)" : "Tên đơn vị";
+            // DropDown permits user-entered TKV companies not yet in the directory,
+            // as well as arbitrary non-TKV organizations.
+            _miningUnit.DropDownStyle = ComboBoxStyle.DropDown;
+        }
+
+        private void MiningUnitChanged(object sender, EventArgs e)
+        {
+            if (_syncingMetadata) return;
+            ProjectState.Current.MiningUnitName = _miningUnit.Text.Trim();
+            // Do not notify on every keystroke: it can interfere with ComboBox
+            // auto-completion. The value is read directly on Save/Export.
+        }
+
+        private void PeriodChanged(object sender, EventArgs e)
+        {
+            if (_syncingMetadata) return;
+            string type = _periodType.SelectedIndex == 2 ? VolumePeriodCatalog.Year :
+                _periodType.SelectedIndex == 1 ? VolumePeriodCatalog.Quarter : VolumePeriodCatalog.Month;
+            bool annual = type == VolumePeriodCatalog.Year;
+            _periodNumber.Enabled = !annual;
+            _periodNumberLabel.Text = type == VolumePeriodCatalog.Quarter ? "Quý" : "Tháng";
+            _periodNumber.Maximum = type == VolumePeriodCatalog.Quarter ? 4 : 12;
+            var state = ProjectState.Current;
+            state.VolumePeriodType = type;
+            state.VolumePeriodNumber = (int)_periodNumber.Value;
+            state.VolumePeriodYear = (int)_periodYear.Value;
+            state.NotifyChanged();
+        }
+
         private void SaveProject(object sender, EventArgs e)
         {
             try
             {
                 SetBusy(true, "Đang lưu Project vào DWG...");
+                if (ProjectState.Current.MiningUnitGroup == MiningUnitCatalog.OutsideTkv &&
+                    string.IsNullOrWhiteSpace(ProjectState.Current.MiningUnitName))
+                    throw new InvalidOperationException(
+                        "Đã chọn 'Đơn vị khác (ngoài TKV)'. Hãy nhập tên đầy đủ của đơn vị trước khi lưu Project.");
                 var saved = ProjectPersistenceService.SaveCurrentProject();
                 _status.Text = "Đã lưu Project vào DWG lúc " + saved.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss") + ".";
             }
@@ -136,6 +248,32 @@ namespace MiningVolume2023.UI
             bool has = false;
             try { has = ProjectPersistenceService.HasSavedProject(); } catch { }
             var st = ProjectState.Current;
+            _syncingMetadata = true;
+            try
+            {
+                string group = MiningUnitCatalog.IsKnownGroup(st.MiningUnitGroup)
+                    ? st.MiningUnitGroup : MiningUnitCatalog.Coal;
+                int groupIndex = _miningGroup.Items.IndexOf(group);
+                if (_miningGroup.SelectedIndex != groupIndex ||
+                    (MiningUnitCatalog.ForCategory(group).Count > 0 && _miningUnit.Items.Count == 0))
+                {
+                    _miningGroup.SelectedIndex = groupIndex;
+                    PopulateMiningUnits(group);
+                }
+                if (_miningUnit.Text != (st.MiningUnitName ?? string.Empty))
+                    _miningUnit.Text = st.MiningUnitName ?? string.Empty;
+                int periodIndex = st.VolumePeriodType == VolumePeriodCatalog.Year ? 2 :
+                    st.VolumePeriodType == VolumePeriodCatalog.Quarter ? 1 : 0;
+                _periodType.SelectedIndex = periodIndex;
+                _periodNumberLabel.Text = periodIndex == 1 ? "Quý" : "Tháng";
+                _periodNumber.Enabled = periodIndex != 2;
+                _periodNumber.Maximum = periodIndex == 1 ? 4 : 12;
+                _periodNumber.Value = Math.Max(_periodNumber.Minimum,
+                    Math.Min(_periodNumber.Maximum, st.VolumePeriodNumber));
+                _periodYear.Value = Math.Max(_periodYear.Minimum,
+                    Math.Min(_periodYear.Maximum, st.VolumePeriodYear));
+            }
+            finally { _syncingMetadata = false; }
             _saved.Text = has ? (st.LastProjectSavedUtc.HasValue ? "Có • " + st.LastProjectSavedUtc.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss") : "Có") : "Chưa lưu";
             string tinHt = st.Existing.IsTinCurrent ? $"OK {st.Existing.Tin.Triangles.Count:n0} tam giác" : "CHƯA HỢP LỆ";
             string tinTk = st.Design.IsTinCurrent ? $"OK {st.Design.Tin.Triangles.Count:n0} tam giác" : "CHƯA HỢP LỆ";

@@ -50,30 +50,17 @@ namespace MiningVolume2023.Services
                 "STT","Mã vỉa","Tên vỉa","Mặt cắt đầu","Mặt cắt cuối",
                 "L (m)","F đầu (m²)","F cuối (m²)","Phương pháp",
                 "Thể trọng (t/m³)","V (m³)","Khối lượng (t)");
-            details.Notes.Add("V theo phương pháp diện tích hai đầu đã chọn; tính toán hình học phải xác nhận lại trên AutoCAD sau chỉnh sửa Polyline.");
+            details.Notes.Add("V tự chọn công thức từ diện tích hai đầu; tính toán hình học phải xác nhận lại trên AutoCAD sau chỉnh sửa Polyline.");
             for (int i=0;i<summary.Intervals.Count;i++)
             {
                 var v=summary.Intervals[i];
                 int row=DataStart+i;
-                string formula;
-                switch(v.Formula)
-                {
-                    case VolumeFormulaKind.Pyramid:
-                        formula="F"+row+"*(G"+row+"+H"+row+")/3";
-                        break;
-                    case VolumeFormulaKind.Frustum:
-                        formula="F"+row+"*(G"+row+"+H"+row+
-                            "+SQRT(G"+row+"*H"+row+"))/3";
-                        break;
-                    default:
-                        formula="F"+row+"*(G"+row+"+H"+row+")/2";
-                        break;
-                }
+                string formula=ExportWorkflowService.AdaptiveVolumeFormula(row,"F","G","H",summary.AreaDifferenceThreshold);
                 details.Rows.Add(new ReportCell[]{
                     ReportCell.Int(i+1),ReportCell.Text(v.BodyId),ReportCell.Text(v.BodyName),
                     ReportCell.Text(v.StartSection),ReportCell.Text(v.EndSection),
                     ReportCell.N3(v.DistanceMetres),ReportCell.N3(v.StartAreaSquareMetres),
-                    ReportCell.N3(v.EndAreaSquareMetres),ReportCell.Text(v.Formula.ToString()),
+                    ReportCell.N3(v.EndAreaSquareMetres),ReportCell.Text("Thích ứng theo F hai đầu"),
                     ReportCell.Formula3("'THAM SỐ VỈA'!C"+rows[v.BodyId]),
                     ReportCell.Formula3(formula),
                     ReportCell.Formula3("J"+row+"*K"+row)
@@ -100,6 +87,28 @@ namespace MiningVolume2023.Services
                         ",A"+row+","+prefix+"$L$"+DataStart+":$L$"+last+")")
                 });
             }
+            totals.ColumnWidths[0]=36;
+            totals.ColumnWidths[1]=40;
+            totals.HasSignatures=true;
+            var state=ProjectState.Current;
+            void Metadata(string label,string value)=>totals.Rows.Add(new[]{ReportCell.Text(label),ReportCell.Text(value)});
+            if (state.MiningUnitGroup != MiningUnitCatalog.OutsideTkv)
+                Metadata("Đơn vị cấp trên",ExportWorkflowService.TkvParentHeading);
+            Metadata("Đơn vị tính toán",string.IsNullOrWhiteSpace(state.MiningUnitName)?"Chưa thiết lập":state.MiningUnitName);
+            Metadata("Loại đơn vị",state.MiningUnitGroup);
+            Metadata("Tỷ lệ mặt cắt (ngang / đứng)",
+                "1:"+state.HorizontalScale.ToString("N0")+" / 1:"+state.VerticalScale.ToString("N0"));
+            Metadata("Thông số mặt cắt",state.SectionParameterMode);
+            Metadata("Khoảng cách mặt cắt, m",state.SectionSpacing.ToString("0.###"));
+            Metadata("Bước chia trục Z, m",state.SectionAxisElevationInterval.ToString("0.###"));
+            Metadata("Kỳ tính khối lượng",state.VolumePeriodLabel);
+            Metadata("Thời điểm tính thành công",summary.CalculatedUtc?.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss")??"Chưa xác nhận");
+            Metadata("Thời gian thực tính, giây",summary.CalculationSeconds?.ToString("0.000")??"Chưa xác nhận");
+            Metadata("Thời điểm xuất Excel",report.CreatedAt.ToString("dd/MM/yyyy HH:mm:ss"));
+            Metadata("Người phát triển","Bùi Thế Nam — ĐT/Zalo: 0967280686");
+            totals.Rows.Add(new[]{ReportCell.Text(""),ReportCell.Text(""),ReportCell.Text(""),ReportCell.Text(""),ReportCell.Text("")});
+            totals.Rows.Add(new[]{ReportCell.Text("NGƯỜI TÍNH TOÁN",true),ReportCell.Text(""),ReportCell.Text(""),ReportCell.Text("NGƯỜI KIỂM TRA",true),ReportCell.Text("")});
+            totals.Rows.Add(new[]{ReportCell.Text("(Ký, ghi rõ họ tên)"),ReportCell.Text(""),ReportCell.Text(""),ReportCell.Text("(Ký, ghi rõ họ tên)"),ReportCell.Text("")});
             report.Sheets.Add(totals);
 
             var waste=Sheet("ĐẤT ĐÁ VÀ HSB",
@@ -110,14 +119,15 @@ namespace MiningVolume2023.Services
             waste.Rows.Add(new[]{ReportCell.Text("Tổng khối lượng đào"),ReportCell.N3(summary.TotalCutCubicMetres),ReportCell.Text("m³")});
             waste.Rows.Add(new[]{ReportCell.Text("Tổng khoáng sản"),ReportCell.Formula3(
                 "SUM('TỔNG HỢP VỈA'!D"+DataStart+":D"+lastBody+")"),ReportCell.Text("m³")});
-            waste.Rows.Add(new[]{ReportCell.Text("Đất đá bóc"),ReportCell.Formula3("B4-B5"),ReportCell.Text("m³")});
+            waste.Rows.Add(new[]{ReportCell.Text("Đất đá bóc"),ReportCell.Formula3("B"+DataStart+"-B"+(DataStart+1)),ReportCell.Text("m³")});
             waste.Rows.Add(new[]{ReportCell.Text("Tổng khoáng sản quy đổi"),ReportCell.Formula3(
                 "SUM('TỔNG HỢP VỈA'!E"+DataStart+":E"+lastBody+")"),ReportCell.Text("tấn")});
             waste.Rows.Add(new[]{ReportCell.Text("Hệ số bóc thể tích"),ReportCell.Formula3(
-                "IF(B5>0,B6/B5,\"\")"),ReportCell.Text("m³/m³")});
+                "IF(B"+(DataStart+1)+">0,B"+(DataStart+2)+"/B"+(DataStart+1)+",\"\")"),ReportCell.Text("m³/m³")});
             waste.Rows.Add(new[]{ReportCell.Text("Hệ số bóc theo tấn"),ReportCell.Formula3(
-                "IF(B7>0,B6/B7,\"\")"),ReportCell.Text("m³/tấn")});
+                "IF(B"+(DataStart+3)+">0,B"+(DataStart+2)+"/B"+(DataStart+3)+",\"\")"),ReportCell.Text("m³/tấn")});
             report.Sheets.Add(waste);
+            ExportWorkflowService.ApplyOrganizationHeader(report, state);
             return report;
         }
 

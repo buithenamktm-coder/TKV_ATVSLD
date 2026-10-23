@@ -20,7 +20,7 @@ def test_volume_page_has_detail_and_level_tables():
     assert 'Chi tiết giữa các mặt cắt' in s
     assert 'Tổng hợp theo tầng' in s
     assert 'Fđ giữa' in s and 'V đào, m³' in s and 'V đắp, m³' in s
-    assert 'TÍNH / CẬP NHẬT KHỐI LƯỢNG' in s
+    assert 'Tính / cập nhật khối lượng' in s
     assert 'Task.Run' in s
 
 
@@ -55,5 +55,7 @@ def test_v1_adaptive_volume_rule_is_visible_in_ui_and_workflow():
     wf=read('src/MiningVolume.Plugin2023/Services/VolumeWorkflowService.cs')
     assert 'relativeDifference <= areaDifferenceThreshold' in calc
     assert 'Math.Sqrt(a1 * a2)' in calc
-    assert 'Hình chóp cụt' in ui and 'chênh ≤ 40%' in ui
+    formula = read("src/MiningVolume.Plugin2023/UI/ProfessionalFormulaPanel.cs")
+    assert 'Hình chóp cụt' in ui and 'Chênh lệch diện tích ≤ 40%' in formula
+    assert '√F₁F₂' in formula
     assert 'AreaDifferenceThreshold = 0.40' in wf

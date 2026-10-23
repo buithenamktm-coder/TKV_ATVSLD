@@ -1,5 +1,7 @@
 using System;
+using System.Threading;
 using System.Collections.Generic;
+using System.Linq;
 using MiningVolume.Core.Sections;
 using MiningVolume.Core.Surface;
 using MiningVolume.Core.Volumes;
@@ -9,13 +11,18 @@ namespace MiningVolume2023.Services
     public static class VolumeWorkflowService
     {
         public static VolumeResult CalculateCore(SectionSystem system, IReadOnlyList<SectionProfile> profiles,
-            TinSurface existing, TinSurface design, double fromLevel, double toLevel, double levelStep)
+            TinSurface existing, TinSurface design, double fromLevel, double toLevel, double levelStep,
+            CancellationToken cancellationToken = default(CancellationToken))
         {
             if (system == null) throw new InvalidOperationException("Chưa có hệ mặt cắt.");
             if (profiles == null || profiles.Count == 0) throw new InvalidOperationException("Chưa thành lập mặt cắt. Hãy thực hiện Bước 7 trước khi tính khối lượng.");
             if (existing == null || design == null) throw new InvalidOperationException("Chưa có đủ TIN hiện trạng và TIN thiết kế.");
             if (levelStep <= 0) throw new ArgumentOutOfRangeException(nameof(levelStep), "Mức chia tầng phải lớn hơn 0.");
             if (Math.Abs(fromLevel - toLevel) < 1e-9) throw new InvalidOperationException("Mức tính từ và mức tính đến phải khác nhau.");
+            // Global TIN.ReviewRequired must NOT prevent calculating a safe
+            // section system. The core checks the projected 3D curtain
+            // against each route AND interval, and records excluded portions.
+            // Never delete source elevations or silently average Z.
 
             return new SectionVolumeCalculator().Calculate(system, profiles, existing, design,
                 new VolumeCalculationOptions
@@ -26,7 +33,7 @@ namespace MiningVolume2023.Services
                     AreaDifferenceThreshold = 0.40,
                     PreferPrismoidal = false,
                     Tolerance = 1e-7
-                });
+                }, cancellationToken);
         }
 
         public static void Commit(VolumeResult result, double fromLevel, double toLevel, double levelStep)

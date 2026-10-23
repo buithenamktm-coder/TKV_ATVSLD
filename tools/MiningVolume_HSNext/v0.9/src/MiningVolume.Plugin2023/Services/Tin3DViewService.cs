@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Windows.Forms;
 using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.Geometry;
@@ -20,60 +21,90 @@ namespace MiningVolume2023.Services
         private static object _previousVisualStyle;
         private static bool _existingWasVisible;
         private static bool _designWasVisible;
-        private static bool _restorePending;
+        // Large TINs must not trigger automatic 3DORBIT or Conceptual shading.
+        private const int LargeTinFaceThreshold = 200000;
 
         public static bool IsActive => _document != null;
 
         public static void Start(ModelRole role)
         {
-            if (IsActive) throw new InvalidOperationException("Chế độ xem TIN 3D đang hoạt động. Nhấn Esc để trở về IMSAT VOLUME.");
-            SurfaceWorkflowService.EnsureTinReady(role, synchronizeCadLayer: true);
             var doc = AcApp.DocumentManager.MdiActiveDocument ??
                 throw new InvalidOperationException("Không có bản vẽ AutoCAD đang hoạt động.");
-            var selected = ProjectState.Current.Get(role);
-            if (!TinCadRenderer.LayerExists(doc.Database, selected.TinLayer) ||
-                TinCadRenderer.CountFaces(doc.Database, selected.TinLayer) == 0)
-                throw new InvalidOperationException("Chưa có đối tượng 3DFACE hợp lệ để xem 3D.");
+            if (IsActive && !ReferenceEquals(_document, doc)) Restore();
+            if (IsActive)
+                throw new InvalidOperationException("Đang xem TIN 3D. Bấm TRỞ VỀ 2D trước.");
 
+            // VIEW must not rescan or rebuild millions of CAD 3DFACEs.
+            SurfaceWorkflowService.EnsureTinReady(role, synchronizeCadLayer: false);
+            var session = ProjectState.Current.Get(role);
+            int faceCount = checked(session.Tin.Triangles.Count + session.Tin.VerticalFaces.Count);
+            if (session.TinCadIsPreview || session.TinCadFaceCount != faceCount ||
+                !TinCadRenderer.LayerExists(doc.Database, session.TinLayer))
+                throw new InvalidOperationException(
+                    "Layer TIN CAD chưa đủ số tam giác chính thức. Hãy tạo/cập nhật TIN trước khi xem 3D.");
+
+            if (faceCount > LargeTinFaceThreshold)
+            {
+                var accepted = MessageBox.Show(
+                    "TIN có " + faceCount.ToString("N0") + " mặt 3D. " +
+                    "3DORBIT/Conceptual tự động có thể làm AutoCAD mất phản hồi.\r\n\r\n" +
+                    "Mở góc nhìn 3D khung dây, không khởi động Orbit, " +
+                    "không giảm số tam giác TIN? Bấm TRỞ VỀ 2D khi xem xong.",
+                    "IMSAT VOLUME - VIEW TIN 3D",
+                    MessageBoxButtons.YesNo, MessageBoxIcon.Information);
+                if (accepted != DialogResult.Yes) return;
+            }
+
+            var bounds = GetTinBounds(session);
             _document = doc;
             _existingWasVisible = ProjectState.Current.Existing.TinVisible;
             _designWasVisible = ProjectState.Current.Design.TinVisible;
-            _previousView = doc.Editor.GetCurrentView();
-            try { _previousVisualStyle = AcApp.GetSystemVariable("VSCURRENT"); }
-            catch { _previousVisualStyle = null; }
-
             try
             {
-                // Hiện một lớp TIN để tránh hai bề mặt chồng lấp gây khó quan sát.
-                SurfaceWorkflowService.SetTinVisible(ModelRole.Existing, role == ModelRole.Existing);
-                SurfaceWorkflowService.SetTinVisible(ModelRole.Design, role == ModelRole.Design);
+                _previousView = doc.Editor.GetCurrentView();
+                try { _previousVisualStyle = AcApp.GetSystemVariable("VSCURRENT"); }
+                catch { _previousVisualStyle = null; }
 
-                var target = GetTinBounds(selected);
+                // Change two layer states without doing multiple full REGENTs.
+                var existing = ProjectState.Current.Existing;
+                var design = ProjectState.Current.Design;
+                using (doc.LockDocument())
+                {
+                    if (existing.TinVisible != (role == ModelRole.Existing))
+                        TinCadRenderer.SetVisible(doc.Database, existing.TinLayer,
+                            role == ModelRole.Existing);
+                    if (design.TinVisible != (role == ModelRole.Design))
+                        TinCadRenderer.SetVisible(doc.Database, design.TinLayer,
+                            role == ModelRole.Design);
+                }
+                existing.TinVisible = role == ModelRole.Existing;
+                design.TinVisible = role == ModelRole.Design;
+                try { AcApp.SetSystemVariable("VSCURRENT", "2D Wireframe"); }
+                catch { /* Retain current style if not accepted. */ }
+
                 using (var view = doc.Editor.GetCurrentView())
                 {
-                    view.ViewDirection = new Vector3d(1.0, -1.0, 0.85);
-                    view.Target = new Point3d(target.cx, target.cy, target.cz);
+                    view.ViewDirection = new Vector3d(1, -1, 0.85);
+                    view.Target = new Point3d(bounds.cx, bounds.cy, bounds.cz);
                     view.CenterPoint = new Point2d(0, 0);
                     view.ViewTwist = 0;
-                    view.Width = target.span * 1.8;
-                    view.Height = target.span * 1.8;
+                    view.Width = bounds.span * 1.8;
+                    view.Height = bounds.span * 1.8;
                     doc.Editor.SetCurrentView(view);
                 }
-                // AutoCAD sẽ duy trì phong cách vẽ hiện hành nếu không hỗ trợ Conceptual.
-                try { AcApp.SetSystemVariable("VSCURRENT", "Conceptual"); } catch { }
-
-                doc.CommandCancelled += OnOrbitFinished;
-                doc.CommandEnded += OnOrbitFinished;
-                doc.CommandFailed += OnOrbitFinished;
-                if (EntryPoint.Palette != null) EntryPoint.Palette.Visible = false;
-                doc.Editor.Regen();
-                doc.SendStringToExecute("_.3DORBIT ", true, false, false);
+                ProjectState.Current.NotifyChanged();
+                // No Editor.Regen(), palette hiding or automatic 3DORBIT.
             }
             catch
             {
                 Restore();
                 throw;
             }
+        }
+
+        public static void Stop()
+        {
+            if (IsActive) Restore();
         }
 
         private static (double cx, double cy, double cz, double span) GetTinBounds(ModelSession selected)
@@ -125,35 +156,10 @@ namespace MiningVolume2023.Services
             return ((minX + maxX) * 0.5, (minY + maxY) * 0.5, (minZ + maxZ) * 0.5, span);
         }
 
-        private static void OnOrbitFinished(object sender, CommandEventArgs e)
-        {
-            string cmd = (e.GlobalCommandName ?? string.Empty).TrimStart('_', '.');
-            if (!string.Equals(cmd, "3DORBIT", StringComparison.OrdinalIgnoreCase)) return;
-            if (_restorePending) return;
-            _restorePending = true;
-            // Khôi phục sau khi AutoCAD đã thực sự rời command context.
-            AcApp.Idle += RestoreOnIdle;
-        }
-
-        private static void RestoreOnIdle(object sender, EventArgs e)
-        {
-            AcApp.Idle -= RestoreOnIdle;
-            Restore();
-        }
-
         private static void Restore()
         {
             var doc = _document;
             _document = null;
-            _restorePending = false;
-            AcApp.Idle -= RestoreOnIdle;
-            if (doc != null)
-            {
-                doc.CommandCancelled -= OnOrbitFinished;
-                doc.CommandEnded -= OnOrbitFinished;
-                doc.CommandFailed -= OnOrbitFinished;
-            }
-
             try
             {
                 if (doc != null && ReferenceEquals(doc, AcApp.DocumentManager.MdiActiveDocument))
@@ -162,9 +168,18 @@ namespace MiningVolume2023.Services
                         doc.Editor.SetCurrentView(_previousView);
                     if (_previousVisualStyle != null)
                         try { AcApp.SetSystemVariable("VSCURRENT", _previousVisualStyle); } catch { }
-                    SurfaceWorkflowService.SetTinVisible(ModelRole.Existing, _existingWasVisible);
-                    SurfaceWorkflowService.SetTinVisible(ModelRole.Design, _designWasVisible);
-                    doc.Editor.Regen();
+                    using (doc.LockDocument())
+                    {
+                        var existing = ProjectState.Current.Existing;
+                        var design = ProjectState.Current.Design;
+                        if (existing.TinVisible != _existingWasVisible)
+                            TinCadRenderer.SetVisible(doc.Database, existing.TinLayer, _existingWasVisible);
+                        if (design.TinVisible != _designWasVisible)
+                            TinCadRenderer.SetVisible(doc.Database, design.TinLayer, _designWasVisible);
+                        existing.TinVisible = _existingWasVisible;
+                        design.TinVisible = _designWasVisible;
+                    }
+                    ProjectState.Current.NotifyChanged();
                 }
             }
             finally

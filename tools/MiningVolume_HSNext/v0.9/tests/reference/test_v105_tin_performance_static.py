@@ -5,14 +5,41 @@ ROOT = Path(__file__).resolve().parents[2]
 def read(rel):
     return (ROOT / rel).read_text(encoding="utf-8")
 
-def test_renderer_replaces_and_clears_tin_in_one_modelspace_pass_each():
+def test_renderer_replaces_once_and_prefilters_tin_clear_before_destructive_phase():
     s = read("src/MiningVolume.Plugin2023/Services/TinCadRenderer.cs")
-    replace = s[s.index("public static int Replace"):s.index("public static int Clear")]
+    pair = s[s.index("public static int[] ReplacePair"):s.index("private static void ClearExistingPairInTransaction")]
+    pair_clear = s[s.index("private static void ClearExistingPairInTransaction"):s.index("private static int ReplaceInTransaction")]
+    replace = s[s.index("private static int ReplaceInTransaction"):s.index("public static int Clear")]
     clear = s[s.index("public static int Clear"):s.index("public static int CountFaces")]
+    # Pair export clears both layers in one traversal, then writes each TIN
+    # without entering the single-TIN cleanup loop.
+    pair_preflight = s[s.index("private static List<ObjectId> ValidateExistingPairBeforeMutation"):s.index("private static void ClearExistingPairInTransaction")]
+    assert pair_preflight.count("foreach (ObjectId id in ms)") == 1
+    assert "oldFaces.Add(id)" in pair_preflight
+    assert "progress.Poll();" in pair_preflight
+    assert pair_clear.count("foreach (ObjectId id in originalFaces)") == 1
+    assert "face.Erase();" in pair_clear
+    assert "progress.Poll()" not in pair_clear
+    assert "ClearExistingPairInTransaction(" in pair
+    assert "existingLayer, existing, 1, false" in pair
+    assert "designLayer, design, 3, false" in pair
     assert replace.count("foreach (ObjectId id in ms)") == 1
+    assert "if (clearExisting)" in replace
     assert clear.count("foreach (ObjectId id in ms)") == 1
     assert "second full scan" in replace
-    assert "Validate and erase in one pass" in clear
+    assert "ent.LayerId != layerId" in clear
+    assert "if (!(ent is Face))" in clear
+    # Host cancellation proved that mid-erase exception rollback is unsafe.
+    # One non-destructive ModelSpace scan gathers only the verified Face IDs;
+    # the second phase erases those IDs directly, without another traversal.
+    assert "faces.Add(id);" in clear
+    assert "face.Erase();" in clear
+    assert clear.index("faces.Add(id);") < clear.index("face.Erase();")
+    assert clear.index("face.Erase();") < clear.rindex("tr.Commit();")
+    assert "progress.Poll();" in clear
+    after_erase = clear.split("face.Erase();", 1)[1]
+    assert "progress.Poll();" not in after_erase
+    assert "pollCancellation?.Invoke();" not in after_erase
 
 def test_pair_build_does_not_rescan_just_written_cad_layers():
     s = read("src/MiningVolume.Plugin2023/Services/SurfaceWorkflowService.cs")
@@ -34,7 +61,7 @@ def test_data_page_reports_each_heavy_phase_and_timings():
     s = read("src/MiningVolume.Plugin2023/UI/DataPage.cs")
     assert "BuildCoreDetailed(" in s and "ModelRole.Existing" in s
     assert "BuildCoreDetailed(" in s and "ModelRole.Design" in s
-    assert "Đang dựng TIN hiện trạng" in s
+    assert "Đang dựng TIN {st.Get(role).Name}" in s
     assert "Đang ghi TIN hiện trạng xuống AutoCAD" in read("src/MiningVolume.Plugin2023/Services/SurfaceWorkflowService.cs")
     assert "cadWatch.Elapsed.TotalSeconds" in s
     assert "totalWatch.Elapsed.TotalSeconds" in s
@@ -69,8 +96,8 @@ def test_legacy_constraint_flip_updates_adjacency_locally_without_scanning_all_l
 def test_section_sampler_uses_reusable_triangle_spatial_index():
     s = read("src/MiningVolume.Core/Sections/TinSectionSampler.cs")
     assert "private sealed class TriangleGridIndex" in s
-    assert "IndexFor(existing)" in s
-    assert "IndexFor(design)" in s
+    assert "IndexFor(existing, cancellationToken)" in s
+    assert "IndexFor(design, cancellationToken)" in s
     assert "QuerySegmentTriangles(a, b)" in s
     assert "ITiledTriangleSource" in s
     assert "_tiled.QueryTiles" in s
@@ -100,7 +127,10 @@ def test_section_profiles_are_parallelized_but_keep_original_order():
     s = read("src/MiningVolume.Core/Sections/TinSectionSampler.cs")
     assert "Parallel.For(0, lines.Count" in s
     assert "var result = new SectionProfile[lines.Count]" in s
-    assert "result[i] = BuildProfileIndexed" in s
+    # Each parallel iteration still writes to result[i] in input order;
+    # the wrapper adds conflict diagnostics without serializing sampling.
+    assert "result[i] = AnnotateVerticalConflicts(" in s
+    assert "BuildProfileIndexed(lines[i], existingIndex, designIndex, tol, cancellationToken)" in s
     assert "Interlocked.Increment" in s
 
 def test_section_cad_output_is_batched_to_avoid_one_giant_transaction():
@@ -128,20 +158,25 @@ def test_large_mine_uses_one_verified_mesh_then_adaptive_storage():
     assert "10 triệu đỉnh" in workflow
 
 
-def test_large_tin_is_file_backed_and_cad_render_is_bounded_preview():
+def test_large_tin_is_file_backed_and_cad_render_uses_complete_mesh():
     store = read("src/MiningVolume.Surface/FileBackedTiledTriangleList.cs")
     tiled = read("src/MiningVolume.Surface/TiledConformingTinBuilder.cs")
     workflow = read("src/MiningVolume.Plugin2023/Services/SurfaceWorkflowService.cs")
-    state = read("src/MiningVolume.Plugin2023/Services/ProjectState.cs")
+    renderer = read("src/MiningVolume.Plugin2023/Services/TinCadRenderer.cs")
     assert "ITiledTriangleSource" in store
     assert "FileOptions.SequentialScan" in store
     assert "cacheTiles:6" in read("src/MiningVolume.Surface/AdaptiveTinStore.cs")
-    assert "PreviewTriangles" in tiled
-    assert "Math.Min(200000,tiles.Count)" in tiled
-    assert "tiles.Count/200000.0" in tiled
-    assert "TinCadIsPreview" in state
-    assert "cadPreview" in workflow
-    assert "BuildCadPreview" in workflow
+    assert "PreviewTriangles=MiningVolume.Core.Compatibility.EmptyArray<Triangle3>.Value" in tiled
+    assert "Math.Min(200000,tiles.Count)" not in tiled
+    assert "var ht = existing.Tin;" in workflow
+    assert "var tk = design.Tin;" in workflow
+    assert "var cadTin = tin;" in workflow
+    assert "bool cadPreview = false;" in workflow
+    assert "BuildCadPreview" not in workflow
+    assert "foreach (var t in tin.Triangles)" in renderer
+    assert "foreach (var t in tin.VerticalFaces)" in renderer
+    assert "if(allowCancellation && (written&1023)==0)progress.Poll(written,true);" in renderer
+    assert "bool allowCancellation = true" in renderer
 
 
 def test_large_tin_ui_has_progress_and_user_cancel():

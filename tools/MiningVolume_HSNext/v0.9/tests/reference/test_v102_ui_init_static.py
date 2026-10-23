@@ -19,7 +19,9 @@ def test_numeric_updown_range_is_set_before_value():
 def test_scale_defaults_that_triggered_runtime_bug_are_covered():
     s = read("src/MiningVolume.Plugin2023/UI/SectionPage.cs")
     assert "_hScale = Num(1000, 1, 100000);" in s
-    assert "_vScale = Num(500, 1, 100000);" in s
+    assert "_vScale = Num(1000, 1, 100000);" in s
+    assert "_hScale.Enabled = false;" in s
+    assert "_vScale.Enabled = false;" in s
 
 def test_runtime_selftest_constructs_real_palette_ui():
     s = read("src/MiningVolume.Plugin2023/Services/SelfTestService.cs")
