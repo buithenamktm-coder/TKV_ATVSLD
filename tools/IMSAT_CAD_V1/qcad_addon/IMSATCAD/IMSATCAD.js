@@ -709,7 +709,17 @@ IMSATCAD.postInit = function() {
     var blockCount = IMSATCAD.populateToolBar(IMSATCAD.getBlocksToolBar(), IMSATCAD._blockScripts);
     var selectionCount = IMSATCAD.populateToolBar(IMSATCAD.getSelectionToolBar(), IMSATCAD._selectionScripts);
     var fileCount = IMSATCAD.populateToolBar(IMSATCAD.getFileToolBar(), IMSATCAD._fileScripts);
-    var quickAccessCount = IMSATCAD.populateToolBar(IMSATCAD.getQuickAccessToolBar(), IMSATCAD._quickAccessScripts);
+    var quickAccessBar = IMSATCAD.getQuickAccessToolBar();
+    var quickAccessCount = IMSATCAD.populateToolBar(quickAccessBar, IMSATCAD._quickAccessScripts);
+    // Keep the high-frequency native actions compact, as in AutoCAD's Quick Access.
+    // Use guarded QtScript calls because bridge versions expose different APIs.
+    if (!isNull(quickAccessBar)) {
+        if (typeof quickAccessBar.setToolButtonStyle === "function" &&
+                typeof Qt.ToolButtonIconOnly !== "undefined") {
+            quickAccessBar.setToolButtonStyle(Qt.ToolButtonIconOnly);
+        }
+        IMSATCAD.setAccessibleLabel(quickAccessBar, "IMSAT CAD Quick Access");
+    }
     if (ribbonReady) {
         IMSATCAD.hideDuplicateToolBars();
         // QCAD's original toolbars remain available from View > Toolbars.

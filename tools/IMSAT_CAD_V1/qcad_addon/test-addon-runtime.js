@@ -14,7 +14,12 @@ function EAction() {}
 EAction.getMenu = () => menu;
 EAction.getToolBar = (label, id) => {
   if (!toolbars.has(id)) {
-    toolbars.set(id, { objectName: id, actions: [], widgets: [], addAction(a) { this.actions.push(a); }, addWidget(w) { this.widgets.push(w); } });
+    toolbars.set(id, { objectName: id, actions: [], widgets: [],
+      addAction(a) { this.actions.push(a); },
+      addWidget(w) { this.widgets.push(w); },
+      setToolButtonStyle(style) { this.buttonStyle = style; },
+      setAccessibleName(label) { this.accessibleName = label; }
+    });
   }
   return toolbars.get(id);
 };
@@ -53,7 +58,7 @@ function QTabWidget(parent) {
   Object.defineProperty(this, 'count', { get: () => ribbonPages.length });
 }
 const context = {
-  include() {}, EAction, qsTr: x => x, Qt: { TopToolBarArea: 1, ToolButtonTextUnderIcon: 2 },
+  include() {}, EAction, qsTr: x => x, Qt: { TopToolBarArea: 1, ToolButtonTextUnderIcon: 2, ToolButtonIconOnly: 3 },
   QWidget, QHBoxLayout, QVBoxLayout, QGridLayout, QLabel, QToolButton, QTabWidget,
   isNull: x => x == null, qWarning: x => warnings.push(x),
   RMainWindowQt: { getMainWindow: () => ({ handleUserMessage: x => messages.push(x) }) },
@@ -219,6 +224,10 @@ const first = [...toolbars.values()].map(x => x.actions.length);
 assert(first.filter(x => x >= 2).length === 9, "CAD toolbars and Quick Access toolbar missing");
 const quickAccess = toolbars.get("IMSATCADQuickAccessToolBar");
 assert(quickAccess, "Native Quick Access toolbar missing");
+assert.strictEqual(quickAccess.buttonStyle, context.Qt.ToolButtonIconOnly,
+  "Quick Access must remain compact and icon-only");
+assert.strictEqual(quickAccess.accessibleName, "IMSAT CAD Quick Access",
+  "Quick Access needs stable native accessibility metadata");
 assert.deepStrictEqual(quickAccess.actions.map(x => x.script), [
   "scripts/File/Save/Save.js",
   "scripts/Edit/Undo/Undo.js",

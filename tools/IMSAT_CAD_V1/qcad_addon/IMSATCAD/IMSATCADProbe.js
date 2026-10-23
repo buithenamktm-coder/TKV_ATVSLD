@@ -38,6 +38,21 @@
         var line = RGuiAction.getByScriptFile("scripts/Draw/Line/Line2P/Line2P.js");
         note("NativeLineAction", !isNull(line));
         if (isNull(line)) { throw new Error("Native LINE action unavailable"); }
+        // Verify the three Quick Access QAction registrations on REAL native Qt;
+        // a merely rendered label is not evidence of a working CAD command.
+        var quickAccess = IMSATCAD.getQuickAccessToolBar();
+        note("QuickAccessToolbar", !isNull(quickAccess));
+        if (isNull(quickAccess)) { throw new Error("Native Quick Access toolbar unavailable"); }
+        var quickActions = IMSATCAD._quickAccessScripts;
+        var confirmedQuickActions = 0;
+        for (var qa = 0; qa < quickActions.length; ++qa) {
+            if (IMSATCAD._installedActions["IMSATCADQuickAccessToolBar|" + quickActions[qa]] !== true) {
+                throw new Error("Native Quick Access action not installed: " + quickActions[qa]);
+            }
+            confirmedQuickActions++;
+        }
+        note("QuickAccessNativeActions", confirmedQuickActions);
+        if (confirmedQuickActions !== 3) { throw new Error("Expected Save, Undo, Redo native actions"); }
         note("MainWindow", !isNull(app));
         if (isNull(app)) { throw new Error("Native main window unavailable"); }
         // Exercise both locales against REAL QCAD Qt widgets, not the Node mock.
