@@ -25,9 +25,12 @@ def test_data_buttons_compact_and_layer_refresh_above_sources():
 
 def test_data_source_types_two_columns_no_horizontal_scroll():
     data = read("DataPage.cs")
-    assert "MultiColumn = true" in data
+    assert "MultiColumn = false" in data
+    assert "_types.MultiColumn = twoColumns;" in data
+    assert "bool twoColumns = width >= 370;" in data
     assert "HorizontalScrollbar = false" in data
-    assert "_types.ColumnWidth = Math.Max(90," in data
+    assert "_types.ColumnWidth = twoColumns" in data
+    assert "typeBox.Height = twoColumns ? 93 : 149;" in data
     assert "_sourceTable.RowCount = compact ? 4 : 2" in data
 
 
@@ -60,7 +63,11 @@ def test_data_navigation_direct_buttons_and_license_nav():
     assert 'Name = "NamvectaLicenseNav"' in menu
     assert 'Text = "Thông tin & Bản quyền"' in menu
     assert 'compactLicense.Click += (s,e) => ShowPage(AppPage.License);' in menu
-    assert 'case AppPage.Model: return new[] { AppPage.Data, AppPage.Project, AppPage.QuickSection };' in menu
+    assert 'case AppPage.Model: return new[] { AppPage.Project, AppPage.Data, AppPage.QuickSection };' in menu
+    assert menu.index('_dataButtons.Controls.Add(_projectTab)') < menu.index('_dataButtons.Controls.Add(_tinTab)')
+    assert '_calcButtons.Controls.Add(_sectionTab);' in menu
+    assert '_calcButtons.Controls.Add(_gridTab);' in menu
+    assert '_subNavigation.Visible = false;' in menu
     assert '_quickSectionTab.Click += (s,e) => ShowPage(AppPage.QuickSection);' in menu
     assert '_advancedVolumeButton' not in menu
     assert 'Text = "Tùy chọn"' not in menu
