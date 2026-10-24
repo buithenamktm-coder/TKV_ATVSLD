@@ -95,7 +95,7 @@ namespace MiningVolume2023.UI
             var preferences = new GroupBox { Text = "Tùy chọn giao diện", Dock = DockStyle.Top, Height = 64 };
             _autoOpen = new CheckBox
             {
-                Text = "Tự động mở bảng IMSAT VOLUME khi khởi động AutoCAD",
+                Text = "Tự động mở bảng NAMVECTA VOLUME khi khởi động AutoCAD",
                 AutoSize = true,
                 Left = 12,
                 Top = 24,
@@ -211,7 +211,7 @@ namespace MiningVolume2023.UI
         private void DeleteProject(object sender, EventArgs e)
         {
             if (!ProjectPersistenceService.HasSavedProject()) { _status.Text = "Bản vẽ chưa có Project đã lưu."; return; }
-            if (MessageBox.Show("Xóa dữ liệu Project IMSAT VOLUME đã lưu trong DWG?\r\nCác đối tượng CAD và dữ liệu nguồn không bị xóa.", "Xóa Project", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+            if (MessageBox.Show("Xóa dữ liệu Project NAMVECTA VOLUME đã lưu trong DWG?\r\nCác đối tượng CAD và dữ liệu nguồn không bị xóa.", "Xóa Project", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
             try { ProjectPersistenceService.DeleteSavedProject(); _status.Text = "Đã xóa Project đã lưu khỏi DWG."; }
             catch (Exception ex) { MessageBox.Show(ex.Message, "Xóa Project", MessageBoxButtons.OK, MessageBoxIcon.Error); }
             RefreshState();
@@ -223,12 +223,12 @@ namespace MiningVolume2023.UI
             {
                 UserSettingsService.AutoOpenPalette = _autoOpen.Checked;
                 _status.Text = _autoOpen.Checked
-                    ? "Đã bật tự động mở bảng IMSAT VOLUME cho các lần khởi động AutoCAD sau."
-                    : "Đã tắt tự động mở bảng IMSAT VOLUME. Khi cần, mở từ Ribbon/menu IMSAT VOLUME.";
+                    ? "Đã bật tự động mở bảng NAMVECTA VOLUME cho các lần khởi động AutoCAD sau."
+                    : "Đã tắt tự động mở bảng NAMVECTA VOLUME. Khi cần, mở từ Ribbon/menu NAMVECTA VOLUME.";
             }
             catch (Exception ex)
             {
-                MessageBox.Show(ex.Message, "Tùy chọn IMSAT VOLUME", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(ex.Message, "Tùy chọn NAMVECTA VOLUME", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 _autoOpen.CheckedChanged -= AutoOpenChanged;
                 _autoOpen.Checked = UserSettingsService.AutoOpenPalette;
                 _autoOpen.CheckedChanged += AutoOpenChanged;
