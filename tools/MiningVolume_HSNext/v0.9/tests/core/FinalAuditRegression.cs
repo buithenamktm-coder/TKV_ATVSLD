@@ -49,6 +49,36 @@ internal static class FinalAuditRegression
         Check(canceled,"Canceled operation returned a result");
     }
     public static void Add(IDictionary<string,Action> tests) {
+        tests["namvecta_compact_default_keeps_live_tier_totals_and_identity"] = () => {
+            var st=State();
+            var report=ExportWorkflowService.BuildReport(st,new ExportOptions());
+            Check(report.Sheets[0].Name=="01 Tổng hợp","Summary must be first");
+            Check(report.Sheets.Any(x=>x.Name=="02 Chi tiết"),"Missing interval audit detail");
+            Check(!report.Sheets.Any(x=>x.Name=="Thông tin" || x.Name=="Dữ liệu XYZ"),"Default technical sheets leaked");
+            int bands=st.VolumeResult.Intervals.Sum(x=>x.BandVolumes.Count);
+            Check(report.Sheets.Count==(bands>0?3:2),"Unexpected default sheet count");
+            var summary=report.Sheets[0];
+            Check(summary.Rows.Any(r=>r.Any(c=>Equals(c.Value,st.VolumeResult.CalculationId))),"Missing calculation identity");
+            Check(((string)summary.Rows[0][2].Value).Contains("'02 Chi tiết'!H"),"Summary not linked to detail");
+            if(bands>0) {
+                Check(Equals(summary.Rows[3][2].Value,"=SUM('Chi tiết tầng'!H4:H"+(3+bands)+")"),"Cut control total is stale static data");
+                Check(Equals(summary.Rows[4][2].Value,"=SUM('Chi tiết tầng'!K4:K"+(3+bands)+")"),"Fill control total is stale static data");
+            }
+        };
+        tests["namvecta_no_legacy_logo_even_without_selected_unit"] = () => {
+            var report=new SpreadsheetReport {IncludeImsatLogo=true};
+            ExportWorkflowService.ApplyOrganizationHeader(report,MiningUnitCatalog.Coal,"");
+            Check(!report.IncludeImsatLogo,"Empty unit bypassed NAMVECTA logo policy");
+        };
+        tests["namvecta_optional_technical_report_remains_available"] = () => {
+            var report=ExportWorkflowService.BuildReport(State(),new ExportOptions {
+                IncludeInfoSheet=true,IncludeSourceXyz=true,IncludeSectionData=true,
+                IncludeSectionAreas=true,IncludeLevels=true,IncludeWarnings=true
+            });
+            foreach(var name in new[]{"Thông tin","Dữ liệu XYZ","Dữ liệu mặt cắt","Thông số mặt cắt","Tổng hợp theo tầng","Cảnh báo"})
+                Check(report.Sheets.Any(x=>x.Name==name),"Missing optional sheet "+name);
+        };
+
         tests["xlsx_revalidate_after_write_preserves_previous_file"] = () => {
             var directory = Path.Combine(Path.GetTempPath(), "imsat-publish-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(directory);
@@ -281,7 +311,7 @@ internal static class FinalAuditRegression
                                 Check(!xml.Descendants().Any(x=>x.Name.LocalName=="t" && x.Value==st.VolumeResult.CalculationId),
                                     "Writing workbook consulted newer calculation");
                             }
-                    Check(occurrences==2,"Calculation identity missing from information/summary sheets");
+                    Check(occurrences==1,"Calculation identity missing from default summary sheet");
                 }
             } finally { Directory.Delete(dir,true); }
         };
@@ -613,7 +643,7 @@ internal static class FinalAuditRegression
                     "Công ty Cổ phần Than Hà Tu - Vinacomin"),
                     "Requested Hà Tu name missing");
                 var report=ExportWorkflowService.BuildReport(state,new ExportOptions());
-                var summary=report.Sheets.Single(x=>x.Name=="Tổng khối");
+                var summary=report.Sheets.Single(x=>x.Name=="01 Tổng hợp");
                 string originalFormula=(string)summary.Rows[0][2].Value;
                 ExportWorkflowService.ApplyOrganizationHeader(report,state);
                 string parent=ExportWorkflowService.TkvParentHeading;
@@ -640,7 +670,7 @@ internal static class FinalAuditRegression
                 Check(outsideReport.Sheets.All(x=>
                     x.Title.StartsWith(state.MiningUnitName+"\n",StringComparison.Ordinal)
                     && !x.Title.Contains(parent)), "Non-TKV unit falsely shown under TKV");
-                Check(outsideReport.Sheets.Single(x=>x.Name=="Thông tin").Rows
+                Check(outsideReport.Sheets.Single(x=>x.Name=="01 Tổng hợp").Rows
                     .Any(row=>row.Any(cell=>Equals(cell.Value,state.MiningUnitName))),
                     "Non-TKV unit missing in information worksheet");
                 state.MiningUnitName=" ";
@@ -660,8 +690,8 @@ internal static class FinalAuditRegression
                 st.MiningUnitGroup=MiningUnitCatalog.Coal;
                 st.MiningUnitName="Công ty Cổ phần Than Cao Sơn - TKV";
                 var report=ExportWorkflowService.BuildReport(st,new ExportOptions());
-                var summary=report.Sheets.Single(x=>x.Name=="Tổng khối");
-                var info=report.Sheets.Single(x=>x.Name=="Thông tin");
+                var summary=report.Sheets.Single(x=>x.Name=="01 Tổng hợp");
+                var info=report.Sheets.Single(x=>x.Name=="01 Tổng hợp");
                 // Emulate switching DWG / project after workbook generation and
                 // before the background Excel writer starts.
                 st.MiningUnitGroup=MiningUnitCatalog.OutsideTkv;
@@ -710,7 +740,7 @@ internal static class FinalAuditRegression
                 st.SectionSystem=new SectionSystem(new Vec2(1,0),
                     new Vec2(0,1),boundary,lines,Array.Empty<string>());
                 st.SectionSpacing=20.0;
-                var info=ExportWorkflowService.BuildReport(st,new ExportOptions())
+                var info=ExportWorkflowService.BuildReport(st,new ExportOptions { IncludeInfoSheet = true })
                     .Sheets.Single(x=>x.Name=="Thông tin");
                 var actual=info.Rows.Single(row=>
                     row.Count>=2&&Equals(row[0].Value,
@@ -1214,11 +1244,11 @@ internal static class FinalAuditRegression
             try {
                 if(bytes!=null)File.Delete(logo);
                 var tkv=ExportWorkflowService.BuildReport(State(),new ExportOptions());
-                Check(tkv.IncludeImsatLogo,"TKV report should request optional branding");
+                Check(!tkv.IncludeImsatLogo,"NAMVECTA must not request IMSAT branding");
                 ExportWorkflowService.WriteXlsx(file,tkv);
                 using(var zip=ZipFile.OpenRead(file))
-                    Check(zip.GetEntry("xl/media/imsat_logo.png")!=null,
-                        "Embedded IMSAT logo was not used when external Assets file was absent");
+                    Check(zip.GetEntry("xl/media/imsat_logo.png")==null,
+                        "NAMVECTA workbook contains legacy IMSAT logo");
                 Check(Directory.GetFiles(dir).Length==1,"A staging file leaked");
                 var outside=State();
                 outside.MiningUnitGroup=MiningUnitCatalog.OutsideTkv;
@@ -1272,7 +1302,7 @@ internal static class FinalAuditRegression
                     var xml=XDocument.Load(stream);
                     Check(xml.Descendants().Where(x=>x.Name.LocalName=="colOff").All(x=>int.Parse(x.Value)>0),"Logo overlaps centered report title");
                 }
-            Check(zip.GetEntry("xl/media/imsat_logo.png")!=null,"IMSAT logo missing: "+file);
+            Check(zip.GetEntry("xl/media/imsat_logo.png")==null,"Legacy IMSAT logo present: "+file);
             string Read(string name){using(var r=new StreamReader(zip.GetEntry(name).Open()))return r.ReadToEnd();}
             var sheets=zip.Entries.Where(x=>x.FullName.StartsWith("xl/worksheets/sheet")&&x.FullName.EndsWith(".xml")).Select(x=>Read(x.FullName)).ToArray();
             var all=string.Join("\n",sheets);Check(all.Contains("Đơn vị đối chứng IMSAT")&&all.Contains("NGƯỜI TÍNH TOÁN")&&all.Contains("NGƯỜI KIỂM TRA")&&all.Contains("0967280686"),"Missing metadata/signature/contact");

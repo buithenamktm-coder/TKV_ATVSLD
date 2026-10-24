@@ -24,7 +24,7 @@ def test_user_pages_have_real_controls():
     assert "DataGridView" in model and "BuildTinAsync" in model
     assert "NumericUpDown" in section and "Preview" in section and "BuildProfiles" in section
     assert "Tính / cập nhật khối lượng" in volume
-    assert "SaveFileDialog" in export and "Xuất Excel / CAD" in export
+    assert "SaveFileDialog" in export and "Xuất kết quả" in export
 
 def test_cli_commands_are_not_used_by_ribbon():
     ribbon = read("src/MiningVolume.Plugin2023/RibbonBuilder.cs")

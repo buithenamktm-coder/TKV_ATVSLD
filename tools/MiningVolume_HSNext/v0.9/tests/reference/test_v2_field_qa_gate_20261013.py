@@ -26,7 +26,7 @@ def test_boundary_clipped_true_3d_faces_use_same_validator_as_cad_renderer():
 def test_export_does_not_fail_for_missing_imsat_logo_for_any_unit():
     export = src("MiningVolume.Plugin2023/Services/ExportWorkflowService.cs")
     logo = src("MiningVolume.Plugin2023/Services/XlsxBrandingInjector.cs")
-    assert "report.IncludeImsatLogo = !outside;" in export
+    assert "report.IncludeImsatLogo = false;" in export
     assert "if (report.IncludeImsatLogo)" in export
     assert "catch (Exception ex) when (!(ex is OutOfMemoryException)" in export
     assert "SimpleXlsxWriter.Write(staging, report, cancellationToken);" in export
@@ -59,7 +59,7 @@ def test_approved_ui_uses_sentence_case_no_white_menu_border_or_boxed_header():
     assert "button.FlatAppearance.BorderSize = 0;" in theme
     assert "kv.Value.FlatAppearance.BorderSize = 0;" in palette
     assert "header.Paint += (sender, args)" in palette
-    assert 'const string title = "IMSAT VOLUME";' in palette
+    assert 'const string title = "NAMVECTA VOLUME";' in palette
     assert "args.Graphics.DrawString(title, big, white, left, 12)" in palette
     assert "top.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 160F))" in section
     assert "_parameterLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 160F))" in section
@@ -94,7 +94,7 @@ def test_excel_hint_is_gone_and_user_brand_name_is_imsat_volume():
     assert "Excel: Arial 12 • bảng đóng khung" not in ui
     title = src("MiningVolume.Plugin2023/UI/MainPaletteControl.cs")
     entry = src("MiningVolume.Plugin2023/EntryPoint.cs")
-    assert '"IMSAT VOLUME"' in title
+    assert '"NAMVECTA VOLUME"' in title
     assert 'PaletteSet("IMSAT VOLUME"' in entry
 
 

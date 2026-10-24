@@ -103,7 +103,7 @@ def test_custom_horizontal_and_vertical_scales_persist_and_match_excel():
 def test_branding_and_discard_excel_tip_only():
     license_page = read("src/MiningVolume.Plugin2023/UI/LicensePage.cs")
     export = read("src/MiningVolume.Plugin2023/UI/ExportPage.cs")
-    assert 'Text = "Bản quyền IMSAT VOLUME"' in license_page
+    assert 'Text = "Bản quyền NAMVECTA VOLUME 2.0"' in license_page
     assert "Excel: Arial 12 • bảng đóng khung" not in export
     assert "ExportClicked" in export
 

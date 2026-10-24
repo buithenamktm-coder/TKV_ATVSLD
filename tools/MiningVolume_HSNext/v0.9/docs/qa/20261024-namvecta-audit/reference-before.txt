@@ -1,0 +1,257 @@
+........................................................................ [ 18%]
+....F.........F......................................................... [ 36%]
+........F................................................F.....FF....... [ 55%]
+......................F.F..F.................................F.......... [ 73%]
+.F.F....................F.s..s.......................................FFF [ 92%]
+....F........FF.............s.                                       [100%]
+=================================== FAILURES ===================================
+_____________________ test_export_contains_required_sheets _____________________
+
+    def test_export_contains_required_sheets():
+        s = read(EXPORT_SERVICE)
+        required = [
+            'NewSheet("Thông tin"',
+            'NewSheet("Dữ liệu XYZ"',
+            'NewSheet("Dữ liệu mặt cắt"',
+            'NewSheet("Thông số mặt cắt"',
+            'NewSheet("Khối lượng chi tiết"',
+            'NewSheet("Tổng hợp theo tầng"',
+            'NewSheet("Tổng khối"',
+            'NewSheet("Cảnh báo"',
+        ]
+        for token in required:
+>           assert token in s
+E           assert 'NewSheet("Tổng khối"' in 'using System;\nusing System.Collections.Generic;\nusing System.IO;\nusing System.Linq;\nusing System.Threading;\nusin...tour: return "Đường đồng mức";\n                default: return type.ToString();\n            }\n        }\n    }\n}\n'
+
+tests/reference/test_v06_report_static.py:45: AssertionError
+____________________ test_project_page_is_real_palette_page ____________________
+
+    def test_project_page_is_real_palette_page():
+        main = read('src/MiningVolume.Plugin2023/UI/MainPaletteControl.cs')
+        page = read('src/MiningVolume.Plugin2023/UI/ProjectPage.cs')
+        assert 'AppPage { Project, Data, Model, Section, Volume, Grid, Mineral, Export, License, QuickSection }' in main
+>       assert 'AddNav(nav, AppPage.Project, "1", "Dự án")' in main
+E       assert 'AddNav(nav, AppPage.Project, "1", "Dự án")' in 'using System;\nusing System.Collections.Generic;\nusing System.Drawing;\nusing System.IO;\nusing System.Windows.Forms...lue.Font = new Font("Arial", 9.5F, active ? FontStyle.Bold : FontStyle.Regular);\n            }\n        }\n    }\n}\n'
+
+tests/reference/test_v07_project_static.py:15: AssertionError
+________________ test_palette_uses_shared_professional_ui_theme ________________
+
+    def test_palette_uses_shared_professional_ui_theme():
+        ui = read("src/MiningVolume.Plugin2023/UI/MainPaletteControl.cs")
+        theme = read("src/MiningVolume.Plugin2023/UI/UiTheme.cs")
+        assert "UiTheme.ApplyPage(page)" in ui
+        assert 'Text = "QUY TRÌNH"' in ui
+>       assert 'TKL  •  Hiện / ẩn IMSAT VOLUME' in ui
+E       assert 'TKL  •  Hiện / ẩn IMSAT VOLUME' in 'using System;\nusing System.Collections.Generic;\nusing System.Drawing;\nusing System.IO;\nusing System.Windows.Forms...lue.Font = new Font("Arial", 9.5F, active ? FontStyle.Bold : FontStyle.Regular);\n            }\n        }\n    }\n}\n'
+
+tests/reference/test_v104_release_gate_static.py:254: AssertionError
+______________________ test_user_pages_have_real_controls ______________________
+
+    def test_user_pages_have_real_controls():
+        data = read("src/MiningVolume.Plugin2023/UI/DataPage.cs")
+        model = read("src/MiningVolume.Plugin2023/UI/ModelPage.cs")
+        section = read("src/MiningVolume.Plugin2023/UI/SectionPage.cs")
+        volume = read("src/MiningVolume.Plugin2023/UI/VolumePage.cs")
+        export = read("src/MiningVolume.Plugin2023/UI/ExportPage.cs")
+        assert "ComboBox" in data and "LoadModel" in data
+        assert "DataGridView" in model and "BuildTinAsync" in model
+        assert "NumericUpDown" in section and "Preview" in section and "BuildProfiles" in section
+        assert "Tính / cập nhật khối lượng" in volume
+>       assert "SaveFileDialog" in export and "Xuất Excel / CAD" in export
+E       assert ('SaveFileDialog' in 'using System;\nusing System.Drawing;\nusing System.IO;\nusing System.Linq;\nusing System.Threading.Tasks;\nusing Syst...Align = ContentAlignment.MiddleLeft,\n            Font = new Font("Arial", 9F, FontStyle.Bold)\n        };\n    }\n}\n' and 'Xuất Excel / CAD' in 'using System;\nusing System.Drawing;\nusing System.IO;\nusing System.Linq;\nusing System.Threading.Tasks;\nusing Syst...Align = ContentAlignment.MiddleLeft,\n            Font = new Font("Arial", 9F, FontStyle.Bold)\n        };\n    }\n}\n')
+
+tests/reference/test_v10_gui_first_static.py:27: AssertionError
+_________ test_five_main_groups_and_exactly_two_default_volume_methods _________
+
+    def test_five_main_groups_and_exactly_two_default_volume_methods():
+        main = read("src/MiningVolume.Plugin2023/UI/MainPaletteControl.cs")
+>       assert 'AddNav(nav, AppPage.Project, "1", "Dự án")' in main
+E       assert 'AddNav(nav, AppPage.Project, "1", "Dự án")' in 'using System;\nusing System.Collections.Generic;\nusing System.Drawing;\nusing System.IO;\nusing System.Windows.Forms...lue.Font = new Font("Arial", 9.5F, active ? FontStyle.Bold : FontStyle.Regular);\n            }\n        }\n    }\n}\n'
+
+tests/reference/test_v2_approved_workflow_layout.py:12: AssertionError
+________________ test_model_contains_input_then_tin_management _________________
+
+    def test_model_contains_input_then_tin_management():
+        p = read("src/MiningVolume.Plugin2023/UI/ModelWorkflowPage.cs")
+        main = read("src/MiningVolume.Plugin2023/UI/MainPaletteControl.cs")
+        assert 'new DataPage' in p and 'new ModelPage' in p
+        assert p.index("new DataPage") < p.index("new ModelPage")
+>       assert 'ShowPage(group == AppPage.Model ? AppPage.Data : pages[0])' in main
+E       assert 'ShowPage(group == AppPage.Model ? AppPage.Data : pages[0])' in 'using System;\nusing System.Collections.Generic;\nusing System.Drawing;\nusing System.IO;\nusing System.Windows.Forms...lue.Font = new Font("Arial", 9.5F, active ? FontStyle.Bold : FontStyle.Regular);\n            }\n        }\n    }\n}\n'
+
+tests/reference/test_v2_approved_workflow_layout.py:27: AssertionError
+________ test_export_does_not_fail_for_missing_imsat_logo_for_any_unit _________
+
+    def test_export_does_not_fail_for_missing_imsat_logo_for_any_unit():
+        export = src("MiningVolume.Plugin2023/Services/ExportWorkflowService.cs")
+        logo = src("MiningVolume.Plugin2023/Services/XlsxBrandingInjector.cs")
+>       assert "report.IncludeImsatLogo = !outside;" in export
+E       assert 'report.IncludeImsatLogo = !outside;' in 'using System;\nusing System.Collections.Generic;\nusing System.IO;\nusing System.Linq;\nusing System.Threading;\nusin...tour: return "Đường đồng mức";\n                default: return type.ToString();\n            }\n        }\n    }\n}\n'
+
+tests/reference/test_v2_field_qa_gate_20261013.py:29: AssertionError
+___ test_approved_ui_uses_sentence_case_no_white_menu_border_or_boxed_header ___
+
+    def test_approved_ui_uses_sentence_case_no_white_menu_border_or_boxed_header():
+        theme = src("MiningVolume.Plugin2023/UI/UiTheme.cs")
+        palette = src("MiningVolume.Plugin2023/UI/MainPaletteControl.cs")
+        section = src("MiningVolume.Plugin2023/UI/SectionPage.cs")
+        assert "button.Text = SentenceCaseButton(button.Text)" in theme
+        assert "button.FlatAppearance.BorderSize = 0;" in theme
+        assert "kv.Value.FlatAppearance.BorderSize = 0;" in palette
+        assert "header.Paint += (sender, args)" in palette
+>       assert 'const string title = "IMSAT VOLUME";' in palette
+E       assert 'const string title = "IMSAT VOLUME";' in 'using System;\nusing System.Collections.Generic;\nusing System.Drawing;\nusing System.IO;\nusing System.Windows.Forms...lue.Font = new Font("Arial", 9.5F, active ? FontStyle.Bold : FontStyle.Regular);\n            }\n        }\n    }\n}\n'
+
+tests/reference/test_v2_field_qa_gate_20261013.py:62: AssertionError
+_________ test_excel_hint_is_gone_and_user_brand_name_is_imsat_volume __________
+
+    def test_excel_hint_is_gone_and_user_brand_name_is_imsat_volume():
+        ui = src("MiningVolume.Plugin2023/UI/ExportPage.cs")
+        assert "Excel: Arial 12 • bảng đóng khung" not in ui
+        title = src("MiningVolume.Plugin2023/UI/MainPaletteControl.cs")
+        entry = src("MiningVolume.Plugin2023/EntryPoint.cs")
+>       assert '"IMSAT VOLUME"' in title
+E       assert '"IMSAT VOLUME"' in 'using System;\nusing System.Collections.Generic;\nusing System.Drawing;\nusing System.IO;\nusing System.Windows.Forms...lue.Font = new Font("Arial", 9.5F, active ? FontStyle.Bold : FontStyle.Regular);\n            }\n        }\n    }\n}\n'
+
+tests/reference/test_v2_field_qa_gate_20261013.py:97: AssertionError
+_ test_liquid_glass_preserves_contrasting_native_actions_and_responsive_navigation _
+
+    def test_liquid_glass_preserves_contrasting_native_actions_and_responsive_navigation():
+        theme = source("src/MiningVolume.Plugin2023/UI/UiTheme.cs")
+        palette = source("src/MiningVolume.Plugin2023/UI/MainPaletteControl.cs")
+        assert "button.UseVisualStyleBackColor = false" in theme
+        assert "button.BackColor = Accent" in theme
+        assert "button.ForeColor = Color.White" in theme
+        assert "button.BackColor = ButtonSecondary" in theme
+        assert "button.ForeColor = ButtonText" in theme
+        assert "UiTheme.ApplyRoundedButtonMask" in palette
+>       assert "ClientSize.Width < 730" in palette
+E       assert 'ClientSize.Width < 730' in 'using System;\nusing System.Collections.Generic;\nusing System.Drawing;\nusing System.IO;\nusing System.Windows.Forms...lue.Font = new Font("Arial", 9.5F, active ? FontStyle.Bold : FontStyle.Regular);\n            }\n        }\n    }\n}\n'
+
+tests/reference/test_v2_liquid_glass_ui_static.py:38: AssertionError
+______ test_excel_outside_tkv_never_gets_logo_and_missing_asset_not_fatal ______
+
+    def test_excel_outside_tkv_never_gets_logo_and_missing_asset_not_fatal():
+        report = source("MiningVolume.Core/Reporting/SpreadsheetReport.cs")
+        export = source("MiningVolume.Plugin2023/Services/ExportWorkflowService.cs")
+        logo = source("MiningVolume.Plugin2023/Services/XlsxBrandingInjector.cs")
+        runner = (R / "tests/core/run_core.py").read_text(encoding="utf-8")
+        assert "public bool IncludeImsatLogo { get; set; } = true;" in report
+>       assert "report.IncludeImsatLogo = !outside;" in export
+E       assert 'report.IncludeImsatLogo = !outside;' in 'using System;\nusing System.Collections.Generic;\nusing System.IO;\nusing System.Linq;\nusing System.Threading;\nusin...tour: return "Đường đồng mức";\n                default: return type.ToString();\n            }\n        }\n    }\n}\n'
+
+tests/reference/test_v2_owner_acceptance_20261013.py:34: AssertionError
+__________ test_ui_fix_header_gap_compact_data_types_and_button_case ___________
+
+    def test_ui_fix_header_gap_compact_data_types_and_button_case():
+        chrome = source("MiningVolume.Plugin2023/UI/MainPaletteControl.cs")
+        data = source("MiningVolume.Plugin2023/UI/DataPage.cs")
+        theme = source("MiningVolume.Plugin2023/UI/UiTheme.cs")
+        mineral = source("MiningVolume.Plugin2023/UI/MineralPage.cs")
+        # Header title/subtitle are owner-painted: WinForms transparent labels
+        # previously left solid rectangles inside AutoCAD's palette host.
+        assert 'header.Paint += (sender, args)' in chrome
+        assert 'args.Graphics.DrawString(title, big, white, left, 12)' in chrome
+>       assert 'const string title = "IMSAT VOLUME";' in chrome
+E       assert 'const string title = "IMSAT VOLUME";' in 'using System;\nusing System.Collections.Generic;\nusing System.Drawing;\nusing System.IO;\nusing System.Windows.Forms...lue.Font = new Font("Arial", 9.5F, active ? FontStyle.Bold : FontStyle.Regular);\n            }\n        }\n    }\n}\n'
+
+tests/reference/test_v2_owner_acceptance_20261013.py:68: AssertionError
+___________________ test_branding_and_discard_excel_tip_only ___________________
+
+    def test_branding_and_discard_excel_tip_only():
+        license_page = read("src/MiningVolume.Plugin2023/UI/LicensePage.cs")
+        export = read("src/MiningVolume.Plugin2023/UI/ExportPage.cs")
+>       assert 'Text = "Bản quyền IMSAT VOLUME"' in license_page
+E       assert 'Text = "Bản quyền IMSAT VOLUME"' in 'using System;\nusing System.Drawing;\nusing System.Windows.Forms;\nusing MiningVolume2023.Services;\n\nnamespace Mini...ate\n                ? Color.FromArgb(34, 96, 62)\n                : Color.FromArgb(160, 48, 48);\n        }\n    }\n}'
+
+tests/reference/test_v2_quick_sections_and_professional_ui.py:106: AssertionError
+___ test_trial_is_15_consecutive_days_and_clock_rollback_blocks_calculation ____
+
+    def test_trial_is_15_consecutive_days_and_clock_rollback_blocks_calculation():
+        s=read("src/MiningVolume.Plugin2023/Services/LicenseService.cs")
+>       assert "record.FirstUseUtc.AddDays(15)" in s
+E       AssertionError: assert 'record.FirstUseUtc.AddDays(15)' in 'using System;\nusing System.Collections.Generic;\nusing System.IO;\nusing System.Linq;\nusing System.Runtime.Serializ...rrentUser.OpenSubKey(keyPath, false))\n                return key?.GetValue(valueName) as byte[];\n        }\n    }\n}'
+
+tests/reference/test_v2_trial15_license_static.py:11: AssertionError
+__ test_activation_uses_rsa_signature_and_machine_bound_payload_not_superkey ___
+
+    def test_activation_uses_rsa_signature_and_machine_bound_payload_not_superkey():
+        s=read("src/MiningVolume.Plugin2023/Services/LicenseService.cs")
+>       assert "rsa.VerifyData(" in s
+E       AssertionError: assert 'rsa.VerifyData(' in 'using System;\nusing System.Collections.Generic;\nusing System.IO;\nusing System.Linq;\nusing System.Runtime.Serializ...rrentUser.OpenSubKey(keyPath, false))\n                return key?.GetValue(valueName) as byte[];\n        }\n    }\n}'
+
+tests/reference/test_v2_trial15_license_static.py:24: AssertionError
+________________ test_license_page_entry_and_calculation_gates _________________
+
+    def test_license_page_entry_and_calculation_gates():
+        e=read("src/MiningVolume.Plugin2023/EntryPoint.cs")
+        n=read("src/MiningVolume.Plugin2023/UI/MainPaletteControl.cs")
+        p=read("src/MiningVolume.Plugin2023/UI/LicensePage.cs")
+        assert 'CommandMethod("MV_LICENSE"' in e
+        assert "LicenseService.GetStatus()" in e
+        assert "new ContactInfoPage()" in n
+        assert "new LicensePage" in read("src/MiningVolume.Plugin2023/UI/ContactInfoPage.cs")
+>       assert "SAO CHÉP MÃ MÁY" in p
+E       AssertionError: assert 'SAO CHÉP MÃ MÁY' in 'using System;\nusing System.Drawing;\nusing System.Windows.Forms;\nusing MiningVolume2023.Services;\n\nnamespace Mini...ate\n                ? Color.FromArgb(34, 96, 62)\n                : Color.FromArgb(160, 48, 48);\n        }\n    }\n}'
+
+tests/reference/test_v2_trial15_license_static.py:41: AssertionError
+__________ test_dock_left_palette_uses_compact_vertical_scroll_layout __________
+
+    def test_dock_left_palette_uses_compact_vertical_scroll_layout():
+        palette = read("src/MiningVolume.Plugin2023/UI/MainPaletteControl.cs")
+        entry = read("src/MiningVolume.Plugin2023/EntryPoint.cs")
+>       assert "bool compact = ClientSize.Width < 730;" in palette
+E       assert 'bool compact = ClientSize.Width < 730;' in 'using System;\nusing System.Collections.Generic;\nusing System.Drawing;\nusing System.IO;\nusing System.Windows.Forms...lue.Font = new Font("Arial", 9.5F, active ? FontStyle.Bold : FontStyle.Regular);\n            }\n        }\n    }\n}\n'
+
+tests/reference/test_v2_user_requirements_20261012.py:26: AssertionError
+__________ test_high_contrast_live_palette_and_correct_seam_ore_label __________
+
+    def test_high_contrast_live_palette_and_correct_seam_ore_label():
+        theme = read("src/MiningVolume.Plugin2023/UI/UiTheme.cs")
+        palette = read("src/MiningVolume.Plugin2023/UI/MainPaletteControl.cs")
+        section = read("src/MiningVolume.Plugin2023/UI/SectionPage.cs")
+        assert "new GlassPanel(true)" in palette
+        assert "UiTheme.ChromeText" in palette
+        assert "UiTheme.ChromeBottom" in palette
+        assert palette.count("Vỉa than/quặng") >= 1
+        assert "AppPage.Mineral" in palette and "GetGroupPages" in palette
+>       assert 'AddNav(nav, AppPage.Project, "1", "Dự án")' in palette
+E       assert 'AddNav(nav, AppPage.Project, "1", "Dự án")' in 'using System;\nusing System.Collections.Generic;\nusing System.Drawing;\nusing System.IO;\nusing System.Windows.Forms...lue.Font = new Font("Arial", 9.5F, active ? FontStyle.Bold : FontStyle.Regular);\n            }\n        }\n    }\n}\n'
+
+tests/reference/test_v2_view3d_and_section_design.py:66: AssertionError
+___________ test_installed_v2_build_is_visible_in_palette_and_about ____________
+
+    def test_installed_v2_build_is_visible_in_palette_and_about():
+        identity = source("src/MiningVolume.Plugin2023/Services/RuntimeBuildIdentity.cs")
+        palette = source("src/MiningVolume.Plugin2023/UI/MainPaletteControl.cs")
+        entry = source("src/MiningVolume.Plugin2023/EntryPoint.cs")
+        ribbon = source("src/MiningVolume.Plugin2023/RibbonBuilder.cs")
+        assert "internal static string ShortTag()" in identity
+        assert "SOURCE_SHA=" in identity
+        assert 'sha.Substring(0, 8)' in identity
+        assert "BUILD UNVERIFIED" in identity
+>       assert 'const string title = "IMSAT VOLUME";' in palette
+E       assert 'const string title = "IMSAT VOLUME";' in 'using System;\nusing System.Collections.Generic;\nusing System.Drawing;\nusing System.IO;\nusing System.Windows.Forms...lue.Font = new Font("Arial", 9.5F, active ? FontStyle.Bold : FontStyle.Regular);\n            }\n        }\n    }\n}\n'
+
+tests/reference/test_v2_visible_installed_build.py:25: AssertionError
+=========================== short test summary info ============================
+FAILED tests/reference/test_v06_report_static.py::test_export_contains_required_sheets
+FAILED tests/reference/test_v07_project_static.py::test_project_page_is_real_palette_page
+FAILED tests/reference/test_v104_release_gate_static.py::test_palette_uses_shared_professional_ui_theme
+FAILED tests/reference/test_v10_gui_first_static.py::test_user_pages_have_real_controls
+FAILED tests/reference/test_v2_approved_workflow_layout.py::test_five_main_groups_and_exactly_two_default_volume_methods
+FAILED tests/reference/test_v2_approved_workflow_layout.py::test_model_contains_input_then_tin_management
+FAILED tests/reference/test_v2_field_qa_gate_20261013.py::test_export_does_not_fail_for_missing_imsat_logo_for_any_unit
+FAILED tests/reference/test_v2_field_qa_gate_20261013.py::test_approved_ui_uses_sentence_case_no_white_menu_border_or_boxed_header
+FAILED tests/reference/test_v2_field_qa_gate_20261013.py::test_excel_hint_is_gone_and_user_brand_name_is_imsat_volume
+FAILED tests/reference/test_v2_liquid_glass_ui_static.py::test_liquid_glass_preserves_contrasting_native_actions_and_responsive_navigation
+FAILED tests/reference/test_v2_owner_acceptance_20261013.py::test_excel_outside_tkv_never_gets_logo_and_missing_asset_not_fatal
+FAILED tests/reference/test_v2_owner_acceptance_20261013.py::test_ui_fix_header_gap_compact_data_types_and_button_case
+FAILED tests/reference/test_v2_quick_sections_and_professional_ui.py::test_branding_and_discard_excel_tip_only
+FAILED tests/reference/test_v2_trial15_license_static.py::test_trial_is_15_consecutive_days_and_clock_rollback_blocks_calculation
+FAILED tests/reference/test_v2_trial15_license_static.py::test_activation_uses_rsa_signature_and_machine_bound_payload_not_superkey
+FAILED tests/reference/test_v2_trial15_license_static.py::test_license_page_entry_and_calculation_gates
+FAILED tests/reference/test_v2_user_requirements_20261012.py::test_dock_left_palette_uses_compact_vertical_scroll_layout
+FAILED tests/reference/test_v2_view3d_and_section_design.py::test_high_contrast_live_palette_and_correct_seam_ore_label
+FAILED tests/reference/test_v2_visible_installed_build.py::test_installed_v2_build_is_visible_in_palette_and_about
+19 failed, 368 passed, 3 skipped, 4 subtests passed in 1.39s

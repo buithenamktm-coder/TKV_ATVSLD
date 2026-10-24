@@ -47,7 +47,7 @@ def test_workbook_defaults_compact_but_formula_dependency_retained():
     for field in ("IncludeIntervals", "IncludeSummary"):
         assert f"{field} {{ get; set; }} = true" in export
     assert "if (options.IncludeInfoSheet)" in export
-    assert 'NewSheet("Tổng hợp"' in export
+    assert 'NewSheet("01 Tổng hợp"' in export
     assert 'NewSheet("Chi tiết tầng"' in export
     assert "BandSum" in export
     assert 'AddCheck(flow, "Tổng hợp toàn khu vực", true)' in ui

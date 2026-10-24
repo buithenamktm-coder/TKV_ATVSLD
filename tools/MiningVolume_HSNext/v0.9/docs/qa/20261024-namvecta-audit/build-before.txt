@@ -1,0 +1,37 @@
+
+Welcome to .NET 8.0!
+---------------------
+SDK Version: 8.0.408
+
+Telemetry
+---------
+The .NET tools collect usage data in order to help us improve your experience. It is collected by Microsoft and shared with the community. You can opt-out of telemetry by setting the DOTNET_CLI_TELEMETRY_OPTOUT environment variable to '1' or 'true' using your favorite shell.
+
+Read more about .NET CLI Tools telemetry: https://aka.ms/dotnet-cli-telemetry
+
+----------------
+Installed an ASP.NET Core HTTPS development certificate.
+To trust the certificate, view the instructions: https://aka.ms/dotnet-https-linux
+
+----------------
+Write your first app: https://aka.ms/dotnet-hello-world
+Find out what's new: https://aka.ms/dotnet-whats-new
+Explore documentation: https://aka.ms/dotnet-docs
+Report issues and find source on GitHub: https://github.com/dotnet/core
+Use 'dotnet --help' to see available commands or visit: https://aka.ms/dotnet-cli
+--------------------------------------------------------------------------------------
+  Determining projects to restore...
+  Restored /workspace/scratch/84289221c180/namvecta/tools/MiningVolume_HSNext/v0.9/src/MiningVolume.Cad2023/MiningVolume.Cad2023.csproj (in 35 sec).
+  Restored /workspace/scratch/84289221c180/namvecta/tools/MiningVolume_HSNext/v0.9/src/MiningVolume.Plugin2023/MiningVolume.Plugin2023.csproj (in 35 sec).
+  Restored /workspace/scratch/84289221c180/namvecta/tools/MiningVolume_HSNext/v0.9/src/MiningVolume.Surface/MiningVolume.Surface.csproj (in 35 sec).
+  Restored /workspace/scratch/84289221c180/namvecta/tools/MiningVolume_HSNext/v0.9/src/MiningVolume.Core/MiningVolume.Core.csproj (in 35 sec).
+  MiningVolume.Core -> /workspace/scratch/84289221c180/namvecta/tools/MiningVolume_HSNext/v0.9/src/MiningVolume.Core/bin/Release/net48/MiningVolume.Core.dll
+  MiningVolume.Surface -> /workspace/scratch/84289221c180/namvecta/tools/MiningVolume_HSNext/v0.9/src/MiningVolume.Surface/bin/Release/net48/MiningVolume.Surface.dll
+  MiningVolume.Cad2023 -> /workspace/scratch/84289221c180/namvecta/tools/MiningVolume_HSNext/v0.9/src/MiningVolume.Cad2023/bin/Release/net48/MiningVolume.Cad2023.dll
+  MiningVolume.Plugin2023 -> /workspace/scratch/84289221c180/namvecta/tools/MiningVolume_HSNext/v0.9/src/MiningVolume.Plugin2023/bin/Release/net48/MiningVolume2023.dll
+
+Build succeeded.
+    0 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:40.19

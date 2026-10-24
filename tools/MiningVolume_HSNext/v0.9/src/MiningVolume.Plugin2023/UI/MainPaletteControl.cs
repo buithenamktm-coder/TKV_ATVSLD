@@ -308,6 +308,7 @@ namespace MiningVolume2023.UI
 
         public void ShowGroup(AppPage group)
         {
+            _updatingNav = true;
             _currentGroup = group;
             var pages = VisiblePages(group);
             _advancedVolumeButton.Visible = true;
@@ -328,7 +329,7 @@ namespace MiningVolume2023.UI
             if (!_pages.TryGetValue(page, out var control)) return;
 
             // Public MV_* commands can open a legacy page directly.
-            // Keep the simplified 5-group navigation in sync with that page.
+            // Keep the three-step navigation in sync with that page.
             AppPage targetGroup;
             switch (page)
             {

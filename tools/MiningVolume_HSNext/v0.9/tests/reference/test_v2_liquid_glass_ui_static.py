@@ -35,7 +35,7 @@ def test_liquid_glass_preserves_contrasting_native_actions_and_responsive_naviga
     assert "button.BackColor = ButtonSecondary" in theme
     assert "button.ForeColor = ButtonText" in theme
     assert "UiTheme.ApplyRoundedButtonMask" in palette
-    assert "ClientSize.Width < 730" in palette
+    assert "ClientSize.Width < 560" in palette
     assert "_compactNavigation" in palette
 
 

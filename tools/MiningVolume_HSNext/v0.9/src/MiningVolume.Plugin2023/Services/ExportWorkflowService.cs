@@ -65,6 +65,7 @@ namespace MiningVolume2023.Services
                     StringComparison.Ordinal) && unit.Length == 0)
                 throw new InvalidOperationException(
                     "Đã chọn 'Đơn vị khác (ngoài TKV)'. Hãy nhập tên đơn vị trước khi xuất Excel.");
+            report.IncludeImsatLogo = false;
             if (unit.Length == 0) return;
             bool outside = string.Equals(unitGroup, MiningUnitCatalog.OutsideTkv,
                 StringComparison.Ordinal);
@@ -331,7 +332,7 @@ namespace MiningVolume2023.Services
 
         private static ReportSheet BuildIntervalSheet(VolumeResult r, CancellationToken cancellationToken)
         {
-            var s = NewSheet("Khối lượng chi tiết", "KHỐI LƯỢNG CHI TIẾT GIỮA CÁC MẶT CẮT",
+            var s = NewSheet("02 Chi tiết", "KHỐI LƯỢNG CHI TIẾT GIỮA CÁC MẶT CẮT",
                 new[] { "Đoạn", "MC đầu", "MC cuối", "L, m", "F đào đầu", "F đào giữa", "F đào cuối", "V đào, m³", "F đắp đầu", "F đắp giữa", "F đắp cuối", "V đắp, m³", "Công thức đào", "Công thức đắp", "Ghi chú" },
                 9, 13, 13, 12, 14, 14, 14, 16, 14, 14, 14, 16, 16, 16, 32);
             s.Notes.Add("Các ô V đào/V đắp là công thức Excel thực: 1 đầu bằng 0 dùng hình chóp; chênh diện tích ≤ 40% dùng TB hai đầu; chênh > 40% dùng hình chóp cụt.");
@@ -435,7 +436,7 @@ namespace MiningVolume2023.Services
             var r = st.VolumeResult;
             double levelCut = r.Levels.Sum(x => x.CutVolume);
             double levelFill = r.Levels.Sum(x => x.FillVolume);
-            var s = NewSheet("Tổng hợp", "BẢNG TỔNG HỢP KHỐI LƯỢNG",
+            var s = NewSheet("01 Tổng hợp", "BẢNG TỔNG HỢP KHỐI LƯỢNG",
                 new[] { "Chỉ tiêu", "Đơn vị", "Giá trị" }, 45, 15, 45);
             s.Landscape = false;
             s.AutoFilter = false;
@@ -445,15 +446,20 @@ namespace MiningVolume2023.Services
 
             int detailTotalRow = 4 + r.Intervals.Count;
             int levelTotalRow = 3 + r.Levels.Count;
+            int bandCount = r.Intervals.Sum(x => x.BandVolumes.Count);
+            bool hasBandSheet = (opt.IncludeIntervals || opt.IncludeLevels) && bandCount > 0;
+            ReportCell BandTotal(string column, double fallback) => hasBandSheet
+                ? ReportCell.Formula2("=SUM('Chi tiết tầng'!" + column + "4:" + column + (3 + bandCount) + ")")
+                : ReportCell.N2(fallback);
 
-            s.Rows.Add(new[] { ReportCell.Text("Tổng khối lượng đào", true), ReportCell.Text("m³"), opt.IncludeIntervals ? ReportCell.Formula2("='Khối lượng chi tiết'!H" + detailTotalRow, true) : ReportCell.N2(r.TotalCutVolume, true) });
-            s.Rows.Add(new[] { ReportCell.Text("Tổng khối lượng đắp", true), ReportCell.Text("m³"), opt.IncludeIntervals ? ReportCell.Formula2("='Khối lượng chi tiết'!L" + detailTotalRow, true) : ReportCell.N2(r.TotalFillVolume, true) });
+            s.Rows.Add(new[] { ReportCell.Text("Tổng khối lượng đào", true), ReportCell.Text("m³"), opt.IncludeIntervals ? ReportCell.Formula2("='02 Chi tiết'!H" + detailTotalRow, true) : ReportCell.N2(r.TotalCutVolume, true) });
+            s.Rows.Add(new[] { ReportCell.Text("Tổng khối lượng đắp", true), ReportCell.Text("m³"), opt.IncludeIntervals ? ReportCell.Formula2("='02 Chi tiết'!L" + detailTotalRow, true) : ReportCell.N2(r.TotalFillVolume, true) });
             s.Rows.Add(new[] { ReportCell.Text("Chênh lệch đào - đắp", true), ReportCell.Text("m³"), ReportCell.Formula2("=C5-C6", true) });
-            s.Rows.Add(new[] { ReportCell.Text("Tổng theo tầng - đào"), ReportCell.Text("m³"), opt.IncludeLevels ? ReportCell.Formula2("='Tổng hợp theo tầng'!E" + levelTotalRow) : ReportCell.N2(levelCut) });
-            s.Rows.Add(new[] { ReportCell.Text("Tổng theo tầng - đắp"), ReportCell.Text("m³"), opt.IncludeLevels ? ReportCell.Formula2("='Tổng hợp theo tầng'!F" + levelTotalRow) : ReportCell.N2(levelFill) });
+            s.Rows.Add(new[] { ReportCell.Text("Tổng theo tầng - đào"), ReportCell.Text("m³"), opt.IncludeLevels ? ReportCell.Formula2("='Tổng hợp theo tầng'!E" + levelTotalRow) : BandTotal("H", levelCut) });
+            s.Rows.Add(new[] { ReportCell.Text("Tổng theo tầng - đắp"), ReportCell.Text("m³"), opt.IncludeLevels ? ReportCell.Formula2("='Tổng hợp theo tầng'!F" + levelTotalRow) : BandTotal("K", levelFill) });
             s.Rows.Add(new[] { ReportCell.Text("Sai lệch kiểm soát đào (chi tiết - theo tầng)"), ReportCell.Text("m³"), ReportCell.Formula3("=C5-C8") });
             s.Rows.Add(new[] { ReportCell.Text("Sai lệch kiểm soát đắp (chi tiết - theo tầng)"), ReportCell.Text("m³"), ReportCell.Formula3("=C6-C9") });
-            s.Rows.Add(new[] { ReportCell.Text("Số khoảng mặt cắt"), ReportCell.Text("khoảng"), opt.IncludeIntervals ? ReportCell.FormulaInt("=COUNTA('Khối lượng chi tiết'!A4:A" + (3 + r.Intervals.Count) + ")") : ReportCell.Int(r.Intervals.Count) });
+            s.Rows.Add(new[] { ReportCell.Text("Số khoảng mặt cắt"), ReportCell.Text("khoảng"), opt.IncludeIntervals ? ReportCell.FormulaInt("=COUNTA('02 Chi tiết'!A4:A" + (3 + r.Intervals.Count) + ")") : ReportCell.Int(r.Intervals.Count) });
             s.Rows.Add(new[] { ReportCell.Text("Số tầng / mức"), ReportCell.Text("tầng"), opt.IncludeLevels ? ReportCell.FormulaInt("=COUNTA('Tổng hợp theo tầng'!A3:A" + (2 + r.Levels.Count) + ")") : ReportCell.Int(r.Levels.Count) });
 
             // Keep C5:C9 and all existing linked volume formulas unchanged.

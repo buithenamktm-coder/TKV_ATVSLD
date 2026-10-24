@@ -7,16 +7,16 @@ def read(relative):
     return (ROOT / relative).read_text(encoding="utf-8")
 
 
-def test_five_main_groups_and_exactly_two_default_volume_methods():
+def test_three_main_groups_and_exactly_two_default_volume_methods():
     main = read("src/MiningVolume.Plugin2023/UI/MainPaletteControl.cs")
-    assert 'AddNav(nav, AppPage.Project, "1", "Dự án")' in main
-    assert 'AddNav(nav, AppPage.Model, "2", "Mô hình")' in main
-    assert 'AddNav(nav, AppPage.Volume, "3", "Tính khối lượng")' in main
-    assert 'AddNav(nav, AppPage.QuickSection, "4", "Vẽ nhanh mặt cắt")' in main
-    assert 'AddNav(nav, AppPage.License, "5", "Thông tin liên hệ")' in main
+    assert 'AddNav(nav, AppPage.Model, "1", "Dữ liệu")' in main
+    assert 'AddNav(nav, AppPage.Volume, "2", "Tính toán")' in main
+    assert 'AddNav(nav, AppPage.Export, "3", "Kết quả")' in main
+    assert '[AppPage.QuickSection] = new SectionPage(true)' in main
+    assert '[AppPage.License] = new ContactInfoPage()' in main
     assert 'case AppPage.Volume: return new[] { AppPage.Section, AppPage.Grid };' in main
-    assert 'case AppPage.Model: return new[] { AppPage.Model };' in main
-    assert 'AppPage.Mineral, AppPage.Export' in main  # preserved behind advanced view
+    assert 'case AppPage.Model: return new[] { AppPage.Data };' in main
+    assert 'AppPage.Volume, AppPage.QuickSection, AppPage.Mineral' in main  # preserved behind advanced view
 
 
 def test_model_contains_input_then_tin_management():
@@ -24,7 +24,7 @@ def test_model_contains_input_then_tin_management():
     main = read("src/MiningVolume.Plugin2023/UI/MainPaletteControl.cs")
     assert 'new DataPage' in p and 'new ModelPage' in p
     assert p.index("new DataPage") < p.index("new ModelPage")
-    assert 'ShowPage(group == AppPage.Model ? AppPage.Data : pages[0])' in main
+    assert 'ShowPage(pages[0])' in main
 
 
 def test_independent_quick_sections_and_volume_result_navigation():

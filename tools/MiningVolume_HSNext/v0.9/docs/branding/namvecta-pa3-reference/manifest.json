@@ -1,0 +1,19 @@
+{
+  "source_document": "NAMVECTA_Bo_nhan_dien_va_Master_Prompt_Chuyen_thuong_hieu.docx",
+  "document_sha256": "946b4f3a748ebce86916979d9f06d7fa013256ef1e565142cd5635640eac05dc",
+  "status": "REFERENCE_ONLY: production vector/icon approval pending",
+  "assets": [
+    {
+      "file": "image1.png",
+      "sha256": "1f41e3d3da3a4042e64dea011a7e7cd527adc54adc6b542b78edc3555d178a4f"
+    },
+    {
+      "file": "image2.png",
+      "sha256": "91aa653548ce361d158fc6be01893c87aea5bad54726a1d6083b9c234ade9161"
+    },
+    {
+      "file": "image3.jpeg",
+      "sha256": "1b84e4d63a7a615d7255ff0eb55677d83d0cf9e3593c2cec27e70527bc934eb4"
+    }
+  ]
+}

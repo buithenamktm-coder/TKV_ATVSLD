@@ -177,6 +177,9 @@ namespace MiningVolume2023.Services
             lock (Sync)
             {
                 DateTime now = DateTime.UtcNow;
+                var trial = LoadTrial() ?? ReadLegacyTrial();
+                if (trial != null && IsClockRollback(now, trial.LastUseUtc))
+                    throw new InvalidOperationException("Ngày giờ hệ thống không hợp lệ.");
                 var ledger = LoadActivation() ?? new ActivationLedger
                 {
                     History = new List<UsedPass>(), LastSeenUtc = now
@@ -236,26 +239,88 @@ namespace MiningVolume2023.Services
             byte[] fromRegistry = ReadRegistry(RegistryPath, registryValue);
             byte[] fromFile = File.Exists(file) ? File.ReadAllBytes(file) : null;
             if (fromRegistry == null && fromFile == null) return null;
-            byte[] input = fromRegistry ?? fromFile;
-            // Each store uses per-user DPAPI, never a license MachineId.
-            var value = Decode<T>(input, Entropy);
-            if (fromRegistry != null && fromFile != null)
+            var first = fromRegistry == null ? null : Decode<T>(fromRegistry, Entropy);
+            var second = fromFile == null ? null : Decode<T>(fromFile, Entropy);
+            if ((fromRegistry != null && first == null) || (fromFile != null && second == null))
+                throw new InvalidDataException("Thông tin bản quyền lưu cục bộ bị lỗi.");
+            if (typeof(T) == typeof(TrialLedger))
+                return MergeTrial(first as TrialLedger, second as TrialLedger) as T;
+            if (typeof(T) == typeof(ActivationLedger))
+                return MergeActivation(first as ActivationLedger, second as ActivationLedger) as T;
+            throw new InvalidDataException("Loại dữ liệu bản quyền không hợp lệ.");
+        }
+
+        // A write can stop between the atomic file replacement and Registry update.
+        // Preserve the earliest use of every pass and the latest observed clock
+        // across BOTH records; a stale replica must never renew a pass or trial.
+        internal static TrialLedger MergeTrial(TrialLedger first, TrialLedger second)
+        {
+            foreach (var item in new[] { first, second })
+                if (item != null && (item.FirstUseUtc == default(DateTime) ||
+                    item.LastUseUtc < item.FirstUseUtc))
+                    throw new InvalidDataException("Dữ liệu dùng thử không hợp lệ.");
+            if (first == null) return second;
+            if (second == null) return first;
+            return new TrialLedger {
+                FirstUseUtc = first.FirstUseUtc < second.FirstUseUtc ? first.FirstUseUtc : second.FirstUseUtc,
+                LastUseUtc = Max(first.LastUseUtc, second.LastUseUtc)
+            };
+        }
+
+        internal static ActivationLedger MergeActivation(ActivationLedger first, ActivationLedger second)
+        {
+            var history = new Dictionary<string, DateTime>();
+            foreach (var item in new[] { first, second })
             {
-                var other = Decode<T>(fromFile, Entropy);
-                if (other == null) throw new InvalidDataException("Thông tin bản quyền lưu trên đĩa bị lỗi.");
+                if (item == null) continue;
+                if (item.LastSeenUtc == default(DateTime) || item.History == null ||
+                    Array.IndexOf(TierNames, item.ActiveTier) < 0)
+                    throw new InvalidDataException("Dữ liệu kích hoạt không hợp lệ.");
+                var seen = new HashSet<string>();
+                foreach (var used in item.History)
+                {
+                    if (used == null || Array.IndexOf(TierNames, used.Tier) < 0 ||
+                        !seen.Add(used.Tier) || used.FirstActivationUtc == default(DateTime) ||
+                        used.FirstActivationUtc > item.LastSeenUtc)
+                        throw new InvalidDataException("Lịch sử kích hoạt không hợp lệ.");
+                    if (!history.TryGetValue(used.Tier, out var earliest) || used.FirstActivationUtc < earliest)
+                        history[used.Tier] = used.FirstActivationUtc;
+                }
+                if (!seen.Contains(item.ActiveTier))
+                    throw new InvalidDataException("Thiếu lịch sử Pass đang dùng.");
             }
-            return value;
+            if (first == null && second == null) return null;
+            if (first != null && second != null && first.LastSeenUtc == second.LastSeenUtc &&
+                first.ActiveTier != second.ActiveTier)
+                throw new InvalidDataException("Hai bản lưu kích hoạt xung đột.");
+            var latest = first == null ? second : second == null ? first :
+                (first.LastSeenUtc >= second.LastSeenUtc ? first : second);
+            return new ActivationLedger {
+                ActiveTier = latest.ActiveTier, LastSeenUtc = latest.LastSeenUtc,
+                History = TierNames.Where(history.ContainsKey).Select(tier => new UsedPass {
+                    Tier = tier, FirstActivationUtc = history[tier]
+                }).ToList()
+            };
         }
 
         private static TrialLedger ReadLegacyTrial()
         {
-            // Retain the earlier trial first-use date where possible.
-            // A corrupt legacy record must not be silently trusted.
-            byte[] raw = ReadRegistry(LegacyRegistryPath, RegistryTrialValue);
-            if (raw == null) return null;
-            var legacy = Decode<LegacyTrialLedger>(raw, LegacyEntropy);
-            if (legacy == null) return null;
-            return new TrialLedger { FirstUseUtc = legacy.FirstUseUtc, LastUseUtc = legacy.LastUseUtc };
+            // Read both historical stores without deriving or checking a machine ID.
+            string file = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "IMSAT", "MiningVolume", "License", "trial.dat");
+            byte[] registry = ReadRegistry(LegacyRegistryPath, RegistryTrialValue);
+            byte[] disk = File.Exists(file) ? File.ReadAllBytes(file) : null;
+            TrialLedger merged = null;
+            foreach (var raw in new[] { registry, disk })
+            {
+                if (raw == null) continue;
+                var legacy = Decode<LegacyTrialLedger>(raw, LegacyEntropy);
+                if (legacy == null) throw new InvalidDataException("Dữ liệu dùng thử cũ bị lỗi.");
+                merged = MergeTrial(merged, new TrialLedger {
+                    FirstUseUtc = legacy.FirstUseUtc, LastUseUtc = legacy.LastUseUtc
+                });
+            }
+            return merged;
         }
 
         private static T Decode<T>(byte[] encrypted, byte[] entropy) where T : class
