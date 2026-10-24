@@ -33,6 +33,5 @@ WizardReady=Sẵn sàng cài đặt
 ReadyLabel1=Bấm Cài đặt để chép thành phần đã chọn.
 WizardInstalling=Đang cài đặt
 InstallingLabel=Đang chép tệp và đăng ký tiện ích NAMVECTA...
-WizardFinished=Đã hoàn tất sao chép tệp
 FinishedHeadingLabel=Trình cài đặt [name] đã hoàn tất
 FinishedLabel=Đã cài các tệp vào thư mục AutoCAD được chọn. Hãy mở AutoCAD để kiểm tra lệnh và chạy MVSELFTEST; kết quả này chưa tự xác nhận tính đúng của chương trình.
