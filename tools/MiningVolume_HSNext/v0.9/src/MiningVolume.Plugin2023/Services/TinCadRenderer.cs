@@ -457,7 +457,7 @@ namespace MiningVolume2023.Services
                     "Layer " + layerName + " chỉ có mặt đứng, không có tam giác TIN phủ XY.");
             }
             return new TinSurface(modelName, support,
-                MiningVolume.Core.Compatibility.EmptyArray<MiningVolume.Core.Model.ValidationIssue>.Value,
+                MiningVolume.Core.Compatibility.EmptyArray<MiningVolume.Core.Surface.ValidationIssue>.Value,
                 vertical);
         }
 
