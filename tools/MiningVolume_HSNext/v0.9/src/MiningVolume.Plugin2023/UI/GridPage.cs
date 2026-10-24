@@ -191,7 +191,7 @@ namespace MiningVolume2023.UI
 
         private static NumericUpDown Num(decimal value,decimal min,decimal max)
         {
-            var n=new NumericUpDown{Minimum=min,Maximum=max,DecimalPlaces=2,Dock=DockStyle.Fill};
+            var n=new NoWheelNumericUpDown{Minimum=min,Maximum=max,DecimalPlaces=2,Dock=DockStyle.Fill};
             n.Value=value;return n;
         }
 
