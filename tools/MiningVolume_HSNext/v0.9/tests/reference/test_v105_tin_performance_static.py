@@ -182,7 +182,9 @@ def test_large_tin_is_file_backed_and_cad_render_uses_complete_mesh():
 def test_large_tin_ui_has_progress_and_user_cancel():
     data = read("src/MiningVolume.Plugin2023/UI/DataPage.cs")
     assert "CancellationTokenSource" in data
-    assert 'Btn("Hủy"' in data
+    assert 'Btn("Hủy dựng"' in data
+    assert '_cancelBuild.Visible=true;' in data
+    assert '_cancelBuild.Visible=false;' in data
     assert "_buildCts.Cancel()" in data
     assert "OperationCanceledException" in data
     assert "SetBuildStatus" in data
