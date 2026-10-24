@@ -466,7 +466,7 @@ namespace MiningVolume2023.UI
                       "xem/chỉnh mặt cắt rồi bấm CẬP NHẬT MẶT CẮT trước khi chốt khối lượng."
                     : string.Empty;
                 MessageBox.Show(build.Summary + review + "\r\n\r\nTIN còn lại được giữ nguyên.",
-                    "IMSAT VOLUME — TIN " + st.Get(role).Name,MessageBoxButtons.OK,
+                    "NAMVECTA VOLUME — TIN " + st.Get(role).Name,MessageBoxButtons.OK,
                     build.WarningCount>0?MessageBoxIcon.Warning:MessageBoxIcon.Information);
             }
             catch(OperationCanceledException) { _status.Text="Đã hủy. Giữ TIN trước thao tác và dữ liệu CAD gốc."; }
