@@ -10,6 +10,7 @@ import json
 import re
 import shutil
 import tempfile
+import uuid
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -61,7 +62,7 @@ def verify_input(directory, year, sha):
     for line in line_list[1:]:
         if not line.strip():
             continue
-        match = re.fullmatch(r"([a-fA-F0-9]{64})  ([A-Za-z0-9._-]+\\.dll)", line)
+        match = re.fullmatch(r"([a-fA-F0-9]{64})  ([A-Za-z0-9._-]+\.dll)", line)
         if not match or match.group(2) in actual:
             raise ValueError("Invalid build identity line for " + str(year))
         actual[match.group(2)] = match.group(1).lower()
@@ -78,15 +79,18 @@ def make_package(root, sha):
         "SchemaVersion": "1.0", "AutodeskProduct": "AutoCAD",
         "ProductType": "Application", "Name": "NAMVECTA VOLUME",
         "AppVersion": "2.0.0",
+        "ProductCode": "{" + str(uuid.uuid5(uuid.NAMESPACE_URL,
+                                  "namvecta.volume.autocad.2020-2024")) + "}",
         "Description": "NAMVECTA VOLUME 2.0 - terrain and mining volumes",
         "Author": "Bùi Thế Nam",
     })
     ET.SubElement(pkg, "RuntimeRequirements", {"OS": "Win64",
         "Platform": "AutoCAD*", "SeriesMin": "R23.1", "SeriesMax": "R24.3"})
-    components = ET.SubElement(pkg, "Components")
     for year, (series, flavor) in VERSIONS.items():
         _, dll = expected_files(year)
-        group = ET.SubElement(components, "Component")
+        # AutoCAD schema uses one Components section PER host family,
+        # each with its own RuntimeRequirements + ComponentEntry.
+        group = ET.SubElement(pkg, "Components")
         ET.SubElement(group, "RuntimeRequirements", {
             "OS": "Win64", "Platform": "AutoCAD*",
             "SeriesMin": series, "SeriesMax": series
