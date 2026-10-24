@@ -70,8 +70,10 @@ def test_real_v2_runtime_has_version_specific_selftest():
     assert "AppVersion=" in verifier
     assert "MININGVOLUME_RUNTIME_PRODUCT_VERSION" in verifier
     assert "ProductVersion=" in verifier
+    # This is the archived IMSAT host verifier; the NAMVECTA add-in
+    # deliberately identifies itself under the approved new product name.
     assert "IMSAT VOLUME V2.0 runtime self-test" in verifier
-    assert "IMSAT VOLUME V2.0 runtime self-test" in test
+    assert "NAMVECTA VOLUME 2.0 runtime self-test" in test
     assert "MiningVolume HS-Next v1.0 runtime self-test" in test
     assert "MiningVolume HS-Next v1.0 runtime self-test" in verifier
     assert "MININGVOLUME_RUNTIME_PRODUCT_VERSION = $oldProductVersion" in verifier
