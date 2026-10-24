@@ -317,9 +317,6 @@ namespace MiningVolume2023
         }
 
         [CommandMethod("MVABOUT")]
-        public void About()
-        {
-            AcApp.ShowAlertDialog("NAMVECTA VOLUME\nMine Survey & Earthwork for AutoCAD\nPhát triển: Bùi Thế Nam\nĐT/Zalo: 0967280686\nPhiên bản V2.0 (QA)");
-        }
+        public void About() => Open(AppPage.License);
     }
 }
