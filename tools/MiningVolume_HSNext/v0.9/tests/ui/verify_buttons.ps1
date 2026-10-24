@@ -187,7 +187,7 @@ $apply.Invoke($null,[object[]]@($quickPage)) | Out-Null
 [Windows.Forms.Application]::DoEvents()
 $quickAction=[Windows.Forms.Button]($quickPage.Controls.Find('btnQuickSections',$true)[0])
 $drawInQuick=[Windows.Forms.Button]($quickPage.Controls.Find('btnDrawSections',$true)[0])
-if($null -eq $quickAction -or $null -eq $drawInQuick -or !$quickAction.Visible -or $drawInQuick.Visible) {
+if($null -eq $quickAction -or !$quickAction.Visible -or ($null -ne $drawInQuick -and $drawInQuick.Visible)) {
   throw 'Independent quick-section page must show quick action and hide calculation section draw.'
 }
 $quickImage=New-Object Drawing.Bitmap(590,620)
