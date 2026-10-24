@@ -107,13 +107,13 @@ namespace MiningVolume2023.UI
             bool exportExcel = _toExcel.Checked;
             if (!exportCad && !exportExcel)
             {
-                MessageBox.Show("Chọn ít nhất một hình thức xuất: CAD hoặc Excel.", "IMSAT VOLUME",
+                MessageBox.Show("Chọn ít nhất một hình thức xuất: CAD hoặc Excel.", "NAMVECTA VOLUME",
                     MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
             if (st.VolumeResult == null || st.SectionProfiles.Count == 0)
             {
-                MessageBox.Show("Chưa có đủ mặt cắt và kết quả khối lượng để xuất.", "IMSAT VOLUME",
+                MessageBox.Show("Chưa có đủ mặt cắt và kết quả khối lượng để xuất.", "NAMVECTA VOLUME",
                     MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
@@ -231,7 +231,7 @@ namespace MiningVolume2023.UI
 
                 _status.Text = exportExcel && exportCad ? "Đã xuất bảng CAD và file Excel." :
                     exportCad ? "Đã xuất bảng khối lượng lên AutoCAD." : "Đã xuất: " + excelPath;
-                MessageBox.Show(_status.Text, "IMSAT VOLUME", MessageBoxButtons.OK,
+                MessageBox.Show(_status.Text, "NAMVECTA VOLUME", MessageBoxButtons.OK,
                     MessageBoxIcon.Information);
             }
             catch (OperationCanceledException)
