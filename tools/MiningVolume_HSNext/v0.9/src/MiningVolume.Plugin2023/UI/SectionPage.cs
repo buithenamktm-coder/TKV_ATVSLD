@@ -413,6 +413,28 @@ namespace MiningVolume2023.UI
             catch (Exception ex) { MessageBox.Show(ex.Message, "Dịch tuyến", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
         }
 
+        private void ClearOldStationLines(object sender, EventArgs e)
+        {
+            if (MessageBox.Show(
+                "Xóa tất cả tuyến mặt cắt cũ trên bình đồ và danh sách tuyến đã tạo?\r\n" +
+                "Các kết quả mặt cắt và khối lượng sẽ mất hiệu lực.\r\n" +
+                "TIN, đường đồng mức, tuyến CAD nguồn và các mặt cắt đã xuất được giữ nguyên.",
+                "Xác nhận xóa toàn bộ tuyến cũ", MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.Yes)
+                return;
+            try
+            {
+                SectionWorkflowService.ClearAllStationLines();
+                RefreshGrid();
+                _status.Text = "Đã xóa toàn bộ tuyến mặt cắt cũ trên bình đồ; giữ nguyên dữ liệu CAD nguồn.";
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.Message, "Không xóa được tuyến cũ",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
         private void DeleteLine(object s, EventArgs e)
         {
             try
