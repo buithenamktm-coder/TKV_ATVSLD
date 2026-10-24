@@ -32,7 +32,7 @@ def test_pass_offline_no_machine_identifier_in_activation_ui():
     assert "AddMonths(TierMonths[tier])" in license_service
     assert "Pass không hợp lệ" in license_service
     assert "Nhập lại không gia hạn" in license_service
-    assert license_service.count("A18AB4532DF") == 1
+    assert license_service.count("E18AB4532DF") == 1
     assert "Nhập Pass kích hoạt offline" in license_ui
     assert "_machineId" not in license_ui
     assert ".mvlic" not in license_ui
