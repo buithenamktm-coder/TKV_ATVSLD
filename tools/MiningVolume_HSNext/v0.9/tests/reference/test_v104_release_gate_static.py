@@ -111,7 +111,7 @@ def test_palette_auto_open_is_user_controlled_and_defaults_off():
     assert 'Registry.CurrentUser' in settings
     assert 'if (autoOpen)' in entry
     assert 'Startup palette auto-open is OFF' in entry
-    assert 'Tự động mở bảng IMSAT VOLUME khi khởi động AutoCAD' in project
+    assert 'Tự động mở bảng NAMVECTA VOLUME khi khởi động AutoCAD' in project
     assert 'UserSettingsService.AutoOpenPalette = _autoOpen.Checked' in project
 
 
@@ -148,7 +148,7 @@ def test_palette_has_direct_show_hide_toggle_and_startup_default_off():
     selftest = read("src/MiningVolume.Plugin2023/Services/SelfTestService.cs")
     assert "Bật/tắt palette MiningVolume hoạt động" in selftest
     assert "EntryPoint.TogglePalette();" in selftest
-    assert "Tự động mở bảng IMSAT VOLUME khi khởi động AutoCAD" in project
+    assert "Tự động mở bảng NAMVECTA VOLUME khi khởi động AutoCAD" in project
     assert "if (key == null) return false;" in settings
 
 
