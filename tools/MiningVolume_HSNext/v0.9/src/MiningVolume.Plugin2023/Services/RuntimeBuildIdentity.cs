@@ -33,7 +33,7 @@ namespace MiningVolume2023.Services
 
         internal static string Describe()
         {
-            var result=new StringBuilder("IMSAT MiningVolume V2.0 — Bùi Thế Nam — ĐT/Zalo: 0967280686\r\n");
+            var result=new StringBuilder("NAMVECTA VOLUME 2.0 — Bùi Thế Nam — ĐT/Zalo: 0967280686\r\n");
             string root=Path.GetDirectoryName(typeof(RuntimeBuildIdentity).Assembly.Location);
             string manifest=Path.Combine(root,"BUILD_IDENTITY.txt");
             result.AppendLine("Loaded plugin directory: "+root);
