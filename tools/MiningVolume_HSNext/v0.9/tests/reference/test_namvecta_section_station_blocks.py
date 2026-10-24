@@ -50,7 +50,7 @@ def test_clear_old_stations_erases_cad_preview_then_state_and_asks_confirmation(
     assert 'state.VolumeResult = null;' in f
     assert 'Button("Xóa toàn bộ tuyến cũ", ClearOldStationLines)' in section
     assert 'MessageBoxButtons.YesNo' in section
-    clear=renderer.split('public static void ClearPreview(Database db)',1)[1].split('public static void ReplaceProfiles(',1)[0]
+    clear=renderer.split('public static void ClearPreview(Database db,',1)[1].split('public static void ReplaceProfiles(',1)[0]
     assert 'EraseOnLayers(ms, tr, clear)' in clear
     assert 'lt.Has(PreviewLayer)' in clear
     assert 'lt.Has(PreviewLabelLayer)' in clear
