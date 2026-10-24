@@ -62,6 +62,69 @@ namespace MiningVolume2023.Services
             }
         }
 
+        /// <summary>
+        /// Remove BOTH application-owned TINs from an existing DWG, including a
+        /// DWG reopened without a restored in-memory TinSurface. All 3DFACE
+        /// objects are validated before mutation; both layers are then erased
+        /// in ONE transaction, so failure on TK cannot delete only HT.
+        /// Does not touch survey entities or change any layer's prior flags.
+        /// </summary>
+        public static int ClearPair(Database db, string existingLayer, string designLayer)
+        {
+            if (db == null) throw new ArgumentNullException(nameof(db));
+            if (string.IsNullOrWhiteSpace(existingLayer) ||
+                string.IsNullOrWhiteSpace(designLayer) ||
+                string.Equals(existingLayer, designLayer, StringComparison.OrdinalIgnoreCase))
+                throw new ArgumentException("Cần hai layer TIN đầu ra khác nhau.");
+
+            // Inspect the physical DWG, not ProjectState/TinCadFaceCount.
+            // Same preflight safety protocol as ReplacePair: reject ANY
+            // foreign entity on either reserved layer before erasing a face.
+            var verifiedFaces = ValidateExistingPairBeforeMutation(
+                db, existingLayer, designLayer);
+            if (verifiedFaces.Count == 0) return 0;
+
+            using (var tr = db.TransactionManager.StartTransaction())
+            {
+                var lt = (LayerTable)tr.GetObject(db.LayerTableId, OpenMode.ForRead);
+                var existingId = lt.Has(existingLayer) ? lt[existingLayer] : ObjectId.Null;
+                var designId = lt.Has(designLayer) ? lt[designLayer] : ObjectId.Null;
+
+                // Only existing output layers are touched. Never synthesize a
+                // layer as a side effect of the delete command.
+                var originalLocks = new Dictionary<ObjectId, bool>();
+                foreach (var layerId in new[] { existingId, designId })
+                {
+                    if (layerId.IsNull) continue;
+                    MoveCurrentLayerAwayIfNeeded(db, tr, layerId);
+                    var layer = (LayerTableRecord)tr.GetObject(layerId, OpenMode.ForWrite);
+                    originalLocks[layerId] = layer.IsLocked;
+                    layer.IsLocked = false;
+                }
+
+                // One atomic, non-interruptible phase after the last Esc poll.
+                // If any entity changed, dispose without Commit to roll back.
+                foreach (ObjectId id in verifiedFaces)
+                {
+                    var face = tr.GetObject(id, OpenMode.ForWrite) as Face;
+                    if (face == null ||
+                        (face.LayerId != existingId && face.LayerId != designId))
+                        throw new InvalidOperationException(
+                            "TIN trong DWG thay đổi sau khi kiểm tra; không xóa.");
+                    face.Erase();
+                }
+
+                foreach (var lockState in originalLocks)
+                {
+                    var layer = (LayerTableRecord)tr.GetObject(
+                        lockState.Key, OpenMode.ForWrite);
+                    layer.IsLocked = lockState.Value;
+                }
+                tr.Commit();
+            }
+            return verifiedFaces.Count;
+        }
+
         private static void ValidateSurfaceBeforePairMutation(TinSurface tin, string layer)
         {
             if (tin == null) throw new ArgumentNullException(nameof(tin));
