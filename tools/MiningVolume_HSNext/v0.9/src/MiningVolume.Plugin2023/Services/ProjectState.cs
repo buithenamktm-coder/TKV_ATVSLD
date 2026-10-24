@@ -171,6 +171,9 @@ namespace MiningVolume2023.Services
         // This flag applies only to a checked CAD surface, never an arbitrary
         // DWG layer or a synthetic empty mesh.
         public bool TinRestoredFromCad { get; set; }
+        // Fail closed if the previously saved surveyed X/Y/Z fingerprint no
+        // longer matches the DWG. TIN CAD still exists but is not certified.
+        public bool CadRecoveryBlocked { get; set; }
         public bool IsTinCurrent
         {
             get
@@ -341,6 +344,7 @@ namespace MiningVolume2023.Services
             s.TinCadFaceCount = 0;
             s.TinCadIsPreview = false;
             s.TinRestoredFromCad = false;
+            s.CadRecoveryBlocked = false;
             s.LastBuiltUtc = null;
             s.AllowedTypes.Clear();
         }
