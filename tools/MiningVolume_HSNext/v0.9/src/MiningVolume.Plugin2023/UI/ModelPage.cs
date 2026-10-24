@@ -354,13 +354,13 @@ namespace MiningVolume2023.UI
             var session = state.Get(role);
             if (session.Tin == null && session.TinCadFaceCount == 0) {
                 MessageBox.Show(this, "Mô hình TIN đang chọn chưa được tạo.",
-                    "IMSAT VOLUME", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    "NAMVECTA VOLUME", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
             var document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument;
             if (document == null) {
                 MessageBox.Show(this, "Không có bản vẽ AutoCAD đang hoạt động.",
-                    "IMSAT VOLUME", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    "NAMVECTA VOLUME", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
             string modelName = role == ModelRole.Existing ? "hiện trạng" : "thiết kế";
@@ -386,7 +386,7 @@ namespace MiningVolume2023.UI
             }
             catch (Exception ex) {
                 MessageBox.Show(this, "Không thể xóa TIN. Mô hình được giữ lại nếu thao tác CAD thất bại.\r\n" + ex.Message,
-                    "IMSAT VOLUME", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    "NAMVECTA VOLUME", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -415,7 +415,7 @@ namespace MiningVolume2023.UI
                     $"TIN {ProjectState.Current.Get(role).Name} đã tạo thành công.\r\n\r\n" +
                     $"Layer TIN: {ProjectState.Current.Get(role).TinLayer}\r\n" +
                     build.Summary,
-                    "IMSAT VOLUME - TIN",
+                    "NAMVECTA VOLUME - TIN",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Information);
             }
@@ -447,7 +447,7 @@ namespace MiningVolume2023.UI
                 .DocumentManager.MdiActiveDocument;
             if(startingDocument==null)
             {
-                MessageBox.Show(this,"Chưa mở bản vẽ AutoCAD.","IMSAT VOLUME",
+                MessageBox.Show(this,"Chưa mở bản vẽ AutoCAD.","NAMVECTA VOLUME",
                     MessageBoxButtons.OK,MessageBoxIcon.Warning);
                 return;
             }
@@ -457,7 +457,7 @@ namespace MiningVolume2023.UI
                 "Đường breakline KHÔNG được giữ như cạnh bắt buộc. "+
                 "Chỉ vẽ trên layer riêng TEST_ONLY, không thay TIN hiện trạng/thiết kế chính thức.\r\n\r\n"+
                 "KẾT QUẢ KHÔNG DÙNG TÍNH KHỐI LƯỢNG. Tiếp tục?",
-                "IMSAT VOLUME – TIN thử nghiệm",
+                "NAMVECTA VOLUME – TIN thử nghiệm",
                 MessageBoxButtons.YesNo,MessageBoxIcon.Warning,
                 MessageBoxDefaultButton.Button2)!=DialogResult.Yes) return;
 
@@ -500,7 +500,7 @@ namespace MiningVolume2023.UI
                     {
                         Filter="CSV phân tích trùng XY (*.csv)|*.csv",
                         DefaultExt="csv",AddExtension=true,OverwritePrompt=true,
-                        FileName="IMSAT_TIN_Z_TB_"+(role==ModelRole.Existing?"HT":"TK")+
+                        FileName="NAMVECTA_TIN_Z_TB_"+(role==ModelRole.Existing?"HT":"TK")+
                             "_THU_"+DateTime.Now.ToString("yyyyMMdd_HHmm")+".csv"
                     })
                         if(dlg.ShowDialog(this)==DialogResult.OK)
@@ -540,7 +540,7 @@ namespace MiningVolume2023.UI
             catch(OperationCanceledException)
             {
                 MessageBox.Show(this,"Đã hủy dựng TIN Z trung bình. Không thay TIN chính thức.",
-                    "IMSAT VOLUME",MessageBoxButtons.OK,MessageBoxIcon.Information);
+                    "NAMVECTA VOLUME",MessageBoxButtons.OK,MessageBoxIcon.Information);
             }
             catch(Exception ex)
             {
