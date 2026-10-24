@@ -59,8 +59,8 @@ namespace MiningVolume2023.UI
             _periodType = new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList };
             _periodType.Items.AddRange(new object[] { VolumePeriodCatalog.Month,
                 VolumePeriodCatalog.Quarter, VolumePeriodCatalog.Year });
-            _periodNumber = new NumericUpDown { Minimum = 1, Maximum = 12, Width = 70, Value = 1 };
-            _periodYear = new NumericUpDown { Minimum = 1900, Maximum = 2200, Width = 84, Value = DateTime.Now.Year };
+            _periodNumber = new NoWheelNumericUpDown { Minimum = 1, Maximum = 12, Width = 70, Value = 1 };
+            _periodYear = new NoWheelNumericUpDown { Minimum = 1900, Maximum = 2200, Width = 84, Value = DateTime.Now.Year };
             _periodNumberLabel = new Label { Text = "Tháng", AutoSize = true, Padding = new Padding(0, 5, 0, 0) };
             var periodValues = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false };
             periodValues.Controls.Add(_periodNumberLabel);
