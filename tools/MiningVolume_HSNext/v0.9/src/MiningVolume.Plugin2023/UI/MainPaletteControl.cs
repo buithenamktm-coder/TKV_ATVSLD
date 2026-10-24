@@ -157,33 +157,10 @@ namespace MiningVolume2023.UI
                 BackColor = UiTheme.ChromeBottom
             };
 
+            // Do not ship the former IMSAT logo under a NAMVECTA title.
+            // Work must add the approved PA3 asset from the user's brand DOCX
+            // before the NAMVECTA release acceptance gate can pass.
             int textLeft = 14;
-            try
-            {
-                // Load from this add-in, not acad.exe's application directory.
-                using (var stream = typeof(MainPaletteControl).Assembly.GetManifestResourceStream(
-                    "MiningVolume2023.Assets.imsat_logo_64.png"))
-                {
-                    if (stream != null)
-                    {
-                        Image logoImage;
-                        using (var original = Image.FromStream(stream))
-                            logoImage = new Bitmap(original);
-                        var logo = new PictureBox
-                        {
-                            Image = logoImage,
-                            SizeMode = PictureBoxSizeMode.Zoom,
-                            Size = new Size(48, 48),
-                            Location = new Point(15, 14),
-                            BackColor = Color.Transparent
-                        };
-                        logo.Disposed += (s, e) => logoImage.Dispose();
-                        header.Controls.Add(logo);
-                        textLeft = 76;
-                    }
-                }
-            }
-            catch { }
 
             // Paint the title directly on the frosted header instead of
             // placing transparent WinForms Labels over a UserPaint panel.
@@ -369,7 +346,7 @@ namespace MiningVolume2023.UI
             }
             // Legacy MV_* commands keep access to expert pages while the
             // ordinary user sees only the three main workflow steps.
-            if (!VisiblePages(targetGroup).Contains(page))
+            if (Array.IndexOf(VisiblePages(targetGroup), page) < 0)
                 _expandedGroups.Add(targetGroup);
             if (_currentGroup != targetGroup)
             {
