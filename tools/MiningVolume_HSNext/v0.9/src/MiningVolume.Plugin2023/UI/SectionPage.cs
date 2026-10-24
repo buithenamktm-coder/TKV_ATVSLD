@@ -183,6 +183,8 @@ namespace MiningVolume2023.UI
             tools.Controls.Add(Button("Thêm tuyến", AddLine));
             tools.Controls.Add(Button("Dịch tuyến", MoveLine));
             tools.Controls.Add(Button("Xóa tuyến", DeleteLine));
+            if (!_quickOnly)
+                tools.Controls.Add(Button("Xóa toàn bộ tuyến cũ", ClearOldStationLines));
             tools.Controls.Add(Button("Xóa preview", (s, e) => SectionWorkflowService.ClearPreview()));
             var updateEdited = Button("Tính toán khối lượng trên mặt cắt", UpdateEditedProfiles);
             updateEdited.Name = "btnUpdateEditedSections";
