@@ -264,6 +264,12 @@ namespace MiningVolume2023.Services
                 ReportCell.Text(""),ReportCell.Text(unitName ?? "")});
             s.Rows.Add(new ReportCell[]{ReportCell.Text("Kỳ tính khối lượng",true),
                 ReportCell.Text(""),ReportCell.Text(period)});
+            // Contact used to exist only on the now-optional information sheet.
+            // Keep it on the visible summary, without adding a third worksheet.
+            s.Rows.Add(new ReportCell[]{ReportCell.Text("Người phát triển",true),
+                ReportCell.Text(""),ReportCell.Text("Bùi Thế Nam")});
+            s.Rows.Add(new ReportCell[]{ReportCell.Text("Điện thoại liên hệ",true),
+                ReportCell.Text(""),ReportCell.Text("0967280686")});
             s.Rows.Add(new ReportCell[]{ReportCell.Text(""),ReportCell.Text(""),ReportCell.Text("")});
             s.Rows.Add(new ReportCell[]{ReportCell.Text("NGƯỜI TÍNH TOÁN",true),
                 ReportCell.Text(""),ReportCell.Text("NGƯỜI KIỂM TRA",true)});
