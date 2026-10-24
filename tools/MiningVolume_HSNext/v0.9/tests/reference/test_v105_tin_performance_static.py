@@ -9,7 +9,7 @@ def test_renderer_replaces_once_and_prefilters_tin_clear_before_destructive_phas
     s = read("src/MiningVolume.Plugin2023/Services/TinCadRenderer.cs")
     pair = s[s.index("public static int[] ReplacePair"):s.index("public static int ClearPair(")]
     pair_clear = s[s.index("private static void ClearExistingPairInTransaction"):s.index("private static int ReplaceInTransaction")]
-    replace = s[s.index("private static int ReplaceInTransaction"):s.index("public static int Clear")]
+    replace = s[s.index("private static int ReplaceInTransaction"):s.index("public static int Clear(")]
     clear = s[s.index("public static int Clear("):s.index("public static TinSurface ReadStoredTin(")]
     # Pair export clears both layers in one traversal, then writes each TIN
     # without entering the single-TIN cleanup loop.
