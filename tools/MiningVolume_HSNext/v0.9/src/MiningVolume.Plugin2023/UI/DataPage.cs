@@ -76,7 +76,7 @@ namespace MiningVolume2023.UI
             {
                 Text = "Nguồn dữ liệu",
                 Width = 520,
-                Height = 154,
+                Height = 182,
                 Margin = new Padding(0, 0, 0, 5)
             };
             var source = _sourceTable = new TableLayoutPanel
@@ -128,7 +128,7 @@ namespace MiningVolume2023.UI
             {
                 Text = "Loại dữ liệu tham gia TIN",
                 Width = 520,
-                Height = 88,
+                Height = 149,
                 Margin = new Padding(0, 0, 0, 5)
             };
             _types = new CheckedListBox
@@ -136,8 +136,8 @@ namespace MiningVolume2023.UI
                 Dock = DockStyle.Fill,
                 CheckOnClick = true,
                 IntegralHeight = false,
-                MultiColumn = true,
-                ColumnWidth = 190, // recalculated for exactly two compact columns
+                MultiColumn = false,
+                ColumnWidth = 190, // 2-column layout only when the viewport can fit both
                 HorizontalScrollbar = false,
                 BorderStyle = BorderStyle.None,
                 Margin = new Padding(0),
@@ -258,11 +258,20 @@ namespace MiningVolume2023.UI
 
             Action resizeCards = () =>
             {
-                int width = Math.Max(1, viewport.ClientSize.Width -
-                    SystemInformation.VerticalScrollBarWidth - body.Padding.Horizontal - 2);
-                foreach (Control card in body.Controls) card.Width = width;
-                _types.ColumnWidth = Math.Max(90, (_types.ClientSize.Width - 12) / 2);
-                actions.Height = _cancelBuild.Visible && width < 500 ? 72 : 38;
+                int width = Math.Max(180, viewport.ClientSize.Width -
+                    SystemInformation.VerticalScrollBarWidth - body.Padding.Horizontal - 6);
+                // Only card containers stretch; do not stretch small controls.
+                body.Width = width + body.Padding.Horizontal;
+                foreach (Control card in body.Controls)
+                    if (card is GroupBox || ReferenceEquals(card, actions))
+                        card.Width = width;
+                bool twoColumns = width >= 370;
+                _types.MultiColumn = twoColumns;
+                _types.ColumnWidth = twoColumns
+                    ? Math.Max(170, (_types.ClientSize.Width - 12) / 2)
+                    : Math.Max(150, _types.ClientSize.Width - 8);
+                typeBox.Height = twoColumns ? 93 : 149;
+                actions.Height = (_cancelBuild.Visible || width < 350) ? 72 : 38;
                 ApplyResponsiveSourceLayout(width);
             };
             viewport.SizeChanged += (s, e) => resizeCards();
@@ -288,11 +297,11 @@ namespace MiningVolume2023.UI
                 _sourceTable.RowCount = compact ? 4 : 2;
                 if (compact)
                 {
-                    _sourceBox.Height = 164;
+                    _sourceBox.Height = 182;
                     _sourceTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 40));
                     _sourceTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 60));
                     for (int k = 0; k < 4; k++)
-                        _sourceTable.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
+                        _sourceTable.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
                     _sourceTable.Controls.Add(_sourceLabels[0], 0, 0);
                     _sourceTable.Controls.Add(_existingLayer, 1, 0);
                     _sourceTable.Controls.Add(_sourceLoad[0], 0, 1);
@@ -301,10 +310,17 @@ namespace MiningVolume2023.UI
                     _sourceTable.Controls.Add(_designLayer, 1, 2);
                     _sourceTable.Controls.Add(_sourceLoad[1], 0, 3);
                     _sourceTable.Controls.Add(_sourceChoose[1], 1, 3);
+                    for (int i = 0; i < 2; i++)
+                    {
+                        _sourceLoad[i].MinimumSize = new Size(0, 28);
+                        _sourceChoose[i].MinimumSize = new Size(0, 28);
+                        _sourceLoad[i].Margin = new Padding(2);
+                        _sourceChoose[i].Margin = new Padding(2);
+                    }
                 }
                 else
                 {
-                    _sourceBox.Height = 93;
+                    _sourceBox.Height = 105;
                     _sourceTable.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 76));
                     _sourceTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
                     _sourceTable.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96));
@@ -443,7 +459,7 @@ namespace MiningVolume2023.UI
                 operation=SurfaceWorkflowService.EnterInteractiveBuild();
                 RefreshBuildButtons();_cancelBuild.Enabled=true;
                 _cancelBuild.Visible=true;
-                _actionsPanel.Height = _actionsPanel.Width < 500 ? 72 : 38;
+                _actionsPanel.Height = _actionsPanel.Width < 350 ? 72 : 38;
                 _sourceBox.Enabled=false;_types.Enabled=false;
                 var totalWatch=Stopwatch.StartNew();
                 SetBuildStatus($"Đang dựng TIN {st.Get(role).Name}...");
@@ -481,7 +497,7 @@ namespace MiningVolume2023.UI
                 operation?.Dispose();
                 _buildCts.Dispose();_buildCts=null;
                 _cancelBuild.Enabled=false;_cancelBuild.Visible=false;
-                _actionsPanel.Height = 38;
+                _actionsPanel.Height = _actionsPanel.Width < 350 ? 72 : 38;
                 _sourceBox.Enabled=true;_types.Enabled=true;
                 RefreshBuildButtons();
             }
