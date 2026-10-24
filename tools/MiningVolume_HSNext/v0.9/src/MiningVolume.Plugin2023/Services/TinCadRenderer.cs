@@ -69,7 +69,8 @@ namespace MiningVolume2023.Services
         /// in ONE transaction, so failure on TK cannot delete only HT.
         /// Does not touch survey entities or change any layer's prior flags.
         /// </summary>
-        public static int ClearPair(Database db, string existingLayer, string designLayer)
+        public static int ClearPair(Database db, string existingLayer, string designLayer,
+            Action<Transaction> afterClearInSameTransaction = null)
         {
             if (db == null) throw new ArgumentNullException(nameof(db));
             if (string.IsNullOrWhiteSpace(existingLayer) ||
@@ -82,7 +83,8 @@ namespace MiningVolume2023.Services
             // foreign entity on either reserved layer before erasing a face.
             var verifiedFaces = ValidateExistingPairBeforeMutation(
                 db, existingLayer, designLayer);
-            if (verifiedFaces.Count == 0) return 0;
+            if (verifiedFaces.Count == 0 && afterClearInSameTransaction == null)
+                return 0;
 
             using (var tr = db.TransactionManager.StartTransaction())
             {
@@ -120,6 +122,9 @@ namespace MiningVolume2023.Services
                         lockState.Key, OpenMode.ForWrite);
                     layer.IsLocked = lockState.Value;
                 }
+                // Store DWG project flags and erased CAD faces atomically:
+                // never let a saved project rebuild the removed TINs at reopen.
+                afterClearInSameTransaction?.Invoke(tr);
                 tr.Commit();
             }
             return verifiedFaces.Count;
