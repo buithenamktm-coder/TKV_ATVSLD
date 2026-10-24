@@ -31,7 +31,7 @@ def test_excel_outside_tkv_never_gets_logo_and_missing_asset_not_fatal():
     logo = source("MiningVolume.Plugin2023/Services/XlsxBrandingInjector.cs")
     runner = (R / "tests/core/run_core.py").read_text(encoding="utf-8")
     assert "public bool IncludeImsatLogo { get; set; } = true;" in report
-    assert "report.IncludeImsatLogo = !outside;" in export
+    assert "report.IncludeImsatLogo = false;" in export
     assert "if (report.IncludeImsatLogo)" in export
     assert "SimpleXlsxWriter.Write(staging, report, cancellationToken);" in export
     assert "if (!report.IncludeImsatLogo) return;" in logo
@@ -65,7 +65,7 @@ def test_ui_fix_header_gap_compact_data_types_and_button_case():
     # previously left solid rectangles inside AutoCAD's palette host.
     assert 'header.Paint += (sender, args)' in chrome
     assert 'args.Graphics.DrawString(title, big, white, left, 12)' in chrome
-    assert 'const string title = "IMSAT VOLUME";' in chrome
+    assert 'const string title = "NAMVECTA VOLUME";' in chrome
     assert "kv.Value.FlatAppearance.BorderSize = 0;" in chrome
     assert "HorizontalScrollbar = false" in data
     assert "ColumnWidth = 148" in data
@@ -78,7 +78,7 @@ def test_ui_fix_header_gap_compact_data_types_and_button_case():
     assert "top.RowStyles.Add(new RowStyle(SizeType.Absolute, i < 2 ? 54F : 35F))" in sections
     assert "_parameterLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, k < 4 ? 48F : 35F))" in sections
     assert "float preferred = 440F;" in sections
-    assert "Bản quyền IMSAT VOLUME" in source("MiningVolume.Plugin2023/UI/LicensePage.cs")
+    assert "Bản quyền NAMVECTA VOLUME" in source("MiningVolume.Plugin2023/UI/LicensePage.cs")
 
 
 def test_professional_formula_quick_section_and_custom_scales():

@@ -21,7 +21,7 @@ namespace MiningVolume2023.UI
                 Font = new Font("Arial", 10F),
                 ForeColor = UiTheme.TextStrong,
                 Padding = new Padding(12),
-                Text = "IMSAT VOLUME" + Environment.NewLine +
+                Text = "NAMVECTA VOLUME 2.0" + Environment.NewLine +
                        "Phiên bản: " + (version == null ? "V2.0" : version.ToString()) + Environment.NewLine +
                        "Phát triển: Bùi Thế Nam" + Environment.NewLine +
                        "Điện thoại/Zalo: 0967280686" + Environment.NewLine + Environment.NewLine +

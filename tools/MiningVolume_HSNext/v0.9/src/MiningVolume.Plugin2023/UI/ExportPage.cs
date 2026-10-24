@@ -34,7 +34,7 @@ namespace MiningVolume2023.UI
 
             Controls.Add(new Label
             {
-                Text = "XUẤT BẢNG EXCEL",
+                Text = "Xuất kết quả",
                 Dock = DockStyle.Top,
                 Height = 32,
                 Font = new Font("Arial", 11F, FontStyle.Bold)
@@ -58,13 +58,13 @@ namespace MiningVolume2023.UI
 
             var box = new GroupBox { Text = "Nội dung xuất", Dock = DockStyle.Top, Height = 222 };
             var flow = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, Padding = new Padding(7) };
-            _xyz = AddCheck(flow, "Dữ liệu X-Y-Z mô hình hiện trạng và thiết kế");
-            _sectionData = AddCheck(flow, "Dữ liệu hình học mặt cắt X-Y-Z");
-            _sectionArea = AddCheck(flow, "Thông số + diện tích đào, đắp từng mặt cắt");
-            _detail = AddCheck(flow, "Khối lượng chi tiết giữa các mặt cắt");
-            _levels = AddCheck(flow, "Tổng hợp khối lượng theo tầng / mức");
-            _summary = AddCheck(flow, "Tổng hợp toàn khu vực");
-            _warnings = AddCheck(flow, "Cảnh báo và ghi chú kiểm soát");
+            _xyz = AddCheck(flow, "Dữ liệu X-Y-Z mô hình hiện trạng và thiết kế", false);
+            _sectionData = AddCheck(flow, "Dữ liệu hình học mặt cắt X-Y-Z", false);
+            _sectionArea = AddCheck(flow, "Thông số + diện tích đào, đắp từng mặt cắt", false);
+            _detail = AddCheck(flow, "Khối lượng chi tiết giữa các mặt cắt", true);
+            _levels = AddCheck(flow, "Tổng hợp khối lượng theo tầng / mức", false);
+            _summary = AddCheck(flow, "Tổng hợp toàn khu vực", true);
+            _warnings = AddCheck(flow, "Cảnh báo và ghi chú kiểm soát", false);
             box.Controls.Add(flow);
             Controls.Add(box);
             box.BringToFront();
@@ -81,7 +81,7 @@ namespace MiningVolume2023.UI
             bottom.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             bottom.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 180));
             _status = new Label { Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, ForeColor = Color.DimGray, Text = "Cần thành lập mặt cắt và tính khối lượng trước khi xuất." };
-            _export = new Button { Text = "Xuất Excel / CAD", Dock = DockStyle.Top, Height = 38, Font = new Font("Arial", 10F, FontStyle.Bold) };
+            _export = new Button { Text = "Xuất kết quả", Dock = DockStyle.Top, Height = 38, Font = new Font("Arial", 10F, FontStyle.Bold) };
             _export.Click += ExportClicked;
             bottom.Controls.Add(_status, 0, 0);
             bottom.Controls.Add(_export, 1, 0);
@@ -145,12 +145,12 @@ namespace MiningVolume2023.UI
             {
                 using (var dlg = new SaveFileDialog
                 {
-                    Title = "Xuất báo cáo IMSAT VOLUME",
+                    Title = "Xuất báo cáo NAMVECTA VOLUME",
                     Filter = "Excel Workbook (*.xlsx)|*.xlsx",
                     DefaultExt = "xlsx",
                     AddExtension = true,
                     OverwritePrompt = true,
-                    FileName = "IMSAT_VOLUME_KhoiLuong_" + DateTime.Now.ToString("yyyyMMdd_HHmm") + ".xlsx"
+                    FileName = "NAMVECTA_VOLUME_KhoiLuong_" + DateTime.Now.ToString("yyyyMMdd_HHmm") + ".xlsx"
                 })
                 {
                     if (dlg.ShowDialog(this) != DialogResult.OK) return;
@@ -251,7 +251,7 @@ namespace MiningVolume2023.UI
             finally
             {
                 _exportCts = null; cts.Dispose();
-                _export.Text = "Xuất Excel / CAD";
+                _export.Text = "Xuất kết quả";
                 UseWaitCursor = false;
                 RefreshState();
             }
@@ -315,9 +315,9 @@ namespace MiningVolume2023.UI
                     : "Cần thành lập mặt cắt và tính khối lượng trước khi xuất.";
         }
 
-        private static CheckBox AddCheck(Control parent, string text)
+        private static CheckBox AddCheck(Control parent, string text, bool enabledByDefault)
         {
-            var c = new CheckBox { Text = text, Checked = true, AutoSize = true, Margin = new Padding(4, 3, 4, 3) };
+            var c = new CheckBox { Text = text, Checked = enabledByDefault, AutoSize = true, Margin = new Padding(4, 3, 4, 3) };
             parent.Controls.Add(c);
             return c;
         }

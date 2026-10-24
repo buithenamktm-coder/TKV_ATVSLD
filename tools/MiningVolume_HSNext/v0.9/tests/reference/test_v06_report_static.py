@@ -36,9 +36,9 @@ def test_export_contains_required_sheets():
         'NewSheet("Dữ liệu XYZ"',
         'NewSheet("Dữ liệu mặt cắt"',
         'NewSheet("Thông số mặt cắt"',
-        'NewSheet("Khối lượng chi tiết"',
+        'NewSheet("02 Chi tiết"',
         'NewSheet("Tổng hợp theo tầng"',
-        'NewSheet("Tổng khối"',
+        'NewSheet("01 Tổng hợp"',
         'NewSheet("Cảnh báo"',
     ]
     for token in required:
@@ -116,8 +116,8 @@ def test_xlsx_writer_supports_real_formulas_and_recalculation():
 
 def test_export_links_summary_to_detail_and_level_sheets():
     s = read(EXPORT_SERVICE)
-    assert "'Khối lượng chi tiết'!H" in s
-    assert "'Khối lượng chi tiết'!L" in s
+    assert "'02 Chi tiết'!H" in s
+    assert "'02 Chi tiết'!L" in s
     assert "'Tổng hợp theo tầng'!E" in s
     assert "'Tổng hợp theo tầng'!F" in s
     assert 'AdaptiveVolumeFormula(excelRow, "D", "E", "G")' in s

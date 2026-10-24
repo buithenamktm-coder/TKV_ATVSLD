@@ -63,8 +63,8 @@ def test_high_contrast_live_palette_and_correct_seam_ore_label():
     assert "UiTheme.ChromeBottom" in palette
     assert palette.count("Vỉa than/quặng") >= 1
     assert "AppPage.Mineral" in palette and "GetGroupPages" in palette
-    assert 'AddNav(nav, AppPage.Project, "1", "Dự án")' in palette
-    assert 'AddNav(nav, AppPage.QuickSection, "4", "Vẽ nhanh mặt cắt")' in palette
+    assert 'AddNav(nav, AppPage.Model, "1", "Dữ liệu")' in palette
+    assert '[AppPage.QuickSection] = new SectionPage(true)' in palette
     assert '"Vỉa / Quặng"' not in palette
     assert "grid.DefaultCellStyle.SelectionBackColor = Color.FromArgb(31, 105, 183)" in theme
     assert "grid.DefaultCellStyle.SelectionForeColor = Color.White" in theme

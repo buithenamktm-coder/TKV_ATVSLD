@@ -251,7 +251,7 @@ def test_palette_uses_shared_professional_ui_theme():
     theme = read("src/MiningVolume.Plugin2023/UI/UiTheme.cs")
     assert "UiTheme.ApplyPage(page)" in ui
     assert 'Text = "QUY TRÌNH"' in ui
-    assert 'TKL  •  Hiện / ẩn IMSAT VOLUME' in ui
+    assert 'TKL  •  Hiện / ẩn NAMVECTA VOLUME' in ui
     assert "UiTheme.Accent" in ui
     assert "StyleGrid(DataGridView grid)" in theme
     assert "StyleButton(Button button)" in theme

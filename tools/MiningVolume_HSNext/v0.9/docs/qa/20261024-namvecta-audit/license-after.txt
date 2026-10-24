@@ -1,0 +1,13 @@
+PASS empty stores
+PASS interrupted tier change retains all first-use dates
+PASS all five tiers retain earliest date
+PASS trial merge cannot renew or lose clock watermark
+PASS equal-time conflicting active tiers fail closed
+PASS duplicate history fails closed
+PASS missing active history fails closed
+PASS unknown tier fails closed
+PASS future first activation fails closed
+PASS null history item fails closed
+PASS invalid trial fails closed
+PASS merge is idempotent and does not mutate inputs
+12 ledger regression tests passed; Windows storage/host NOT TESTED.

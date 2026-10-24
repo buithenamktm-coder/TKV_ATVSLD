@@ -22,7 +22,7 @@ def test_installed_v2_build_is_visible_in_palette_and_about():
     assert "SOURCE_SHA=" in identity
     assert 'sha.Substring(0, 8)' in identity
     assert "BUILD UNVERIFIED" in identity
-    assert 'const string title = "IMSAT VOLUME";' in palette
+    assert 'const string title = "NAMVECTA VOLUME";' in palette
     assert '"V2.0 QA · " + RuntimeBuildIdentity.ShortTag()' in palette
     assert "RuntimeBuildIdentity.ShortTag()" in palette
     assert "args.Graphics.DrawString(buildLabel" in palette

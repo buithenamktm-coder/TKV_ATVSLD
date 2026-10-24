@@ -12,7 +12,7 @@ def test_project_page_is_real_palette_page():
     main = read('src/MiningVolume.Plugin2023/UI/MainPaletteControl.cs')
     page = read('src/MiningVolume.Plugin2023/UI/ProjectPage.cs')
     assert 'AppPage { Project, Data, Model, Section, Volume, Grid, Mineral, Export, License, QuickSection }' in main
-    assert 'AddNav(nav, AppPage.Project, "1", "Dự án")' in main
+    assert 'AddNav(nav, AppPage.Model, "1", "Dữ liệu")' in main
     assert '[AppPage.Project] = new ProjectPage()' in main
     assert 'Lưu dự án vào DWG' in page
     assert 'Nạp lại dự án' in page
