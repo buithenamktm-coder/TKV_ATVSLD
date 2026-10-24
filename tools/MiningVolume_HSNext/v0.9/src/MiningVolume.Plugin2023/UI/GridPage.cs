@@ -227,8 +227,9 @@ namespace MiningVolume2023.UI
             string missing = !existing && !design
                 ? "hiện trạng và thiết kế"
                 : !existing ? "hiện trạng" : "thiết kế";
-            return "TIN " + missing + " chưa sẵn sàng hoặc đã thay đổi. " +
-                "Chỉ tạo/cập nhật mô hình còn thiếu; TIN hợp lệ còn lại được giữ nguyên.";
+            return "TIN " + missing + " chưa nạp trong phiên làm việc. " +
+                "Nếu DWG đã có 3DFACE trên layer MV_TIN_HIENTRANG / MV_TIN_THIETKE, " +
+                "bấm Tính khối lượng để tự đọc lại TIN, không cần dựng lại.";
         }
 
         private void ParametersChanged(object sender,EventArgs e)
@@ -271,6 +272,8 @@ namespace MiningVolume2023.UI
                     throw new InvalidOperationException("Không có bản vẽ AutoCAD đang hoạt động.");
                 string boundaryHandle = st.GridBoundaryHandle;
                 var boundary=BoundaryGeometryService.ReadBoundary(boundaryHandle).ToArray();
+                // Reopen recovery reads the actual approved CAD TIN faces,
+                // not the surveyed points; no unnecessary retriangulation.
                 SurfaceWorkflowService.EnsureBothTinsReady(synchronizeCadLayers:false);
                 var options=new GridVolumeOptions
                 {
