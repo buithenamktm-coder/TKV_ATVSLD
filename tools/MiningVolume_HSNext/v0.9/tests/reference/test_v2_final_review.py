@@ -24,7 +24,7 @@ def test_pair_transaction_cannot_delete_both_old_tins_in_failure_handler():
  assert 'InvalidateTin(' not in pair
  assert pair.index('TinCadRenderer.ReplacePair(')<pair.index('AdoptTin(')
  r=read('src/MiningVolume.Plugin2023/Services/TinCadRenderer.cs')
- pair=r.split('public static int[] ReplacePair',1)[1].split('private static int ReplaceInTransaction',1)[0]
+ pair=r.split('public static int[] ReplacePair',1)[1].split('public static int ClearPair(',1)[0]
  assert pair.count('StartTransaction()')==1
  assert pair.count('ReplaceInTransaction(')==2
  assert pair.index('designLayer, design, 3')<pair.index('tr.Commit()')
