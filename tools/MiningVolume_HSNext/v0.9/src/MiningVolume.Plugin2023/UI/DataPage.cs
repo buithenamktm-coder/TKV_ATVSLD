@@ -29,7 +29,7 @@ namespace MiningVolume2023.UI
         private readonly Control[] _sourceLabels = new Control[2];
         private readonly Control[] _sourceLoad = new Control[2];
         private readonly Control[] _sourceChoose = new Control[2];
-        private bool _compactSourceLayout;
+        private bool? _compactSourceLayout; // null forces the first responsive layout on wide palettes too
 
         public DataPage()
         {
