@@ -255,6 +255,23 @@ var
   I: Integer;
   TextValue: String;
 begin
+  if CurPageID = wpFinished then
+  begin
+    // All post-install guidance belongs to the final Setup page.
+    // Do not launch a console, website, extra activation form or popup.
+    // Setup has no access to the user's actual activation state.
+    WizardForm.FinishedLabel.Caption :=
+      'NAMVECTA VOLUME 2.0 đã hoàn tất sao chép tệp.' + #13#10 +
+      'Người phát triển: Bùi Thế Nam   |   ĐT/Zalo: 0967280686' + #13#10 + #13#10 +
+      'SỬ DỤNG VÀ KÍCH HOẠT' + #13#10 +
+      '1. Mở AutoCAD đã chọn, gõ TKL để mở NAMVECTA VOLUME.' + #13#10 +
+      '2. Dùng thử 15 ngày tính từ lần sử dụng đầu tiên.' + #13#10 +
+      '3. Vào Thông tin & Bản quyền để xem thời hạn và nhập Pass.' + #13#10 +
+      '4. Pass offline: 1 tháng, 3 tháng, 6 tháng, 1 năm hoặc vĩnh viễn.' + #13#10 +
+      'Không cần Internet hoặc mã máy; bộ cài không yêu cầu nhập Pass.' + #13#10 +
+      'Lưu ý: Cần chạy MVSELFTEST trong AutoCAD để kiểm thử chức năng.';
+    exit;
+  end;
   if CurPageID <> SummaryPage.ID then exit;
   TextValue := '{#ProductName}' + #13#10 +
     CustomMessage('InstallSelection') + ':' + #13#10;
