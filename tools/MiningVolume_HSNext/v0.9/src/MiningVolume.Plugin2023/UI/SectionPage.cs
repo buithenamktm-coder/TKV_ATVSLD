@@ -273,7 +273,8 @@ namespace MiningVolume2023.UI
             // Reserve usable space for the table of section results even on
             // 620px Windows palettes; the parameter panel scrolls internally.
             int visibleHeight = Math.Max(500, ClientSize.Height);
-            int reserved = 34 + 42 + 80 + 38 + Math.Max(105, visibleHeight / 5);
+            int reserved = 34 + (_compactParameters ? 72 : 42) +
+                (_compactParameters ? 138 : 80) + 38 + Math.Max(105, visibleHeight / 5);
             float maxParameters = Math.Max(185, visibleHeight - reserved);
             float preferred = 370F;
             _rootLayout.RowStyles[1].Height = Math.Min(preferred, maxParameters);
@@ -284,6 +285,11 @@ namespace MiningVolume2023.UI
             bool compact = ClientSize.Width < 560;
             if (_compactParameters == compact) return;
             _compactParameters = compact;
+            if (!_quickOnly)
+            {
+                _rootLayout.RowStyles[2].Height = compact ? 72F : 42F;
+                _rootLayout.RowStyles[3].Height = compact ? 138F : 80F;
+            }
             _parameterLayout.SuspendLayout();
             try
             {
