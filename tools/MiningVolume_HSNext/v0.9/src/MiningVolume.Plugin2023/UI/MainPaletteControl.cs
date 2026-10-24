@@ -20,6 +20,9 @@ namespace MiningVolume2023.UI
         private AppPage _currentPage;
         private readonly Dictionary<AppPage, Button> _buttons = new Dictionary<AppPage, Button>();
         private readonly ComboBox _subNavigation;
+        private readonly FlowLayoutPanel _dataButtons;
+        private readonly Button _tinTab;
+        private readonly Button _projectTab;
         private readonly Panel _subNavigationPanel;
         private readonly AppPage[] _groups = { AppPage.Model, AppPage.Volume, AppPage.Export };
         private AppPage _currentGroup = AppPage.Project;
@@ -35,6 +38,12 @@ namespace MiningVolume2023.UI
 
             var header = BuildHeader();
             _sidebar = BuildSidebar(out var nav);
+            var about = _sidebar.Controls.Find("NamvectaLicenseNav", true);
+            if (about.Length > 0 && about[0] is Button contact)
+            {
+                contact.Click += (s,e) => ShowPage(AppPage.License);
+                _buttons[AppPage.License] = contact;
+            }
             _compactNavigation = new ComboBox
             {
                 Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList,
@@ -69,7 +78,23 @@ namespace MiningVolume2023.UI
                 var pages = VisiblePages(_currentGroup);
                 if (_subNavigation.SelectedIndex < pages.Length) ShowPage(pages[_subNavigation.SelectedIndex]);
             };
-            _subNavigationPanel = new Panel { Dock = DockStyle.Top, Height = 42, Padding = new Padding(12, 5, 12, 5), BackColor = UiTheme.Canvas };
+            // Direct, one-click navigation; no dropdown for the two Data tabs.
+            _dataButtons = new FlowLayoutPanel { Dock = DockStyle.Fill,
+                WrapContents = true, Padding = Padding.Empty, Margin = Padding.Empty };
+            _tinTab = new Button { Text = "TIN hiện trạng / thiết kế",
+                Width = 184, Height = 28, FlatStyle = FlatStyle.Flat,
+                Margin = new Padding(2) };
+            _projectTab = new Button { Text = "Thông tin dự án / đơn vị",
+                Width = 184, Height = 28, FlatStyle = FlatStyle.Flat,
+                Margin = new Padding(2) };
+            _tinTab.FlatAppearance.BorderSize = 0;
+            _projectTab.FlatAppearance.BorderSize = 0;
+            _tinTab.Click += (s,e) => ShowPage(AppPage.Data);
+            _projectTab.Click += (s,e) => ShowPage(AppPage.Project);
+            _dataButtons.Controls.Add(_tinTab);
+            _dataButtons.Controls.Add(_projectTab);
+            _subNavigationPanel = new Panel { Dock = DockStyle.Top, Height = 42,
+                Padding = new Padding(8, 4, 8, 4), BackColor = UiTheme.Canvas };
             _advancedVolumeButton = new Button {
                 Dock = DockStyle.Right, Width = 96, Text = "Tùy chọn",
                 Visible = false, FlatStyle = FlatStyle.Flat, Font = new Font("Arial", 9F)
@@ -81,6 +106,7 @@ namespace MiningVolume2023.UI
                 ShowGroup(_currentGroup);
             };
             _subNavigationPanel.Controls.Add(_subNavigation);
+            _subNavigationPanel.Controls.Add(_dataButtons);
             _subNavigationPanel.Controls.Add(_advancedVolumeButton);
             Controls.Add(_content);
             Controls.Add(_subNavigationPanel);
@@ -131,6 +157,11 @@ namespace MiningVolume2023.UI
                 _compactNavigation.SelectedIndex = Array.IndexOf(_groups, _currentGroup);
                 _updatingNav = false;
             }
+            _subNavigationPanel.Height = _currentGroup == AppPage.Model &&
+                ClientSize.Width < 610 ? 72 : 42;
+            int usable = ClientSize.Width - (_compact ? 0 : _sidebar.Width) - 42;
+            _tinTab.Width = Math.Min(184, Math.Max(120, usable / 2));
+            _projectTab.Width = Math.Min(184, Math.Max(120, usable / 2));
             var page = _content.Controls.Count == 0 ? null : _content.Controls[0];
             if (page == null) return;
             _content.SuspendLayout();
@@ -233,6 +264,19 @@ namespace MiningVolume2023.UI
                 ForeColor = UiTheme.ChromeMuted
             };
 
+            var footerHost = new Panel {
+                Dock = DockStyle.Bottom, Height = 96, BackColor = UiTheme.ChromeBottom
+            };
+            var aboutButton = new Button {
+                Name = "NamvectaLicenseNav", Text = "Thông tin & Bản quyền",
+                Width = 164, Height = 32, Location = new Point(8, 3),
+                TextAlign = ContentAlignment.MiddleLeft,
+                FlatStyle = FlatStyle.Flat, BackColor = UiTheme.Sidebar,
+                ForeColor = UiTheme.ChromeText, Cursor = Cursors.Hand
+            };
+            aboutButton.FlatAppearance.BorderSize = 0;
+            UiTheme.ApplyRoundedButtonMask(aboutButton);
+            footerHost.Controls.Add(aboutButton);
             var footer = new Label
             {
                 Text = "TKL  •  Hiện / ẩn NAMVECTA VOLUME",
@@ -253,8 +297,9 @@ namespace MiningVolume2023.UI
                 BackColor = UiTheme.ChromeBottom
             };
 
+            footerHost.Controls.Add(footer);
             sidebar.Controls.Add(nav);
-            sidebar.Controls.Add(footer);
+            sidebar.Controls.Add(footerHost);
             sidebar.Controls.Add(sectionTitle);
             return sidebar;
         }
@@ -288,7 +333,7 @@ namespace MiningVolume2023.UI
         {
             switch (group)
             {
-                case AppPage.Model: return new[] { AppPage.Data };
+                case AppPage.Model: return new[] { AppPage.Data, AppPage.Project };
                 case AppPage.Volume: return new[] { AppPage.Section, AppPage.Grid };
                 case AppPage.Export: return new[] { AppPage.Export };
                 default: return new[] { AppPage.Data };
@@ -301,8 +346,8 @@ namespace MiningVolume2023.UI
             switch (group)
             {
                 case AppPage.Model: return new[] { AppPage.Data, AppPage.Project };
-                case AppPage.Volume: return new[] { AppPage.Section, AppPage.Grid, AppPage.Volume, AppPage.QuickSection, AppPage.Mineral };
-                case AppPage.Export: return new[] { AppPage.Export, AppPage.License };
+                case AppPage.Volume: return new[] { AppPage.Section, AppPage.Grid, AppPage.Volume, AppPage.QuickSection };
+                case AppPage.Export: return new[] { AppPage.Export };
                 default: return GetGroupPages(group);
             }
         }
@@ -330,12 +375,13 @@ namespace MiningVolume2023.UI
             _updatingNav = true;
             _currentGroup = group;
             var pages = VisiblePages(group);
-            _advancedVolumeButton.Visible = true;
+            _advancedVolumeButton.Visible = group == AppPage.Volume;
             _advancedVolumeButton.Text = _expandedGroups.Contains(group) ? "Thu gọn" : "Tùy chọn";
             _subNavigation.Items.Clear();
             foreach (var page in pages) _subNavigation.Items.Add(PageLabel(page));
             _subNavigationPanel.Visible = true;
-            _subNavigation.Visible = pages.Length > 1;
+            _dataButtons.Visible = group == AppPage.Model;
+            _subNavigation.Visible = group != AppPage.Model && pages.Length > 1;
             _subNavigation.SelectedIndex = 0;
             int groupIndex = Array.IndexOf(_groups, group);
             if (groupIndex >= 0) _compactNavigation.SelectedIndex = groupIndex;
@@ -376,7 +422,9 @@ namespace MiningVolume2023.UI
                 foreach (var member in VisiblePages(targetGroup))
                     _subNavigation.Items.Add(PageLabel(member));
                 _subNavigationPanel.Visible = true;
-                _subNavigation.Visible = _subNavigation.Items.Count > 1;
+                _dataButtons.Visible = targetGroup == AppPage.Model;
+                _subNavigation.Visible = targetGroup != AppPage.Model &&
+                    _subNavigation.Items.Count > 1;
                 _updatingNav = false;
             }
 
@@ -392,9 +440,11 @@ namespace MiningVolume2023.UI
             _content.Controls.Add(control);
             _content.ResumeLayout();
             _updatingNav = true;
-            _advancedVolumeButton.Visible = true;
+            _advancedVolumeButton.Visible = _currentGroup == AppPage.Volume;
             _advancedVolumeButton.Text = _expandedGroups.Contains(_currentGroup) ? "Thu gọn" : "Tùy chọn";
-            _subNavigation.Visible = VisiblePages(_currentGroup).Length > 1;
+            _dataButtons.Visible = _currentGroup == AppPage.Model;
+            _subNavigation.Visible = _currentGroup != AppPage.Model &&
+                VisiblePages(_currentGroup).Length > 1;
             _updatingNav = true;
             _subNavigation.Items.Clear();
             foreach (var member in VisiblePages(_currentGroup))
@@ -405,11 +455,17 @@ namespace MiningVolume2023.UI
             int groupIndex = Array.IndexOf(_groups, _currentGroup);
             if (groupIndex >= 0) _compactNavigation.SelectedIndex = groupIndex;
             _updatingNav = false;
+            _tinTab.BackColor = page == AppPage.Data ? UiTheme.Accent : UiTheme.Soft;
+            _projectTab.BackColor = page == AppPage.Project ? UiTheme.Accent : UiTheme.Soft;
+            _tinTab.ForeColor = page == AppPage.Data ? Color.White : UiTheme.TextStrong;
+            _projectTab.ForeColor = page == AppPage.Project ? Color.White : UiTheme.TextStrong;
             ApplyResponsiveLayout();
 
             foreach (var kv in _buttons)
             {
-                bool active = kv.Key == _currentGroup;
+                bool active = kv.Key == AppPage.License
+                    ? page == AppPage.License
+                    : kv.Key == _currentGroup && page != AppPage.License;
                 kv.Value.BackColor = active ? UiTheme.Accent : UiTheme.Sidebar;
                 kv.Value.ForeColor = active ? Color.White : UiTheme.ChromeText;
                 // Active navigation is indicated by the fill only.
