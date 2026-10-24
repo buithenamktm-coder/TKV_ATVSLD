@@ -392,7 +392,7 @@ namespace MiningVolume2023.UI
                 using(var dlg=new SaveFileDialog
                 {
                     Filter="Excel Workbook (*.xlsx)|*.xlsx",DefaultExt="xlsx",
-                    FileName="IMSAT_LuoiOVuong_"+DateTime.Now.ToString("yyyyMMdd_HHmm")+".xlsx",
+                    FileName="NAMVECTA_LuoiOVuong_"+DateTime.Now.ToString("yyyyMMdd_HHmm")+".xlsx",
                     OverwritePrompt=true
                 })
                 {
