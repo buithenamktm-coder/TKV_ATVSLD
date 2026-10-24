@@ -258,7 +258,9 @@ namespace MiningVolume2023.Services
             var doc = Application.DocumentManager.MdiActiveDocument
                 ?? throw new InvalidOperationException("Không có bản vẽ AutoCAD đang hoạt động.");
             using (doc.LockDocument())
-                SectionCadRenderer.ClearPreview(doc.Database);
+                SectionCadRenderer.ClearPreview(doc.Database,
+                    tr => ProjectPersistenceService.MarkStationLinesDeletedInTransaction(
+                        doc.Database, tr));
             var state = ProjectState.Current;
             state.SectionSystem = null;
             state.SectionProfiles.Clear();
