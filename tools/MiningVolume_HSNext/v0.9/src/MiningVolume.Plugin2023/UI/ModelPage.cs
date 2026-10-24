@@ -630,7 +630,7 @@ namespace MiningVolume2023.UI
             Width = 330;
             Height = 150;
             Controls.Add(new Label { Text = prompt, Left = 12, Top = 15, Width = 105 });
-            _value = new NumericUpDown { Left = 120, Top = 12, Width = 180, DecimalPlaces = 3, Minimum = -1000000, Maximum = 1000000, Value = Clamp(current) };
+            _value = new NoWheelNumericUpDown { Left = 120, Top = 12, Width = 180, DecimalPlaces = 3, Minimum = -1000000, Maximum = 1000000, Value = Clamp(current) };
             Controls.Add(_value);
             var ok = new Button { Text = "OK", DialogResult = DialogResult.OK, Left = 140, Top = 55, Width = 75 };
             var cancel = new Button { Text = "Hủy", DialogResult = DialogResult.Cancel, Left = 225, Top = 55, Width = 75 };
