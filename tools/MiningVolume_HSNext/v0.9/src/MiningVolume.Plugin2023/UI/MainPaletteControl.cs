@@ -62,6 +62,14 @@ namespace MiningVolume2023.UI
                 BackColor = UiTheme.ChromeBottom, Padding = new Padding(12, 6, 12, 6)
             };
             _compactHeader.Controls.Add(_compactNavigation);
+            var compactLicense = new Button {
+                Dock = DockStyle.Right, Width = 82, Text = "Bản quyền",
+                FlatStyle = FlatStyle.Flat, Font = new Font("Arial", 8.5F),
+                ForeColor = UiTheme.ChromeText, BackColor = UiTheme.Sidebar
+            };
+            compactLicense.FlatAppearance.BorderSize = 0;
+            compactLicense.Click += (s,e) => ShowPage(AppPage.License);
+            _compactHeader.Controls.Add(compactLicense);
 
             _content = new Panel
             {
@@ -160,8 +168,14 @@ namespace MiningVolume2023.UI
             _subNavigationPanel.Height = _currentGroup == AppPage.Model &&
                 ClientSize.Width < 610 ? 72 : 42;
             int usable = ClientSize.Width - (_compact ? 0 : _sidebar.Width) - 42;
-            _tinTab.Width = Math.Min(184, Math.Max(120, usable / 2));
-            _projectTab.Width = Math.Min(184, Math.Max(120, usable / 2));
+            if (ClientSize.Width < 610) {
+                _tinTab.Width = Math.Max(125, Math.Min(310, usable));
+                _projectTab.Width = _tinTab.Width;
+            }
+            else {
+                _tinTab.Width = Math.Min(184, Math.Max(120, usable / 2));
+                _projectTab.Width = Math.Min(184, Math.Max(120, usable / 2));
+            }
             var page = _content.Controls.Count == 0 ? null : _content.Controls[0];
             if (page == null) return;
             _content.SuspendLayout();
