@@ -166,6 +166,11 @@ namespace MiningVolume2023.Services
         public bool TinVisible { get; set; } = true;
         public int TinCadFaceCount { get; set; }
         public bool TinCadIsPreview { get; set; }
+        // A reopened DWG may contain the full, validated 3DFACE TIN while
+        // the in-memory source data has not been restored from a legacy file.
+        // This flag applies only to a checked CAD surface, never an arbitrary
+        // DWG layer or a synthetic empty mesh.
+        public bool TinRestoredFromCad { get; set; }
         public bool IsTinCurrent
         {
             get
@@ -335,6 +340,7 @@ namespace MiningVolume2023.Services
             s.TinVisible = true;
             s.TinCadFaceCount = 0;
             s.TinCadIsPreview = false;
+            s.TinRestoredFromCad = false;
             s.LastBuiltUtc = null;
             s.AllowedTypes.Clear();
         }
