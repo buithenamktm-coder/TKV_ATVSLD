@@ -59,6 +59,8 @@ en.NoAutoCAD=No supported AutoCAD 2020–2024 installation was verified. Setup w
 vi.NoAutoCAD=Không tìm thấy AutoCAD 2020–2024 hợp lệ. Bộ cài sẽ không tiếp tục.
 en.CloseAcad=Close all AutoCAD processes before continuing.
 vi.CloseAcad=Hãy đóng toàn bộ AutoCAD trước khi cài đặt.
+en.LegacyConflict=The previous IMSAT MiningVolume add-in was detected. This QA Setup cannot safely install beside it. Uninstall the old add-in using Windows Installed Apps, without deleting drawing files, before continuing.
+vi.LegacyConflict=Phát hiện tiện ích IMSAT MiningVolume cũ. Bản QA chưa thể cài song song an toàn. Hãy gỡ add-in cũ trong Ứng dụng đã cài của Windows (không xóa bản vẽ), sau đó cài NAMVECTA.
 en.EmbeddedStatus=Package validation only. Real AutoCAD functional acceptance is still required.
 vi.EmbeddedStatus=Chỉ kiểm tra bộ cài. Vẫn phải nghiệm thu chức năng trong AutoCAD thực tế.
 en.AcadPath=Autodesk auto-load directory (fixed)
@@ -243,10 +245,21 @@ begin
     Result := ExitCode = 0;
 end;
 
+function LegacyBundlePresent: Boolean;
+begin
+  // Never uninstall/rename legacy products silently; two autoloaders with
+  // overlapping commands would otherwise make the AutoCAD host unstable.
+  Result := DirExists(ExpandConstant('{commonappdata}\Autodesk\ApplicationPlugins\MiningVolume2023.bundle'))
+    or DirExists(ExpandConstant('{userappdata}\Autodesk\ApplicationPlugins\MiningVolume2023.bundle'));
+end;
+
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
   Result := '';
-  if AcadRunning then Result := CustomMessage('CloseAcad');
+  if AcadRunning then
+    Result := CustomMessage('CloseAcad')
+  else if LegacyBundlePresent then
+    Result := CustomMessage('LegacyConflict');
 end;
 
 procedure CurPageChanged(CurPageID: Integer);
