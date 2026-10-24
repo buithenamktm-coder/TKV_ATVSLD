@@ -686,6 +686,7 @@ namespace MiningVolume2023.Services
             session.TinVisible = true;
             session.TinCadFaceCount = written;
             session.TinCadIsPreview = cadPreview;
+            session.TinRestoredFromCad = false;
         }
 
         public static void EnsureOutputLayer(ModelRole role)
@@ -767,6 +768,7 @@ namespace MiningVolume2023.Services
             session.TinVisible = false;
             session.TinCadFaceCount = 0;
             session.TinCadIsPreview = false;
+            session.TinRestoredFromCad = false;
 
             state.SectionProfiles.Clear();
             state.VolumeResult = null;
@@ -807,6 +809,43 @@ namespace MiningVolume2023.Services
                         "TIN đang lưu thuộc vùng cũ; hãy chọn lại vùng và dựng TIN trước khi tính.");
         }
 
+        /// <summary>
+        /// Restores an existing application-owned 3DFACE TIN from the DWG.
+        /// Reuses the faces actually saved in AutoCAD; no core triangulation,
+        /// no layer modifications, no fake source points. Changes to a known,
+        /// loaded survey source continue to invalidate the model via revision.
+        /// </summary>
+        public static bool TryRestoreTinFromCad(ModelRole role)
+        {
+            var state = ProjectState.Current;
+            var session = state.Get(role);
+            if (session.IsTinCurrent) return true;
+            // Never silently re-accept a stale in-memory surface after a
+            // source/region edit; only a missing runtime TIN is recoverable.
+            if (session.Tin != null || session.CadRecoveryBlocked) return false;
+            var doc = Application.DocumentManager.MdiActiveDocument;
+            if (doc == null) return false;
+            TinSurface recovered;
+            using (doc.LockDocument())
+                recovered = TinCadRenderer.ReadStoredTin(
+                    doc.Database, session.TinLayer, session.Name);
+            if (recovered == null) return false;
+
+            session.Tin = recovered;
+            session.TinBuiltFromSourceRevision = session.Source.Revision;
+            session.TinBuiltFromSourceUtc = session.Source.LastModifiedUtc;
+            session.TinBuiltFromRegionRevision = state.TinRegionRevision;
+            session.LastBuiltUtc = DateTime.UtcNow;
+            session.TinCadFaceCount = checked(
+                recovered.Triangles.Count + recovered.VerticalFaces.Count);
+            session.TinCadIsPreview = false;
+            session.TinRestoredFromCad = true;
+            // The layer is the geometry source of truth on DWG reopening.
+            // Do not assume a newly created app session matches prior settings.
+            state.NotifyChanged();
+            return true;
+        }
+
         public static void EnsureBothTinsReady(bool synchronizeCadLayers)
         {
             EnsureTinRegionMatchesCad();
@@ -832,8 +871,12 @@ namespace MiningVolume2023.Services
         {
             EnsureTinRegionMatchesCad();
             var session = ProjectState.Current.Get(role);
-            if (session.Source == null || session.Source.Entities.Count == 0)
-                throw new InvalidOperationException($"Chưa nạp dữ liệu {session.Name}.");
+            if (session.Tin == null)
+                TryRestoreTinFromCad(role);
+            if ((session.Source == null || session.Source.Entities.Count == 0) &&
+                !session.TinRestoredFromCad)
+                throw new InvalidOperationException(
+                    $"Chưa nạp dữ liệu {session.Name}; không tìm thấy TIN đã lưu trong DWG.");
             if (session.Tin == null || session.Tin.Triangles == null || session.Tin.Triangles.Count == 0)
                 throw new InvalidOperationException(
                     $"Chưa tạo TIN {session.Name}. Vào mục Mô hình và bấm TẠO / CẬP NHẬT TIN.");
@@ -909,6 +952,8 @@ namespace MiningVolume2023.Services
         public static string TinStatusText(ModelRole role)
         {
             var s = ProjectState.Current.Get(role);
+            if (s.TinRestoredFromCad && s.IsTinCurrent)
+                return $"{s.Name}: ĐÃ KHÔI PHỤC TIN DWG {s.Tin.Triangles.Count:n0} tam giác → {s.TinLayer}";
             if (s.Source == null || s.Source.Entities.Count == 0)
                 return $"{s.Name}: chưa nạp dữ liệu → {s.TinLayer}";
             if (s.Tin == null)
