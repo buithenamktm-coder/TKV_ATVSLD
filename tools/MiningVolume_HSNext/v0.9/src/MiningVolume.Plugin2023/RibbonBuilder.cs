@@ -18,30 +18,21 @@ namespace MiningVolume2023
         {
             var ribbon = ComponentManager.Ribbon;
             if (ribbon == null) return;
-            foreach (var t in ribbon.Tabs)
+            RibbonTab tab = null;
+            foreach (var candidate in ribbon.Tabs)
+                if (candidate.Id == TabId) { tab = candidate; break; }
+            if (tab == null)
             {
-                if (t.Id != TabId) continue;
-                t.Title = "NAMVECTA VOLUME";
-                return;
+                tab = new RibbonTab { Title = "NAMVECTA VOLUME", Id = TabId };
+                ribbon.Tabs.Add(tab);
             }
-
-            var tab = new RibbonTab { Title = "NAMVECTA VOLUME", Id = TabId };
-            ribbon.Tabs.Add(tab);
-
-            AddPanel(tab, "1. Dữ liệu", new[]
+            // Replace any old three-group Ribbon after an add-in update.
+            tab.Title = "NAMVECTA VOLUME";
+            tab.Panels.Clear();
+            AddPanel(tab, "NAMVECTA VOLUME", new[]
             {
-                Btn("Mở / Ẩn", RibbonAction.TogglePalette),
-                Btn("TIN", RibbonAction.Model)
-            });
-            AddPanel(tab, "2. Tính toán", new[]
-            {
-                Btn("Mặt cắt", RibbonAction.Section),
-                Btn("Lưới ô vuông", RibbonAction.Grid)
-            });
-            AddPanel(tab, "3. Kết quả", new[]
-            {
-                Btn("Xuất kết quả", RibbonAction.Export),
-                Btn("Thông tin", RibbonAction.About)
+                Btn("Ẩn / hiện phần mềm", RibbonAction.TogglePalette),
+                Btn("Thông tin phần mềm", RibbonAction.About)
             });
         }
 
@@ -149,11 +140,7 @@ namespace MiningVolume2023
                         EntryPoint.Open(AppPage.Export);
                         break;
                     case RibbonAction.About:
-                        AcApp.ShowAlertDialog("NAMVECTA VOLUME 2.0 QA\n" +
-                            RuntimeBuildIdentity.ShortTag() + "\n" +
-                            "Mine Survey & Earthwork for AutoCAD\n" +
-                            "Phát triển: Bùi Thế Nam\nĐT/Zalo: 0967280686\n" +
-                            "Dùng lệnh MVBUILDINFO để xác minh DLL đang nạp.");
+                        EntryPoint.Open(AppPage.License);
                         break;
                 }
             }
