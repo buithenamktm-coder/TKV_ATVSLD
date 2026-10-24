@@ -159,8 +159,8 @@ def test_field_qa_excel_wrapped_headers_have_enough_height_without_row_insert():
 def test_field_qa_layer_buttons_are_compact_and_direct():
     data = src("MiningVolume.Plugin2023/UI/DataPage.cs")
     assert "bool compact = width < 720;" in data
-    assert "_sourceBox.Height = 164;" in data
-    assert "new RowStyle(SizeType.Absolute, 34)" in data
+    assert "_sourceBox.Height = 182;" in data
+    assert "new RowStyle(SizeType.Absolute, 38)" in data
     assert "_sourceTable.Controls.Add(_sourceLoad[0], 0, 1);" in data
     assert "_sourceTable.Controls.Add(_sourceChoose[0], 1, 1);" in data
     assert "_sourceTable.Controls.Add(_sourceLoad[1], 0, 3);" in data
