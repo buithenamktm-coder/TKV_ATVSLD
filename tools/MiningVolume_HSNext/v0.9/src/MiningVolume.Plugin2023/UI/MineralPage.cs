@@ -219,7 +219,7 @@ namespace MiningVolume2023.UI
                 .Where(x => x.HasData).OrderBy(x => x.Line.Index).ToList();
             if (profiles.Count == 0)
             {
-                MessageBox.Show("Chưa có mặt cắt có đủ hai TIN.", "IMSAT VOLUME");
+                MessageBox.Show("Chưa có mặt cắt có đủ hai TIN.", "NAMVECTA VOLUME");
                 return null;
             }
             using (var dialog = new Form
@@ -255,7 +255,7 @@ namespace MiningVolume2023.UI
             if (!body.HasPairedOutcrops)
             {
                 MessageBox.Show("Vỉa này chưa chọn đủ đường lộ vỉa hiện trạng và thiết kế.",
-                    "IMSAT VOLUME",MessageBoxButtons.OK,MessageBoxIcon.Warning);
+                    "NAMVECTA VOLUME",MessageBoxButtons.OK,MessageBoxIcon.Warning);
                 return;
             }
             string sectionName = ChooseSection();
@@ -298,7 +298,7 @@ namespace MiningVolume2023.UI
             if(!body.HasPairedOutcrops)
             {
                 MessageBox.Show("Vỉa phải có đủ lộ vỉa hiện trạng và thiết kế.",
-                    "IMSAT VOLUME",MessageBoxButtons.OK,MessageBoxIcon.Warning);
+                    "NAMVECTA VOLUME",MessageBoxButtons.OK,MessageBoxIcon.Warning);
                 return;
             }
             string sectionName=ChooseSection();
@@ -365,7 +365,7 @@ namespace MiningVolume2023.UI
                 {
                     Filter="Excel Workbook (*.xlsx)|*.xlsx",DefaultExt="xlsx",
                     AddExtension=true,OverwritePrompt=true,
-                    FileName="IMSAT_KhoiLuong_KhoangSan_"+
+                    FileName="NAMVECTA_KhoiLuong_KhoangSan_"+
                         DateTime.Now.ToString("yyyyMMdd_HHmm")+".xlsx"
                 })
                 {
@@ -376,7 +376,7 @@ namespace MiningVolume2023.UI
                     _status.Text="Đã xuất Excel khoáng sản: "+Path.GetFileName(dlg.FileName);
                     MessageBox.Show(_status.Text+Environment.NewLine+
                         "Công thức Excel liên kết thể trọng, diện tích, chiều dài, thể tích và tấn.",
-                        "IMSAT VOLUME",MessageBoxButtons.OK,MessageBoxIcon.Information);
+                        "NAMVECTA VOLUME",MessageBoxButtons.OK,MessageBoxIcon.Information);
                 }
             }
             catch(Exception ex){Alert(ex);}
