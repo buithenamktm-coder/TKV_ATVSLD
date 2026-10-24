@@ -23,7 +23,7 @@ namespace MiningVolume2023.Services
                 throw new ArgumentNullException(nameof(summary));
             var report = new SpreadsheetReport
             {
-                Title = "IMSAT MININGVOLUME – KHỐI LƯỢNG THAN / QUẶNG THEO VỈA",
+                Title = "NAMVECTA VOLUME – KHỐI LƯỢNG THAN / QUẶNG THEO VỈA",
                 Creator = "Bùi Thế Nam",
                 CreatedAt = DateTime.Now
             };
