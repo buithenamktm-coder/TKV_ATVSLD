@@ -157,10 +157,29 @@ namespace MiningVolume2023.UI
                 BackColor = UiTheme.ChromeBottom
             };
 
-            // Do not ship the former IMSAT logo under a NAMVECTA title.
-            // Work must add the approved PA3 asset from the user's brand DOCX
-            // before the NAMVECTA release acceptance gate can pass.
+            // The original PA3 raster source is bundled as an embedded resource.
             int textLeft = 14;
+            using (var stream = typeof(MainPaletteControl).Assembly.GetManifestResourceStream(
+                "MiningVolume2023.Assets.namvecta_pa3_symbol.png"))
+            {
+                if (stream != null)
+                {
+                    Bitmap raster;
+                    using (var original = Image.FromStream(stream))
+                        raster = new Bitmap(original);
+                    var brand = new PictureBox
+                    {
+                        Image = raster,
+                        SizeMode = PictureBoxSizeMode.Zoom,
+                        Size = new Size(44, 44),
+                        Location = new Point(10, 12),
+                        BackColor = Color.White
+                    };
+                    brand.Disposed += (s, e) => raster.Dispose();
+                    header.Controls.Add(brand);
+                    textLeft = 60;
+                }
+            }
 
             // Paint the title directly on the frosted header instead of
             // placing transparent WinForms Labels over a UserPaint panel.
@@ -168,7 +187,7 @@ namespace MiningVolume2023.UI
             // in AutoCAD's palette host (as shown in the field QA capture).
             const string title = "NAMVECTA VOLUME";
             string buildLabel = "V2.0 QA · " + RuntimeBuildIdentity.ShortTag();
-            const string subtitle = "Phát triển: Bùi Thế Nam  •  ĐT/Zalo: 0967280686";
+            const string subtitle = "Bùi Thế Nam  •  0967280686";
             int left = textLeft;
             header.Paint += (sender, args) =>
             {
