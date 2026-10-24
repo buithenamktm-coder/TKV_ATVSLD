@@ -15,7 +15,9 @@ def test_three_main_groups_and_exactly_two_default_volume_methods():
     assert '[AppPage.QuickSection] = new SectionPage(true)' in main
     assert '[AppPage.License] = new ContactInfoPage()' in main
     assert 'case AppPage.Volume: return new[] { AppPage.Section, AppPage.Grid };' in main
-    assert 'case AppPage.Model: return new[] { AppPage.Data, AppPage.Project, AppPage.QuickSection };' in main
+    assert 'case AppPage.Model: return new[] { AppPage.Project, AppPage.Data, AppPage.QuickSection };' in main
+    assert '_calcButtons.Controls.Add(_sectionTab);' in main
+    assert '_calcButtons.Controls.Add(_gridTab);' in main
     assert 'case AppPage.Volume: return new[] { AppPage.Section, AppPage.Grid };' in main  # advanced menu deliberately removed
 
 
