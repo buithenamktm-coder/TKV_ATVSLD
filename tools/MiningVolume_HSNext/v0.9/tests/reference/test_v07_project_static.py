@@ -105,7 +105,7 @@ def test_ribbon_exposes_only_toggle_and_software_information():
     assert 'Btn("Ẩn / hiện phần mềm", RibbonAction.TogglePalette)' in s
     assert 'Btn("Thông tin phần mềm", RibbonAction.About)' in s
     assert 'EntryPoint.Open(AppPage.License)' in s
-    assert 'EntryPoint.SaveProject();' not in s
+    assert 'Btn("Lưu dự án", RibbonAction.SaveProject)' not in s
 
 
 def test_project_scale_is_persisted_but_report_identity_is_fixed():
