@@ -1,0 +1,138 @@
+name: NAMVECTA V2 Windows Setup QA
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'tools/MiningVolume_HSNext/v0.9/installer/NAMVECTA_Volume_V2.iss'
+      - 'tools/MiningVolume_HSNext/v0.9/installer/namvecta_host_bundles.py'
+      - 'tools/MiningVolume_HSNext/v0.9/installer/prepare_namvecta_branding.py'
+      - 'tools/MiningVolume_HSNext/v0.9/installer/lang/**'
+      - 'tools/MiningVolume_HSNext/v0.9/installer/test_namvecta_host_bundles.py'
+      - '.github/workflows/namvecta-v2-setup-qa.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: namvecta-setup-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-windows-qa:
+    runs-on: windows-2022
+    timeout-minutes: 55
+    env:
+      ROOT: tools/MiningVolume_HSNext/v0.9
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify source and prepare dependencies
+        shell: pwsh
+        run: |
+          if ((git rev-parse HEAD).Trim() -ne $env:SOURCE_SHA) { throw 'SOURCE_SHA mismatch' }
+          python -m pip install --disable-pip-version-check Pillow
+          if ($LASTEXITCODE -ne 0) { throw 'Pillow installation failed' }
+          python -m unittest discover -s "$env:ROOT/installer" -p "test_namvecta_host_bundles.py" -v
+          if ($LASTEXITCODE -ne 0) { throw 'Host bundle tests failed' }
+      - name: Build five exact AutoCAD binaries and immutable per-flavor receipts
+        shell: pwsh
+        run: |
+          Set-Location $env:ROOT
+          $ErrorActionPreference = 'Stop'
+          $mapping = @(
+            @{ Year=2020; Flavor='ACAD2020_NET47'; Framework='net47'; Main='IMSATVolume.ACAD2020_NET47.dll'; Cad='IMSATVolume.Cad.ACAD2020_NET47.dll' }
+            @{ Year=2021; Flavor='ACAD2021_NET48'; Framework='net48'; Main='IMSATVolume.ACAD2021_NET48.dll'; Cad='IMSATVolume.Cad.ACAD2021_NET48.dll' }
+            @{ Year=2022; Flavor='ACAD2022_NET48'; Framework='net48'; Main='IMSATVolume.ACAD2022_NET48.dll'; Cad='IMSATVolume.Cad.ACAD2022_NET48.dll' }
+            @{ Year=2023; Flavor='ACAD2023_NET48'; Framework='net48'; Main='MiningVolume2023.dll'; Cad='MiningVolume.Cad2023.dll' }
+            @{ Year=2024; Flavor='ACAD2024_NET48'; Framework='net48'; Main='IMSATVolume.ACAD2024_NET48.dll'; Cad='IMSATVolume.Cad.ACAD2024_NET48.dll' }
+          )
+          foreach ($item in $mapping) {
+            $flavor = $item.Flavor
+            dotnet build src/MiningVolume.Plugin2023/MiningVolume.Plugin2023.csproj -t:Rebuild -c Release `
+              -p:UseAutoCADNuGet=true -p:IMSATCadFlavor=$flavor `
+              -p:SourceRevisionId=$env:SOURCE_SHA -m:1 --disable-build-servers
+            if ($LASTEXITCODE -ne 0) { throw "Build failed: $flavor" }
+            $destination = Join-Path "dist/namvecta-work/verified-flavors" $flavor
+            New-Item -ItemType Directory -Force $destination | Out-Null
+            $net = $item.Framework
+            Copy-Item "src/MiningVolume.Plugin2023/bin/Release/$net/$($item.Main)" $destination
+            Copy-Item "src/MiningVolume.Cad2023/bin/Release/$net/$($item.Cad)" $destination
+            Copy-Item "src/MiningVolume.Core/bin/Release/$net/MiningVolume.Core.dll" $destination
+            Copy-Item "src/MiningVolume.Surface/bin/Release/$net/MiningVolume.Surface.dll" $destination
+            Copy-Item "src/MiningVolume.Surface/bin/Release/$net/MiningVolume.Cdt.Native.dll" $destination
+            Copy-Item "src/MiningVolume.Surface/Native/NOTICE.txt" $destination
+            Copy-Item "src/MiningVolume.Surface/Native/LICENSE-CDT.txt" $destination
+            $id = @("SOURCE_SHA=$env:SOURCE_SHA")
+            Get-ChildItem "$destination/*.dll" | Sort-Object Name | ForEach-Object {
+              $id += "$( (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant() )  $($_.Name)"
+            }
+            $id | Set-Content -Encoding ascii "$destination/BUILD_IDENTITY.txt"
+          }
+      - name: Assemble five distinct Autoloader bundles
+        shell: pwsh
+        run: |
+          Set-Location $env:ROOT
+          python installer/namvecta_host_bundles.py `
+            --stage dist/namvecta-work/verified-flavors `
+            --output dist/namvecta-work/Bundles `
+            --source-sha $env:SOURCE_SHA
+          if ($LASTEXITCODE -ne 0) { throw 'NAMVECTA bundle staging failed' }
+      - name: Prepare PA3 reference bitmap/icon (not approved production vectors)
+        shell: pwsh
+        run: |
+          Set-Location $env:ROOT
+          python installer/prepare_namvecta_branding.py `
+            --reference docs/branding/namvecta-pa3-reference `
+            --output dist/namvecta-work/Branding
+          if ($LASTEXITCODE -ne 0) { throw 'PA3 raster hash/derivative check failed' }
+      - name: Compile professional Windows wizard into QA-only EXE
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (!(Get-Command choco -ErrorAction SilentlyContinue)) {
+            throw 'Windows Chocolatey unavailable: cannot install Inno Setup'
+          }
+          choco install innosetup --yes --no-progress --limit-output
+          if ($LASTEXITCODE -ne 0) { throw 'Inno Setup installation failed' }
+          $iscc = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6/ISCC.exe'
+          if (-not (Test-Path $iscc)) {
+            $iscc = (Get-Command ISCC.exe -ErrorAction SilentlyContinue).Source
+          }
+          if (-not $iscc -or -not (Test-Path $iscc)) { throw 'ISCC.exe not found' }
+          $stage = (Resolve-Path "$env:ROOT/dist/namvecta-work").Path
+          & $iscc ("/DStageDir=$stage") "$env:ROOT/installer/NAMVECTA_Volume_V2.iss"
+          if ($LASTEXITCODE -ne 0) { throw 'Inno compiler failed' }
+          $exe = Join-Path $stage 'Output/NAMVECTA-VOLUME-2.0-Setup-QA-NOT-RELEASE.exe'
+          if (-not (Test-Path $exe)) { throw 'QA Setup EXE missing' }
+          $receipt = [ordered]@{
+            source_sha = $env:SOURCE_SHA
+            release_status = 'QA_CANDIDATE_NOT_RELEASE'
+            name = 'NAMVECTA-VOLUME-2.0-Setup-QA-NOT-RELEASE.exe'
+            sha256 = (Get-FileHash $exe -Algorithm SHA256).Hash.ToLowerInvariant()
+            windows_inno_compile = 'PASS'
+            autocad_2020_2024_runtime = 'NOT_TESTED'
+            mvselftest = 'NOT_TESTED'
+            installer_live_upgrade_uninstall = 'NOT_TESTED'
+            logo_vector_production_approval = 'PENDING'
+            license_pass_windows_runtime = 'NOT_TESTED'
+          }
+          $receipt | ConvertTo-Json | Set-Content -Encoding utf8 (Join-Path $stage 'Output/QA_BUILD_RECEIPT.json')
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NAMVECTA-V2.0-Setup-QA-NOT-RELEASE
+          retention-days: 14
+          if-no-files-found: error
+          path: |
+            tools/MiningVolume_HSNext/v0.9/dist/namvecta-work/Output/NAMVECTA-VOLUME-2.0-Setup-QA-NOT-RELEASE.exe
+            tools/MiningVolume_HSNext/v0.9/dist/namvecta-work/Output/QA_BUILD_RECEIPT.json
+            tools/MiningVolume_HSNext/v0.9/dist/namvecta-work/Bundles/STAGING_QA.json
+            tools/MiningVolume_HSNext/v0.9/dist/namvecta-work/Branding/BRANDING_QA.json
