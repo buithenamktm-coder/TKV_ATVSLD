@@ -452,8 +452,10 @@ namespace MiningVolume2023.Services
                     !string.Equals(SourceFingerprint.ComputeModel(session.Source),
                         snap.FullSourceFingerprint, StringComparison.OrdinalIgnoreCase))
                 {
+                    session.CadRecoveryBlocked = true;
                     warnings.Add(session.Name +
-                        ": nguồn CAD đã thay đổi so với lúc lưu Project; không áp sửa Z/loại điểm hoặc tính lại khối lượng từ mặt cắt đã chỉnh.");
+                        ": nguồn CAD đã thay đổi so với lúc lưu Project; " +
+                        "chặn dùng lại TIN để tránh tính khối lượng từ dữ liệu không khớp.");
                     return;
                 }
                 var byHandle = session.Source.Entities.GroupBy(e => e.Handle, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
@@ -481,67 +483,36 @@ namespace MiningVolume2023.Services
 
         private static void RebuildSavedTins(ProjectSnapshot snap, List<string> warnings)
         {
-            bool hadExisting = snap?.Existing?.HadTin == true;
-            bool hadDesign = snap?.Design?.HadTin == true;
-
-            if (hadExisting && hadDesign)
+            // Despite this historical method name, reopened DWGs MUST NOT
+            // retriangulate a TIN already present as native 3DFACEs. The
+            // physical DWG TIN is the authoritative existing mesh; restore its
+            // core geometry in read-only mode, retaining original CAD faces.
+            // A missing/broken saved TIN is reported, never quietly replaced.
+            foreach (ModelRole role in new[] { ModelRole.Existing, ModelRole.Design })
             {
-                SurfaceBuildResult[] builds = null;
+                var modelSnap = role == ModelRole.Existing ? snap?.Existing : snap?.Design;
+                if (modelSnap?.HadTin != true) continue;
+                var session = ProjectState.Current.Get(role);
                 try
                 {
-                    // A saved calculation-ready project must restore the two TINs as one pair.
-                    // Build both cores first, then let DrawTinPair enforce the CAD atomicity gate.
-                    builds = SurfaceWorkflowService.BuildPairCoreDetailed();
-                    SurfaceWorkflowService.DrawTinPair(builds);
-                    SurfaceWorkflowService.SetTinVisible(ModelRole.Existing, snap.Existing.TinVisible);
-                    SurfaceWorkflowService.SetTinVisible(ModelRole.Design, snap.Design.TinVisible);
+                    if (session.CadRecoveryBlocked)
+                    {
+                        warnings.Add("Không dùng TIN " + session.Name +
+                            ": dữ liệu nguồn đã thay đổi so với lúc lưu Project.");
+                        continue;
+                    }
+                    if (!SurfaceWorkflowService.TryRestoreTinFromCad(role))
+                        warnings.Add("DWG đã lưu có thông tin TIN " + session.Name +
+                            " nhưng không tìm thấy TIN nguyên vẹn trên " + session.TinLayer +
+                            ". Hãy kiểm tra layer trước khi dựng lại.");
+                    else
+                        session.TinVisible = modelSnap.TinVisible;
                 }
                 catch (Exception ex)
                 {
-                    // Even if CAD cleanup itself encountered a protected/foreign entity,
-                    // never leave either in-memory TIN eligible for downstream calculation.
-                    SurfaceWorkflowService.InvalidateTin(ModelRole.Existing, clearCadLayer: false, notify: false);
-                    SurfaceWorkflowService.InvalidateTin(ModelRole.Design, clearCadLayer: false, notify: false);
-                    ProjectState.Current.NotifyChanged();
-                    warnings.Add("Không dựng lại được cặp TIN hiện trạng/thiết kế: " + ex.Message);
+                    warnings.Add("Không khôi phục được TIN " + session.Name +
+                        " từ 3DFACE trong DWG: " + ex.Message);
                 }
-                finally
-                {
-                    if (builds != null)
-                        foreach (var build in builds)
-                        {
-                            // A file-backed mesh is owned by ProjectState only after
-                            // successful adoption into the live AutoCAD session.
-                            // Release all remaining temporary stores on failure.
-                            if (build?.Tin != null &&
-                                !ReferenceEquals(ProjectState.Current.Get(build.Role).Tin, build.Tin))
-                                try { (build.Tin.Triangles as IDisposable)?.Dispose(); } catch { }
-                        }
-                }
-                return;
-            }
-
-            if (hadExisting) TryRebuildTin(ModelRole.Existing, snap.Existing, warnings);
-            if (hadDesign) TryRebuildTin(ModelRole.Design, snap.Design, warnings);
-        }
-
-        private static void TryRebuildTin(ModelRole role, ModelSnapshot snap, List<string> warnings)
-        {
-            if (snap == null || !snap.HadTin) return;
-            var session = ProjectState.Current.Get(role);
-            if (session.Source == null || session.Source.Entities.Count == 0) return;
-            SurfaceBuildResult build = null;
-            try
-            {
-                build = SurfaceWorkflowService.BuildCoreDetailed(role);
-                SurfaceWorkflowService.DrawTin(role, build);
-                SurfaceWorkflowService.SetTinVisible(role, snap.TinVisible);
-            }
-            catch (Exception ex) { warnings.Add($"Không dựng lại được TIN {session.Name}: {ex.Message}"); }
-            finally
-            {
-                if (build?.Tin != null && !ReferenceEquals(session.Tin, build.Tin))
-                    try { (build.Tin.Triangles as IDisposable)?.Dispose(); } catch { }
             }
         }
 
