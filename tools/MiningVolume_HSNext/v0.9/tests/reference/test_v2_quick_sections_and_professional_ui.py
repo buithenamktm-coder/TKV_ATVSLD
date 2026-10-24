@@ -73,13 +73,13 @@ def test_buttons_have_breathing_room_and_are_not_all_caps():
     assert "button.Padding = new Padding(12, 3, 12, 3)" in theme
     assert "button.FlatAppearance.BorderSize = 0;" in theme
     assert "kv.Value.FlatAppearance.BorderSize = 0;" in palette
-    assert "source.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 168));" in data
-    assert "bool compact = width < 820;" in data
-    assert "_sourceBox.Height = 278;" in data
-    assert "new RowStyle(SizeType.Absolute, 46)" in data
-    assert "Height = 173," in data
-    assert "_buildExisting.Margin = new Padding(5,5,7,5);" in data
-    assert "_buildDesign.Margin = new Padding(7,5,5,5);" in data
+    assert "_sourceTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 40));" in data
+    assert "bool compact = width < 720;" in data
+    assert "_sourceBox.Height = 164;" in data
+    assert "new RowStyle(SizeType.Absolute, 34)" in data
+    assert "Height = 154," in data
+    assert "actions.Controls.Add(_buildExisting);" in data
+    assert "actions.Controls.Add(_buildDesign);" in data
     assert "buttons.Height = ClientSize.Width < 650 ? 140 : 62;" in project
 
 
