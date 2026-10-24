@@ -143,7 +143,8 @@ def test_palette_has_direct_show_hide_toggle_and_startup_default_off():
     assert "Open(AppPage.Project);" in toggle
     assert "Palette.Visible = false;" in toggle
     assert 'CommandMethod("MV_TOGGLE"' in entry
-    assert 'Btn("Mở / Ẩn", RibbonAction.TogglePalette)' in ribbon
+    assert 'Btn("Ẩn / hiện phần mềm", RibbonAction.TogglePalette)' in ribbon
+    assert 'Btn("Thông tin phần mềm", RibbonAction.About)' in ribbon
     assert "EntryPoint.TogglePalette();" in ribbon
     selftest = read("src/MiningVolume.Plugin2023/Services/SelfTestService.cs")
     assert "Bật/tắt palette MiningVolume hoạt động" in selftest
