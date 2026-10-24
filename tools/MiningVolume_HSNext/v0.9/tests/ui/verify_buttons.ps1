@@ -251,6 +251,13 @@ foreach($clientWidth in $dataWidths) {
     }
   }
   if($types.HorizontalScrollbar) { throw 'TIN source-type list has unwanted horizontal scrolling.' }
+  if($types.MultiColumn) {
+    $rows=[Math]::Max(1,[Math]::Floor($types.ClientSize.Height / [Math]::Max(1,$types.ItemHeight)))
+    $neededColumns=[Math]::Ceiling($types.Items.Count / $rows)
+    if($neededColumns -gt 2) {
+      throw "TIN types need $neededColumns columns, only 2 fit without horizontal scroll at $clientWidth px."
+    }
+  }
   $dataDetails+=@{
     palette_width=$clientWidth;source_width=$sourceBox.Width;
     source_height=$sourceBox.Height;source_row_count=$sourceTable.RowCount;
