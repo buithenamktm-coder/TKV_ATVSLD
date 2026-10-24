@@ -346,41 +346,87 @@ namespace MiningVolume2023.UI
         private void DeleteAllTins()
         {
             if (_busy) return;
-            var state = ProjectState.Current;
-            bool hasExisting = state.Existing.Tin != null || state.Existing.TinCadFaceCount > 0;
-            bool hasDesign = state.Design.Tin != null || state.Design.TinCadFaceCount > 0;
-            if (!hasExisting && !hasDesign)
+            var doc = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument;
+            if (doc == null)
             {
-                MessageBox.Show(this, "Chưa có TIN hiện trạng hoặc thiết kế để xóa.",
+                MessageBox.Show(this, "Không có DWG đang hoạt động.",
+                    "NAMVECTA VOLUME", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            var state = ProjectState.Current;
+            var names = new[] { state.Existing.TinLayer, state.Design.TinLayer };
+            int cadFaces;
+            try
+            {
+                // A reopened DWG may contain hundreds of thousands of real
+                // TIN 3DFACEs even when session.Tin == null and the counters
+                // have not yet been reconstructed. Inspect its CAD layers.
+                using (doc.LockDocument())
+                {
+                    var inspection = TinCadRenderer.InspectLayers(doc.Database, names);
+                    cadFaces = inspection[names[0]].Faces + inspection[names[1]].Faces;
+                    if (inspection[names[0]].Unexpected > 0 ||
+                        inspection[names[1]].Unexpected > 0)
+                    {
+                        MessageBox.Show(this,
+                            "Layer TIN chứa đối tượng không phải 3DFACE. Không xóa tự động " +
+                            "để bảo vệ dữ liệu CAD nguồn. Kiểm tra các layer:\r\n" +
+                            string.Join(" / ", names),
+                            "NAMVECTA VOLUME", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        return;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, "Không kiểm tra được TIN trong DWG:\r\n" +
+                    ex.Message, "NAMVECTA VOLUME",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+            bool hasSession = state.Existing.Tin != null ||
+                state.Existing.TinCadFaceCount > 0 || state.Design.Tin != null ||
+                state.Design.TinCadFaceCount > 0;
+            if (cadFaces == 0 && !hasSession)
+            {
+                MessageBox.Show(this,
+                    "Không tìm thấy 3DFACE TIN trên hai layer của NAMVECTA:\r\n" +
+                    string.Join(" / ", names) +
+                    "\r\nNếu TIN cũ nằm trên layer khác, hãy kiểm tra tên layer trước khi xóa.",
                     "NAMVECTA VOLUME", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
-            var document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument;
-            if (document == null) return;
             if (MessageBox.Show(this,
-                "Xóa TOÀN BỘ TIN HIỆN TRẠNG VÀ THIẾT KẾ đã tạo?\r\n" +
-                "Các kết quả mặt cắt và khối lượng liên quan sẽ mất hiệu lực.\r\n" +
-                "Dữ liệu khảo sát, đường đồng mức, đối tượng CAD và DWG gốc không bị xóa.",
+                "Xóa toàn bộ TIN hiện trạng và TIN thiết kế trong DWG này?\r\n" +
+                "Phát hiện " + cadFaces.ToString("n0") + " mặt TIN trên layer đầu ra.\r\n" +
+                "Mọi kết quả mặt cắt và khối lượng phụ thuộc sẽ mất hiệu lực.\r\n" +
+                "Điểm khảo sát, đường đồng mức, đối tượng CAD nguồn và " +
+                "hồ sơ Project sẽ được giữ nguyên.",
                 "Xác nhận xóa toàn bộ TIN",
                 MessageBoxButtons.YesNo, MessageBoxIcon.Warning,
-                MessageBoxDefaultButton.Button2) != DialogResult.Yes) return;
-            if (!ReferenceEquals(document,
+                MessageBoxDefaultButton.Button2) != DialogResult.Yes)
+                return;
+            if (!ReferenceEquals(doc,
                 Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument))
                 return;
             try
             {
                 if (Tin3DViewService.IsActive) Tin3DViewService.Stop();
-                if (hasExisting) SurfaceWorkflowService.InvalidateTin(
-                    ModelRole.Existing, clearCadLayer: true);
-                if (hasDesign) SurfaceWorkflowService.InvalidateTin(
-                    ModelRole.Design, clearCadLayer: true);
-                _info.Text = "Đã xóa TIN hiện trạng và thiết kế; dữ liệu CAD nguồn được giữ nguyên.";
+                // Physical DWG inspection + atomic erase + snapshot invalidation.
+                // Do not branch on the session counters after a drawing reopen.
+                int removed = SurfaceWorkflowService.DeleteAllTinsStoredInCurrentDrawing();
+                _info.Text = "Đã xóa " + removed.ToString("n0") +
+                    " mặt TIN trong DWG. Đã cập nhật trạng thái Project; nguồn giữ nguyên.";
                 RebuildRows();
+            }
+            catch (OperationCanceledException)
+            {
+                _info.Text = "Đã hủy. Chưa xóa TIN trong DWG.";
             }
             catch (Exception ex)
             {
                 MessageBox.Show(this,
-                    "Không hoàn tất xóa tất cả TIN. Hãy kiểm tra trạng thái từng mô hình.\r\n" +
+                    "Không thể xóa toàn bộ TIN an toàn. Không tự động xóa dữ liệu khảo sát.\r\n" +
                     ex.Message, "NAMVECTA VOLUME",
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
