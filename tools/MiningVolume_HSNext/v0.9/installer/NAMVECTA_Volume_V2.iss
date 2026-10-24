@@ -71,7 +71,7 @@ vi.BrandNotice=NAMVECTA VOLUME 2.0 — nhập Pass offline bên trong AutoCAD.
 [Files]
 ; This {app} directory is for setup metadata and help, not the Autodesk loader.
 Source: "{#StageDir}\Branding\namvecta-setup.ico"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#StageDir}\STAGING_QA.json"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#StageDir}\Bundles\STAGING_QA.json"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#StageDir}\Bundles\NAMVECTAVolume2020.bundle\*"; DestDir: "{commonappdata}\Autodesk\ApplicationPlugins\NAMVECTAVolume2020.bundle"; Flags: recursesubdirs createallsubdirs ignoreversion; Check: Install2020
 Source: "{#StageDir}\Bundles\NAMVECTAVolume2021.bundle\*"; DestDir: "{commonappdata}\Autodesk\ApplicationPlugins\NAMVECTAVolume2021.bundle"; Flags: recursesubdirs createallsubdirs ignoreversion; Check: Install2021
 Source: "{#StageDir}\Bundles\NAMVECTAVolume2022.bundle\*"; DestDir: "{commonappdata}\Autodesk\ApplicationPlugins\NAMVECTAVolume2022.bundle"; Flags: recursesubdirs createallsubdirs ignoreversion; Check: Install2022
