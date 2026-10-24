@@ -95,7 +95,7 @@ def test_excel_hint_is_gone_and_user_brand_name_is_imsat_volume():
     title = src("MiningVolume.Plugin2023/UI/MainPaletteControl.cs")
     entry = src("MiningVolume.Plugin2023/EntryPoint.cs")
     assert '"NAMVECTA VOLUME"' in title
-    assert 'PaletteSet("IMSAT VOLUME"' in entry
+    assert 'PaletteSet("NAMVECTA VOLUME"' in entry
 
 
 
