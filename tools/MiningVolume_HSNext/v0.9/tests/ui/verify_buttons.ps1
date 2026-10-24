@@ -201,5 +201,67 @@ $quickForm.Close();$quickForm.Dispose()
   calculation_buttons='preview and draw; quick hidden';quick_page='quick visible; calculation draw hidden';
   button_gap_px=$gap;status='PASS';source_sha=$env:SOURCE_SHA;autocad_runtime='NOT TESTED'} |
   ConvertTo-Json -Depth 4 | Set-Content -Encoding UTF8 (Join-Path $out 'UI_SECTION_PARAMETERS.json')
+# End-to-end WinForms sizing check for the real survey-input panel.
+# This catches the exact field failure: global theme forces min button 36px
+# while the TableLayoutPanel cell is only 34px, clipping and overlapping rows.
+# It also checks that all CAD picker labels fit on one line.
+$dataType=$assembly.GetType('MiningVolume2023.UI.DataPage',$true)
+$dataPage=[Windows.Forms.Control][Activator]::CreateInstance($dataType)
+$dataForm=New-Object Windows.Forms.Form
+$dataForm.ClientSize=New-Object Drawing.Size(800,680)
+$dataForm.StartPosition=[Windows.Forms.FormStartPosition]::Manual
+$dataForm.Location=New-Object Drawing.Point(-1800,-1800)
+$dataForm.ShowInTaskbar=$false
+$dataPage.Dock=[Windows.Forms.DockStyle]::Fill
+$dataForm.Controls.Add($dataPage)
+$apply.Invoke($null,[object[]]@($dataPage)) | Out-Null
+$dataForm.Show()
+[Windows.Forms.Application]::DoEvents()
+$sourceFields=[Reflection.BindingFlags]'NonPublic,Instance'
+$sourceTable=[Windows.Forms.TableLayoutPanel]$dataType.GetField('_sourceTable',$sourceFields).GetValue($dataPage)
+$chooseControls=[Windows.Forms.Control[]]$dataType.GetField('_sourceChoose',$sourceFields).GetValue($dataPage)
+$loadControls=[Windows.Forms.Control[]]$dataType.GetField('_sourceLoad',$sourceFields).GetValue($dataPage)
+$types=[Windows.Forms.CheckedListBox]$dataType.GetField('_types',$sourceFields).GetValue($dataPage)
+$sourceBox=[Windows.Forms.GroupBox]$dataType.GetField('_sourceBox',$sourceFields).GetValue($dataPage)
+$dataWidths=@(800,340)
+$dataDetails=@()
+foreach($clientWidth in $dataWidths) {
+  $dataForm.ClientSize=New-Object Drawing.Size($clientWidth,680)
+  $dataPage.Size=New-Object Drawing.Size($clientWidth,680)
+  $dataPage.PerformLayout()
+  [Windows.Forms.Application]::DoEvents()
+  $sourceTable.PerformLayout()
+  foreach($ctrl in @($chooseControls[0],$chooseControls[1],$loadControls[0],$loadControls[1])) {
+    $actual=[Windows.Forms.Control]$ctrl
+    if($actual.Height -gt 34) {
+      throw "CAD picker overflow: $($actual.Text), height=$($actual.Height), viewport=$clientWidth"
+    }
+    if($actual.MinimumSize.Height -gt 28) {
+      throw "CAD picker minimum height is above compact contract: $($actual.Text)"
+    }
+    $required=[Windows.Forms.TextRenderer]::MeasureText(
+      $actual.Text,$actual.Font,
+      (New-Object Drawing.Size(1000,100)),
+      [Windows.Forms.TextFormatFlags]::SingleLine).Width + $actual.Padding.Horizontal
+    if($required -gt $actual.Width) {
+      throw "CAD picker text does not fit at $clientWidth px: $($actual.Text) needs $required, has $($actual.Width)"
+    }
+    if($actual.Bottom -gt $sourceTable.ClientSize.Height + 2) {
+      throw "CAD picker extends below its source table: $($actual.Text)"
+    }
+  }
+  if($types.HorizontalScrollbar) { throw 'TIN source-type list has unwanted horizontal scrolling.' }
+  $dataDetails+=@{
+    palette_width=$clientWidth;source_width=$sourceBox.Width;
+    source_height=$sourceBox.Height;source_row_count=$sourceTable.RowCount;
+    pick_width=$chooseControls[0].Width;pick_height=$chooseControls[0].Height;
+    type_multi_column=$types.MultiColumn;status='PASS'
+  }
+}
+$dataForm.Close();$dataForm.Dispose()
+@{scope='Real WinForms DataPage after UiTheme, 800px and 340px widths';
+  widths=$dataDetails;source_sha=$env:SOURCE_SHA;autocad_runtime='NOT TESTED'} |
+  ConvertTo-Json -Depth 5 | Set-Content -Encoding UTF8 (Join-Path $out 'UI_DATA_SOURCE_BUTTONS.json')
+
 Write-Host 'PASS: separate real Windows calculation section and quick-section action layouts'
 Write-Host 'PASS: actual Windows WinForms buttons, text contrast >=4.5; AutoCAD runtime NOT TESTED'
