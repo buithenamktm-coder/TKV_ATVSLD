@@ -99,9 +99,11 @@ def test_project_autoload_on_palette_open_once_per_drawing():
     assert 'ProjectPersistenceService.LoadCurrentProject(true)' in s
 
 
-def test_ribbon_has_project_panel():
+def test_three_step_ribbon_preserves_project_commands():
     s = read('src/MiningVolume.Plugin2023/RibbonBuilder.cs')
-    assert 'AddPanel(tab, "Dự án"' in s
+    assert 'AddPanel(tab, "1. Dữ liệu"' in s
+    assert 'AddPanel(tab, "2. Tính toán"' in s
+    assert 'AddPanel(tab, "3. Kết quả"' in s
     assert 'EntryPoint.Open(AppPage.Project)' in s
     assert 'EntryPoint.SaveProject();' in s
 
