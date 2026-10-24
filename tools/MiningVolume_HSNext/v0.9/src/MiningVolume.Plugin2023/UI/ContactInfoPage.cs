@@ -1,6 +1,7 @@
 using System;
 using System.Drawing;
 using System.Windows.Forms;
+using MiningVolume2023.Services;
 
 namespace MiningVolume2023.UI
 {
