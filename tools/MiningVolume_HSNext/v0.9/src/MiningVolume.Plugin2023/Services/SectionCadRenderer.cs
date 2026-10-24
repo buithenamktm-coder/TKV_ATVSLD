@@ -32,48 +32,118 @@ namespace MiningVolume2023.Services
                 var ms = ModelSpace(db, tr, true);
                 EraseOnLayers(ms, tr, new[] { layerId, namesLayerId });
 
+                // Each station line (all segments + its label) is ONE native
+                // AutoCAD BLOCK, not loose LINE/DBText entities. The block's
+                // insertion/base point is the start of the first valid span.
+                // Stable names prevent accumulating thousands of new block
+                // definitions when the user previews/moves/deletes stations.
+                int stationIndex = 0;
                 foreach (var line in system.Lines)
                 {
-                    foreach (var span in line.Spans)
-                    {
-                        var a = line.PointAt(span.StartT);
-                        var b = line.PointAt(span.EndT);
-                        AddLine(ms, tr, new Point3d(a.X, a.Y, 0), new Point3d(b.X, b.Y, 0), layerId);
-                    }
-                    if (line.Spans.Count > 0)
-                    {
-                        var p = line.PointAt(line.Spans[0].StartT);
-                        var txt = new DBText
-                        {
-                            // Draw labels outside the dense TIN and route
-                            // crossings; keep a separate toggleable label layer.
-                            Position = new Point3d(p.X-18.0*line.Direction.X,
-                                p.Y-18.0*line.Direction.Y,0),
-                            TextString = line.Name,
-                            Height = 3.0,
-                            Rotation = Math.Atan2(line.Direction.Y, line.Direction.X),
-                            LayerId = namesLayerId,
-                            TextStyleId = styleId
-                        };
-                        ms.AppendEntity(txt); tr.AddNewlyCreatedDBObject(txt, true);
-                    }
+                    if (line.Spans.Count == 0) continue;
+                    stationIndex++;
+                    var anchor2 = line.PointAt(line.Spans[0].StartT);
+                    var anchor = new Point3d(anchor2.X, anchor2.Y, 0);
+                    string blockName = "NAMVECTA_MC_TUYEN_" + stationIndex.ToString("D6");
+                    ObjectId blockId = UpdateStationDefinition(db, tr, blockName,
+                        line, anchor, layerId, namesLayerId, styleId);
+                    var instance = new BlockReference(anchor, blockId) { LayerId = layerId };
+                    ms.AppendEntity(instance);
+                    tr.AddNewlyCreatedDBObject(instance, true);
                 }
                 tr.Commit();
             }
         }
 
-        public static void ClearPreview(Database db)
+        private static ObjectId UpdateStationDefinition(Database db, Transaction tr,
+            string blockName, SectionLine line, Point3d basePoint,
+            ObjectId planLayer, ObjectId labelLayer, ObjectId styleId)
+        {
+            var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
+            BlockTableRecord definition;
+            if (bt.Has(blockName))
+            {
+                // Only reuse definitions whose contents are exactly our own
+                // previously generated LINE/DBText objects on reserved layers.
+                // Reject collisions or user-modified blocks, never erase or
+                // overwrite unrelated CAD geometry.
+                definition = (BlockTableRecord)tr.GetObject(bt[blockName], OpenMode.ForWrite);
+                ObjectId[] oldBlockEntities = definition.Cast<ObjectId>().ToArray();
+                foreach (ObjectId id in oldBlockEntities)
+                {
+                    var entity = tr.GetObject(id, OpenMode.ForRead) as Entity;
+                    if (entity == null ||
+                        (!(entity is Line) && !(entity is DBText)) ||
+                        (entity.LayerId != planLayer && entity.LayerId != labelLayer))
+                        throw new InvalidOperationException(
+                            "Block tuyến " + blockName +
+                            " chứa hình học không thuộc NAMVECTA; không ghi đè.");
+                }
+                foreach (ObjectId id in oldBlockEntities)
+                {
+                    var entity = tr.GetObject(id, OpenMode.ForWrite) as Entity;
+                    entity?.Erase();
+                }
+            }
+            else
+            {
+                bt.UpgradeOpen();
+                definition = new BlockTableRecord
+                {
+                    Name = blockName,
+                    Origin = Point3d.Origin
+                };
+                bt.Add(definition);
+                tr.AddNewlyCreatedDBObject(definition, true);
+            }
+
+            foreach (var span in line.Spans)
+            {
+                var first = line.PointAt(span.StartT);
+                var last = line.PointAt(span.EndT);
+                var segment = new Line(
+                    new Point3d(first.X - basePoint.X, first.Y - basePoint.Y, 0),
+                    new Point3d(last.X - basePoint.X, last.Y - basePoint.Y, 0))
+                {
+                    LayerId = planLayer
+                };
+                definition.AppendEntity(segment);
+                tr.AddNewlyCreatedDBObject(segment, true);
+            }
+            var label = new DBText
+            {
+                Position = new Point3d(
+                    -18.0 * line.Direction.X,
+                    -18.0 * line.Direction.Y, 0),
+                TextString = line.Name,
+                Height = 3.0,
+                Rotation = Math.Atan2(line.Direction.Y, line.Direction.X),
+                LayerId = labelLayer,
+                TextStyleId = styleId
+            };
+            definition.AppendEntity(label);
+            tr.AddNewlyCreatedDBObject(label, true);
+            return definition.ObjectId;
+        }
+
+        public static void ClearPreview(Database db,
+            Action<Transaction> onClearedInSameTransaction = null)
         {
             using (var tr = db.TransactionManager.StartTransaction())
             {
                 var lt = (LayerTable)tr.GetObject(db.LayerTableId, OpenMode.ForRead);
                 if (!lt.Has(PreviewLayer) && !lt.Has(PreviewLabelLayer))
-                { tr.Commit(); return; }
+                {
+                    onClearedInSameTransaction?.Invoke(tr);
+                    tr.Commit();
+                    return;
+                }
                 var ms = ModelSpace(db, tr, true);
                 var clear = new List<ObjectId>();
                 if(lt.Has(PreviewLayer))clear.Add(lt[PreviewLayer]);
                 if(lt.Has(PreviewLabelLayer))clear.Add(lt[PreviewLabelLayer]);
                 EraseOnLayers(ms, tr, clear);
+                onClearedInSameTransaction?.Invoke(tr);
                 tr.Commit();
             }
         }

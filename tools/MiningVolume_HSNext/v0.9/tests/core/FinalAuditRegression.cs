@@ -240,12 +240,18 @@ internal static class FinalAuditRegression
             var options=new GridVolumeOptions { Boundary=Boundary, SizeX=1, SizeY=1 };
             var grid=new GridVolumeCalculator().Calculate(Plane(5),Plane(0),options);
             var expected=GridVolumeExcelReportBuilder.Build(grid,options);
+            Check(expected.Sheets.Count==2 && expected.Sheets[0].Name=="01 Tổng hợp" &&
+                expected.Sheets[1].Name=="02 Chi tiết","Compact grid sheets are missing");
+            Check(expected.Sheets[0].Rows.Any(row=>row.Any(c=>Equals(c.Value,"0967280686"))),
+                "Compact grid summary lost the required developer contact");
+            var technical=GridVolumeExcelReportBuilder.Build(grid,options,true);
+            Check(technical.Sheets.Count==6,"Optional technical grid workbook lost audit sheets");
             var pending=GridVolumeExcelReportBuilder.BuildAsync(grid,options);
             state.MiningUnitName="Changed after export started";
             var actual=pending.GetAwaiter().GetResult();
-            Check(actual.Sheets.Count==6,"Async grid lost sheets");
+            Check(actual.Sheets.Count==2,"Default grid workbook must contain exactly two sheets");
             Check(!actual.IncludeImsatLogo,"Async grid lost outside-unit snapshot");
-            for(int i=0;i<6;i++) {
+            for(int i=0;i<2;i++) {
                 Check(actual.Sheets[i].Title==expected.Sheets[i].Title,"Async grid read live unit");
                 Check(actual.Sheets[i].Rows.Count==expected.Sheets[i].Rows.Count,"Async grid lost rows");
             }
@@ -257,7 +263,7 @@ internal static class FinalAuditRegression
                     var xml=XDocument.Load(stream);
                     Check(xml.Descendants().Any(x=>x.Name.LocalName=="t" && x.Value==grid.CalculationId),"Async ID missing");
                     Check(!xml.ToString().Contains("Changed after export started"),"Async metadata changed");
-                    using(var summary=zip.GetEntry("xl/worksheets/sheet5.xml").Open())
+                    using(var summary=zip.GetEntry("xl/worksheets/sheet1.xml").Open())
                         Check(!XDocument.Load(summary).ToString().Contains("Changed after export started"),"Async signature metadata changed");
                 }
             } finally { if(File.Exists(file))File.Delete(file); }
@@ -956,7 +962,7 @@ internal static class FinalAuditRegression
                 reversed.Cells.All(c=>c.CoverageStatus=="Thiếu phủ TIN hiện trạng"),
                 "Missing existing-TIN cells were misclassified");
             var reportXlsx=GridVolumeExcelReportBuilder.Build(report,opts);
-            var detail=reportXlsx.Sheets.First(x=>x.Name=="CHI TIẾT Ô LƯỚI");
+            var detail=reportXlsx.Sheets.First(x=>x.Name=="02 Chi tiết");
             Check(detail.Rows.Count>0 &&
                 detail.Rows.All(row=>row[7].Value.ToString()=="" &&
                     row[8].Value.ToString()=="" &&

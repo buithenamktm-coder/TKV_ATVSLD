@@ -48,7 +48,7 @@ namespace MiningVolume2023
         {
             // Never leave the globally shared palette active with another
             // drawing's HT/TK sources or accepted volume result. Defer costly
-            // DWG/TIN restoration until the user next opens IMSAT.
+            // DWG/TIN restoration until the user next opens NAMVECTA.
             if (_loadedDocument == null) return;
             var current = CurrentFingerprint();
             // SaveAs and copies can share a FingerprintGuid. The in-session
@@ -66,7 +66,7 @@ namespace MiningVolume2023
                 try
                 {
                     e.Document?.Editor.WriteMessage(
-                        "\\nIMSAT VOLUME: đã đổi bản vẽ. Mở lại Ribbon IMSAT để nạp Project của DWG hiện tại; không dùng kết quả của DWG trước.");
+                        "\\nNAMVECTA VOLUME: đã đổi bản vẽ. Mở lại Ribbon NAMVECTA để nạp Project của DWG hiện tại; không dùng kết quả của DWG trước.");
                 }
                 catch { }
             }
@@ -94,7 +94,7 @@ namespace MiningVolume2023
                     }
                     else
                     {
-                        StartupLog("Startup palette auto-open is OFF. Use Ribbon/menu to open IMSAT VOLUME.");
+                        StartupLog("Startup palette auto-open is OFF. Use Ribbon/menu to open NAMVECTA VOLUME.");
                     }
 
                     StartupUiError = null;
@@ -117,7 +117,7 @@ namespace MiningVolume2023
                     {
                         try
                         {
-                            AcApp.ShowAlertDialog("IMSAT VOLUME đã được nạp nhưng không mở được giao diện.\n\n" +
+                            AcApp.ShowAlertDialog("NAMVECTA VOLUME đã được nạp nhưng không mở được giao diện.\n\n" +
                                 ex.Message + "\n\nXem log tại: " + StartupLogPath());
                         }
                         catch { }
@@ -177,14 +177,14 @@ namespace MiningVolume2023
             LicenseService.GetStatus();
             if (Palette == null)
             {
-                Palette = new PaletteSet("IMSAT VOLUME", new Guid("8C96DC13-BC65-4A2C-8B34-2D7644FD1C62"))
+                Palette = new PaletteSet("NAMVECTA VOLUME", new Guid("8C96DC13-BC65-4A2C-8B34-2D7644FD1C62"))
                 {
                     Style = PaletteSetStyles.ShowAutoHideButton | PaletteSetStyles.ShowCloseButton | PaletteSetStyles.ShowPropertiesMenu,
                     MinimumSize = new System.Drawing.Size(360, 450),
                     Size = new System.Drawing.Size(800, 650)
                 };
                 MainControl = new MainPaletteControl();
-                Palette.Add("IMSAT VOLUME", MainControl);
+                Palette.Add("NAMVECTA VOLUME", MainControl);
             }
             Palette.Visible = true;
             MainControl.ShowPage(page);
@@ -195,7 +195,7 @@ namespace MiningVolume2023
         {
             string report=RuntimeBuildIdentity.Describe();
             AcApp.DocumentManager.MdiActiveDocument?.Editor.WriteMessage("\n"+report);
-            System.Windows.Forms.MessageBox.Show(report,"IMSAT — Kiểm tra DLL đang nạp");
+            System.Windows.Forms.MessageBox.Show(report,"NAMVECTA — Kiểm tra DLL đang nạp");
         }
 
         [CommandMethod("MVOPEN", CommandFlags.Session)] public static void OpenPalette() => Open(AppPage.Project);
@@ -228,7 +228,7 @@ namespace MiningVolume2023
             bool next = !UserSettingsService.AutoOpenPalette;
             UserSettingsService.AutoOpenPalette = next;
             AcApp.DocumentManager.MdiActiveDocument?.Editor.WriteMessage(
-                "\nIMSAT VOLUME: tự động mở bảng khi khởi động AutoCAD = " + (next ? "BẬT" : "TẮT") + ".");
+                "\nNAMVECTA VOLUME: tự động mở bảng khi khởi động AutoCAD = " + (next ? "BẬT" : "TẮT") + ".");
             if (MainControl != null) MainControl.Refresh();
         }
         [CommandMethod("MV_PROJECT", CommandFlags.Session)] public static void OpenProject() => Open(AppPage.Project);
@@ -257,14 +257,14 @@ namespace MiningVolume2023
         {
             EnsureCurrentDrawingProjectLoaded();
             var saved = Services.ProjectPersistenceService.SaveCurrentProject();
-            AcApp.DocumentManager.MdiActiveDocument?.Editor.WriteMessage("\nIMSAT VOLUME: đã lưu Project vào DWG lúc " + saved.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss") + ".");
+            AcApp.DocumentManager.MdiActiveDocument?.Editor.WriteMessage("\nNAMVECTA VOLUME: đã lưu Project vào DWG lúc " + saved.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss") + ".");
         }
 
         [CommandMethod("MV_PROJECT_LOAD", CommandFlags.Session)]
         public static void LoadProject()
         {
             var r = Services.ProjectPersistenceService.LoadCurrentProject(true);
-            AcApp.DocumentManager.MdiActiveDocument?.Editor.WriteMessage("\nIMSAT VOLUME: " + r.Message);
+            AcApp.DocumentManager.MdiActiveDocument?.Editor.WriteMessage("\nNAMVECTA VOLUME: " + r.Message);
             _loadedDocument = AcApp.DocumentManager.MdiActiveDocument;
             _loadedDrawingFingerprint = CurrentFingerprint();
             Open(AppPage.Project);
@@ -286,12 +286,12 @@ namespace MiningVolume2023
                 {
                     var r = Services.ProjectPersistenceService.LoadCurrentProject(true);
                     if (r.Warnings.Count > 0)
-                        doc.Editor.WriteMessage("\nIMSAT VOLUME: Project đã nạp với " + r.Warnings.Count + " cảnh báo. Mở trang Dự án để xem/kiểm soát.");
+                        doc.Editor.WriteMessage("\nNAMVECTA VOLUME: Project đã nạp với " + r.Warnings.Count + " cảnh báo. Mở trang Dự án để xem/kiểm soát.");
                 }
             }
             catch (System.Exception ex)
             {
-                doc.Editor.WriteMessage("\nIMSAT VOLUME: chưa tự nạp được Project - " + ex.Message);
+                doc.Editor.WriteMessage("\nNAMVECTA VOLUME: chưa tự nạp được Project - " + ex.Message);
             }
             _loadedDocument = doc;
             _loadedDrawingFingerprint = fingerprint;
@@ -311,15 +311,12 @@ namespace MiningVolume2023
             var r = Services.SelfTestService.Run();
             var ed = AcApp.DocumentManager.MdiActiveDocument?.Editor;
             if (r.Passed)
-                ed?.WriteMessage("\nIMSAT VOLUME v1.0 SELFTEST: PASS (" + r.Checks.Count + " checks). Log: " + r.OutputFile);
+                ed?.WriteMessage("\nNAMVECTA VOLUME v2.0 SELFTEST: PASS (" + r.Checks.Count + " checks). Log: " + r.OutputFile);
             else
-                ed?.WriteMessage("\nIMSAT VOLUME v1.0 SELFTEST: FAIL (" + r.Errors.Count + " errors). Log: " + r.OutputFile);
+                ed?.WriteMessage("\nNAMVECTA VOLUME v1.0 SELFTEST: FAIL (" + r.Errors.Count + " errors). Log: " + r.OutputFile);
         }
 
         [CommandMethod("MVABOUT")]
-        public void About()
-        {
-            AcApp.ShowAlertDialog("IMSAT VOLUME\nMine Survey & Earthwork for AutoCAD\nPhát triển: Bùi Thế Nam\nĐT/Zalo: 0967280686\nPhiên bản V2.0 (QA)");
-        }
+        public void About() => Open(AppPage.License);
     }
 }

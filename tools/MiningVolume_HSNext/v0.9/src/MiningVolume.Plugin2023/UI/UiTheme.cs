@@ -111,7 +111,7 @@ namespace MiningVolume2023.UI
             group.BackColor = Color.FromArgb(247, 251, 255);
             group.ForeColor = TextStrong;
             group.Font = new Font("Arial", 9.5F, FontStyle.Bold);
-            group.Padding = new Padding(12, 10, 12, 12);
+            group.Padding = new Padding(6, 7, 6, 6);
         }
 
         private static void StyleButton(Button button)
@@ -121,19 +121,25 @@ namespace MiningVolume2023.UI
             // leaving black/white slivers on high-DPI AutoCAD palettes.
             button.FlatAppearance.BorderSize = 0;
             button.FlatAppearance.BorderColor = ButtonBorder;
-            button.Font = new Font("Arial", 9.5F, FontStyle.Bold);
+            button.Font = new Font("Arial", 9F, FontStyle.Regular);
             button.Text = SentenceCaseButton(button.Text);
             button.TextAlign = ContentAlignment.MiddleCenter;
             button.UseVisualStyleBackColor = false;
             button.Cursor = Cursors.Hand;
-            if (button.MinimumSize.Height < 36)
-                button.MinimumSize = new Size(button.MinimumSize.Width, 36);
+            // Never enlarge compact Palette buttons: 28px controls must fit 32px rows.
+            if (button.MinimumSize.Height > 28)
+                button.MinimumSize = new Size(button.MinimumSize.Width, 28);
             // Real whitespace between controls, not a larger clickable
             // surface touching adjacent buttons on short palettes.
-            button.Margin = new Padding(
-                Math.Max(5, button.Margin.Left), Math.Max(4, button.Margin.Top),
-                Math.Max(5, button.Margin.Right), Math.Max(4, button.Margin.Bottom));
-            button.Padding = new Padding(12, 3, 12, 3);
+            // Calculation preview and draw need a visible gap (>=6px),
+            // but all other Palette buttons keep their compact margins.
+            if (button.Name == "btnPreviewSections" ||
+                button.Name == "btnDrawSections")
+                button.Margin = new Padding(4, 2, 4, 2);
+            else
+                button.Margin = new Padding(2, 2, 2, 2);
+            button.Padding = new Padding(4, 1, 4, 1);
+            button.AutoEllipsis = true;
             button.UseCompatibleTextRendering = true;
             ApplyRoundedButtonMask(button);
 

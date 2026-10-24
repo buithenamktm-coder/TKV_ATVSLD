@@ -12,7 +12,7 @@ def test_data_page_loads_real_cad_reader():
 def test_model_grid_is_virtualized_and_xyz_present():
     s=text('src/MiningVolume.Plugin2023/UI/ModelPage.cs')
     assert 'VirtualMode = true' in s
-    for token in ['"X"','"Y"','"Z"','Loại điểm','Loại đối tượng','TẠO / CẬP NHẬT TIN']:
+    for token in ['"X"','"Y"','"Z"','DisableSelectedVertices()', 'DisableSelectedEntities()', 'BuildTinAsync()']:
         assert token in s
 
 def test_model_build_runs_core_off_ui_thread():

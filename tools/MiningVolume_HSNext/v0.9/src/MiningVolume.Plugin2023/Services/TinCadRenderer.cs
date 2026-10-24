@@ -62,6 +62,74 @@ namespace MiningVolume2023.Services
             }
         }
 
+        /// <summary>
+        /// Remove BOTH application-owned TINs from an existing DWG, including a
+        /// DWG reopened without a restored in-memory TinSurface. All 3DFACE
+        /// objects are validated before mutation; both layers are then erased
+        /// in ONE transaction, so failure on TK cannot delete only HT.
+        /// Does not touch survey entities or change any layer's prior flags.
+        /// </summary>
+        public static int ClearPair(Database db, string existingLayer, string designLayer,
+            Action<Transaction> afterClearInSameTransaction = null)
+        {
+            if (db == null) throw new ArgumentNullException(nameof(db));
+            if (string.IsNullOrWhiteSpace(existingLayer) ||
+                string.IsNullOrWhiteSpace(designLayer) ||
+                string.Equals(existingLayer, designLayer, StringComparison.OrdinalIgnoreCase))
+                throw new ArgumentException("Cần hai layer TIN đầu ra khác nhau.");
+
+            // Inspect the physical DWG, not ProjectState/TinCadFaceCount.
+            // Same preflight safety protocol as ReplacePair: reject ANY
+            // foreign entity on either reserved layer before erasing a face.
+            var verifiedFaces = ValidateExistingPairBeforeMutation(
+                db, existingLayer, designLayer);
+            if (verifiedFaces.Count == 0 && afterClearInSameTransaction == null)
+                return 0;
+
+            using (var tr = db.TransactionManager.StartTransaction())
+            {
+                var lt = (LayerTable)tr.GetObject(db.LayerTableId, OpenMode.ForRead);
+                var existingId = lt.Has(existingLayer) ? lt[existingLayer] : ObjectId.Null;
+                var designId = lt.Has(designLayer) ? lt[designLayer] : ObjectId.Null;
+
+                // Only existing output layers are touched. Never synthesize a
+                // layer as a side effect of the delete command.
+                var originalLocks = new Dictionary<ObjectId, bool>();
+                foreach (var layerId in new[] { existingId, designId })
+                {
+                    if (layerId.IsNull) continue;
+                    MoveCurrentLayerAwayIfNeeded(db, tr, layerId);
+                    var layer = (LayerTableRecord)tr.GetObject(layerId, OpenMode.ForWrite);
+                    originalLocks[layerId] = layer.IsLocked;
+                    layer.IsLocked = false;
+                }
+
+                // One atomic, non-interruptible phase after the last Esc poll.
+                // If any entity changed, dispose without Commit to roll back.
+                foreach (ObjectId id in verifiedFaces)
+                {
+                    var face = tr.GetObject(id, OpenMode.ForWrite) as Face;
+                    if (face == null ||
+                        (face.LayerId != existingId && face.LayerId != designId))
+                        throw new InvalidOperationException(
+                            "TIN trong DWG thay đổi sau khi kiểm tra; không xóa.");
+                    face.Erase();
+                }
+
+                foreach (var lockState in originalLocks)
+                {
+                    var layer = (LayerTableRecord)tr.GetObject(
+                        lockState.Key, OpenMode.ForWrite);
+                    layer.IsLocked = lockState.Value;
+                }
+                // Store DWG project flags and erased CAD faces atomically:
+                // never let a saved project rebuild the removed TINs at reopen.
+                afterClearInSameTransaction?.Invoke(tr);
+                tr.Commit();
+            }
+            return verifiedFaces.Count;
+        }
+
         private static void ValidateSurfaceBeforePairMutation(TinSurface tin, string layer)
         {
             if (tin == null) throw new ArgumentNullException(nameof(tin));
@@ -315,6 +383,91 @@ namespace MiningVolume2023.Services
             }
             return faces.Count;
         }
+
+        /// <summary>
+        /// Rebuild the calculation TIN from actual native 3DFACE geometry in an
+        /// existing drawing (no triangulation and NO CAD writes). A prior
+        /// source model is not required: older DWGs often contain faces but no
+        /// NAMVECTA Project Xrecord. Only our exact reserved output layer is
+        /// eligible; arbitrary CAD or survey layers are never auto-imported.
+        /// </summary>
+        public static TinSurface ReadStoredTin(Database db, string layerName, string modelName)
+        {
+            if (db == null) throw new ArgumentNullException(nameof(db));
+            if (string.IsNullOrWhiteSpace(layerName))
+                throw new ArgumentException("Thiếu tên layer TIN.", nameof(layerName));
+
+            var support = new List<MiningVolume.Core.Geometry.Triangle3>();
+            var vertical = new List<MiningVolume.Core.Geometry.Triangle3>();
+            using (var progress = new SectionCadProgress(1, "đọc TIN đã lưu trong DWG"))
+            using (var tr = db.TransactionManager.StartOpenCloseTransaction())
+            {
+                var layers = (LayerTable)tr.GetObject(db.LayerTableId, OpenMode.ForRead);
+                if (!layers.Has(layerName)) return null;
+                ObjectId layerId = layers[layerName];
+                var blocks = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
+                var model = (BlockTableRecord)tr.GetObject(
+                    blocks[BlockTableRecord.ModelSpace], OpenMode.ForRead);
+                int inspected = 0;
+                foreach (ObjectId id in model)
+                {
+                    if ((inspected++ & 2047) == 0) progress.Poll();
+                    var entity = tr.GetObject(id, OpenMode.ForRead) as Entity;
+                    if (entity == null || entity.LayerId != layerId) continue;
+                    var face = entity as Face;
+                    if (face == null)
+                        throw new InvalidOperationException(
+                            "Layer " + layerName + " có đối tượng không phải 3DFACE. " +
+                            "Không sử dụng như TIN để tránh tính khối lượng sai.");
+                    var p0 = face.GetVertexAt(0);
+                    var p1 = face.GetVertexAt(1);
+                    var p2 = face.GetVertexAt(2);
+                    var p3 = face.GetVertexAt(3);
+                    if (!Finite(p0) || !Finite(p1) || !Finite(p2) || !Finite(p3))
+                        throw new InvalidOperationException(
+                            "Layer " + layerName + " có 3DFACE chứa tọa độ không hữu hạn.");
+                    if (!Close(p2, p3))
+                        throw new InvalidOperationException(
+                            "Layer " + layerName + " có mặt tứ giác. " +
+                            "Không tự suy đoán cách chia thành tam giác TIN.");
+                    var triangle = new MiningVolume.Core.Geometry.Triangle3(
+                        new MiningVolume.Core.Geometry.Vec3(p0.X,p0.Y,p0.Z),
+                        new MiningVolume.Core.Geometry.Vec3(p1.X,p1.Y,p1.Z),
+                        new MiningVolume.Core.Geometry.Vec3(p2.X,p2.Y,p2.Z));
+                    if (triangle.Area2D <= 1e-12)
+                    {
+                        // Vertical faces are retained as geometry evidence, but
+                        // must never enter the single-Z grid support sampler.
+                        double d01 = p0.DistanceTo(p1), d12 = p1.DistanceTo(p2),
+                            d20 = p2.DistanceTo(p0);
+                        if (d01 <= 1e-9 || d12 <= 1e-9 || d20 <= 1e-9)
+                            throw new InvalidOperationException(
+                                "Layer " + layerName + " có tam giác suy biến (cạnh bằng 0).");
+                        vertical.Add(triangle);
+                    }
+                    else
+                        support.Add(triangle);
+                }
+                progress.Poll();
+            }
+            if (support.Count == 0)
+            {
+                if (vertical.Count == 0) return null;
+                throw new InvalidOperationException(
+                    "Layer " + layerName + " chỉ có mặt đứng, không có tam giác TIN phủ XY.");
+            }
+            return new TinSurface(modelName, support,
+                MiningVolume.Core.Compatibility.EmptyArray<MiningVolume.Core.Surface.ValidationIssue>.Value,
+                vertical);
+        }
+
+        private static bool Finite(Point3d point)
+            => !double.IsNaN(point.X) && !double.IsNaN(point.Y) &&
+               !double.IsNaN(point.Z) && !double.IsInfinity(point.X) &&
+               !double.IsInfinity(point.Y) && !double.IsInfinity(point.Z);
+
+        private static bool Close(Point3d a, Point3d b)
+            => a.DistanceTo(b) <= 1e-7;
 
         public static int CountFaces(Database db, string layerName)
         {

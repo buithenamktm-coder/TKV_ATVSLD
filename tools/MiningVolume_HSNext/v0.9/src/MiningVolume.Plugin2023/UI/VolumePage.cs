@@ -26,16 +26,16 @@ namespace MiningVolume2023.UI
             Font = new Font("Arial", 9F); BackColor = Color.White;
             Controls.Add(new Label { Text = "TÍNH KHỐI LƯỢNG", Dock = DockStyle.Top, Height = 32, Font = new Font("Arial", 11F, FontStyle.Bold) });
 
-            var info = new TableLayoutPanel { Dock = DockStyle.Top, Height = 202, ColumnCount = 2, RowCount = 3,
+            var info = new TableLayoutPanel { Dock = DockStyle.Top, Height = 218, ColumnCount = 2, RowCount = 3,
                 Padding = new Padding(10, 7, 10, 10), Margin = new Padding(0, 4, 0, 10) };
             info.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
             info.RowStyles.Add(new RowStyle(SizeType.Absolute, 126));
-            info.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
-            info.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 145)); info.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            info.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
+            info.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 160)); info.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             _scope = InfoLabel(); _formula = new ProfessionalFormulaPanel(); _totals = InfoLabel(true);
             AddInfo(info, 0, "Phạm vi tính", _scope);
             AddInfo(info, 1, "Công thức", _formula);
-            AddInfo(info, 2, "Tổng khối", _totals);
+            AddInfo(info, 2, "Tổng khối lượng", _totals);
             // Keep mathematical transparency available on demand, but do not
             // overwhelm the default workflow with a large formula pane.
             var formulaToggle = new CheckBox
@@ -45,11 +45,11 @@ namespace MiningVolume2023.UI
                 Padding = new Padding(10, 3, 0, 3)
             };
             info.RowStyles[1].Height = 0;
-            info.Height = 76;
+            info.Height = 94;
             formulaToggle.CheckedChanged += (sender, args) =>
             {
                 info.RowStyles[1].Height = formulaToggle.Checked ? 126 : 0;
-                info.Height = formulaToggle.Checked ? 202 : 76;
+                info.Height = formulaToggle.Checked ? 218 : 94;
             };
             Controls.Add(info); info.BringToFront();
             Controls.Add(formulaToggle); formulaToggle.BringToFront();
@@ -61,12 +61,12 @@ namespace MiningVolume2023.UI
             var p2 = new TabPage("Tổng hợp theo tầng"); p2.Controls.Add(_levels); tabs.TabPages.Add(p2);
             Controls.Add(tabs); tabs.BringToFront();
 
-            var bottom = new TableLayoutPanel { Dock = DockStyle.Bottom, Height = 66, ColumnCount = 2, Padding = new Padding(4) };
+            var bottom = new TableLayoutPanel { Dock = DockStyle.Bottom, Height = 48, ColumnCount = 2, Padding = new Padding(4) };
             bottom.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             bottom.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 245));
             _status = new Label { Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, ForeColor = Color.DimGray, Padding = new Padding(2, 0, 0, 0), Text = "Chưa tính khối lượng." };
             _calculate = new Button { Text = "Tính / cập nhật khối lượng", Dock = DockStyle.Top,
-                Height = 40, Margin = new Padding(8, 5, 8, 5),
+                Height = 30, Margin = new Padding(5, 3, 5, 3),
                 Font = new Font("Arial", 9.5F, FontStyle.Bold) };
             _calculate.Click += CalculateClicked;
             bottom.Controls.Add(_status, 0, 0); bottom.Controls.Add(_calculate, 1, 0);

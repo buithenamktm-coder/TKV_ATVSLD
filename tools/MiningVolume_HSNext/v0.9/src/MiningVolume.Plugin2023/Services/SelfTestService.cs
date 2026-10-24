@@ -368,7 +368,7 @@ namespace MiningVolume2023.Services
                 {
                     string.Equals(Environment.GetEnvironmentVariable("MININGVOLUME_RUNTIME_PRODUCT_VERSION"),
                         "2.0", StringComparison.Ordinal)
-                        ? "IMSAT VOLUME V2.0 runtime self-test"
+                        ? "NAMVECTA VOLUME 2.0 runtime self-test"
                         : "MiningVolume HS-Next v1.0 runtime self-test",
                     "Timestamp=" + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture),
                     "Status=" + (r.Passed ? "PASS" : "FAIL")

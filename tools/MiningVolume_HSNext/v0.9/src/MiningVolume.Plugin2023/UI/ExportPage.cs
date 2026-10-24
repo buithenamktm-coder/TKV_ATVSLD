@@ -81,7 +81,7 @@ namespace MiningVolume2023.UI
             bottom.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             bottom.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 180));
             _status = new Label { Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, ForeColor = Color.DimGray, Text = "Cần thành lập mặt cắt và tính khối lượng trước khi xuất." };
-            _export = new Button { Text = "Xuất kết quả", Dock = DockStyle.Top, Height = 38, Font = new Font("Arial", 10F, FontStyle.Bold) };
+            _export = new Button { Text = "Xuất kết quả", Dock = DockStyle.Top, Height = 30, Font = new Font("Arial", 10F, FontStyle.Bold) };
             _export.Click += ExportClicked;
             bottom.Controls.Add(_status, 0, 0);
             bottom.Controls.Add(_export, 1, 0);
@@ -107,13 +107,13 @@ namespace MiningVolume2023.UI
             bool exportExcel = _toExcel.Checked;
             if (!exportCad && !exportExcel)
             {
-                MessageBox.Show("Chọn ít nhất một hình thức xuất: CAD hoặc Excel.", "IMSAT VOLUME",
+                MessageBox.Show("Chọn ít nhất một hình thức xuất: CAD hoặc Excel.", "NAMVECTA VOLUME",
                     MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
             if (st.VolumeResult == null || st.SectionProfiles.Count == 0)
             {
-                MessageBox.Show("Chưa có đủ mặt cắt và kết quả khối lượng để xuất.", "IMSAT VOLUME",
+                MessageBox.Show("Chưa có đủ mặt cắt và kết quả khối lượng để xuất.", "NAMVECTA VOLUME",
                     MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
@@ -231,7 +231,7 @@ namespace MiningVolume2023.UI
 
                 _status.Text = exportExcel && exportCad ? "Đã xuất bảng CAD và file Excel." :
                     exportCad ? "Đã xuất bảng khối lượng lên AutoCAD." : "Đã xuất: " + excelPath;
-                MessageBox.Show(_status.Text, "IMSAT VOLUME", MessageBoxButtons.OK,
+                MessageBox.Show(_status.Text, "NAMVECTA VOLUME", MessageBoxButtons.OK,
                     MessageBoxIcon.Information);
             }
             catch (OperationCanceledException)

@@ -7,10 +7,10 @@ def read(rel):
 
 def test_renderer_replaces_once_and_prefilters_tin_clear_before_destructive_phase():
     s = read("src/MiningVolume.Plugin2023/Services/TinCadRenderer.cs")
-    pair = s[s.index("public static int[] ReplacePair"):s.index("private static void ClearExistingPairInTransaction")]
+    pair = s[s.index("public static int[] ReplacePair"):s.index("public static int ClearPair(")]
     pair_clear = s[s.index("private static void ClearExistingPairInTransaction"):s.index("private static int ReplaceInTransaction")]
-    replace = s[s.index("private static int ReplaceInTransaction"):s.index("public static int Clear")]
-    clear = s[s.index("public static int Clear"):s.index("public static int CountFaces")]
+    replace = s[s.index("private static int ReplaceInTransaction"):s.index("public static int Clear(")]
+    clear = s[s.index("public static int Clear("):s.index("public static TinSurface ReadStoredTin(")]
     # Pair export clears both layers in one traversal, then writes each TIN
     # without entering the single-TIN cleanup loop.
     pair_preflight = s[s.index("private static List<ObjectId> ValidateExistingPairBeforeMutation"):s.index("private static void ClearExistingPairInTransaction")]
@@ -182,7 +182,9 @@ def test_large_tin_is_file_backed_and_cad_render_uses_complete_mesh():
 def test_large_tin_ui_has_progress_and_user_cancel():
     data = read("src/MiningVolume.Plugin2023/UI/DataPage.cs")
     assert "CancellationTokenSource" in data
-    assert 'Btn("Hủy"' in data
+    assert 'Btn("Hủy dựng"' in data
+    assert '_cancelBuild.Visible=true;' in data
+    assert '_cancelBuild.Visible=false;' in data
     assert "_buildCts.Cancel()" in data
     assert "OperationCanceledException" in data
     assert "SetBuildStatus" in data

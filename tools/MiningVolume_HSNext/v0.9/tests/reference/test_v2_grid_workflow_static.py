@@ -41,13 +41,16 @@ def test_v2_grid_cad_uses_separate_layers_for_cut_fill_mixed_and_nodata():
     assert "tr.Commit();" in s
 
 
-def test_six_sheet_grid_excel_formula_links_nodes_and_totals():
+def test_grid_excel_default_two_sheets_retains_formulas_and_optional_audit():
     s=read("src/MiningVolume.Plugin2023/Services/GridVolumeExcelReportBuilder.cs")
-    for sheet in ["THÔNG TIN","CAO ĐỘ NÚT LƯỚI","CHI TIẾT Ô LƯỚI",
-                  "BẢNG LƯỚI TỔNG HỢP","TỔNG HỢP KHỐI LƯỢNG","CHI TIẾT TÍNH TOÁN"]:
+    for sheet in ["THÔNG TIN","CAO ĐỘ NÚT LƯỚI","02 Chi tiết",
+                  "BẢNG LƯỚI TỔNG HỢP","01 Tổng hợp","CHI TIẾT TÍNH TOÁN"]:
         assert sheet in s
     assert 'ReportCell.Formula3("G"+row+"-H"+row)' in s
-    assert "'CHI TIẾT Ô LƯỚI'!" in s
+    assert "'02 Chi tiết'!" in s
+    assert "if (technicalInfo != null)" in s
+    assert 'r.Sheets.Add(Totals(grid, unitGroup, unitName, period));' in s
+    assert 'r.Sheets.Add(Details(grid, cancellationToken));' in s
     assert "ReportCell.Formula3" in s
     assert "chỉ sửa Excel" in s
 

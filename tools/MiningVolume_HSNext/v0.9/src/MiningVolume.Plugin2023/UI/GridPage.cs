@@ -48,8 +48,8 @@ namespace MiningVolume2023.UI
             root.RowStyles.Add(new RowStyle(SizeType.Absolute,34));
             root.RowStyles.Add(new RowStyle(SizeType.Absolute,46)); // shared HT/TK TIN status
             root.RowStyles.Add(new RowStyle(SizeType.Absolute,80));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute,83));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute,56));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute,70));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute,40));
             root.RowStyles.Add(new RowStyle(SizeType.Percent,100));
             Controls.Add(root);
             root.Controls.Add(new Label
@@ -178,20 +178,20 @@ namespace MiningVolume2023.UI
                     _settingsGrid.Controls.Add(_angleCaption,4,1); _settingsGrid.Controls.Add(_angle,5,1);
                 }
                 _rootLayout.RowStyles[2].Height = compact ? 184F : 80F;
-                _rootLayout.RowStyles[3].Height = compact ? 148F : 83F;
+                _rootLayout.RowStyles[3].Height = compact ? 102F : 70F;
             }
             finally { _settingsGrid.ResumeLayout(true); }
         }
 
         private static Button Btn(string text,EventHandler e)
         {
-            var b=new Button{Text=text,AutoSize=true,Height=30,Margin=new Padding(2)};
+            var b=new Button{Text=text,AutoSize=true,Height=28,MinimumSize=new Size(0,28),Margin=new Padding(2)};
             b.Click+=e; return b;
         }
 
         private static NumericUpDown Num(decimal value,decimal min,decimal max)
         {
-            var n=new NumericUpDown{Minimum=min,Maximum=max,DecimalPlaces=2,Dock=DockStyle.Fill};
+            var n=new NoWheelNumericUpDown{Minimum=min,Maximum=max,DecimalPlaces=2,Dock=DockStyle.Fill};
             n.Value=value;return n;
         }
 
@@ -227,8 +227,9 @@ namespace MiningVolume2023.UI
             string missing = !existing && !design
                 ? "hiện trạng và thiết kế"
                 : !existing ? "hiện trạng" : "thiết kế";
-            return "TIN " + missing + " chưa sẵn sàng hoặc đã thay đổi. " +
-                "Chỉ tạo/cập nhật mô hình còn thiếu; TIN hợp lệ còn lại được giữ nguyên.";
+            return "TIN " + missing + " chưa nạp trong phiên làm việc. " +
+                "Nếu DWG đã có 3DFACE trên layer MV_TIN_HIENTRANG / MV_TIN_THIETKE, " +
+                "bấm Tính khối lượng để tự đọc lại TIN, không cần dựng lại.";
         }
 
         private void ParametersChanged(object sender,EventArgs e)
@@ -271,6 +272,8 @@ namespace MiningVolume2023.UI
                     throw new InvalidOperationException("Không có bản vẽ AutoCAD đang hoạt động.");
                 string boundaryHandle = st.GridBoundaryHandle;
                 var boundary=BoundaryGeometryService.ReadBoundary(boundaryHandle).ToArray();
+                // Reopen recovery reads the actual approved CAD TIN faces,
+                // not the surveyed points; no unnecessary retriangulation.
                 SurfaceWorkflowService.EnsureBothTinsReady(synchronizeCadLayers:false);
                 var options=new GridVolumeOptions
                 {
@@ -392,7 +395,7 @@ namespace MiningVolume2023.UI
                 using(var dlg=new SaveFileDialog
                 {
                     Filter="Excel Workbook (*.xlsx)|*.xlsx",DefaultExt="xlsx",
-                    FileName="IMSAT_LuoiOVuong_"+DateTime.Now.ToString("yyyyMMdd_HHmm")+".xlsx",
+                    FileName="NAMVECTA_LuoiOVuong_"+DateTime.Now.ToString("yyyyMMdd_HHmm")+".xlsx",
                     OverwritePrompt=true
                 })
                 {
@@ -441,7 +444,7 @@ namespace MiningVolume2023.UI
                             BoundaryGeometryService.ReadBoundary(state.GridBoundaryHandle));
                     };
                     validateCurrent();
-                    _excel.Text="Hủy xuất Excel";UseWaitCursor=true;_status.Text="Đang dựng 6 sheet Excel...";
+                    _excel.Text="Hủy xuất Excel";UseWaitCursor=true;_status.Text="Đang dựng 2 sheet Excel...";
                     var report=await GridVolumeExcelReportBuilder.BuildAsync(acceptedGrid,acceptedOptions,exportToken);
                     exportToken.ThrowIfCancellationRequested();
                     _status.Text="Đang ghi Excel...";

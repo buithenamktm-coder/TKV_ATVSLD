@@ -11,12 +11,12 @@ def test_installer_vet_failure_cannot_be_masked_by_following_test_command():
     index = commands.index("go vet main.go host_install_plan.go")
     assert commands[index + 1] == 'if ($LASTEXITCODE -ne 0) { throw "Installer go vet failed." }'
 
-def test_project_restore_rebuilds_saved_tin_pair_atomically():
+def test_project_restore_uses_original_dwg_tin_and_refuses_invalid_source():
     s = read("src/MiningVolume.Plugin2023/Services/ProjectPersistenceService.cs")
     assert "RebuildSavedTins" in s
-    assert "BuildPairCoreDetailed" in s
-    assert "DrawTinPair" in s
-    assert "Không dựng lại được cặp TIN hiện trạng/thiết kế" in s
+    assert "SurfaceWorkflowService.TryRestoreTinFromCad(role)" in s
+    assert "session.CadRecoveryBlocked" in s
+    assert "Không khôi phục được TIN " in s
 
 def test_tin_sync_rejects_foreign_entities_even_when_face_count_matches():
     renderer = read("src/MiningVolume.Plugin2023/Services/TinCadRenderer.cs")
@@ -111,7 +111,7 @@ def test_palette_auto_open_is_user_controlled_and_defaults_off():
     assert 'Registry.CurrentUser' in settings
     assert 'if (autoOpen)' in entry
     assert 'Startup palette auto-open is OFF' in entry
-    assert 'Tự động mở bảng IMSAT VOLUME khi khởi động AutoCAD' in project
+    assert 'Tự động mở bảng NAMVECTA VOLUME khi khởi động AutoCAD' in project
     assert 'UserSettingsService.AutoOpenPalette = _autoOpen.Checked' in project
 
 
@@ -143,12 +143,13 @@ def test_palette_has_direct_show_hide_toggle_and_startup_default_off():
     assert "Open(AppPage.Project);" in toggle
     assert "Palette.Visible = false;" in toggle
     assert 'CommandMethod("MV_TOGGLE"' in entry
-    assert 'Btn("Ẩn / Hiện bảng", RibbonAction.TogglePalette)' in ribbon
+    assert 'Btn("Ẩn / hiện phần mềm", RibbonAction.TogglePalette)' in ribbon
+    assert 'Btn("Thông tin phần mềm", RibbonAction.About)' in ribbon
     assert "EntryPoint.TogglePalette();" in ribbon
     selftest = read("src/MiningVolume.Plugin2023/Services/SelfTestService.cs")
     assert "Bật/tắt palette MiningVolume hoạt động" in selftest
     assert "EntryPoint.TogglePalette();" in selftest
-    assert "Tự động mở bảng IMSAT VOLUME khi khởi động AutoCAD" in project
+    assert "Tự động mở bảng NAMVECTA VOLUME khi khởi động AutoCAD" in project
     assert "if (key == null) return false;" in settings
 
 
@@ -240,8 +241,8 @@ def test_palette_primary_command_is_tkl_with_legacy_alias():
 
 def test_main_palette_shows_fixed_developer_name():
     ui = read("src/MiningVolume.Plugin2023/UI/MainPaletteControl.cs")
-    assert 'Phát triển: Bùi Thế Nam' in ui
-    assert 'ĐT/Zalo: 0967280686' in ui
+    assert 'const string subtitle = "Bùi Thế Nam  •  0967280686";' in ui
+    assert 'namvecta_pa3_symbol.png' in ui
     assert 'Height = 76' in ui
     assert 'UiTheme.ChromeText' in ui
 
@@ -258,36 +259,44 @@ def test_palette_uses_shared_professional_ui_theme():
     assert "EnableHeadersVisualStyles = false" in theme
 
 
-def test_classic_menu_bar_exposes_main_miningvolume_workflow():
+def test_classic_menu_bar_has_only_toggle_and_software_information():
     entry = read("src/MiningVolume.Plugin2023/EntryPoint.cs")
     menu = read("src/MiningVolume.Plugin2023/MenuBarBuilder.cs")
     assert "MenuBarBuilder.EnsureMenu();" in entry
-    assert 'MenuName = "IMSAT VOLUME"' in menu
+    assert 'MenuName = "NAMVECTA VOLUME"' in menu
+    assert 'LegacyMenuName = "IMSAT VOLUME"' in menu
     for token in [
-        "Hiện / Ẩn IMSAT VOLUME",
-        "Dữ liệu đầu vào",
-        "TIN / Mô hình",
-        "Mặt cắt",
-        "Tính khối lượng",
-        "Xuất Excel",
+        "Ẩn / hiện phần mềm",
+        "Thông tin phần mềm",
         'CommandMacro("TKL")',
+        'CommandMacro("MVABOUT")',
     ]:
         assert token in menu
+    assert "CommandMacro(\"MV_MODEL\")" not in menu
+    assert "CommandMacro(\"MV_SECTION\")" not in menu
 
 
-def test_imsat_branding_is_packaged_for_ribbon_excel_and_setup():
+def test_namvecta_pa3_ribbon_and_setup_while_historical_installer_remains_separate():
     project = read("src/MiningVolume.Plugin2023/MiningVolume.Plugin2023.csproj")
     ribbon = read("src/MiningVolume.Plugin2023/RibbonBuilder.cs")
     export_ui = read("src/MiningVolume.Plugin2023/UI/ExportPage.cs")
     branding = read("src/MiningVolume.Plugin2023/Services/XlsxBrandingInjector.cs")
     installer = read("installer/main.go")
     hosted = read("../../../.github/workflows/build-miningvolume-autocad2023.yml")
-    assert "imsat_logo_64.png" in project
-    assert "imsat_logo_64.png" in ribbon
-    assert "imsat_logo.png" in branding
-    assert "Thông tin" in branding and "Tổng khối" in branding
+    setup = read("installer/NAMVECTA_Volume_V2.iss")
+    workflow = read("../../../.github/workflows/namvecta-v2-setup-qa.yml")
+    assert "namvecta_pa3_symbol.png" in project
+    assert "namvecta_pa3_full.png" in project
+    assert "imsat_logo_64.png" not in project
+    assert "LoadPa3Icon()" in ribbon
+    assert "imsat_logo_64.png" not in ribbon
+    assert "imsat_logo.png" in branding  # Legacy-only XLSX injector retained
     assert "logo IMSAT" not in export_ui
-    assert "ExportClicked" in export_ui  # export formatting and logo still handled in writer
-    assert "DisplayIcon" in installer
-    assert "IMSAT VOLUME.lnk" in installer
-    assert "rsrc -ico imsat.ico" in hosted
+    assert "ExportClicked" in export_ui
+    assert "NAMVECTA-VOLUME-2.0-Setup-QA-NOT-RELEASE" in setup
+    assert "NAMVECTAVolume2020.bundle" in setup
+    assert "NAMVECTAVolume2024.bundle" in setup
+    assert "namvecta_host_bundles.py" in workflow
+    assert "UninstallDisplayIcon" in setup
+    assert "IMSAT VOLUME.lnk" in installer  # Historical V1 is not relabeled
+    assert "rsrc -ico imsat.ico" in hosted  # Historical CI remains separate
