@@ -131,7 +131,13 @@ namespace MiningVolume2023.UI
                 button.MinimumSize = new Size(button.MinimumSize.Width, 28);
             // Real whitespace between controls, not a larger clickable
             // surface touching adjacent buttons on short palettes.
-            button.Margin = new Padding(2, 2, 2, 2);
+            // Calculation preview and draw need a visible gap (>=6px),
+            // but all other Palette buttons keep their compact margins.
+            if (button.Name == "btnPreviewSections" ||
+                button.Name == "btnDrawSections")
+                button.Margin = new Padding(4, 2, 4, 2);
+            else
+                button.Margin = new Padding(2, 2, 2, 2);
             button.Padding = new Padding(4, 1, 4, 1);
             button.AutoEllipsis = true;
             button.UseCompatibleTextRendering = true;
