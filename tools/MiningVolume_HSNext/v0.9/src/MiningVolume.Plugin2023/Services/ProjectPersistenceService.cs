@@ -121,6 +121,35 @@ namespace MiningVolume2023.Services
             rec.Data = ToBuffer(ProjectSnapshotCodec.Encode(snap));
         }
 
+        /// <summary>
+        /// Clear saved station geometry in the SAME CAD transaction as the
+        /// deletion of plan station BlockReferences. Source survey, boundary
+        /// handle, project identity and TIN snapshots remain unchanged.
+        /// </summary>
+        internal static void MarkStationLinesDeletedInTransaction(Database db, Transaction tr)
+        {
+            var nod = (DBDictionary)tr.GetObject(
+                db.NamedObjectsDictionaryId, OpenMode.ForRead);
+            if (!nod.Contains(DictionaryKey)) return;
+            var dict = tr.GetObject(nod.GetAt(DictionaryKey), OpenMode.ForRead) as DBDictionary;
+            if (dict == null || !dict.Contains(RecordKey)) return;
+            var rec = tr.GetObject(dict.GetAt(RecordKey), OpenMode.ForWrite) as Xrecord;
+            if (rec == null)
+                throw new InvalidOperationException("Không đọc được Project đã lưu trong DWG.");
+            var snap = ProjectSnapshotCodec.Decode(FromBuffer(rec.Data));
+            if (snap == null || snap.FormatVersion > 2)
+                throw new InvalidOperationException(
+                    "Không hỗ trợ phiên bản Project DWG này. Chưa xóa tuyến để bảo vệ dữ liệu.");
+            snap.SectionLines?.Clear();
+            snap.Boundary?.Clear();
+            snap.HadProfiles = false;
+            snap.HadVolumeResult = false;
+            snap.VolumeCalculatedUtc = null;
+            snap.VolumeCalculationSeconds = null;
+            snap.SavedUtc = DateTime.UtcNow;
+            rec.Data = ToBuffer(ProjectSnapshotCodec.Encode(snap));
+        }
+
         public static ProjectLoadResult LoadCurrentProject(bool rebuildDerived = true)
         {
             var doc = Application.DocumentManager.MdiActiveDocument ?? throw new InvalidOperationException("Không có bản vẽ AutoCAD đang hoạt động.");
