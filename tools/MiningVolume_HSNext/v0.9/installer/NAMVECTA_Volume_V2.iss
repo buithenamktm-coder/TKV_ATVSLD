@@ -283,8 +283,8 @@ begin
       if not FileExists(AddBackslash(BundleDir) + 'PackageContents.xml') then
         RaiseException('The installed AutoCAD bundle manifest is missing: ' + BundleDir);
       if I = 3 then Module := 'MiningVolume2023.dll'
-      else Module := 'IMSATVolume.ACAD' + IntToStr(YearAt(I)) +
-          IfThen(I = 0, '_NET47.dll', '_NET48.dll');
+      else if I = 0 then Module := 'IMSATVolume.ACAD2020_NET47.dll'
+      else Module := 'IMSATVolume.ACAD' + IntToStr(YearAt(I)) + '_NET48.dll';
       if not FileExists(AddBackslash(BundleDir) + 'Contents\Windows\' + Module) then
         RaiseException('The installed main CAD DLL is missing: ' + Module);
     end;
