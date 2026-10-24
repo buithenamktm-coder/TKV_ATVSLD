@@ -11,9 +11,9 @@ namespace MiningVolume2023.Services
             if (status.CanCalculate) return true;
             MessageBox.Show(
                 status.Description + Environment.NewLine +
-                "Mở mục Bản quyền của IMSAT VOLUME để nhập key." + Environment.NewLine +
+                "Mở mục Kết quả → Tùy chọn → Giới thiệu / bản quyền để nhập Pass." + Environment.NewLine +
                 "Bản vẽ DWG và dữ liệu của người dùng không bị xóa.",
-                "IMSAT VOLUME – Cần kích hoạt",
+                "NAMVECTA VOLUME – Cần kích hoạt",
                 MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return false;
         }
