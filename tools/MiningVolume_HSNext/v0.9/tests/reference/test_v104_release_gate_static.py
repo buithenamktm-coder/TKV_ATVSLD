@@ -11,12 +11,12 @@ def test_installer_vet_failure_cannot_be_masked_by_following_test_command():
     index = commands.index("go vet main.go host_install_plan.go")
     assert commands[index + 1] == 'if ($LASTEXITCODE -ne 0) { throw "Installer go vet failed." }'
 
-def test_project_restore_rebuilds_saved_tin_pair_atomically():
+def test_project_restore_uses_original_dwg_tin_and_refuses_invalid_source():
     s = read("src/MiningVolume.Plugin2023/Services/ProjectPersistenceService.cs")
     assert "RebuildSavedTins" in s
-    assert "BuildPairCoreDetailed" in s
-    assert "DrawTinPair" in s
-    assert "Không dựng lại được cặp TIN hiện trạng/thiết kế" in s
+    assert "SurfaceWorkflowService.TryRestoreTinFromCad(role)" in s
+    assert "session.CadRecoveryBlocked" in s
+    assert "Không khôi phục được TIN " in s
 
 def test_tin_sync_rejects_foreign_entities_even_when_face_count_matches():
     renderer = read("src/MiningVolume.Plugin2023/Services/TinCadRenderer.cs")
