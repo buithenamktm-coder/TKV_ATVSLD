@@ -16,7 +16,7 @@ def read(path):
 def test_pair_validates_both_meshes_and_both_layers_before_erasing_once():
     src = read("src/MiningVolume.Plugin2023/Services/TinCadRenderer.cs")
     pair = src.split("public static int[] ReplacePair(", 1)[1].split(
-        "private static void ValidateSurfaceBeforePairMutation(", 1
+        "public static int ClearPair(", 1
     )[0]
     assert pair.count("StartTransaction()") == 1
     assert pair.count("ReplaceInTransaction(") == 2
