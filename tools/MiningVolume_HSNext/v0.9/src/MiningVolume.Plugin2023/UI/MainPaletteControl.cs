@@ -106,8 +106,8 @@ namespace MiningVolume2023.UI
             _tinTab.Click += (s,e) => ShowPage(AppPage.Data);
             _projectTab.Click += (s,e) => ShowPage(AppPage.Project);
             _quickSectionTab.Click += (s,e) => ShowPage(AppPage.QuickSection);
-            _dataButtons.Controls.Add(_tinTab);
             _dataButtons.Controls.Add(_projectTab);
+            _dataButtons.Controls.Add(_tinTab);
             _dataButtons.Controls.Add(_quickSectionTab);
             // Calculation modes are direct action buttons, not a dropdown.
             _calcButtons = new FlowLayoutPanel {
@@ -368,7 +368,7 @@ namespace MiningVolume2023.UI
         {
             switch (group)
             {
-                case AppPage.Model: return new[] { AppPage.Data, AppPage.Project, AppPage.QuickSection };
+                case AppPage.Model: return new[] { AppPage.Project, AppPage.Data, AppPage.QuickSection };
                 case AppPage.Volume: return new[] { AppPage.Section, AppPage.Grid };
                 case AppPage.Export: return new[] { AppPage.Export };
                 default: return new[] { AppPage.Data };
