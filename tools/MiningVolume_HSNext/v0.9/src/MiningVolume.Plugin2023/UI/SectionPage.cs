@@ -362,7 +362,7 @@ namespace MiningVolume2023.UI
 
         private static NumericUpDown Num(decimal v, decimal min, decimal max)
         {
-            var n = new NumericUpDown
+            var n = new NoWheelNumericUpDown
             {
                 Minimum = min,
                 Maximum = max,
