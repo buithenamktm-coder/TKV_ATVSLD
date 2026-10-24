@@ -441,7 +441,7 @@ namespace MiningVolume2023.UI
                             BoundaryGeometryService.ReadBoundary(state.GridBoundaryHandle));
                     };
                     validateCurrent();
-                    _excel.Text="Hủy xuất Excel";UseWaitCursor=true;_status.Text="Đang dựng 6 sheet Excel...";
+                    _excel.Text="Hủy xuất Excel";UseWaitCursor=true;_status.Text="Đang dựng 2 sheet Excel...";
                     var report=await GridVolumeExcelReportBuilder.BuildAsync(acceptedGrid,acceptedOptions,exportToken);
                     exportToken.ThrowIfCancellationRequested();
                     _status.Text="Đang ghi Excel...";
