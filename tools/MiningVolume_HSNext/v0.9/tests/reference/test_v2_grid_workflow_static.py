@@ -48,6 +48,9 @@ def test_grid_excel_default_two_sheets_retains_formulas_and_optional_audit():
         assert sheet in s
     assert 'ReportCell.Formula3("G"+row+"-H"+row)' in s
     assert "'02 Chi tiết'!" in s
+    assert "if (technicalInfo != null)" in s
+    assert 'r.Sheets.Add(Totals(grid, unitGroup, unitName, period));' in s
+    assert 'r.Sheets.Add(Details(grid, cancellationToken));' in s
     assert "ReportCell.Formula3" in s
     assert "chỉ sửa Excel" in s
 
