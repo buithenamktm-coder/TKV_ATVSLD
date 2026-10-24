@@ -550,6 +550,8 @@ jobs:
           $uiaLanguageDetail = "InvokePattern not yet inspected"
           $uiaCadAction = "NOT_TESTED"
           $uiaCadDetail = "Native LINE command button has not been invoked"
+          $keyboardResult = "NOT_TESTED"
+          $keyboardDetail = "Native Windows command input has not been inspected"
           try {
             for ($attempt = 0; $attempt -lt 30; $attempt++) {
               Start-Sleep -Seconds 1
@@ -776,6 +778,80 @@ jobs:
             } catch {
               $uiaDetail = "UIA inspection unavailable: $($_.Exception.Message)"
             }
+            # Test native Space by sending actual Windows keystrokes to
+            # installed QCAD CommandEdit. Only record PASS when a typed 'l'
+            # is observed and Space clears it through commandConfirmed.
+            try {
+              Add-Type -AssemblyName System.Windows.Forms -ErrorAction Stop
+              $edits = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants,
+                [System.Windows.Automation.PropertyCondition]::new(
+                  [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
+                  [System.Windows.Automation.ControlType]::Edit))
+              $commandEdit = $null
+              $editNames = @()
+              for ($ki = 0; $ki -lt $edits.Count; $ki++) {
+                $candidate = $edits.Item($ki)
+                $id = [string]$candidate.Current.AutomationId
+                $name = [string]$candidate.Current.Name
+                $editNames += "$($id):$name"
+                if ($id -eq "CommandEdit" -or $name -eq "CommandEdit") {
+                  $commandEdit = $candidate
+                  break
+                }
+              }
+              if ($null -eq $commandEdit -and $edits.Count -eq 1) {
+                $commandEdit = $edits.Item(0)
+              }
+              if ($null -eq $commandEdit) {
+                $keyboardDetail = "Command edit not exposed through UIA; edits=$($editNames -join ' | ')"
+              } else {
+                $valuePattern = $null
+                if (-not $commandEdit.TryGetCurrentPattern(
+                    [System.Windows.Automation.ValuePattern]::Pattern, [ref]$valuePattern)) {
+                  $keyboardDetail = "Native command edit lacks UIA ValuePattern"
+                } else {
+                  $valuePattern.SetValue("")
+                  $commandEdit.SetFocus()
+                  Start-Sleep -Milliseconds 150
+                  [System.Windows.Forms.SendKeys]::SendWait("l")
+                  $typed = $false
+                  for ($keyPoll = 0; $keyPoll -lt 10; $keyPoll++) {
+                    Start-Sleep -Milliseconds 100
+                    if ([string]$valuePattern.Current.Value -ceq "l") {
+                      $typed = $true
+                      break
+                    }
+                  }
+                  if (-not $typed) {
+                    $keyboardDetail = "Windows key L did not reach native command edit (interactive desktop not verified)"
+                  } else {
+                    $keyboardResult = "FAIL"
+                    [System.Windows.Forms.SendKeys]::SendWait(" ")
+                    $cleared = $false
+                    for ($spacePoll = 0; $spacePoll -lt 15; $spacePoll++) {
+                      Start-Sleep -Milliseconds 150
+                      if ([string]$valuePattern.Current.Value -ceq "") {
+                        $cleared = $true
+                        break
+                      }
+                    }
+                    if ($cleared) {
+                      $keyboardResult = "PASS"
+                      $keyboardDetail = "Windows keyboard L then Space confirmed native QCAD command input"
+                    } else {
+                      $keyboardDetail = "Space did not submit L; native command input value=$($valuePattern.Current.Value)"
+                    }
+                  }
+                }
+              }
+            } catch {
+              if ($keyboardResult -eq "FAIL") {
+                $keyboardDetail = "Native Space keyboard dispatch exception: $($_.Exception.Message)"
+              } else {
+                $keyboardResult = "NOT_TESTED"
+                $keyboardDetail = "Windows keyboard/UIA test unavailable: $($_.Exception.Message)"
+              }
+            }
             if (-not (Test-Path $probeFile)) {
               Write-Warning "Native Ribbon probe did not finish before GUI exit or timeout"
               Write-Host "GUI diagnostic window title: $windowTitle"
@@ -809,6 +885,7 @@ jobs:
           Write-Host "Native UIA tab interaction: $uiaTabInteraction ($uiaTabInteractionDetail)"
           Write-Host "Native UIA language interaction: $uiaLanguageInteraction ($uiaLanguageDetail)"
           Write-Host "Native UIA LINE action invocation: $uiaCadAction ($uiaCadDetail)"
+          Write-Host "Native Windows Space-key dispatch: $keyboardResult ($keyboardDetail)"
           Get-Content "native-ribbon-probe.txt" | Select-Object -First 32
           $guiLineDxf = Join-Path $env:TEMP "imsat-cad-gui-line-roundtrip.dxf"
           if (Test-Path $guiLineDxf) {
@@ -826,7 +903,8 @@ jobs:
             "GUICommandClickDetail=$uiaCadDetail",
             "NativeGuiLineActionGeometry=$probeState",
             "NativeGuiCommandAliasDispatch=$probeState",
-            "NativeSpaceCommandKey=NOT_TESTED",
+            "NativeSpaceCommandKey=$keyboardResult",
+            "NativeSpaceCommandKeyDetail=$keyboardDetail",
             "PhysicalMouseAndKeyboard=NOT_TESTED",
             "NativeOffscreenCADGeometryAndDXFPersistence=$geometryGate"
           ) | Set-Content "native-gui-uia.txt" -Encoding UTF8
@@ -936,7 +1014,7 @@ jobs:
           "Native CAD geometry and DXF persistence (off-screen): $geometryGate" | Add-Content "native-install-smoke.txt"
           "GUI LINE coordinate event and DXF round-trip: $probeState" | Add-Content "native-install-smoke.txt"
           "Native GUI command aliases L/C: $probeState" | Add-Content "native-install-smoke.txt"
-          "Space command-bar key: NOT_TESTED (source patch installed)" | Add-Content "native-install-smoke.txt"
+          "Space command-bar key: $keyboardResult ($keyboardDetail)" | Add-Content "native-install-smoke.txt"
           "Physical mouse and keyboard CAD drawing: NOT_TESTED" | Add-Content "native-install-smoke.txt"
           if ($probeState -ne "PASS") {
             throw "Native installed Ribbon probe $probeState; inspect native-ribbon-probe.txt and native-gui-startup-output.txt"
@@ -949,6 +1027,9 @@ jobs:
           }
           if ($uiaCadAction -eq "FAIL") {
             throw "Native LINE Ribbon invocation failed; inspect native-gui-uia.txt"
+          }
+          if ($keyboardResult -eq "FAIL") {
+            throw "Native Space command-line keyboard test failed; inspect native-gui-uia.txt"
           }
       # Upload diagnostics even when compilation, installation, or GUI smoke fails.
       # Without always(), the logs needed to fix a failed Windows build are lost.

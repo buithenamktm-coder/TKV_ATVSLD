@@ -173,6 +173,16 @@
             drawing.terminateCurrentAction();
         }
         note("NativeAliasDispatch", "PASS");
+        // Expose QCAD's native command input to Windows UI Automation.
+        var commandDock = app.findChild("CommandLineDock");
+        var commandBox = !isNull(commandDock) ? commandDock.findChild("CommandEdit") : null;
+        var commandReady = !isNull(commandDock) && !isNull(commandBox);
+        note("NativeCommandInputReady", commandReady);
+        if (commandReady) {
+            commandDock.visible = true;
+            commandBox.clear();
+            commandBox.setFocus();
+        }
         note("NativeSpaceCommandKey", "NOT_TESTED");
         note("PhysicalMouseAndKeyboard", "NOT_TESTED");
         status = "PASS";
