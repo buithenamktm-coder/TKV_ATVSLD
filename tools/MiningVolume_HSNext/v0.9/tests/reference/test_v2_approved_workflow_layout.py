@@ -15,8 +15,8 @@ def test_three_main_groups_and_exactly_two_default_volume_methods():
     assert '[AppPage.QuickSection] = new SectionPage(true)' in main
     assert '[AppPage.License] = new ContactInfoPage()' in main
     assert 'case AppPage.Volume: return new[] { AppPage.Section, AppPage.Grid };' in main
-    assert 'case AppPage.Model: return new[] { AppPage.Data, AppPage.Project };' in main
-    assert 'AppPage.Volume, AppPage.QuickSection };' in main  # minerals reserved for later version
+    assert 'case AppPage.Model: return new[] { AppPage.Data, AppPage.Project, AppPage.QuickSection };' in main
+    assert 'case AppPage.Volume: return new[] { AppPage.Section, AppPage.Grid };' in main  # advanced menu deliberately removed
 
 
 def test_model_contains_input_then_tin_management():
