@@ -663,7 +663,13 @@ namespace MiningVolume2023.UI
                 if (Tin3DViewService.IsActive)
                     Tin3DViewService.Stop();
                 else
+                {
+                    if (!SurfaceWorkflowService.TryRestoreTinFromCad(CurrentRole))
+                        throw new InvalidOperationException(
+                            "Chưa tìm thấy TIN 3DFACE trên layer " + CurrentSession.TinLayer +
+                            ". Kiểm tra tên layer TIN trong bản vẽ.");
                     Tin3DViewService.Start(CurrentRole);
+                }
                 _view3D.Text = Tin3DViewService.IsActive
                     ? "Trở về 2D" : "Xem TIN";
                 _info.Text = Tin3DViewService.IsActive
@@ -691,7 +697,9 @@ namespace MiningVolume2023.UI
             _toggleTin.Enabled = !busy && CurrentSession.Tin != null;
             _meanZBuild.Enabled = !busy && CurrentSession.Source != null && CurrentSession.Source.Entities.Count > 0;
             _meanZCancel.Enabled = busy && (_meanZCts != null || _buildCts != null);
-            _view3D.Enabled = !busy && (Tin3DViewService.IsActive || CurrentSession.IsTinCurrent);
+            // A reopened DWG has real CAD faces even before the calculation
+            // model has been reconstructed; allow View to import them on demand.
+            _view3D.Enabled = !busy;
             _view3D.Text = Tin3DViewService.IsActive ? "Trở về 2D" : "Xem TIN";
             _model.Enabled = !busy;
             _grid.Enabled = !busy;
