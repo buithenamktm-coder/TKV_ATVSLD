@@ -247,6 +247,28 @@ namespace MiningVolume2023.Services
             }
         }
 
+        /// <summary>
+        /// Remove ALL NAMVECTA-generated station lines and labels from the
+        /// drawing, including old DWGs whose current SectionSystem was not
+        /// restored. CAD clearing commits before invalidating calculated data;
+        /// no survey route, TIN layer or separately exported profile is touched.
+        /// </summary>
+        public static void ClearAllStationLines()
+        {
+            var doc = Application.DocumentManager.MdiActiveDocument
+                ?? throw new InvalidOperationException("Không có bản vẽ AutoCAD đang hoạt động.");
+            using (doc.LockDocument())
+                SectionCadRenderer.ClearPreview(doc.Database);
+            var state = ProjectState.Current;
+            state.SectionSystem = null;
+            state.SectionProfiles.Clear();
+            state.VolumeResult = null;
+            state.VolumeCalculatedUtc = null;
+            state.VolumeCalculationSeconds = null;
+            state.NotifyChanged();
+            doc.Editor.Regen();
+        }
+
         public static void ClearPreview()
         {
             var doc = Application.DocumentManager.MdiActiveDocument;
