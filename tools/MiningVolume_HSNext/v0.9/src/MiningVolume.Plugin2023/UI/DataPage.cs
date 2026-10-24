@@ -109,6 +109,19 @@ namespace MiningVolume2023.UI
                 _sourceLabels[row] = source.GetControlFromPosition(0,row);
                 _sourceLoad[row] = source.GetControlFromPosition(2,row);
                 _sourceChoose[row] = source.GetControlFromPosition(3,row);
+                // Do not Dock=Fill inside TableLayoutPanel. In AutoCAD the
+                // last fixed row absorbs surplus parent height, stretching
+                // 28px picker buttons to 39+px and overlapping the next row.
+                foreach (Control action in new[] { _sourceLoad[row], _sourceChoose[row] })
+                {
+                    action.Dock = DockStyle.None;
+                    action.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+                    action.AutoSize = false;
+                    action.Height = 28;
+                    action.MinimumSize = new Size(0, 28);
+                    action.MaximumSize = new Size(0, 28);
+                    action.Margin = new Padding(2);
+                }
             }
             _via4Preset = Btn("Nạp mẫu Vỉa 4: ht / - nam4 / LO_TINHKL", (s, e) => LoadVia4Preset());
             // Preserve the historical sample command internally for fixtures,
