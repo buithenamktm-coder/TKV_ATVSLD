@@ -552,6 +552,8 @@ jobs:
           $uiaCadDetail = "Native LINE command button has not been invoked"
           $keyboardResult = "NOT_TESTED"
           $keyboardDetail = "Native Windows command input has not been inspected"
+          $mouseResult = "NOT_TESTED"
+          $mouseDetail = "Real mouse drawing not tested"
           try {
             for ($attempt = 0; $attempt -lt 30; $attempt++) {
               Start-Sleep -Seconds 1
@@ -856,6 +858,72 @@ jobs:
                 $keyboardDetail = "Windows keyboard/UIA test unavailable: $($_.Exception.Message)"
               }
             }
+            # Send Win32 mouse events into the native Qt CAD canvas.
+            # Accept only if the installed app persists one additional LINE
+            # to the same DXF using the actual Ctrl+S shortcut.
+            if ($keyboardResult -eq "PASS" -and (Test-Path $probeFile)) {
+              try {
+                $canvasLine = @(Get-Content $probeFile | Where-Object { $_ -match '^NativeGuiCanvasBounds=' } | Select-Object -First 1)
+                if ($canvasLine.Count -eq 0 -or $canvasLine[0] -eq "NativeGuiCanvasBounds=NOT_TESTED") {
+                  $mouseDetail = "QCAD Qt graphics widget bounds unavailable; not tested"
+                } else {
+                  $coords = ([string]$canvasLine[0]).Split('=')[1].Split(',')
+                  if ($coords.Count -ne 4) { throw "Invalid native viewport bounding box" }
+                  $px = [int][double]::Parse($coords[0],[Globalization.CultureInfo]::InvariantCulture)
+                  $py = [int][double]::Parse($coords[1],[Globalization.CultureInfo]::InvariantCulture)
+                  $pw = [int][double]::Parse($coords[2],[Globalization.CultureInfo]::InvariantCulture)
+                  $ph = [int][double]::Parse($coords[3],[Globalization.CultureInfo]::InvariantCulture)
+                  $point1 = @($px+[int]($pw*.35),$py+[int]($ph*.35))
+                  $point2 = @($px+[int]($pw*.65),$py+[int]($ph*.55))
+                  $frame = $root.Current.BoundingRectangle
+                  if ($pw -lt 250 -or $ph -lt 180 -or
+                      $point1[0] -lt $frame.Left -or $point2[0] -gt $frame.Right -or
+                      $point1[1] -lt $frame.Top -or $point2[1] -gt $frame.Bottom) {
+                    $mouseDetail = "QCAD canvas bounds inconsistent with live window"
+                  } else {
+                    $drawingFile = Join-Path $env:TEMP "imsat-cad-gui-line-roundtrip.dxf"
+                    if (-not (Test-Path $drawingFile)) { throw "Installed GUI source DXF missing" }
+                    $linePattern = '(?m)^[ \t]*0\r?\nLINE\r?$'
+                    $before = [regex]::Matches((Get-Content $drawingFile -Raw),$linePattern).Count
+                    if ($before -ne 1) {
+                      $mouseDetail = "Native DXF baseline not recognized (LINE count=$before)"
+                    } else {
+                      Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public static class IMSATCADWinMouse { [DllImport("user32.dll",SetLastError=true)] public static extern bool SetCursorPos(int x,int y); [DllImport("user32.dll")] public static extern void mouse_event(uint flags,uint dx,uint dy,uint data,UIntPtr extra); }' -ErrorAction Stop
+                      $mouseResult = "FAIL"
+                      foreach ($point in @($point1,$point2)) {
+                        if (-not [IMSATCADWinMouse]::SetCursorPos([int]$point[0],[int]$point[1])) {
+                          throw "SetCursorPos failed"
+                        }
+                        Start-Sleep -Milliseconds 180
+                        [IMSATCADWinMouse]::mouse_event(2,0,0,0,[UIntPtr]::Zero)
+                        Start-Sleep -Milliseconds 85
+                        [IMSATCADWinMouse]::mouse_event(4,0,0,0,[UIntPtr]::Zero)
+                        Start-Sleep -Milliseconds 400
+                      }
+                      [System.Windows.Forms.SendKeys]::SendWait("^{s}")
+                      $after = $before
+                      for ($poll = 0; $poll -lt 20; $poll++) {
+                        Start-Sleep -Milliseconds 200
+                        $rawDxf = Get-Content $drawingFile -Raw -ErrorAction SilentlyContinue
+                        if ($rawDxf) {
+                          $after = [regex]::Matches($rawDxf,$linePattern).Count
+                          if ($after -gt $before) { break }
+                        }
+                      }
+                      if ($after -eq ($before+1)) {
+                        $mouseResult = "PASS"
+                        $mouseDetail = "Two Win32 clicks and Ctrl+S increased LINE count from $before to $after"
+                      } else {
+                        $mouseDetail = "DXF did not gain one LINE: $before -> $after; points=$($point1 -join ','),$($point2 -join ',')"
+                      }
+                    }
+                  }
+                }
+              } catch {
+                $mouseDetail = "Native mouse drawing exception: $($_.Exception.Message)"
+                if ($mouseResult -ne "FAIL") { $mouseResult = "NOT_TESTED" }
+              }
+            }
             if (-not (Test-Path $probeFile)) {
               Write-Warning "Native Ribbon probe did not finish before GUI exit or timeout"
               Write-Host "GUI diagnostic window title: $windowTitle"
@@ -890,6 +958,7 @@ jobs:
           Write-Host "Native UIA language interaction: $uiaLanguageInteraction ($uiaLanguageDetail)"
           Write-Host "Native UIA LINE action invocation: $uiaCadAction ($uiaCadDetail)"
           Write-Host "Native Windows Space-key dispatch: $keyboardResult ($keyboardDetail)"
+          Write-Host "Native Windows mouse and Ctrl+S: $mouseResult ($mouseDetail)"
           Get-Content "native-ribbon-probe.txt" | Select-Object -First 32
           $guiLineDxf = Join-Path $env:TEMP "imsat-cad-gui-line-roundtrip.dxf"
           if (Test-Path $guiLineDxf) {
@@ -910,7 +979,8 @@ jobs:
             "NativeSpaceCommandKey=$keyboardResult",
             "NativeSpaceCommandKeyDetail=$keyboardDetail",
             "PhysicalKeyboardCommandSubmission=$keyboardResult",
-            "PhysicalMouseDrawing=NOT_TESTED",
+            "PhysicalMouseDrawing=$mouseResult",
+            "PhysicalMouseDrawingDetail=$mouseDetail",
             "NativeOffscreenCADGeometryAndDXFPersistence=$geometryGate"
           ) | Set-Content "native-gui-uia.txt" -Encoding UTF8
           @(
@@ -1021,7 +1091,7 @@ jobs:
           "Native GUI command aliases L/C: $probeState" | Add-Content "native-install-smoke.txt"
           "Space command-bar key: $keyboardResult ($keyboardDetail)" | Add-Content "native-install-smoke.txt"
           "Physical keyboard L/Space command confirmation: $keyboardResult" | Add-Content "native-install-smoke.txt"
-          "Physical mouse CAD drawing: NOT_TESTED" | Add-Content "native-install-smoke.txt"
+          "Physical mouse CAD drawing: $mouseResult ($mouseDetail)" | Add-Content "native-install-smoke.txt"
           if ($probeState -ne "PASS") {
             throw "Native installed Ribbon probe $probeState; inspect native-ribbon-probe.txt and native-gui-startup-output.txt"
           }
@@ -1036,6 +1106,9 @@ jobs:
           }
           if ($keyboardResult -eq "FAIL") {
             throw "Native Space command-line keyboard test failed; inspect native-gui-uia.txt"
+          }
+          if ($mouseResult -eq "FAIL") {
+            throw "Native mouse CAD drawing failed; inspect native-gui-uia.txt and DXF evidence"
           }
       # Upload diagnostics even when compilation, installation, or GUI smoke fails.
       # Without always(), the logs needed to fix a failed Windows build are lost.
