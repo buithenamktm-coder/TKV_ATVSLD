@@ -28,11 +28,28 @@ namespace MiningVolume2023.UI
                        "Tạo mô hình TIN, tính khối lượng theo mặt cắt hoặc lưới ô vuông, " +
                        "vẽ mặt cắt và kết xuất bảng CAD/Excel."
             };
+            var logoPanel = new Panel { Dock = DockStyle.Top, Height = 118,
+                BackColor = Color.White };
+            using (var stream = typeof(MainPaletteControl).Assembly.GetManifestResourceStream(
+                "MiningVolume2023.Assets.namvecta_pa3_full.png"))
+            {
+                if (stream != null)
+                {
+                    Bitmap raster;
+                    using (var original = Image.FromStream(stream))
+                        raster = new Bitmap(original);
+                    var brand = new PictureBox { Dock = DockStyle.Fill,
+                        SizeMode = PictureBoxSizeMode.Zoom, Image = raster };
+                    brand.Disposed += (s, e) => raster.Dispose();
+                    logoPanel.Controls.Add(brand);
+                }
+            }
             var license = new LicensePage { Dock = DockStyle.Fill };
             var licenseHost = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
             licenseHost.Controls.Add(license);
             Controls.Add(licenseHost);
             Controls.Add(intro);
+            Controls.Add(logoPanel);
         }
     }
 }
