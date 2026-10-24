@@ -28,7 +28,8 @@ SetupLogging=yes
 Uninstallable=yes
 CreateUninstallRegKey=yes
 DisableProgramGroupPage=yes
-ShowLanguageDialog=yes
+ShowLanguageDialog=no
+UsePreviousLanguage=no
 VersionInfoVersion=2.0.0.0
 VersionInfoDescription=NAMVECTA VOLUME 2.0 — QA Installer
 VersionInfoProductName=NAMVECTA VOLUME 2.0
@@ -41,33 +42,20 @@ ChangesEnvironment=no
 ChangesAssociations=no
 
 [Languages]
-Name: "en"; MessagesFile: "compiler:Default.isl"
 Name: "vi"; MessagesFile: "compiler:Default.isl,lang\NAMVECTA_Vietnamese.isl"
 
 [CustomMessages]
-en.HostTitle=Choose AutoCAD versions
 vi.HostTitle=Chọn phiên bản AutoCAD
-en.HostSubtitle=Only installed, detected AutoCAD 2020–2024 versions can be selected.
 vi.HostSubtitle=Chỉ có thể chọn AutoCAD 2020–2024 đã được phát hiện trên máy.
-en.SummaryTitle=Review installation details
 vi.SummaryTitle=Kiểm tra thông tin trước khi cài đặt
-en.SummarySubtitle=Review the selected hosts and installation locations.
 vi.SummarySubtitle=Kiểm tra phiên bản CAD và đường dẫn cài đặt.
-en.ChooseOne=Select at least one installed AutoCAD version.
 vi.ChooseOne=Hãy chọn ít nhất một phiên bản AutoCAD đã cài.
-en.NoAutoCAD=No supported AutoCAD 2020–2024 installation was verified. Setup will not continue.
 vi.NoAutoCAD=Không tìm thấy AutoCAD 2020–2024 hợp lệ. Bộ cài sẽ không tiếp tục.
-en.CloseAcad=Close all AutoCAD processes before continuing.
 vi.CloseAcad=Hãy đóng toàn bộ AutoCAD trước khi cài đặt.
-en.LegacyConflict=The previous IMSAT MiningVolume add-in was detected. This QA Setup cannot safely install beside it. Uninstall the old add-in using Windows Installed Apps, without deleting drawing files, before continuing.
 vi.LegacyConflict=Phát hiện tiện ích IMSAT MiningVolume cũ. Bản QA chưa thể cài song song an toàn. Hãy gỡ add-in cũ trong Ứng dụng đã cài của Windows (không xóa bản vẽ), sau đó cài NAMVECTA.
-en.EmbeddedStatus=Package validation only. Real AutoCAD functional acceptance is still required.
 vi.EmbeddedStatus=Chỉ kiểm tra bộ cài. Vẫn phải nghiệm thu chức năng trong AutoCAD thực tế.
-en.AcadPath=Autodesk auto-load directory (fixed)
 vi.AcadPath=Thư mục tự nạp Autodesk (cố định)
-en.InstallSelection=Selected AutoCAD versions
 vi.InstallSelection=Các phiên bản AutoCAD đã chọn
-en.BrandNotice=NAMVECTA VOLUME 2.0 — offline Pass is entered inside AutoCAD.
 vi.BrandNotice=NAMVECTA VOLUME 2.0 — nhập Pass offline bên trong AutoCAD.
 
 [Files]
@@ -86,7 +74,7 @@ Name: "{group}\Gỡ NAMVECTA VOLUME 2.0"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\NAMVECTA VOLUME 2.0"; Filename: "{code:LauncherPath}"; IconFilename: "{app}\namvecta-setup.ico"; Tasks: desktopicon; Check: AnySelected
 
 [Tasks]
-Name: "desktopicon"; Description: "Tạo biểu tượng Desktop / Create Desktop icon"; GroupDescription: "NAMVECTA VOLUME"
+Name: "desktopicon"; Description: "Tạo biểu tượng Desktop"; GroupDescription: "NAMVECTA VOLUME"
 
 [Code]
 var
@@ -197,7 +185,7 @@ begin
     if HostFound[I] then
       LabelText := 'AutoCAD ' + IntToStr(YearAt(I)) + ' — ' + HostDir[I]
     else
-      LabelText := 'AutoCAD ' + IntToStr(YearAt(I)) + ' — Not detected / Chưa tìm thấy';
+      LabelText := 'AutoCAD ' + IntToStr(YearAt(I)) + ' — Chưa tìm thấy';
     J := CheckList.AddCheckBox(LabelText, '', 0, HostFound[I],
       HostFound[I], False, False, nil);
   end;
@@ -274,7 +262,7 @@ begin
     if Selected(I) then TextValue := TextValue +
       '  AutoCAD ' + IntToStr(YearAt(I)) + ': ' + HostDir[I] + #13#10;
   TextValue := TextValue + #13#10 +
-    'Installation folder / Thư mục ứng dụng: ' + WizardDirValue + #13#10 +
+    'Thư mục ứng dụng: ' + WizardDirValue + #13#10 +
     CustomMessage('AcadPath') + ': ' +
     ExpandConstant('{commonappdata}\Autodesk\ApplicationPlugins') + #13#10 +
     CustomMessage('BrandNotice') + #13#10 + #13#10 +
