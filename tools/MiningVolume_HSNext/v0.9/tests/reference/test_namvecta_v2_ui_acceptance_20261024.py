@@ -60,7 +60,10 @@ def test_data_navigation_direct_buttons_and_license_nav():
     assert 'Name = "NamvectaLicenseNav"' in menu
     assert 'Text = "Thông tin & Bản quyền"' in menu
     assert 'compactLicense.Click += (s,e) => ShowPage(AppPage.License);' in menu
-    assert 'case AppPage.Model: return new[] { AppPage.Data, AppPage.Project };' in menu
+    assert 'case AppPage.Model: return new[] { AppPage.Data, AppPage.Project, AppPage.QuickSection };' in menu
+    assert '_quickSectionTab.Click += (s,e) => ShowPage(AppPage.QuickSection);' in menu
+    assert '_advancedVolumeButton' not in menu
+    assert 'Text = "Tùy chọn"' not in menu
     assert 'AppPage.Mineral };' not in menu
 
 
