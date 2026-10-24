@@ -9,6 +9,7 @@ on:
       - "tools/IMSAT_CAD_V1/generate-brand.py"
       - "tools/IMSAT_CAD_V1/brand-native-qcad.js"
       - "tools/IMSAT_CAD_V1/assets/**"
+      - "tools/IMSAT_CAD_V1/patches/**"
   push:
     branches: [imsat-cad-foundation]
     paths:
@@ -18,6 +19,7 @@ on:
       - "tools/IMSAT_CAD_V1/generate-brand.py"
       - "tools/IMSAT_CAD_V1/brand-native-qcad.js"
       - "tools/IMSAT_CAD_V1/assets/**"
+      - "tools/IMSAT_CAD_V1/patches/**"
 concurrency:
   group: imsat-cad-native-${{ github.ref }}
   cancel-in-progress: true
@@ -179,6 +181,19 @@ jobs:
           Add-Content -Path $cm -Value 'if(MSVC)'
           Add-Content -Path $cm -Value '  set_source_files_properties(opennurbs_lookup.cpp PROPERTIES COMPILE_OPTIONS "/Od")'
           Add-Content -Path $cm -Value 'endif()'
+      - name: Apply pinned GPLv3 native Space command-bar integration
+        shell: pwsh
+        run: |
+          $patch = (Resolve-Path "tools/IMSAT_CAD_V1/patches/imsat-commandline-space.patch").Path
+          git -C native/qcad apply --check "$patch"
+          if ($LASTEXITCODE -ne 0) { throw "IMSAT native command-bar patch does not apply to pinned QCAD CE v3.32.2.0" }
+          git -C native/qcad apply "$patch"
+          if ($LASTEXITCODE -ne 0) { throw "IMSAT native Space command-bar patch failed" }
+          $cpp = Get-Content "native/qcad/src/gui/RCommandLine.cpp" -Raw
+          if ($cpp -notmatch 'case Qt::Key_Space:' -or $cpp -notmatch 'emit commandConfirmed\(command\);') {
+            throw "IMSAT native Space command-bar patch was not installed"
+          }
+          Write-Host "IMSAT native Space command-bar source integration PASS (runtime keyboard test NOT_TESTED)"
       - name: Build QCAD core
         shell: pwsh
         run: |
@@ -781,7 +796,8 @@ jobs:
             $probeLines = @(Get-Content $probeFile)
             $probeState = if ($probeLines -contains "Status=PASS" -and
                 $probeLines -contains "NativeGuiLineActionGeometry=PASS" -and
-                $probeLines -contains "NativeGuiLineDXFRoundtrip=PASS") { "PASS" } else { "FAIL" }
+                $probeLines -contains "NativeGuiLineDXFRoundtrip=PASS" -and
+                $probeLines -contains "NativeAliasDispatch=PASS") { "PASS" } else { "FAIL" }
           } else {
             "Status=NOT_TESTED" | Set-Content "native-ribbon-probe.txt" -Encoding UTF8
             "Failure=Native -exec probe produced no evidence" | Add-Content "native-ribbon-probe.txt"
@@ -789,6 +805,7 @@ jobs:
             "ProbeScript=$probeScript" | Add-Content "native-ribbon-probe.txt"
           }
           Write-Host "Native installed Ribbon probe: $probeState"
+          Write-Host "Native GUI command aliases L/C: $(if ($probeState -eq 'PASS') { 'PASS' } else { 'FAIL' })"
           Write-Host "Native UIA tab interaction: $uiaTabInteraction ($uiaTabInteractionDetail)"
           Write-Host "Native UIA language interaction: $uiaLanguageInteraction ($uiaLanguageDetail)"
           Write-Host "Native UIA LINE action invocation: $uiaCadAction ($uiaCadDetail)"
@@ -808,6 +825,8 @@ jobs:
             "GUICommandClickTests=$uiaCadAction",
             "GUICommandClickDetail=$uiaCadDetail",
             "NativeGuiLineActionGeometry=$probeState",
+            "NativeGuiCommandAliasDispatch=$probeState",
+            "NativeSpaceCommandKey=NOT_TESTED",
             "PhysicalMouseAndKeyboard=NOT_TESTED",
             "NativeOffscreenCADGeometryAndDXFPersistence=$geometryGate"
           ) | Set-Content "native-gui-uia.txt" -Encoding UTF8
@@ -916,6 +935,8 @@ jobs:
           "GUI LINE Ribbon invocation: $uiaCadAction" | Add-Content "native-install-smoke.txt"
           "Native CAD geometry and DXF persistence (off-screen): $geometryGate" | Add-Content "native-install-smoke.txt"
           "GUI LINE coordinate event and DXF round-trip: $probeState" | Add-Content "native-install-smoke.txt"
+          "Native GUI command aliases L/C: $probeState" | Add-Content "native-install-smoke.txt"
+          "Space command-bar key: NOT_TESTED (source patch installed)" | Add-Content "native-install-smoke.txt"
           "Physical mouse and keyboard CAD drawing: NOT_TESTED" | Add-Content "native-install-smoke.txt"
           if ($probeState -ne "PASS") {
             throw "Native installed Ribbon probe $probeState; inspect native-ribbon-probe.txt and native-gui-startup-output.txt"

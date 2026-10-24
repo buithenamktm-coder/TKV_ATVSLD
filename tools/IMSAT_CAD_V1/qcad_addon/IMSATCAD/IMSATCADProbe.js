@@ -140,6 +140,40 @@
         if (reopenedLines !== createdLines) { throw new Error("Native GUI LINE DXF line count changed"); }
         note("NativeGuiLineActionGeometry", "PASS");
         note("NativeGuiLineDXFRoundtrip", "PASS");
+        // The real GUI LINE geometry test above leaves LINE active.
+        // Terminate it before verifying independent command dispatch aliases.
+        drawing.terminateCurrentAction();
+        var aliasChecks = [
+            { command: "l", script: "scripts/Draw/Line/Line2P/Line2P.js", suffix: "Line2P.js" },
+            { command: "c", script: "scripts/Draw/Circle/CircleCR/CircleCR.js", suffix: "CircleCR.js" }
+        ];
+        for (var ac = 0; ac < aliasChecks.length; ++ac) {
+            var check = aliasChecks[ac];
+            var guiAction = RGuiAction.getByScriptFile(check.script);
+            if (isNull(guiAction) || !guiAction.isEnabled()) {
+                throw new Error("Native CAD alias action unavailable: " + check.command);
+            }
+            var registeredCommands = guiAction.getCommands();
+            if (isNull(registeredCommands) || !registeredCommands.contains(check.command)) {
+                throw new Error("Native CAD alias not registered: " + check.command);
+            }
+            if (!RGuiAction.triggerByCommand(check.command)) {
+                throw new Error("Native CAD alias did not dispatch: " + check.command);
+            }
+            QCoreApplication.processEvents();
+            var active = drawing.getCurrentAction();
+            if (isNull(active) || isNull(active.getGuiAction())) {
+                throw new Error("Native CAD command has no active action: " + check.command);
+            }
+            var activeScript = String(active.getGuiAction().getScriptFile());
+            note("Alias_" + check.command + "_ActiveScript", activeScript);
+            if (activeScript.indexOf(check.suffix) < 0) {
+                throw new Error("Wrong native action for alias " + check.command + ": " + activeScript);
+            }
+            drawing.terminateCurrentAction();
+        }
+        note("NativeAliasDispatch", "PASS");
+        note("NativeSpaceCommandKey", "NOT_TESTED");
         note("PhysicalMouseAndKeyboard", "NOT_TESTED");
         status = "PASS";
     } catch (error) {
