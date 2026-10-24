@@ -21,3 +21,6 @@ ISCC /DStageDir="D:\NAMVECTA" installer\NAMVECTA_Volume_V2.iss
 
 This build produces `NAMVECTA-VOLUME-2.0-Setup-QA-NOT-RELEASE.exe`.
 The final filename `NAMVECTA-VOLUME-2.0-Setup.exe` is reserved for a future release passing all gates.
+
+## Licensing of installer tooling
+Inno Setup's 2026 vendor requests a commercial license for commercial use (https://jrsoftware.org/ishelp/topic_purchase.htm). The current Windows QA compiler reports `Non-commercial use only` and is not evidence of an approved paid commercial distribution license. Verify acquisition/entitlement before issuing a retail release. No credentials belong in the Git repository.
