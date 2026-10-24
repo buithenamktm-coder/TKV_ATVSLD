@@ -700,6 +700,35 @@ namespace MiningVolume2023.Services
                     role == ModelRole.Existing ? (short)1 : (short)3);
         }
 
+        /// <summary>
+        /// Delete the two persistent AutoCAD TIN layers even if an older DWG
+        /// was opened without recovering the in-memory TinSurface model.
+        /// CAD faces and existing saved-project flags update in one transaction.
+        /// Survey layers are never touched.
+        /// </summary>
+        public static int DeleteAllTinsStoredInCurrentDrawing()
+        {
+            var doc = Application.DocumentManager.MdiActiveDocument ??
+                throw new InvalidOperationException("Không có bản vẽ AutoCAD đang hoạt động.");
+            var state = ProjectState.Current;
+            int removed;
+            using (doc.LockDocument())
+            {
+                removed = TinCadRenderer.ClearPair(doc.Database,
+                    state.Existing.TinLayer, state.Design.TinLayer,
+                    tr => ProjectPersistenceService.MarkTinModelsDeletedInTransaction(
+                        doc.Database, tr));
+            }
+
+            // Only invalidate accepted in-memory surfaces AFTER the transaction
+            // has committed. Any CAD error leaves the current model intact.
+            InvalidateTin(ModelRole.Existing, clearCadLayer: false, notify: false);
+            InvalidateTin(ModelRole.Design, clearCadLayer: false, notify: false);
+            state.NotifyChanged();
+            try { doc.Editor.Regen(); } catch { }
+            return removed;
+        }
+
         public static void InvalidateTin(ModelRole role, bool clearCadLayer = true, bool notify = true)
         {
             var state = ProjectState.Current;
