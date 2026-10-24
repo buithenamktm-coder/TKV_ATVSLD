@@ -43,8 +43,10 @@ def test_station_actions_reuse_block_renderer():
 def test_clear_old_stations_erases_cad_preview_then_state_and_asks_confirmation():
     assert 'ClearAllStationLines()' in workflow
     f=workflow.split('public static void ClearAllStationLines()',1)[1].split('public static void ClearPreview()',1)[0]
-    assert 'SectionCadRenderer.ClearPreview(doc.Database);' in f
-    assert f.index('SectionCadRenderer.ClearPreview(doc.Database);') < f.index('state.SectionSystem = null;')
+    assert 'SectionCadRenderer.ClearPreview(doc.Database,' in f
+    assert 'ProjectPersistenceService.MarkStationLinesDeletedInTransaction(' in f
+    assert 'SectionCadRenderer.ClearPreview(doc.Database);' in workflow  # plain "Xóa preview" preserves saved station state
+    assert f.index('SectionCadRenderer.ClearPreview(doc.Database,') < f.index('state.SectionSystem = null;')
     assert 'state.VolumeResult = null;' in f
     assert 'Button("Xóa toàn bộ tuyến cũ", ClearOldStationLines)' in section
     assert 'MessageBoxButtons.YesNo' in section
@@ -52,3 +54,19 @@ def test_clear_old_stations_erases_cad_preview_then_state_and_asks_confirmation(
     assert 'EraseOnLayers(ms, tr, clear)' in clear
     assert 'lt.Has(PreviewLayer)' in clear
     assert 'lt.Has(PreviewLabelLayer)' in clear
+
+def test_deleting_station_blocks_clears_only_saved_section_snapshot():
+    persistence=(ROOT/"src/MiningVolume.Plugin2023/Services/ProjectPersistenceService.cs").read_text(encoding="utf-8")
+    helper=persistence.split("internal static void MarkStationLinesDeletedInTransaction(",1)[1].split(
+        "public static ProjectLoadResult LoadCurrentProject(",1)[0]
+    assert "snap.SectionLines?.Clear();" in helper
+    assert "snap.Boundary?.Clear();" in helper
+    assert "snap.HadProfiles = false;" in helper
+    assert "snap.HadVolumeResult = false;" in helper
+    assert "rec.Data = ToBuffer(ProjectSnapshotCodec.Encode(snap));" in helper
+    for forbidden in ("snap.Existing.HadTin = false;", "snap.Design.HadTin = false;", "snap.TinRegion.Clear()", "snap.BoundaryHandle = null;"):
+        assert forbidden not in helper
+    clear=renderer.split("public static void ClearPreview(Database db,",1)[1].split(
+        "public static void ReplaceProfiles(",1)[0]
+    assert "onClearedInSameTransaction?.Invoke(tr);" in clear
+    assert clear.index("EraseOnLayers(ms, tr, clear);") < clear.rindex("onClearedInSameTransaction?.Invoke(tr);") < clear.rindex("tr.Commit();")
