@@ -42,7 +42,7 @@ ChangesAssociations=no
 
 [Languages]
 Name: "en"; MessagesFile: "compiler:Default.isl"
-Name: "vi"; MessagesFile: "compiler:Default.isl,installer\lang\NAMVECTA_Vietnamese.isl"
+Name: "vi"; MessagesFile: "compiler:Default.isl,lang\NAMVECTA_Vietnamese.isl"
 
 [CustomMessages]
 en.HostTitle=Choose AutoCAD versions
