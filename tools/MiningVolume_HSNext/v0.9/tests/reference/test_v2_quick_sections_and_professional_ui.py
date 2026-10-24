@@ -69,15 +69,15 @@ def test_buttons_have_breathing_room_and_are_not_all_caps():
     data = read("src/MiningVolume.Plugin2023/UI/DataPage.cs")
     project = read("src/MiningVolume.Plugin2023/UI/ProjectPage.cs")
     assert "button.Text = SentenceCaseButton(button.Text)" in theme
-    assert "Math.Max(5, button.Margin.Left)" in theme
-    assert "button.Padding = new Padding(12, 3, 12, 3)" in theme
+    assert "button.Margin = new Padding(2, 2, 2, 2);" in theme
+    assert "button.Padding = new Padding(4, 1, 4, 1)" in theme
     assert "button.FlatAppearance.BorderSize = 0;" in theme
     assert "kv.Value.FlatAppearance.BorderSize = 0;" in palette
     assert "_sourceTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 40));" in data
     assert "bool compact = width < 720;" in data
-    assert "_sourceBox.Height = 164;" in data
-    assert "new RowStyle(SizeType.Absolute, 34)" in data
-    assert "Height = 154," in data
+    assert "_sourceBox.Height = 182;" in data
+    assert "new RowStyle(SizeType.Absolute, 38)" in data
+    assert "Height = 182," in data
     assert "actions.Controls.Add(_buildExisting);" in data
     assert "actions.Controls.Add(_buildDesign);" in data
     assert "buttons.Height = ClientSize.Width < 650 ? 140 : 62;" in project
