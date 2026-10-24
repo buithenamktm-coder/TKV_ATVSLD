@@ -78,6 +78,49 @@ namespace MiningVolume2023.Services
             return snapshot.SavedUtc;
         }
 
+        /// <summary>
+        /// Remove TIN-derived restore flags from an existing DWG project
+        /// WITHOUT replacing its saved survey/source selections. Called inside
+        /// the exact same CAD transaction that erases the two output TIN layers.
+        /// A corrupt/newer project blocks deletion rather than resurrecting TIN
+        /// on the next DWG open or silently destroying serialized source data.
+        /// </summary>
+        internal static void MarkTinModelsDeletedInTransaction(Database db, Transaction tr)
+        {
+            var nod = (DBDictionary)tr.GetObject(
+                db.NamedObjectsDictionaryId, OpenMode.ForRead);
+            if (!nod.Contains(DictionaryKey)) return;
+            var dict = tr.GetObject(nod.GetAt(DictionaryKey), OpenMode.ForRead) as DBDictionary;
+            if (dict == null || !dict.Contains(RecordKey)) return;
+            var rec = tr.GetObject(dict.GetAt(RecordKey), OpenMode.ForWrite) as Xrecord;
+            if (rec == null)
+                throw new InvalidOperationException("Không đọc được hồ sơ Project lưu trong DWG.");
+            var snap = ProjectSnapshotCodec.Decode(FromBuffer(rec.Data));
+            if (snap == null || snap.FormatVersion > 2)
+                throw new InvalidOperationException(
+                    "Hồ sơ Project DWG không hỗ trợ cập nhật TIN; không xóa để tránh dữ liệu bị khôi phục sai.");
+            // Preserve all source geometry fingerprints, user edits, layers,
+            // project metadata, named sections and survey selections.
+            if (snap.Existing != null)
+            {
+                snap.Existing.HadTin = false;
+                snap.Existing.TinVisible = false;
+            }
+            if (snap.Design != null)
+            {
+                snap.Design.HadTin = false;
+                snap.Design.TinVisible = false;
+            }
+            snap.HadProfiles = false;
+            snap.HadVolumeResult = false;
+            snap.VolumeCalculatedUtc = null;
+            snap.VolumeCalculationSeconds = null;
+            snap.GridCalculatedUtc = null;
+            snap.GridCalculationSeconds = null;
+            snap.SavedUtc = DateTime.UtcNow;
+            rec.Data = ToBuffer(ProjectSnapshotCodec.Encode(snap));
+        }
+
         public static ProjectLoadResult LoadCurrentProject(bool rebuildDerived = true)
         {
             var doc = Application.DocumentManager.MdiActiveDocument ?? throw new InvalidOperationException("Không có bản vẽ AutoCAD đang hoạt động.");
