@@ -17,13 +17,16 @@ namespace MiningVolume2023.Services
         public const string FixedDeveloperName = "Bùi Thế Nam";
         public const string FixedDeveloperContact = "ĐT/Zalo: 0967280686";
 
-        public bool IncludeSourceXyz { get; set; } = true;
-        public bool IncludeSectionData { get; set; } = true;
-        public bool IncludeSectionAreas { get; set; } = true;
+        // Compact default: only a readable summary and an auditable interval table.
+        // All technical sheets remain opt-in for engineering review.
+        public bool IncludeInfoSheet { get; set; } = false;
+        public bool IncludeSourceXyz { get; set; } = false;
+        public bool IncludeSectionData { get; set; } = false;
+        public bool IncludeSectionAreas { get; set; } = false;
         public bool IncludeIntervals { get; set; } = true;
-        public bool IncludeLevels { get; set; } = true;
+        public bool IncludeLevels { get; set; } = false;
         public bool IncludeSummary { get; set; } = true;
-        public bool IncludeWarnings { get; set; } = true;
+        public bool IncludeWarnings { get; set; } = false;
         public string DeveloperName { get; set; } = FixedDeveloperName;
         public string DeveloperContact { get; set; } = FixedDeveloperContact;
     }
@@ -65,7 +68,9 @@ namespace MiningVolume2023.Services
             if (unit.Length == 0) return;
             bool outside = string.Equals(unitGroup, MiningUnitCatalog.OutsideTkv,
                 StringComparison.Ordinal);
-            report.IncludeImsatLogo = !outside;
+            // The IMSAT raster asset is not part of NAMVECTA brand identity.
+            // Do not inject it while PA3 production assets are being prepared.
+            report.IncludeImsatLogo = false;
             string prefix = outside ? unit : TkvParentHeading + "\n" + unit;
             foreach (var sheet in report.Sheets)
             {
@@ -157,12 +162,18 @@ namespace MiningVolume2023.Services
             var now = DateTime.Now;
             var report = new SpreadsheetReport
             {
-                Title = "IMSAT VOLUME - Báo cáo mặt cắt và khối lượng",
+                Title = "NAMVECTA VOLUME 2.0 - Bảng khối lượng",
+                IncludeImsatLogo = false,
                 Creator = ExportOptions.FixedDeveloperName,
                 CreatedAt = now
             };
 
-            report.Sheets.Add(BuildInfoSheet(state, options, now, frozenGroup, frozenUnit));
+            if (options.IncludeInfoSheet)
+                report.Sheets.Add(BuildInfoSheet(state, options, now, frozenGroup, frozenUnit));
+            // Display the final summary first. Excel formulas may refer
+            // forward to the detail and tier sheet added below.
+            if (options.IncludeSummary)
+                report.Sheets.Add(BuildSummarySheet(state, options, frozenGroup, frozenUnit));
             cancellationToken.ThrowIfCancellationRequested();
             if (options.IncludeSourceXyz) report.Sheets.Add(BuildSourceXyzSheet(state, cancellationToken));
             if (options.IncludeSectionData) report.Sheets.Add(BuildSectionDataSheet(state, cancellationToken));
@@ -173,7 +184,6 @@ namespace MiningVolume2023.Services
             if (options.IncludeIntervals) report.Sheets.Add(BuildIntervalSheet(state.VolumeResult, cancellationToken));
             if (options.IncludeLevels) report.Sheets.Add(BuildLevelSheet(state.VolumeResult, cancellationToken));
             cancellationToken.ThrowIfCancellationRequested();
-            if (options.IncludeSummary) report.Sheets.Add(BuildSummarySheet(state, options, frozenGroup, frozenUnit));
             if (options.IncludeWarnings) report.Sheets.Add(BuildWarningSheet(state, cancellationToken));
             cancellationToken.ThrowIfCancellationRequested();
             ApplyOrganizationHeader(report, frozenGroup, frozenUnit);
@@ -184,10 +194,10 @@ namespace MiningVolume2023.Services
         private static ReportSheet BuildInfoSheet(ProjectState st, ExportOptions opt,
             DateTime now, string unitGroup, string unitName)
         {
-            var s = NewSheet("Thông tin", "THÔNG TIN BÁO CÁO IMSAT VOLUME", new[] { "Nội dung", "Giá trị" }, 45, 45);
+            var s = NewSheet("Thông tin", "THÔNG TIN BÁO CÁO NAMVECTA VOLUME", new[] { "Nội dung", "Giá trị" }, 45, 45);
             s.Landscape = false;
             s.AutoFilter = false;
-            s.Notes.Add("Báo cáo được xuất tự động từ IMSAT VOLUME.");
+            s.Notes.Add("Báo cáo được xuất từ NAMVECTA VOLUME 2.0.");
             if (unitGroup != MiningUnitCatalog.OutsideTkv)
                 AddKV(s, "Đơn vị cấp trên", TkvParentHeading);
             AddKV(s, "Đơn vị tính toán", EmptyAsNotSet(unitName));
@@ -425,7 +435,7 @@ namespace MiningVolume2023.Services
             var r = st.VolumeResult;
             double levelCut = r.Levels.Sum(x => x.CutVolume);
             double levelFill = r.Levels.Sum(x => x.FillVolume);
-            var s = NewSheet("Tổng khối", "BẢNG TỔNG HỢP KHỐI LƯỢNG",
+            var s = NewSheet("Tổng hợp", "BẢNG TỔNG HỢP KHỐI LƯỢNG",
                 new[] { "Chỉ tiêu", "Đơn vị", "Giá trị" }, 45, 15, 45);
             s.Landscape = false;
             s.AutoFilter = false;
