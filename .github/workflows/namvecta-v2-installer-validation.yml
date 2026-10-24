@@ -1,0 +1,36 @@
+name: NAMVECTA V2 installer safety
+
+on:
+  push:
+    branches:
+      - namvecta-v2-installer-safety-20261024
+    paths:
+      - 'tools/MiningVolume_HSNext/v0.9/installer/namvecta_bundle.py'
+      - 'tools/MiningVolume_HSNext/v0.9/installer/test_namvecta_bundle.py'
+      - '.github/workflows/namvecta-v2-installer-validation.yml'
+  pull_request:
+    paths:
+      - 'tools/MiningVolume_HSNext/v0.9/installer/namvecta_bundle.py'
+      - 'tools/MiningVolume_HSNext/v0.9/installer/test_namvecta_bundle.py'
+
+permissions:
+  contents: read
+
+jobs:
+  package-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check package builder syntax
+        run: python -m py_compile tools/MiningVolume_HSNext/v0.9/installer/namvecta_bundle.py
+      - name: Test all five host package manifests and refusal rules
+        working-directory: tools/MiningVolume_HSNext/v0.9/installer
+        run: python -m unittest -v test_namvecta_bundle
+      - name: Declare test boundary
+        run: |
+          echo 'Only Python package-contract tests run here.'
+          echo 'Windows installer / AutoCAD runtime / PA3 production logo still NOT TESTED.'
