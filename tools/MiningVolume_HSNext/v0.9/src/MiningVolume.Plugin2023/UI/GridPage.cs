@@ -48,8 +48,8 @@ namespace MiningVolume2023.UI
             root.RowStyles.Add(new RowStyle(SizeType.Absolute,34));
             root.RowStyles.Add(new RowStyle(SizeType.Absolute,46)); // shared HT/TK TIN status
             root.RowStyles.Add(new RowStyle(SizeType.Absolute,80));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute,83));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute,56));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute,70));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute,40));
             root.RowStyles.Add(new RowStyle(SizeType.Percent,100));
             Controls.Add(root);
             root.Controls.Add(new Label
@@ -178,14 +178,14 @@ namespace MiningVolume2023.UI
                     _settingsGrid.Controls.Add(_angleCaption,4,1); _settingsGrid.Controls.Add(_angle,5,1);
                 }
                 _rootLayout.RowStyles[2].Height = compact ? 184F : 80F;
-                _rootLayout.RowStyles[3].Height = compact ? 148F : 83F;
+                _rootLayout.RowStyles[3].Height = compact ? 102F : 70F;
             }
             finally { _settingsGrid.ResumeLayout(true); }
         }
 
         private static Button Btn(string text,EventHandler e)
         {
-            var b=new Button{Text=text,AutoSize=true,Height=30,Margin=new Padding(2)};
+            var b=new Button{Text=text,AutoSize=true,Height=28,MinimumSize=new Size(0,28),Margin=new Padding(2)};
             b.Click+=e; return b;
         }
 
