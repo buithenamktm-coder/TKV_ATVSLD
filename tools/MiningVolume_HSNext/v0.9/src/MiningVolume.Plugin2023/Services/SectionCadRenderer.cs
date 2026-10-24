@@ -133,12 +133,17 @@ namespace MiningVolume2023.Services
             {
                 var lt = (LayerTable)tr.GetObject(db.LayerTableId, OpenMode.ForRead);
                 if (!lt.Has(PreviewLayer) && !lt.Has(PreviewLabelLayer))
-                { tr.Commit(); return; }
+                {
+                    onClearedInSameTransaction?.Invoke(tr);
+                    tr.Commit();
+                    return;
+                }
                 var ms = ModelSpace(db, tr, true);
                 var clear = new List<ObjectId>();
                 if(lt.Has(PreviewLayer))clear.Add(lt[PreviewLayer]);
                 if(lt.Has(PreviewLabelLayer))clear.Add(lt[PreviewLabelLayer]);
                 EraseOnLayers(ms, tr, clear);
+                onClearedInSameTransaction?.Invoke(tr);
                 tr.Commit();
             }
         }
