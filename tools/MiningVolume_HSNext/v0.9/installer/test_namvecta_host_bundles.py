@@ -66,6 +66,14 @@ class HostBundleTests(unittest.TestCase):
             host.stage(self.source, dest, SHA)
         self.assertFalse(dest.exists())
 
+    def test_qa_installer_never_auto_deletes_legacy_bundle(self):
+        script = (Path(__file__).parent / "NAMVECTA_Volume_V2.iss").read_text(encoding="utf-8")
+        self.assertIn("function LegacyBundlePresent: Boolean;", script)
+        self.assertIn("MiningVolume2023.bundle", script)
+        self.assertIn("else if LegacyBundlePresent then", script)
+        self.assertIn("LegacyConflict", script)
+        self.assertNotIn("DeleteFolder(ExpandConstant('{commonappdata}", script)
+
     def test_manifest_and_installer_stage_must_have_only_five_hosts(self):
         self.assertEqual(set(core.VERSIONS.keys()), set(range(2020, 2025)))
         for year in core.VERSIONS:
