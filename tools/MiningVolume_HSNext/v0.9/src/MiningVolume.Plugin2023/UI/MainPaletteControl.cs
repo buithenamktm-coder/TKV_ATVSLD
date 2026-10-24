@@ -21,6 +21,9 @@ namespace MiningVolume2023.UI
         private readonly Dictionary<AppPage, Button> _buttons = new Dictionary<AppPage, Button>();
         private readonly ComboBox _subNavigation;
         private readonly FlowLayoutPanel _dataButtons;
+        private readonly FlowLayoutPanel _calcButtons;
+        private readonly Button _sectionTab;
+        private readonly Button _gridTab;
         private readonly Button _tinTab;
         private readonly Button _projectTab;
         private readonly Button _quickSectionTab;
@@ -106,10 +109,31 @@ namespace MiningVolume2023.UI
             _dataButtons.Controls.Add(_tinTab);
             _dataButtons.Controls.Add(_projectTab);
             _dataButtons.Controls.Add(_quickSectionTab);
+            // Calculation modes are direct action buttons, not a dropdown.
+            _calcButtons = new FlowLayoutPanel {
+                Dock = DockStyle.Fill, WrapContents = true,
+                FlowDirection = FlowDirection.LeftToRight,
+                Padding = Padding.Empty, Margin = Padding.Empty
+            };
+            _sectionTab = new Button {
+                Text = "Theo mặt cắt", Width = 150, Height = 28,
+                FlatStyle = FlatStyle.Flat, Margin = new Padding(2)
+            };
+            _gridTab = new Button {
+                Text = "Theo lưới ô vuông", Width = 170, Height = 28,
+                FlatStyle = FlatStyle.Flat, Margin = new Padding(2)
+            };
+            _sectionTab.FlatAppearance.BorderSize = 0;
+            _gridTab.FlatAppearance.BorderSize = 0;
+            _sectionTab.Click += (s,e) => ShowPage(AppPage.Section);
+            _gridTab.Click += (s,e) => ShowPage(AppPage.Grid);
+            _calcButtons.Controls.Add(_sectionTab);
+            _calcButtons.Controls.Add(_gridTab);
             _subNavigationPanel = new Panel { Dock = DockStyle.Top, Height = 42,
                 Padding = new Padding(8, 4, 8, 4), BackColor = UiTheme.Canvas };
             _subNavigationPanel.Controls.Add(_subNavigation);
             _subNavigationPanel.Controls.Add(_dataButtons);
+            _subNavigationPanel.Controls.Add(_calcButtons);
             Controls.Add(_content);
             Controls.Add(_subNavigationPanel);
             Controls.Add(_compactHeader);
@@ -168,9 +192,11 @@ namespace MiningVolume2023.UI
             _tinTab.Width = perButton;
             _projectTab.Width = perButton;
             _quickSectionTab.Width = perButton;
+            _sectionTab.Width = usable >= 370 ? 170 : Math.Max(135, usable - 12);
+            _gridTab.Width = usable >= 370 ? 180 : Math.Max(135, usable - 12);
             _subNavigationPanel.Height = _currentGroup == AppPage.Model
                 ? (cols == 3 ? 42 : cols == 2 ? 72 : 104)
-                : 42;
+                : _currentGroup == AppPage.Volume && usable < 370 ? 72 : 42;
             var page = _content.Controls.Count == 0 ? null : _content.Controls[0];
             if (page == null) return;
             _content.SuspendLayout();
@@ -382,7 +408,8 @@ namespace MiningVolume2023.UI
             foreach (var page in pages) _subNavigation.Items.Add(PageLabel(page));
             _subNavigationPanel.Visible = true;
             _dataButtons.Visible = group == AppPage.Model;
-            _subNavigation.Visible = group != AppPage.Model && pages.Length > 1;
+            _calcButtons.Visible = group == AppPage.Volume;
+            _subNavigation.Visible = false;
             _subNavigation.SelectedIndex = 0;
             int groupIndex = Array.IndexOf(_groups, group);
             if (groupIndex >= 0) _compactNavigation.SelectedIndex = groupIndex;
@@ -422,8 +449,8 @@ namespace MiningVolume2023.UI
                     _subNavigation.Items.Add(PageLabel(member));
                 _subNavigationPanel.Visible = true;
                 _dataButtons.Visible = targetGroup == AppPage.Model;
-                _subNavigation.Visible = targetGroup != AppPage.Model &&
-                    _subNavigation.Items.Count > 1;
+                _calcButtons.Visible = targetGroup == AppPage.Volume;
+                _subNavigation.Visible = false;
                 _updatingNav = false;
             }
 
@@ -440,8 +467,8 @@ namespace MiningVolume2023.UI
             _content.ResumeLayout();
             _updatingNav = true;
             _dataButtons.Visible = _currentGroup == AppPage.Model;
-            _subNavigation.Visible = _currentGroup != AppPage.Model &&
-                VisiblePages(_currentGroup).Length > 1;
+            _calcButtons.Visible = _currentGroup == AppPage.Volume;
+            _subNavigation.Visible = false;
             _updatingNav = true;
             _subNavigation.Items.Clear();
             foreach (var member in VisiblePages(_currentGroup))
@@ -460,6 +487,10 @@ namespace MiningVolume2023.UI
             _projectTab.ForeColor = page == AppPage.Project ? Color.White : UiTheme.TextStrong;
             _quickSectionTab.ForeColor = page == AppPage.QuickSection
                 ? Color.White : UiTheme.TextStrong;
+            _sectionTab.BackColor = page == AppPage.Section ? UiTheme.Accent : UiTheme.Soft;
+            _gridTab.BackColor = page == AppPage.Grid ? UiTheme.Accent : UiTheme.Soft;
+            _sectionTab.ForeColor = page == AppPage.Section ? Color.White : UiTheme.TextStrong;
+            _gridTab.ForeColor = page == AppPage.Grid ? Color.White : UiTheme.TextStrong;
             ApplyResponsiveLayout();
 
             foreach (var kv in _buttons)
