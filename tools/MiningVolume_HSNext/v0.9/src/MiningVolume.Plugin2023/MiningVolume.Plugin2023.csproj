@@ -33,10 +33,10 @@
     <Reference Include="System.Xml.Linq" />
   </ItemGroup>
   <ItemGroup>
-  </ItemGroup>
-  <ItemGroup Condition="'$(UseAutoCADNuGet)'=='true'">
     <EmbeddedResource Include="..\..\docs\branding\namvecta-pa3-reference\image2.png" LogicalName="MiningVolume2023.Assets.namvecta_pa3_symbol.png" />
     <EmbeddedResource Include="..\..\docs\branding\namvecta-pa3-reference\image1.png" LogicalName="MiningVolume2023.Assets.namvecta_pa3_full.png" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(UseAutoCADNuGet)'=='true'">
     <PackageReference Include="AutoCAD.NET" Version="$(IMSATCadPackageVersion)" PrivateAssets="all" ExcludeAssets="runtime" />
   </ItemGroup>
   <ItemGroup Condition="'$(UseAutoCADNuGet)'!='true'">
