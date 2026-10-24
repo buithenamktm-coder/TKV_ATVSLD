@@ -22,6 +22,7 @@ namespace MiningVolume2023.UI
         private readonly Button _buildDesign;
         private readonly Button _cancelBuild;
         private readonly Button _via4Preset;
+        private readonly FlowLayoutPanel _actionsPanel;
         private CancellationTokenSource _buildCts;
         private readonly GroupBox _sourceBox;
         private readonly TableLayoutPanel _sourceTable;
@@ -64,12 +65,19 @@ namespace MiningVolume2023.UI
                 BackColor = UiTheme.Canvas
             };
 
+            // Keep layer refresh at the top, before the two TIN sources.
+            var refreshLayers = Btn("Làm mới layer", (s, e) => RefreshLayers());
+            refreshLayers.Dock = DockStyle.None;
+            refreshLayers.Width = 118;
+            refreshLayers.Height = 28;
+            body.Controls.Add(refreshLayers);
+
             var sourceBox = _sourceBox = new GroupBox
             {
                 Text = "Nguồn dữ liệu",
                 Width = 520,
-                Height = 173,
-                Margin = new Padding(0, 0, 0, 8)
+                Height = 154,
+                Margin = new Padding(0, 0, 0, 5)
             };
             var source = _sourceTable = new TableLayoutPanel
             {
@@ -84,7 +92,7 @@ namespace MiningVolume2023.UI
             source.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 168));
             source.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
             source.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
-            source.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
+            // No test-dataset button in the normal workflow.
 
             _existingLayer = new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList, Margin = new Padding(3, 5, 6, 5) };
             _designLayer = new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList, Margin = new Padding(3, 5, 6, 5) };
@@ -103,23 +111,25 @@ namespace MiningVolume2023.UI
                 _sourceChoose[row] = source.GetControlFromPosition(3,row);
             }
             _via4Preset = Btn("Nạp mẫu Vỉa 4: ht / - nam4 / LO_TINHKL", (s, e) => LoadVia4Preset());
-            source.Controls.Add(_via4Preset, 0, 2);
-            source.SetColumnSpan(_via4Preset, 4);
+            // Preserve the historical sample command internally for fixtures,
+            // but do not expose it in the production Palette.
             sourceBox.Controls.Add(source);
             body.Controls.Add(sourceBox);
             // Optional diagnostic only: a user never has to delete duplicate
             // survey points to use the default automatic TIN workflow.
             var review = Btn("Thống kê điểm trùng (kiểm tra tùy chọn)", (s, e) =>
                 DuplicateXYConflictUi.Show(ProjectState.Current.ActiveRole));
-            review.Width = 520;
+            review.Width = 240;
+            review.Dock = DockStyle.None;
+            review.Height = 28;
             body.Controls.Add(review);
 
             var typeBox = new GroupBox
             {
                 Text = "Loại dữ liệu tham gia TIN",
                 Width = 520,
-                Height = 106,
-                Margin = new Padding(0, 0, 0, 8)
+                Height = 88,
+                Margin = new Padding(0, 0, 0, 5)
             };
             _types = new CheckedListBox
             {
@@ -127,7 +137,7 @@ namespace MiningVolume2023.UI
                 CheckOnClick = true,
                 IntegralHeight = false,
                 MultiColumn = true,
-                ColumnWidth = 148, // compact, three columns fit without horizontal scrolling
+                ColumnWidth = 190, // recalculated for exactly two compact columns
                 HorizontalScrollbar = false,
                 BorderStyle = BorderStyle.None,
                 Margin = new Padding(0),
@@ -136,7 +146,7 @@ namespace MiningVolume2023.UI
             foreach (var x in new[] { "POINT", "LINE", "LWPOLYLINE", "2D POLYLINE", "3D POLYLINE", "Đường đồng mức" })
                 _types.Items.Add(x, true);
             var typePanel = new Panel { Dock = DockStyle.Fill,
-                Padding = new Padding(12, 8, 12, 8) };
+                Padding = new Padding(8, 4, 8, 4) };
             typePanel.Controls.Add(_types);
             typeBox.Controls.Add(typePanel);
             body.Controls.Add(typeBox);
@@ -145,8 +155,8 @@ namespace MiningVolume2023.UI
             {
                 Text = "Phạm vi tạo TIN",
                 Width = 520,
-                Height = 102,
-                Margin = new Padding(0, 0, 0, 8)
+                Height = 77,
+                Margin = new Padding(0, 0, 0, 5)
             };
             var regionLayout = new TableLayoutPanel
             {
@@ -179,8 +189,8 @@ namespace MiningVolume2023.UI
             {
                 Text = "Trạng thái mô hình",
                 Width = 520,
-                Height = 80,
-                Margin = new Padding(0, 0, 0, 8)
+                Height = 57,
+                Margin = new Padding(0, 0, 0, 5)
             };
             _status = new Label
             {
@@ -194,43 +204,36 @@ namespace MiningVolume2023.UI
             statusBox.Controls.Add(_status);
             body.Controls.Add(statusBox);
 
-            var actions = new TableLayoutPanel
+            var actions = _actionsPanel = new FlowLayoutPanel
             {
-                Width = 520,
-                Height = 104,
-                ColumnCount = 2,
-                RowCount = 2,
-                Margin = new Padding(0),
-                Padding = new Padding(0)
+                Width = 520, Height = 38, WrapContents = true,
+                FlowDirection = FlowDirection.LeftToRight,
+                AutoScroll = false, Margin = Padding.Empty, Padding = new Padding(0)
             };
-            actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
-            actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
-            actions.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
-            actions.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
-
-            var refresh = Btn("Làm mới layer", (s, e) => RefreshLayers());
-            refresh.Dock = DockStyle.Fill;
-            refresh.Margin = new Padding(5, 5, 7, 5);
-            actions.Controls.Add(refresh, 0, 1);
-
-            _buildExisting = Btn("Tạo TIN hiện trạng", async (s,e) => await BuildSingleTinAsync(ModelRole.Existing));
-            _buildDesign = Btn("Tạo TIN thiết kế", async (s,e) => await BuildSingleTinAsync(ModelRole.Design));
-            _buildExisting.Dock = DockStyle.Fill;
-            _buildDesign.Dock = DockStyle.Fill;
-            _buildExisting.Margin = new Padding(5,5,7,5);
-            _buildDesign.Margin = new Padding(7,5,5,5);
-            actions.Controls.Add(_buildExisting,0,0);
-            actions.Controls.Add(_buildDesign,1,0);
-            _cancelBuild = Btn("Hủy", (s, e) =>
+            _buildExisting = Btn("Tạo TIN hiện trạng",
+                async (s, e) => await BuildSingleTinAsync(ModelRole.Existing));
+            _buildDesign = Btn("Tạo TIN thiết kế",
+                async (s, e) => await BuildSingleTinAsync(ModelRole.Design));
+            foreach (var button in new[] { _buildExisting, _buildDesign })
+            {
+                button.Dock = DockStyle.None;
+                button.Width = 150;
+                button.Height = 28;
+            }
+            actions.Controls.Add(_buildExisting);
+            actions.Controls.Add(_buildDesign);
+            _cancelBuild = Btn("Hủy dựng", (s, e) =>
             {
                 if (_buildCts == null || _buildCts.IsCancellationRequested) return;
                 _status.Text = "Đang yêu cầu hủy dựng TIN...";
                 _buildCts.Cancel();
             });
-            _cancelBuild.Dock = DockStyle.Fill;
-            _cancelBuild.Margin = new Padding(7, 5, 5, 5);
+            _cancelBuild.Dock = DockStyle.None;
+            _cancelBuild.Width = 90;
+            _cancelBuild.Height = 28;
             _cancelBuild.Enabled = false;
-            actions.Controls.Add(_cancelBuild, 1, 1);
+            _cancelBuild.Visible = false;
+            actions.Controls.Add(_cancelBuild);
 
             body.Controls.Add(actions);
 
@@ -258,7 +261,8 @@ namespace MiningVolume2023.UI
                 int width = Math.Max(1, viewport.ClientSize.Width -
                     SystemInformation.VerticalScrollBarWidth - body.Padding.Horizontal - 2);
                 foreach (Control card in body.Controls) card.Width = width;
-                _types.ColumnWidth = Math.Max(120, (_types.ClientSize.Width - 4) / 2);
+                _types.ColumnWidth = Math.Max(90, (_types.ClientSize.Width - 12) / 2);
+                actions.Height = _cancelBuild.Visible && width < 500 ? 72 : 38;
                 ApplyResponsiveSourceLayout(width);
             };
             viewport.SizeChanged += (s, e) => resizeCards();
@@ -271,9 +275,7 @@ namespace MiningVolume2023.UI
 
         private void ApplyResponsiveSourceLayout(int width)
         {
-            // Keep action labels in full, single-line buttons even when the
-            // palette is wide enough for the source layer combo alone.
-            bool compact = width < 820;
+            bool compact = width < 720;
             if (_compactSourceLayout == compact) return;
             _compactSourceLayout = compact;
             _sourceTable.SuspendLayout();
@@ -283,44 +285,39 @@ namespace MiningVolume2023.UI
                 _sourceTable.RowStyles.Clear();
                 _sourceTable.ColumnStyles.Clear();
                 _sourceTable.ColumnCount = compact ? 2 : 4;
-                _sourceTable.RowCount = compact ? 5 : 3;
+                _sourceTable.RowCount = compact ? 4 : 2;
                 if (compact)
                 {
-                    _sourceBox.Height = 278;
-                    _sourceTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 47));
-                    _sourceTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 53));
-                    for (int k=0;k<5;k++)
-                        _sourceTable.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
-                    _sourceTable.Controls.Add(_sourceLabels[0],0,0);
-                    _sourceTable.Controls.Add(_existingLayer,1,0);
-                    _sourceTable.Controls.Add(_sourceLoad[0],0,1);
-                    _sourceTable.Controls.Add(_sourceChoose[0],1,1);
-                    _sourceTable.Controls.Add(_sourceLabels[1],0,2);
-                    _sourceTable.Controls.Add(_designLayer,1,2);
-                    _sourceTable.Controls.Add(_sourceLoad[1],0,3);
-                    _sourceTable.Controls.Add(_sourceChoose[1],1,3);
-                    _sourceTable.SetColumnSpan(_via4Preset,2);
-                    _sourceTable.Controls.Add(_via4Preset,0,4);
+                    _sourceBox.Height = 164;
+                    _sourceTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 40));
+                    _sourceTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 60));
+                    for (int k = 0; k < 4; k++)
+                        _sourceTable.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
+                    _sourceTable.Controls.Add(_sourceLabels[0], 0, 0);
+                    _sourceTable.Controls.Add(_existingLayer, 1, 0);
+                    _sourceTable.Controls.Add(_sourceLoad[0], 0, 1);
+                    _sourceTable.Controls.Add(_sourceChoose[0], 1, 1);
+                    _sourceTable.Controls.Add(_sourceLabels[1], 0, 2);
+                    _sourceTable.Controls.Add(_designLayer, 1, 2);
+                    _sourceTable.Controls.Add(_sourceLoad[1], 0, 3);
+                    _sourceTable.Controls.Add(_sourceChoose[1], 1, 3);
                 }
                 else
                 {
-                    _sourceBox.Height = 148;
+                    _sourceBox.Height = 93;
                     _sourceTable.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 76));
                     _sourceTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-                    _sourceTable.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 132));
-                    _sourceTable.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 168));
-                    _sourceTable.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
-                    _sourceTable.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
-                    _sourceTable.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
-                    for (int row=0;row<2;row++)
+                    _sourceTable.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96));
+                    _sourceTable.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 126));
+                    for (int k = 0; k < 2; k++)
+                        _sourceTable.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
+                    for (int row = 0; row < 2; row++)
                     {
-                        _sourceTable.Controls.Add(_sourceLabels[row],0,row);
-                        _sourceTable.Controls.Add(row==0 ? (Control)_existingLayer : _designLayer,1,row);
-                        _sourceTable.Controls.Add(_sourceLoad[row],2,row);
-                        _sourceTable.Controls.Add(_sourceChoose[row],3,row);
+                        _sourceTable.Controls.Add(_sourceLabels[row], 0, row);
+                        _sourceTable.Controls.Add(row == 0 ? (Control)_existingLayer : _designLayer, 1, row);
+                        _sourceTable.Controls.Add(_sourceLoad[row], 2, row);
+                        _sourceTable.Controls.Add(_sourceChoose[row], 3, row);
                     }
-                    _sourceTable.SetColumnSpan(_via4Preset,4);
-                    _sourceTable.Controls.Add(_via4Preset,0,2);
                 }
             }
             finally { _sourceTable.ResumeLayout(true); }
@@ -332,9 +329,9 @@ namespace MiningVolume2023.UI
             {
                 Text = text,
                 Dock = DockStyle.Fill,
-                Height = 34,
-                MinimumSize = new Size(0, 34),
-                Margin = new Padding(3, 4, 3, 4),
+                Height = 28,
+                MinimumSize = new Size(0, 28),
+                Margin = new Padding(2, 2, 2, 2),
                 UseCompatibleTextRendering = true
             };
             b.Click += h;
@@ -445,6 +442,8 @@ namespace MiningVolume2023.UI
             {
                 operation=SurfaceWorkflowService.EnterInteractiveBuild();
                 RefreshBuildButtons();_cancelBuild.Enabled=true;
+                _cancelBuild.Visible=true;
+                _actionsPanel.Height = _actionsPanel.Width < 500 ? 72 : 38;
                 _sourceBox.Enabled=false;_types.Enabled=false;
                 var totalWatch=Stopwatch.StartNew();
                 SetBuildStatus($"Đang dựng TIN {st.Get(role).Name}...");
@@ -481,7 +480,9 @@ namespace MiningVolume2023.UI
                     (build.Tin.Triangles as IDisposable)?.Dispose();
                 operation?.Dispose();
                 _buildCts.Dispose();_buildCts=null;
-                _cancelBuild.Enabled=false;_sourceBox.Enabled=true;_types.Enabled=true;
+                _cancelBuild.Enabled=false;_cancelBuild.Visible=false;
+                _actionsPanel.Height = 38;
+                _sourceBox.Enabled=true;_types.Enabled=true;
                 RefreshBuildButtons();
             }
         }
