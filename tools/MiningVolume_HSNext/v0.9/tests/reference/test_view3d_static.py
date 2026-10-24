@@ -35,7 +35,7 @@ def test_2d_restore_is_explicit_and_preserves_original_visibility():
 def test_ui_and_commands_choose_tin_and_allow_return_to_2d():
     model = read("src/MiningVolume.Plugin2023/UI/ModelPage.cs")
     entry = read("src/MiningVolume.Plugin2023/EntryPoint.cs")
-    assert 'Button("VIEW TIN 3D"' in model
+    assert 'Button("Xem TIN", (s, e) => ViewTin3D())' in model
     assert "Tin3DViewService.Start(CurrentRole)" in model
     assert "Tin3DViewService.Stop()" in model
     assert '"Trở về 2D"' in model
