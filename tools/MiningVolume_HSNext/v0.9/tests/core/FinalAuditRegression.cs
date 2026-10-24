@@ -242,6 +242,8 @@ internal static class FinalAuditRegression
             var expected=GridVolumeExcelReportBuilder.Build(grid,options);
             Check(expected.Sheets.Count==2 && expected.Sheets[0].Name=="01 Tổng hợp" &&
                 expected.Sheets[1].Name=="02 Chi tiết","Compact grid sheets are missing");
+            Check(expected.Sheets[0].Rows.Any(row=>row.Any(c=>Equals(c.Value,"0967280686"))),
+                "Compact grid summary lost the required developer contact");
             var technical=GridVolumeExcelReportBuilder.Build(grid,options,true);
             Check(technical.Sheets.Count==6,"Optional technical grid workbook lost audit sheets");
             var pending=GridVolumeExcelReportBuilder.BuildAsync(grid,options);
