@@ -240,6 +240,10 @@ internal static class FinalAuditRegression
             var options=new GridVolumeOptions { Boundary=Boundary, SizeX=1, SizeY=1 };
             var grid=new GridVolumeCalculator().Calculate(Plane(5),Plane(0),options);
             var expected=GridVolumeExcelReportBuilder.Build(grid,options);
+            Check(expected.Sheets.Count==2 && expected.Sheets[0].Name=="01 Tổng hợp" &&
+                expected.Sheets[1].Name=="02 Chi tiết","Compact grid sheets are missing");
+            var technical=GridVolumeExcelReportBuilder.Build(grid,options,true);
+            Check(technical.Sheets.Count==6,"Optional technical grid workbook lost audit sheets");
             var pending=GridVolumeExcelReportBuilder.BuildAsync(grid,options);
             state.MiningUnitName="Changed after export started";
             var actual=pending.GetAwaiter().GetResult();
