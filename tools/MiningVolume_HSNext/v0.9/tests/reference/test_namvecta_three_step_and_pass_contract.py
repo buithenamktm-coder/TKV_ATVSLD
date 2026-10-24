@@ -17,7 +17,7 @@ def test_three_step_navigation_keeps_advanced_commands():
     ui = source("UI/MainPaletteControl.cs")
     assert "_groups = { AppPage.Model, AppPage.Volume, AppPage.Export }" in ui
     assert '"1  Dữ liệu", "2  Tính toán", "3  Kết quả"' in ui
-    assert "AppPage.QuickSection: targetGroup = AppPage.Volume" in ui
+    assert "AppPage.QuickSection: targetGroup = AppPage.Model" in ui
     assert "AppPage.Project: targetGroup = AppPage.Model" in ui
     assert "AppPage.License: targetGroup = AppPage.Export" in ui
     assert "imsat_logo_64.png" not in ui
