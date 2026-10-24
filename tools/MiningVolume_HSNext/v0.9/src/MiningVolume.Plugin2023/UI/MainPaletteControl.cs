@@ -23,12 +23,11 @@ namespace MiningVolume2023.UI
         private readonly FlowLayoutPanel _dataButtons;
         private readonly Button _tinTab;
         private readonly Button _projectTab;
+        private readonly Button _quickSectionTab;
         private readonly Panel _subNavigationPanel;
         private readonly AppPage[] _groups = { AppPage.Model, AppPage.Volume, AppPage.Export };
         private AppPage _currentGroup = AppPage.Project;
         private bool _updatingNav;
-        private readonly HashSet<AppPage> _expandedGroups = new HashSet<AppPage>();
-        private readonly Button _advancedVolumeButton;
 
         public MainPaletteControl()
         {
@@ -95,27 +94,22 @@ namespace MiningVolume2023.UI
             _projectTab = new Button { Text = "Thông tin dự án / đơn vị",
                 Width = 184, Height = 28, FlatStyle = FlatStyle.Flat,
                 Margin = new Padding(2) };
+            _quickSectionTab = new Button { Text = "Vẽ nhanh mặt cắt",
+                Width = 184, Height = 28, FlatStyle = FlatStyle.Flat,
+                Margin = new Padding(2) };
             _tinTab.FlatAppearance.BorderSize = 0;
             _projectTab.FlatAppearance.BorderSize = 0;
+            _quickSectionTab.FlatAppearance.BorderSize = 0;
             _tinTab.Click += (s,e) => ShowPage(AppPage.Data);
             _projectTab.Click += (s,e) => ShowPage(AppPage.Project);
+            _quickSectionTab.Click += (s,e) => ShowPage(AppPage.QuickSection);
             _dataButtons.Controls.Add(_tinTab);
             _dataButtons.Controls.Add(_projectTab);
+            _dataButtons.Controls.Add(_quickSectionTab);
             _subNavigationPanel = new Panel { Dock = DockStyle.Top, Height = 42,
                 Padding = new Padding(8, 4, 8, 4), BackColor = UiTheme.Canvas };
-            _advancedVolumeButton = new Button {
-                Dock = DockStyle.Right, Width = 96, Text = "Tùy chọn",
-                Visible = false, FlatStyle = FlatStyle.Flat, Font = new Font("Arial", 9F)
-            };
-            _advancedVolumeButton.FlatAppearance.BorderSize = 0;
-            _advancedVolumeButton.Click += (sender, args) => {
-                if (!_expandedGroups.Add(_currentGroup))
-                    _expandedGroups.Remove(_currentGroup);
-                ShowGroup(_currentGroup);
-            };
             _subNavigationPanel.Controls.Add(_subNavigation);
             _subNavigationPanel.Controls.Add(_dataButtons);
-            _subNavigationPanel.Controls.Add(_advancedVolumeButton);
             Controls.Add(_content);
             Controls.Add(_subNavigationPanel);
             Controls.Add(_compactHeader);
@@ -165,17 +159,18 @@ namespace MiningVolume2023.UI
                 _compactNavigation.SelectedIndex = Array.IndexOf(_groups, _currentGroup);
                 _updatingNav = false;
             }
-            _subNavigationPanel.Height = _currentGroup == AppPage.Model &&
-                ClientSize.Width < 610 ? 72 : 42;
-            int usable = ClientSize.Width - (_compact ? 0 : _sidebar.Width) - 42;
-            if (ClientSize.Width < 610) {
-                _tinTab.Width = Math.Max(125, Math.Min(310, usable));
-                _projectTab.Width = _tinTab.Width;
-            }
-            else {
-                _tinTab.Width = Math.Min(184, Math.Max(120, usable / 2));
-                _projectTab.Width = Math.Min(184, Math.Max(120, usable / 2));
-            }
+            // Three direct, compact Data actions with responsive wrapping.
+            int usable = Math.Max(150, ClientSize.Width -
+                (_compact ? 0 : _sidebar.Width) - 38);
+            int cols = usable >= 510 ? 3 : usable >= 342 ? 2 : 1;
+            int perButton = Math.Max(126,
+                Math.Min(176, (usable - cols * 4 - 6) / cols));
+            _tinTab.Width = perButton;
+            _projectTab.Width = perButton;
+            _quickSectionTab.Width = perButton;
+            _subNavigationPanel.Height = _currentGroup == AppPage.Model
+                ? (cols == 3 ? 42 : cols == 2 ? 72 : 104)
+                : 42;
             var page = _content.Controls.Count == 0 ? null : _content.Controls[0];
             if (page == null) return;
             _content.SuspendLayout();
@@ -347,7 +342,7 @@ namespace MiningVolume2023.UI
         {
             switch (group)
             {
-                case AppPage.Model: return new[] { AppPage.Data, AppPage.Project };
+                case AppPage.Model: return new[] { AppPage.Data, AppPage.Project, AppPage.QuickSection };
                 case AppPage.Volume: return new[] { AppPage.Section, AppPage.Grid };
                 case AppPage.Export: return new[] { AppPage.Export };
                 default: return new[] { AppPage.Data };
@@ -356,14 +351,8 @@ namespace MiningVolume2023.UI
 
         private AppPage[] VisiblePages(AppPage group)
         {
-            if (!_expandedGroups.Contains(group)) return GetGroupPages(group);
-            switch (group)
-            {
-                case AppPage.Model: return new[] { AppPage.Data, AppPage.Project };
-                case AppPage.Volume: return new[] { AppPage.Section, AppPage.Grid, AppPage.Volume, AppPage.QuickSection };
-                case AppPage.Export: return new[] { AppPage.Export };
-                default: return GetGroupPages(group);
-            }
+            // Main navigation has no expandable Options submenu.
+            return GetGroupPages(group);
         }
 
         private static string PageLabel(AppPage page)
@@ -389,8 +378,6 @@ namespace MiningVolume2023.UI
             _updatingNav = true;
             _currentGroup = group;
             var pages = VisiblePages(group);
-            _advancedVolumeButton.Visible = group == AppPage.Volume;
-            _advancedVolumeButton.Text = _expandedGroups.Contains(group) ? "Thu gọn" : "Tùy chọn";
             _subNavigation.Items.Clear();
             foreach (var page in pages) _subNavigation.Items.Add(PageLabel(page));
             _subNavigationPanel.Visible = true;
@@ -414,20 +401,18 @@ namespace MiningVolume2023.UI
             {
                 case AppPage.Data:
                 case AppPage.Model:
-                case AppPage.Project: targetGroup = AppPage.Model; break;
+                case AppPage.Project:
+                case AppPage.QuickSection: targetGroup = AppPage.Model; break;
                 case AppPage.Section:
                 case AppPage.Volume:
                 case AppPage.Grid:
-                case AppPage.Mineral:
-                case AppPage.QuickSection: targetGroup = AppPage.Volume; break;
+                case AppPage.Mineral: targetGroup = AppPage.Volume; break;
                 case AppPage.Export:
                 case AppPage.License: targetGroup = AppPage.Export; break;
                 default: targetGroup = AppPage.Model; break;
             }
             // Legacy MV_* commands keep access to expert pages while the
             // ordinary user sees only the three main workflow steps.
-            if (Array.IndexOf(VisiblePages(targetGroup), page) < 0)
-                _expandedGroups.Add(targetGroup);
             if (_currentGroup != targetGroup)
             {
                 _currentGroup = targetGroup;
@@ -454,8 +439,6 @@ namespace MiningVolume2023.UI
             _content.Controls.Add(control);
             _content.ResumeLayout();
             _updatingNav = true;
-            _advancedVolumeButton.Visible = _currentGroup == AppPage.Volume;
-            _advancedVolumeButton.Text = _expandedGroups.Contains(_currentGroup) ? "Thu gọn" : "Tùy chọn";
             _dataButtons.Visible = _currentGroup == AppPage.Model;
             _subNavigation.Visible = _currentGroup != AppPage.Model &&
                 VisiblePages(_currentGroup).Length > 1;
@@ -471,8 +454,12 @@ namespace MiningVolume2023.UI
             _updatingNav = false;
             _tinTab.BackColor = page == AppPage.Data ? UiTheme.Accent : UiTheme.Soft;
             _projectTab.BackColor = page == AppPage.Project ? UiTheme.Accent : UiTheme.Soft;
+            _quickSectionTab.BackColor = page == AppPage.QuickSection
+                ? UiTheme.Accent : UiTheme.Soft;
             _tinTab.ForeColor = page == AppPage.Data ? Color.White : UiTheme.TextStrong;
             _projectTab.ForeColor = page == AppPage.Project ? Color.White : UiTheme.TextStrong;
+            _quickSectionTab.ForeColor = page == AppPage.QuickSection
+                ? Color.White : UiTheme.TextStrong;
             ApplyResponsiveLayout();
 
             foreach (var kv in _buttons)
