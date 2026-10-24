@@ -259,22 +259,21 @@ def test_palette_uses_shared_professional_ui_theme():
     assert "EnableHeadersVisualStyles = false" in theme
 
 
-def test_classic_menu_bar_exposes_main_miningvolume_workflow():
+def test_classic_menu_bar_has_only_toggle_and_software_information():
     entry = read("src/MiningVolume.Plugin2023/EntryPoint.cs")
     menu = read("src/MiningVolume.Plugin2023/MenuBarBuilder.cs")
     assert "MenuBarBuilder.EnsureMenu();" in entry
     assert 'MenuName = "NAMVECTA VOLUME"' in menu
     assert 'LegacyMenuName = "IMSAT VOLUME"' in menu
     for token in [
-        "Hiện / Ẩn NAMVECTA VOLUME",
-        "Dữ liệu đầu vào",
-        "TIN / Mô hình",
-        "Mặt cắt",
-        "Tính khối lượng",
-        "Xuất Excel",
+        "Ẩn / hiện phần mềm",
+        "Thông tin phần mềm",
         'CommandMacro("TKL")',
+        'CommandMacro("MVABOUT")',
     ]:
         assert token in menu
+    assert "CommandMacro(\"MV_MODEL\")" not in menu
+    assert "CommandMacro(\"MV_SECTION\")" not in menu
 
 
 def test_namvecta_pa3_ribbon_and_setup_while_historical_installer_remains_separate():
