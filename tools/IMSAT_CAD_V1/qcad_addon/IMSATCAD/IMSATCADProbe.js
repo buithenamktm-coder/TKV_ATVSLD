@@ -86,6 +86,61 @@
             }
         }
         note("BilingualNativeQtSwitch", "PASS");
+        // Native GUI document and real QCAD LINE tool action. Coordinates are
+        // dispatched as QCAD coordinate events (not physical mouse clicks).
+        include("scripts/File/NewFile/NewFile.js");
+        include("scripts/simple.js");
+        var mdi = NewFile.createMdiChild();
+        if (isNull(mdi)) { throw new Error("Native GUI document creation failed"); }
+        var drawing = app.getDocumentInterface();
+        if (isNull(drawing)) { throw new Error("No active native CAD GUI document"); }
+        function countLines(doc) {
+            var ids = doc.queryAllEntities();
+            var n = typeof ids.length === "number" ? ids.length :
+                (typeof ids.size === "function" ? ids.size() : -1);
+            if (n < 0) { throw new Error("Native GUI entity collection not countable"); }
+            var lines = 0;
+            for (var k = 0; k < n; ++k) {
+                var entity = doc.queryEntity(ids[k]);
+                if (!isNull(entity) && entity.getType() === RS.EntityLine) { lines++; }
+            }
+            return lines;
+        }
+        var initialLines = countLines(drawing.getDocument());
+        note("GuiLineCountBefore", initialLines);
+        if (!RGuiAction.triggerByCommand("line")) {
+            throw new Error("Native LINE alias failed to activate the GUI CAD tool");
+        }
+        QCoreApplication.processEvents();
+        var view = drawing.getLastKnownViewWithFocus();
+        if (isNull(view) || isNull(view.getScene())) {
+            throw new Error("No active CAD viewport to dispatch LINE coordinates");
+        }
+        var scene = view.getScene();
+        var graphicsView = getRGraphicsView(view);
+        drawing.coordinateEvent(new RCoordinateEvent(new RVector(10, 20), scene, graphicsView));
+        drawing.coordinateEvent(new RCoordinateEvent(new RVector(90, 50), scene, graphicsView));
+        var createdLines = countLines(drawing.getDocument());
+        note("GuiLineCountAfter", createdLines);
+        if (createdLines !== initialLines + 1) {
+            throw new Error("Native GUI LINE command did not create exactly one line");
+        }
+        var guiDXF = QDir.tempPath() + "/imsat-cad-gui-line-roundtrip.dxf";
+        var previous = new QFile(guiDXF);
+        if (previous.exists() && !previous.remove()) { throw new Error("Stale GUI DXF could not be cleared"); }
+        if (drawing.exportFile(guiDXF, "") !== true) { throw new Error("Native GUI LINE DXF export failed"); }
+        var reopened = createDocumentInterface();
+        if (isNull(reopened) ||
+                reopened.importFile(guiDXF) !== RDocumentInterface.IoErrorNoError) {
+            throw new Error("Native GUI LINE DXF reimport failed");
+        }
+        var reopenedLines = countLines(reopened.getDocument());
+        note("GuiDXFReopenedLines", reopenedLines);
+        note("GuiDXFPath", guiDXF);
+        if (reopenedLines !== createdLines) { throw new Error("Native GUI LINE DXF line count changed"); }
+        note("NativeGuiLineActionGeometry", "PASS");
+        note("NativeGuiLineDXFRoundtrip", "PASS");
+        note("PhysicalMouseAndKeyboard", "NOT_TESTED");
         status = "PASS";
     } catch (error) {
         note("Failure", String(error).replace(/[\r\n]+/g, " "));

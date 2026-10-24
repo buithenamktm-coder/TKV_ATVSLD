@@ -31,6 +31,7 @@ jobs:
         shell: pwsh
         run: |
           node --check tools/IMSAT_CAD_V1/qcad_addon/IMSATCAD/IMSATCAD.js
+          node --check tools/IMSAT_CAD_V1/qcad_addon/IMSATCAD/IMSATCADProbe.js
           node --check tools/IMSAT_CAD_V1/qcad_addon/IMSATCAD/IMSATCADDxfProbe.js
           node --check tools/IMSAT_CAD_V1/brand-native-qcad.js
           node tools/IMSAT_CAD_V1/qcad_addon/check-addon.js
@@ -778,7 +779,9 @@ jobs:
           if (Test-Path $probeFile) {
             Copy-Item $probeFile "native-ribbon-probe.txt" -Force
             $probeLines = @(Get-Content $probeFile)
-            $probeState = if ($probeLines -contains "Status=PASS") { "PASS" } else { "FAIL" }
+            $probeState = if ($probeLines -contains "Status=PASS" -and
+                $probeLines -contains "NativeGuiLineActionGeometry=PASS" -and
+                $probeLines -contains "NativeGuiLineDXFRoundtrip=PASS") { "PASS" } else { "FAIL" }
           } else {
             "Status=NOT_TESTED" | Set-Content "native-ribbon-probe.txt" -Encoding UTF8
             "Failure=Native -exec probe produced no evidence" | Add-Content "native-ribbon-probe.txt"
@@ -789,7 +792,11 @@ jobs:
           Write-Host "Native UIA tab interaction: $uiaTabInteraction ($uiaTabInteractionDetail)"
           Write-Host "Native UIA language interaction: $uiaLanguageInteraction ($uiaLanguageDetail)"
           Write-Host "Native UIA LINE action invocation: $uiaCadAction ($uiaCadDetail)"
-          Get-Content "native-ribbon-probe.txt" | Select-Object -First 12
+          Get-Content "native-ribbon-probe.txt" | Select-Object -First 32
+          $guiLineDxf = Join-Path $env:TEMP "imsat-cad-gui-line-roundtrip.dxf"
+          if (Test-Path $guiLineDxf) {
+            Copy-Item $guiLineDxf "native-gui-line-roundtrip.dxf" -Force
+          }
           @(
             "InstalledGUIRibbonTabsUIA=$uiaResult",
             "UIADetail=$uiaDetail",
@@ -800,7 +807,8 @@ jobs:
             "UIATabNames=$($tabNames -join ' | ')",
             "GUICommandClickTests=$uiaCadAction",
             "GUICommandClickDetail=$uiaCadDetail",
-            "InteractiveCADGeometryAndDXFPersistence=NOT_TESTED",
+            "NativeGuiLineActionGeometry=$probeState",
+            "PhysicalMouseAndKeyboard=NOT_TESTED",
             "NativeOffscreenCADGeometryAndDXFPersistence=$geometryGate"
           ) | Set-Content "native-gui-uia.txt" -Encoding UTF8
           @(
@@ -907,7 +915,8 @@ jobs:
           "GUI Ribbon language interaction: $uiaLanguageInteraction" | Add-Content "native-install-smoke.txt"
           "GUI LINE Ribbon invocation: $uiaCadAction" | Add-Content "native-install-smoke.txt"
           "Native CAD geometry and DXF persistence (off-screen): $geometryGate" | Add-Content "native-install-smoke.txt"
-          "GUI CAD geometry and DXF persistence: NOT_TESTED" | Add-Content "native-install-smoke.txt"
+          "GUI LINE coordinate event and DXF round-trip: $probeState" | Add-Content "native-install-smoke.txt"
+          "Physical mouse and keyboard CAD drawing: NOT_TESTED" | Add-Content "native-install-smoke.txt"
           if ($probeState -ne "PASS") {
             throw "Native installed Ribbon probe $probeState; inspect native-ribbon-probe.txt and native-gui-startup-output.txt"
           }
@@ -946,6 +955,7 @@ jobs:
             native-dxf-roundtrip-audit.txt
             native-dxf-runtime-output.txt
             native-dxf-roundtrip.dxf
+            native-gui-line-roundtrip.dxf
             native-commit-report.txt
             native-qt-dependencies.txt
             native-plugin-dependencies.txt
