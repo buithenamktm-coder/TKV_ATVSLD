@@ -168,7 +168,7 @@ namespace MiningVolume2023.UI
             regionLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             regionLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             regionLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
-            regionLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            regionLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
             _tinRegionStatus = new Label
             {
                 Dock = DockStyle.Fill,
