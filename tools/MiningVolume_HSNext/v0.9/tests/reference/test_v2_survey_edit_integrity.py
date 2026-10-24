@@ -40,36 +40,39 @@ def test_invalidate_tin_clears_cad_before_disposal_and_clears_grid_report():
     assert "session.TinBuiltFromRegionRevision = null;" in part
 
 
-def test_dwg_project_restore_releases_unadopted_file_backed_tin_stores():
+def test_dwg_project_restore_uses_original_verified_faces_without_retriangulation():
     project = source("src/MiningVolume.Plugin2023/Services/ProjectPersistenceService.cs")
+    workflow = source("src/MiningVolume.Plugin2023/Services/SurfaceWorkflowService.cs")
+    renderer = source("src/MiningVolume.Plugin2023/Services/TinCadRenderer.cs")
     restore = project.split("private static void RebuildSavedTins(", 1)[1].split(
-        "private static void TryRebuildTin(", 1
-    )[0]
-    assert "SurfaceBuildResult[] builds = null;" in restore
-    assert "finally" in restore
-    assert "foreach (var build in builds)" in restore
-    assert "!ReferenceEquals(ProjectState.Current.Get(build.Role).Tin, build.Tin)" in restore
-    assert "(build.Tin.Triangles as IDisposable)?.Dispose();" in restore
-    single = project.split("private static void TryRebuildTin(", 1)[1]
-    assert "SurfaceBuildResult build = null;" in single
-    assert "finally" in single
-    assert "!ReferenceEquals(session.Tin, build.Tin)" in single
-    assert "(build.Tin.Triangles as IDisposable)?.Dispose();" in single
+        "private static double PositiveOr(", 1)[0]
+    assert "SurfaceWorkflowService.TryRestoreTinFromCad(role)" in restore
+    assert "BuildPairCoreDetailed()" not in restore
+    assert "BuildCoreDetailed(role)" not in restore
+    assert "DrawTinPair(" not in restore
+    assert "DrawTin(role" not in restore
+    assert "session.CadRecoveryBlocked" in restore
+    assert "TinCadRenderer.ReadStoredTin(" in workflow
+    reader = renderer.split("public static TinSurface ReadStoredTin(", 1)[1].split(
+        "private static bool Finite(Point3d", 1)[0]
+    assert "StartOpenCloseTransaction()" in reader
+    assert ".Erase();" not in reader
+    assert "tr.Commit()" not in reader
 
 
-def test_dwg_restore_does_not_erase_saved_tin_before_replacement_is_ready():
+def test_restore_does_not_touch_saved_tin_or_edit_survey_without_verification():
     workflow = source("src/MiningVolume.Plugin2023/Services/SurfaceWorkflowService.cs")
     project = source("src/MiningVolume.Plugin2023/Services/ProjectPersistenceService.cs")
     assert "bool clearPreviousCadTin = true" in workflow
     assert "InvalidateTin(role, clearCadLayer: clearPreviousCadTin, notify: false);" in workflow
     restore = project.split("private static void RestoreModel(", 1)[1].split(
-        "private static void RebuildSavedTins(", 1
-    )[0]
+        "private static void RebuildSavedTins(", 1)[0]
     assert "SurfaceWorkflowService.LoadLayer(role, snap.Layer, types, clearPreviousCadTin: false)" in restore
     assert "SurfaceWorkflowService.LoadSelectedHandles(role, snap.SelectedHandles, types, clearPreviousCadTin: false)" in restore
-    rebuild = project.split("private static void RebuildSavedTins(", 1)[1].split(
-        "private static void TryRebuildTin(", 1
-    )[0]
-    assert "SurfaceWorkflowService.DrawTinPair(builds);" in rebuild
-    assert "SurfaceWorkflowService.InvalidateTin(ModelRole.Existing, clearCadLayer: false" in rebuild
-    assert "SurfaceWorkflowService.InvalidateTin(ModelRole.Design, clearCadLayer: false" in rebuild
+    assert "SourceFingerprint.ComputeModel(session.Source)" in restore
+    assert "session.CadRecoveryBlocked = true;" in restore
+    recovered = project.split("private static void RebuildSavedTins(", 1)[1].split(
+        "private static double PositiveOr(", 1)[0]
+    assert "SurfaceWorkflowService.TryRestoreTinFromCad(role)" in recovered
+    assert "SurfaceWorkflowService.DrawTinPair(" not in recovered
+    assert "SurfaceWorkflowService.DrawTin(" not in recovered
