@@ -10,7 +10,7 @@ namespace MiningVolume2023.Services
 {
     /// <summary>
     /// Tạo workbook riêng cho lưới ô vuông, dùng cùng định dạng Arial 12,
-    /// không tô nền, có công thức liên kết kết quả và logo IMSAT qua
+    /// không tô nền, có công thức liên kết kết quả và logo theo thiết kế NAMVECTA qua
     /// ExportWorkflowService.WriteXlsx.
     /// </summary>
     internal static class GridVolumeExcelReportBuilder
@@ -40,7 +40,7 @@ namespace MiningVolume2023.Services
             if (options == null) throw new ArgumentNullException(nameof(options));
             var r = new SpreadsheetReport
             {
-                Title = "IMSAT MININGVOLUME – KHỐI LƯỢNG LƯỚI Ô VUÔNG",
+                Title = "NAMVECTA VOLUME – KHỐI LƯỢNG LƯỚI Ô VUÔNG",
                 Creator = "Bùi Thế Nam", CreatedAt = DateTime.Now
             };
             r.Sheets.Add(Info(grid, options));
