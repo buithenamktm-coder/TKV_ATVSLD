@@ -15,8 +15,8 @@ def test_three_main_groups_and_exactly_two_default_volume_methods():
     assert '[AppPage.QuickSection] = new SectionPage(true)' in main
     assert '[AppPage.License] = new ContactInfoPage()' in main
     assert 'case AppPage.Volume: return new[] { AppPage.Section, AppPage.Grid };' in main
-    assert 'case AppPage.Model: return new[] { AppPage.Data };' in main
-    assert 'AppPage.Volume, AppPage.QuickSection, AppPage.Mineral' in main  # preserved behind advanced view
+    assert 'case AppPage.Model: return new[] { AppPage.Data, AppPage.Project };' in main
+    assert 'AppPage.Volume, AppPage.QuickSection };' in main  # minerals reserved for later version
 
 
 def test_model_contains_input_then_tin_management():
@@ -30,10 +30,10 @@ def test_model_contains_input_then_tin_management():
 def test_independent_quick_sections_and_volume_result_navigation():
     section = read("src/MiningVolume.Plugin2023/UI/SectionPage.cs")
     main = read("src/MiningVolume.Plugin2023/UI/MainPaletteControl.cs")
-    assert 'if (_quickOnly)\n                primary.Controls.Add(quick, 2, 0);' in section
+    assert 'if (_quickOnly) primary.Controls.Add(quick);' in section
     assert 'new SectionPage(false, ShowPage)' in main
     assert 'new SectionPage(true)' in main
-    assert '_navigate(AppPage.Volume)' in section
+    assert 'VolumeWorkflowService.Commit(volume, from, to, step);' in section
 
 
 def test_supported_cad_compile_matrix_is_2020_through_2026():
