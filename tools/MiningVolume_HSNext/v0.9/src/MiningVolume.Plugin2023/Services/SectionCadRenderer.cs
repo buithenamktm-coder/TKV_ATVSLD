@@ -68,7 +68,8 @@ namespace MiningVolume2023.Services
                 // Reject collisions or user-modified blocks, never erase or
                 // overwrite unrelated CAD geometry.
                 definition = (BlockTableRecord)tr.GetObject(bt[blockName], OpenMode.ForWrite);
-                foreach (ObjectId id in definition)
+                ObjectId[] oldBlockEntities = definition.Cast<ObjectId>().ToArray();
+                foreach (ObjectId id in oldBlockEntities)
                 {
                     var entity = tr.GetObject(id, OpenMode.ForRead) as Entity;
                     if (entity == null ||
@@ -78,7 +79,7 @@ namespace MiningVolume2023.Services
                             "Block tuyến " + blockName +
                             " chứa hình học không thuộc NAMVECTA; không ghi đè.");
                 }
-                foreach (ObjectId id in definition)
+                foreach (ObjectId id in oldBlockEntities)
                 {
                     var entity = tr.GetObject(id, OpenMode.ForWrite) as Entity;
                     entity?.Erase();
