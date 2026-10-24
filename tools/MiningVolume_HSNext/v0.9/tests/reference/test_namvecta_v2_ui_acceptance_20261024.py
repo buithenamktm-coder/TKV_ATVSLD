@@ -35,9 +35,10 @@ def test_tin_management_exactly_two_visible_actions():
     model = read("ModelPage.cs")
     assert 'Button("Xem TIN", (s, e) => ViewTin3D())' in model
     assert 'Button("Xóa toàn bộ TIN", (s, e) => DeleteAllTins())' in model
-    assert "SurfaceWorkflowService.InvalidateTin(\n                    ModelRole.Existing, clearCadLayer: true)" in model
-    assert "SurfaceWorkflowService.InvalidateTin(\n                    ModelRole.Design, clearCadLayer: true)" in model
-    assert "Dữ liệu khảo sát, đường đồng mức" in model
+    # Reopened DWGs have 3DFACEs even when TinCadFaceCount is not restored.
+    assert "TinCadRenderer.InspectLayers(doc.Database, names)" in model
+    assert "SurfaceWorkflowService.DeleteAllTinsStoredInCurrentDrawing()" in model
+    assert "Dữ liệu khảo sát" not in model or "đường đồng mức" in model
     assert "operations.Controls.Add(_view3D);" in model
     assert "operations.Controls.Add(deleteAll);" in model
     for obsolete in (
