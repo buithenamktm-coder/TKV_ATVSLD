@@ -126,7 +126,8 @@ namespace MiningVolume2023.Services
             return definition.ObjectId;
         }
 
-        public static void ClearPreview(Database db)
+        public static void ClearPreview(Database db,
+            Action<Transaction> onClearedInSameTransaction = null)
         {
             using (var tr = db.TransactionManager.StartTransaction())
             {
