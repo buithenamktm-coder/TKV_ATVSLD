@@ -946,6 +946,13 @@ internal static class CoreRegression
                 Check(tiny.CalculationArea > 0 && !tiny.IsComplete,
                     "A positive clipped sliver must not be reported as a valid zero-volume cell");
             },
+            ["grid_partially_covered_sliver_is_not_accepted"] = ()=>{
+                var sliver = new GridCellVolume {
+                    CalculationArea = 5e-9, CoveredArea = 4e-9
+                };
+                Check(!sliver.IsComplete,
+                    "Absolute no-data tolerance must not hide 20% missing sliver coverage");
+            },
             ["grid_positive_tiny_tin_face_is_not_silently_accepted"] = ()=>{
                 // A 5e-10 m2 projected face is accepted by the TIN renderer
                 // but cannot be integrated by the grid kernel at Eps=1e-9.
