@@ -270,5 +270,49 @@ $dataForm.Close();$dataForm.Dispose()
   widths=$dataDetails;source_sha=$env:SOURCE_SHA;autocad_runtime='NOT TESTED'} |
   ConvertTo-Json -Depth 5 | Set-Content -Encoding UTF8 (Join-Path $out 'UI_DATA_SOURCE_BUTTONS.json')
 
+# Grid "Chọn trên CAD" must stay 28px tall after wide -> narrow -> wide.
+# This catches a subtle issue where the old compact layout assigned
+# Dock=Fill but the wide layout never reset Dock.
+$gridType=$assembly.GetType('MiningVolume2023.UI.GridPage',$true)
+$gridPage=[Windows.Forms.Control][Activator]::CreateInstance($gridType)
+$gridForm=New-Object Windows.Forms.Form
+$gridForm.ClientSize=New-Object Drawing.Size(800,650)
+$gridForm.StartPosition=[Windows.Forms.FormStartPosition]::Manual
+$gridForm.Location=New-Object Drawing.Point(-1800,-1800)
+$gridForm.ShowInTaskbar=$false
+$gridPage.Dock=[Windows.Forms.DockStyle]::Fill
+$gridForm.Controls.Add($gridPage)
+$apply.Invoke($null,[object[]]@($gridPage)) | Out-Null
+$gridForm.Show()
+[Windows.Forms.Application]::DoEvents()
+$gridPicker=[Windows.Forms.Button]$gridType.GetField('_pickBoundary',
+    [Reflection.BindingFlags]'NonPublic,Instance').GetValue($gridPage)
+$gridChecks=@()
+foreach($width in @(800,340,800)) {
+  $gridForm.ClientSize=New-Object Drawing.Size($width,650)
+  $gridPage.PerformLayout()
+  [Windows.Forms.Application]::DoEvents()
+  if($gridPicker.Dock -ne [Windows.Forms.DockStyle]::None) {
+    throw "Grid CAD picker stretches after resize to width $width."
+  }
+  if($gridPicker.Height -ne 28) {
+    throw "Grid CAD picker height $($gridPicker.Height) != 28 at width $width."
+  }
+  $needed=[Windows.Forms.TextRenderer]::MeasureText(
+    $gridPicker.Text,$gridPicker.Font,
+    (New-Object Drawing.Size(1000,100)),
+    [Windows.Forms.TextFormatFlags]::SingleLine).Width +
+    $gridPicker.Padding.Horizontal
+  if($gridPicker.Width -lt $needed) {
+    throw "Grid CAD picker text clipped at width $width."
+  }
+  $gridChecks+=@{width=$width;picker_width=$gridPicker.Width;
+    picker_height=$gridPicker.Height;status='PASS'}
+}
+$gridForm.Close();$gridForm.Dispose()
+@{scope='GridPage CAD button resizing from wide to compact and back';
+  widths=$gridChecks;source_sha=$env:SOURCE_SHA;autocad_runtime='NOT TESTED'} |
+  ConvertTo-Json -Depth 5 | Set-Content -Encoding UTF8 (Join-Path $out 'UI_GRID_BUTTON_RESIZE.json')
+
 Write-Host 'PASS: separate real Windows calculation section and quick-section action layouts'
 Write-Host 'PASS: actual Windows WinForms buttons, text contrast >=4.5; AutoCAD runtime NOT TESTED'
