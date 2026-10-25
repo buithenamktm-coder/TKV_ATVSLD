@@ -36,7 +36,7 @@ def test_quick_section_selects_selected_routes_not_parallel_volume_stations():
     assert "total + segment.S1" in core
     assert "new SectionSpan(0, total)" in core
     out = cad.split("public static void DrawQuickProfiles(", 1)[1].split(
-        "private static BlockTableRecord ModelSpace(", 1
+        "private static void ValidatePreviewOwnership(", 1
     )[0]
     for layer in ["MV_MC_NHANH_HT", "MV_MC_NHANH_TK",
                   "MV_MC_NHANH_TRUC", "MV_MC_NHANH_CHU"]:
