@@ -37,3 +37,14 @@ def test_data_page_clears_prior_combo_selection_but_preserves_loaded_source_laye
     assert "Fill(_existingLayer, layers, existing, preservePriorSelection);" in page
     assert "Fill(_designLayer, layers, design, preservePriorSelection);" in page
     assert "preservePriorSelection ? cb.Text : string.Empty" in page
+
+
+def test_manual_project_reload_invalidates_old_grid_before_disposing_tin():
+    project = source("Services/ProjectState.cs")
+    reset = project.split("public void Reset()", 1)[1].split(
+        "private static void ResetModel(", 1)[0]
+    assert "GridWorkflowService.Invalidate();" in reset
+    assert reset.index("GridWorkflowService.Invalidate();") < reset.index(
+        "ResetModel(Existing);")
+    cache = source("Services/GridWorkflowService.cs")
+    assert "_report = null; _options = null; _existing = null; _design = null;" in cache
