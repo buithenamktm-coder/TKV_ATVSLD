@@ -1,4 +1,4 @@
-"""Plan-section stations must be individual native AutoCAD blocks.
+"""Plan-section stations must be one native AutoCAD block for the entire system.
 
 Static regression only: the actual BlockReference display/edit/save/reopen
 path still requires Windows AutoCAD + real DWG acceptance.
@@ -11,18 +11,21 @@ workflow=(ROOT/"src/MiningVolume.Plugin2023/Services/SectionWorkflowService.cs")
 section=(ROOT/"src/MiningVolume.Plugin2023/UI/SectionPage.cs").read_text(encoding="utf-8")
 
 
-def test_each_plan_station_is_one_block_reference_not_loose_geometry():
-    pre=renderer.split("public static void ReplacePreview(",1)[1].split("private static ObjectId UpdateStationDefinition(",1)[0]
-    assert 'NAMVECTA_MC_TUYEN_' in pre
-    assert 'UpdateStationDefinition(db, tr, blockName' in pre
+def test_all_plan_stations_share_one_block_reference():
+    pre=renderer.split("public static void ReplacePreview(",1)[1].split(
+        "private static ObjectId UpdateStationSystemDefinition(",1)[0]
+    assert 'NAMVECTA_MC_HE_TUYEN' in pre
+    assert 'UpdateStationSystemDefinition(db, tr,' in pre
     assert 'new BlockReference(anchor, blockId) { LayerId = layerId }' in pre
     assert 'ms.AppendEntity(instance);' in pre
+    assert 'foreach (var line in system.Lines)' not in pre
     assert 'AddLine(ms, tr,' not in pre
-    assert 'ms.AppendEntity(txt)' not in pre
 
 
-def test_station_block_contains_all_segments_and_label():
-    builder=renderer.split("private static ObjectId UpdateStationDefinition(",1)[1].split("public static void ClearPreview(",1)[0]
+def test_one_station_system_block_contains_all_segments_and_labels():
+    builder=renderer.split("private static ObjectId UpdateStationSystemDefinition(",1)[1].split(
+        "public static void ClearPreview(",1)[0]
+    assert 'foreach (var line in lines)' in builder
     assert 'foreach (var span in line.Spans)' in builder
     assert 'definition.AppendEntity(segment);' in builder
     assert 'definition.AppendEntity(label);' in builder
@@ -30,7 +33,7 @@ def test_station_block_contains_all_segments_and_label():
     assert 'new Point3d(first.X - basePoint.X, first.Y - basePoint.Y, 0)' in builder
     assert 'TextStyleId = styleId' in builder
     assert 'tr.AddNewlyCreatedDBObject(instance, true)' not in builder
-    assert '(!' in builder or '(entity.LayerId != planLayer' in builder
+    assert 'entity.LayerId != planLayer && entity.LayerId != labelLayer' in builder
 
 
 def test_station_actions_reuse_block_renderer():
@@ -75,7 +78,7 @@ def test_deleting_station_blocks_clears_only_saved_section_snapshot():
 def test_section_clear_preflight_preserves_foreign_cad_objects():
     # Validate both initial preview replacement and explicit removal.
     pre=renderer.split("public static void ReplacePreview(",1)[1].split(
-        "private static ObjectId UpdateStationDefinition(",1)[0]
+        "private static ObjectId UpdateStationSystemDefinition(",1)[0]
     clear=renderer.split("public static void ClearPreview(Database db,",1)[1].split(
         "public static void ReplaceProfiles(",1)[0]
     assert pre.index("ValidatePreviewOwnership(") < pre.index("EraseOnLayers(")
@@ -88,6 +91,7 @@ def test_section_clear_preflight_preserves_foreign_cad_objects():
     assert "throw new InvalidOperationException(" in method
     block=renderer.split("private static bool IsStationBlock(",1)[1].split(
         "private static BlockTableRecord ModelSpace(",1)[0]
+    assert 'definition.Name == "NAMVECTA_MC_HE_TUYEN"' in block
     assert 'StartsWith("NAMVECTA_MC_TUYEN_", StringComparison.Ordinal)' in block
     assert "entity is Line && entity.LayerId == planLayer" in block
     assert "entity is DBText && entity.LayerId == nameLayer" in block
