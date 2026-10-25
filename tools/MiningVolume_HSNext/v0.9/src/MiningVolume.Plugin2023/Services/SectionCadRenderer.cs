@@ -33,21 +33,17 @@ namespace MiningVolume2023.Services
                 ValidatePreviewOwnership(ms, tr, layerId, namesLayerId);
                 EraseOnLayers(ms, tr, new[] { layerId, namesLayerId });
 
-                // Each station line (all segments + its label) is ONE native
-                // AutoCAD BLOCK, not loose LINE/DBText entities. The block's
-                // insertion/base point is the start of the first valid span.
-                // Stable names prevent accumulating thousands of new block
-                // definitions when the user previews/moves/deletes stations.
-                int stationIndex = 0;
-                foreach (var line in system.Lines)
+                // The ENTIRE plan section system is one selectable CAD BLOCK.
+                // Internal LINE and DBText geometry remains on reserved layers;
+                // named station updates still regenerate from SectionSystem.
+                var validLines = system.Lines.Where(line => line.Spans.Count > 0).ToArray();
+                if (validLines.Length > 0)
                 {
-                    if (line.Spans.Count == 0) continue;
-                    stationIndex++;
-                    var anchor2 = line.PointAt(line.Spans[0].StartT);
+                    var anchor2 = validLines[0].PointAt(validLines[0].Spans[0].StartT);
                     var anchor = new Point3d(anchor2.X, anchor2.Y, 0);
-                    string blockName = "NAMVECTA_MC_TUYEN_" + stationIndex.ToString("D6");
-                    ObjectId blockId = UpdateStationDefinition(db, tr, blockName,
-                        line, anchor, layerId, namesLayerId, styleId);
+                    ObjectId blockId = UpdateStationSystemDefinition(db, tr,
+                        "NAMVECTA_MC_HE_TUYEN", validLines, anchor,
+                        layerId, namesLayerId, styleId);
                     var instance = new BlockReference(anchor, blockId) { LayerId = layerId };
                     ms.AppendEntity(instance);
                     tr.AddNewlyCreatedDBObject(instance, true);
@@ -56,74 +52,67 @@ namespace MiningVolume2023.Services
             }
         }
 
-        private static ObjectId UpdateStationDefinition(Database db, Transaction tr,
-            string blockName, SectionLine line, Point3d basePoint,
+        private static ObjectId UpdateStationSystemDefinition(Database db, Transaction tr,
+            string blockName, IReadOnlyList<SectionLine> lines, Point3d basePoint,
             ObjectId planLayer, ObjectId labelLayer, ObjectId styleId)
         {
             var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
             BlockTableRecord definition;
             if (bt.Has(blockName))
             {
-                // Only reuse definitions whose contents are exactly our own
-                // previously generated LINE/DBText objects on reserved layers.
-                // Reject collisions or user-modified blocks, never erase or
-                // overwrite unrelated CAD geometry.
+                // Never overwrite a user-owned or modified block definition.
                 definition = (BlockTableRecord)tr.GetObject(bt[blockName], OpenMode.ForWrite);
-                ObjectId[] oldBlockEntities = definition.Cast<ObjectId>().ToArray();
-                foreach (ObjectId id in oldBlockEntities)
+                ObjectId[] oldEntities = definition.Cast<ObjectId>().ToArray();
+                foreach (ObjectId id in oldEntities)
                 {
                     var entity = tr.GetObject(id, OpenMode.ForRead) as Entity;
                     if (entity == null ||
                         (!(entity is Line) && !(entity is DBText)) ||
                         (entity.LayerId != planLayer && entity.LayerId != labelLayer))
                         throw new InvalidOperationException(
-                            "Block tuyến " + blockName +
-                            " chứa hình học không thuộc NAMVECTA; không ghi đè.");
+                            "Block hệ mặt cắt chứa hình học ngoài NAMVECTA; không ghi đè.");
                 }
-                foreach (ObjectId id in oldBlockEntities)
-                {
-                    var entity = tr.GetObject(id, OpenMode.ForWrite) as Entity;
-                    entity?.Erase();
-                }
+                foreach (ObjectId id in oldEntities)
+                    (tr.GetObject(id, OpenMode.ForWrite) as Entity)?.Erase();
             }
             else
             {
                 bt.UpgradeOpen();
-                definition = new BlockTableRecord
-                {
-                    Name = blockName,
-                    Origin = Point3d.Origin
-                };
+                definition = new BlockTableRecord { Name = blockName, Origin = Point3d.Origin };
                 bt.Add(definition);
                 tr.AddNewlyCreatedDBObject(definition, true);
             }
 
-            foreach (var span in line.Spans)
+            foreach (var line in lines)
             {
-                var first = line.PointAt(span.StartT);
-                var last = line.PointAt(span.EndT);
-                var segment = new Line(
-                    new Point3d(first.X - basePoint.X, first.Y - basePoint.Y, 0),
-                    new Point3d(last.X - basePoint.X, last.Y - basePoint.Y, 0))
+                foreach (var span in line.Spans)
                 {
-                    LayerId = planLayer
+                    var first = line.PointAt(span.StartT);
+                    var last = line.PointAt(span.EndT);
+                    var segment = new Line(
+                        new Point3d(first.X - basePoint.X, first.Y - basePoint.Y, 0),
+                        new Point3d(last.X - basePoint.X, last.Y - basePoint.Y, 0))
+                    {
+                        LayerId = planLayer
+                    };
+                    definition.AppendEntity(segment);
+                    tr.AddNewlyCreatedDBObject(segment, true);
+                }
+                var firstPoint = line.PointAt(line.Spans[0].StartT);
+                var label = new DBText
+                {
+                    Position = new Point3d(
+                        firstPoint.X - basePoint.X - 18.0 * line.Direction.X,
+                        firstPoint.Y - basePoint.Y - 18.0 * line.Direction.Y, 0),
+                    TextString = line.Name,
+                    Height = 3.0,
+                    Rotation = Math.Atan2(line.Direction.Y, line.Direction.X),
+                    LayerId = labelLayer,
+                    TextStyleId = styleId
                 };
-                definition.AppendEntity(segment);
-                tr.AddNewlyCreatedDBObject(segment, true);
+                definition.AppendEntity(label);
+                tr.AddNewlyCreatedDBObject(label, true);
             }
-            var label = new DBText
-            {
-                Position = new Point3d(
-                    -18.0 * line.Direction.X,
-                    -18.0 * line.Direction.Y, 0),
-                TextString = line.Name,
-                Height = 3.0,
-                Rotation = Math.Atan2(line.Direction.Y, line.Direction.X),
-                LayerId = labelLayer,
-                TextStyleId = styleId
-            };
-            definition.AppendEntity(label);
-            tr.AddNewlyCreatedDBObject(label, true);
             return definition.ObjectId;
         }
 
@@ -461,7 +450,8 @@ namespace MiningVolume2023.Services
             var definition = tr.GetObject(reference.BlockTableRecord,
                 OpenMode.ForRead) as BlockTableRecord;
             if (definition == null ||
-                !definition.Name.StartsWith("NAMVECTA_MC_TUYEN_", StringComparison.Ordinal))
+                !(definition.Name == "NAMVECTA_MC_HE_TUYEN" ||
+                   definition.Name.StartsWith("NAMVECTA_MC_TUYEN_", StringComparison.Ordinal)))
                 return false;
             bool hasSegment = false;
             foreach (ObjectId id in definition)
