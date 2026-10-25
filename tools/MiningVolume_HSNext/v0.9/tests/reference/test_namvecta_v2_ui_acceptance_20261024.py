@@ -109,3 +109,12 @@ def test_scope_not_clipped_and_offline_pass_refreshes():
     assert "0967280686" in contact
     assert "Nhập Pass kích hoạt offline" in license
     assert "status.ExpiresUtc" in license
+
+
+def test_palette_header_hides_qa_build_hash_but_keeps_diagnostics():
+    palette = read("MainPaletteControl.cs")
+    header = palette.split("private static Panel BuildHeader()", 1)[1].split(
+        "private static Panel BuildSidebar(", 1)[0]
+    assert 'const string title = "NAMVECTA VOLUME";' in header
+    assert "RuntimeBuildIdentity.ShortTag()" not in header
+    assert "V2.0 QA" not in header
