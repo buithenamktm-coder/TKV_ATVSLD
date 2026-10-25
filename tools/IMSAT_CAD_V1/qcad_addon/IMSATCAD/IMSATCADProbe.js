@@ -129,6 +129,20 @@
         var previous = new QFile(guiDXF);
         if (previous.exists() && !previous.remove()) { throw new Error("Stale GUI DXF could not be cleared"); }
         if (drawing.exportFile(guiDXF, "") !== true) { throw new Error("Native GUI LINE DXF export failed"); }
+        // QCAD's native Ctrl+S uses RDocument.getFileName(), not the
+        // last path exported by a JavaScript probe. Bind the GUI drawing
+        // explicitly to the existing acceptance DXF to avoid Save As dialogs.
+        var guiDocument = drawing.getDocument();
+        note("GuiDocumentFileNameAfterExport", String(guiDocument.getFileName()));
+        guiDocument.setFileName(guiDXF);
+        note("GuiNativeSaveTarget", String(guiDocument.getFileName()));
+        note("GuiNativeSaveVersion", String(guiDocument.getFileVersion()));
+        if (String(guiDocument.getFileName()) !== guiDXF) {
+            throw new Error("Cannot bind GUI document to DXF acceptance target");
+        }
+        // CI profile only: avoid a modal 'format not recommended' warning
+        // when native Save chooses the existing document's DXF version.
+        RSettings.setValue("SaveAs/ColorWarning", false, false);
         var reopened = createDocumentInterface();
         if (isNull(reopened) ||
                 reopened.importFile(guiDXF) !== RDocumentInterface.IoErrorNoError) {

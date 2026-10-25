@@ -206,7 +206,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Native canvas UIA integration patch failed" }
           $cpp = Get-Content "native/qcad/src/gui/RGraphicsViewQt.cpp" -Raw
           if ($cpp -notmatch 'setObjectName\("IMSATCADGraphicsCanvas"\)' -or
-              $cpp -notmatch 'setAccessibleName\("IMSAT CAD drawing canvas"\)') {
+              $cpp -notmatch 'setAccessibleName\("IMSAT CAD drawing canvas"\)' -or
+              $cpp -notmatch 'IMSATCAD_MOUSE_QA RELEASE') {
             throw "IMSAT CAD native drawing canvas accessibility identity was not installed"
           }
           Write-Host "Native Qt canvas accessibility source patch: PASS (mouse input runtime NOT_TESTED)"
@@ -554,6 +555,8 @@ jobs:
           # on a clean profile unless -locale is supplied. That dialog can be
           # mistaken for the CAD main window and prevents -exec from running.
           # -rescan also ensures the newly installed IMSAT add-on is discovered.
+          # Enable bounded native mouse event diagnostics only for CI.
+          $env:IMSATCAD_MOUSE_QA = "1"
           $gui = Start-Process -FilePath $installedExe -ArgumentList @("-allow-multiple-instances", "-locale", "vi", "-rescan", "-exec", $probeScript) -WorkingDirectory $destination -RedirectStandardOutput $guiStdout -RedirectStandardError $guiStderr -PassThru
           $windowFound = $false
           $windowTitle = ""
@@ -570,6 +573,11 @@ jobs:
           $keyboardDetail = "Native Windows command input has not been inspected"
           $mouseResult = "NOT_TESTED"
           $mouseDetail = "Real mouse drawing not tested"
+          $mouseQtPressCount = "NOT_TESTED"
+          $mouseQtReleaseCount = "NOT_TESTED"
+          $mouseQtEntityCounts = "NOT_TESTED"
+          $mouseDxfBefore = "NOT_TESTED"
+          $mouseDxfAfter = "NOT_TESTED"
           try {
             for ($attempt = 0; $attempt -lt 30; $attempt++) {
               Start-Sleep -Seconds 1
@@ -945,9 +953,10 @@ jobs:
                         [IMSATCADWinMouse]::mouse_event(4,0,0,0,[UIntPtr]::Zero)
                         Start-Sleep -Milliseconds 400
                       }
+                      # Save the same named GUI document using native Ctrl+S.
                       [System.Windows.Forms.SendKeys]::SendWait("^{s}")
                       $after = $before
-                      for ($poll = 0; $poll -lt 20; $poll++) {
+                      for ($poll = 0; $poll -lt 25; $poll++) {
                         Start-Sleep -Milliseconds 200
                         $rawDxf = Get-Content $drawingFile -Raw -ErrorAction SilentlyContinue
                         if ($rawDxf) {
@@ -955,11 +964,28 @@ jobs:
                           if ($after -gt $before) { break }
                         }
                       }
-                      if ($after -eq ($before+1)) {
+                      $mouseDxfBefore = $before
+                      $mouseDxfAfter = $after
+                      # These lines are produced by native QWidget mouse
+                      # event handlers, not inferred from the mouse cursor.
+                      Start-Sleep -Milliseconds 150
+                      $nativeMouseTrace = ((Get-Content $guiStdout -Raw -ErrorAction SilentlyContinue) +
+                        [Environment]::NewLine +
+                        (Get-Content $guiStderr -Raw -ErrorAction SilentlyContinue))
+                      $mouseQtPressCount = [regex]::Matches($nativeMouseTrace, 'IMSATCAD_MOUSE_QA PRESS').Count
+                      $qtReleases = [regex]::Matches($nativeMouseTrace,
+                        'IMSATCAD_MOUSE_QA RELEASE\s+[-\d]+\s+[-\d]+\s+EntityCount\s+(-?\d+)')
+                      $mouseQtReleaseCount = $qtReleases.Count
+                      $entityValues = @()
+                      foreach ($release in $qtReleases) { $entityValues += [int]$release.Groups[1].Value }
+                      $mouseQtEntityCounts = if ($entityValues.Count) { $entityValues -join ',' } else { "NO_QT_RELEASE" }
+                      if ($mouseQtReleaseCount -lt 2) {
+                        $mouseDetail = "Win32 clicks did not reach native CAD viewport: press=$mouseQtPressCount release=$mouseQtReleaseCount"
+                      } elseif ($after -eq ($before+1) -and $entityValues[-1] -eq ($before+1)) {
                         $mouseResult = "PASS"
-                        $mouseDetail = "Two Win32 clicks and Ctrl+S increased LINE count from $before to $after"
+                        $mouseDetail = "Native Qt mouse releases created LINE and Ctrl+S saved DXF $before -> $after"
                       } else {
-                        $mouseDetail = "DXF did not gain one LINE: $before -> $after; points=($x1,$y1),($x2,$y2)"
+                        $mouseDetail = "Native Qt releases=$mouseQtReleaseCount, entity counts=$mouseQtEntityCounts, DXF=$before->$after, points=($x1,$y1),($x2,$y2)"
                       }
                     }
                   }
@@ -1005,11 +1031,22 @@ jobs:
           Write-Host "Native UIA LINE action invocation: $uiaCadAction ($uiaCadDetail)"
           Write-Host "Native Windows Space-key dispatch: $keyboardResult ($keyboardDetail)"
           Write-Host "Native Windows mouse and Ctrl+S: $mouseResult ($mouseDetail)"
+          Write-Host "Native Qt mouse events: press=$mouseQtPressCount release=$mouseQtReleaseCount entityCounts=$mouseQtEntityCounts; DXF=$mouseDxfBefore->$mouseDxfAfter"
           Get-Content "native-ribbon-probe.txt" | Select-Object -First 32
           $guiLineDxf = Join-Path $env:TEMP "imsat-cad-gui-line-roundtrip.dxf"
           if (Test-Path $guiLineDxf) {
             Copy-Item $guiLineDxf "native-gui-line-roundtrip.dxf" -Force
           }
+          @(
+            "MouseTestStatus=$mouseResult",
+            "MouseTestDetail=$mouseDetail",
+            "NativeMouseQtPressCount=$mouseQtPressCount",
+            "NativeMouseQtReleaseCount=$mouseQtReleaseCount",
+            "NativeMouseEntityCounts=$mouseQtEntityCounts",
+            "DXFLinesBefore=$mouseDxfBefore",
+            "DXFLinesAfter=$mouseDxfAfter",
+            "Commit=$env:GITHUB_SHA"
+          ) | Set-Content "native-mouse-event-audit.txt" -Encoding UTF8
           @(
             "InstalledGUIRibbonTabsUIA=$uiaResult",
             "UIADetail=$uiaDetail",
@@ -1027,6 +1064,11 @@ jobs:
             "PhysicalKeyboardCommandSubmission=$keyboardResult",
             "PhysicalMouseDrawing=$mouseResult",
             "PhysicalMouseDrawingDetail=$mouseDetail",
+            "NativeMouseQtPressCount=$mouseQtPressCount",
+            "NativeMouseQtReleaseCount=$mouseQtReleaseCount",
+            "NativeMouseEntityCounts=$mouseQtEntityCounts",
+            "MouseDXFLineCountBefore=$mouseDxfBefore",
+            "MouseDXFLineCountAfter=$mouseDxfAfter",
             "NativeOffscreenCADGeometryAndDXFPersistence=$geometryGate"
           ) | Set-Content "native-gui-uia.txt" -Encoding UTF8
           @(
@@ -1183,6 +1225,7 @@ jobs:
             native-dxf-runtime-output.txt
             native-dxf-roundtrip.dxf
             native-gui-line-roundtrip.dxf
+            native-mouse-event-audit.txt
             native-commit-report.txt
             native-qt-dependencies.txt
             native-plugin-dependencies.txt

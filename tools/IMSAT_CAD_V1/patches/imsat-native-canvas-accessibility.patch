@@ -1,15 +1,51 @@
 diff --git a/src/gui/RGraphicsViewQt.cpp b/src/gui/RGraphicsViewQt.cpp
 --- a/src/gui/RGraphicsViewQt.cpp
 +++ b/src/gui/RGraphicsViewQt.cpp
-@@ -42,7 +42,11 @@ RGraphicsViewQt::RGraphicsViewQt(QWidget* parent, bool showFocus)
+@@ -21,7 +21,8 @@
+ #include <QGestureEvent>
+ #include <QPainter>
+ 
+ #include "RDocumentInterface.h"
++#include "RDocument.h"
+ #include "RGraphicsViewImage.h"
+ #include "RGraphicsViewQt.h"
+ #include "RMainWindow.h"
+@@ -42,7 +43,11 @@
        focusFrameWidget(NULL),
        gesturesEnabled(true),
        gotMouseButtonPress(false),
        imageView(NULL) {
- 
++
 +    // IMSAT CAD (GPLv3): expose the native drawing surface to Windows UIA.
 +    setObjectName("IMSATCADGraphicsCanvas");
 +    setAccessibleName("IMSAT CAD drawing canvas");
-+
+ 
      setFocusPolicy(Qt::WheelFocus);
      setMouseTracking(true);
+@@ -291,7 +296,11 @@
+     mousePressScreenPosition = e.getScreenPosition();
+     mousePressModelPosition = e.getModelPosition();
+     mouseClickTimer.start();
+     imageView->handleMousePressEvent(e);
++    // Diagnostic is enabled only on Windows acceptance runners.
++    if (qEnvironmentVariableIsSet("IMSATCAD_MOUSE_QA") && event->button()==Qt::LeftButton) {
++        qWarning() << "IMSATCAD_MOUSE_QA PRESS" << event->pos().x() << event->pos().y();
++    }
+     lastButtonState = event->buttons();
+     event->accept();
+ }
+@@ -343,7 +352,14 @@
+         e.setScreenPosition(mousePressScreenPosition);
+         e.setModelPosition(mousePressModelPosition);
+     }
+     imageView->handleMouseReleaseEvent(e);
++    if (qEnvironmentVariableIsSet("IMSATCAD_MOUSE_QA") && event->button()==Qt::LeftButton) {
++        RDocumentInterface* auditDi = imageView->getDocumentInterface();
++        int auditEntityCount = auditDi==NULL ? -1 : auditDi->getDocument().queryAllEntities().size();
++        QString auditFileName = auditDi==NULL ? QString() : auditDi->getDocument().getFileName();
++        qWarning() << "IMSATCAD_MOUSE_QA RELEASE" << event->pos().x() << event->pos().y()
++                   << "EntityCount" << auditEntityCount << "FileName" << auditFileName;
++    }
+     lastButtonState = event->buttons();
+     event->accept();
+ }
