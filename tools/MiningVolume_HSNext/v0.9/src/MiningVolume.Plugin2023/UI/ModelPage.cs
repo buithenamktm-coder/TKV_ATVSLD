@@ -43,9 +43,15 @@ namespace MiningVolume2023.UI
             BackColor = Color.White;
             Controls.Add(new Label { Text = "MÔ HÌNH TIN HIỆN TRẠNG / THIẾT KẾ", Dock = DockStyle.Top, Height = 32, Font = new Font("Arial", 11F, FontStyle.Bold) });
 
-            var top = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 36, WrapContents = false, Padding = new Padding(0, 2, 0, 2) };
-            top.Controls.Add(new Label { Text = "Mô hình:", AutoSize = true, Padding = new Padding(0, 7, 0, 0) });
-            _model = new ComboBox { Width = 130, DropDownStyle = ComboBoxStyle.DropDownList };
+            var top = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Top, Height = 38, WrapContents = false,
+                Padding = new Padding(4, 3, 4, 3)
+            };
+            top.Controls.Add(new Label { Text = "Mô hình:", AutoSize = true,
+                Padding = new Padding(0, 6, 0, 0) });
+            _model = new ComboBox { Width = 130,
+                DropDownStyle = ComboBoxStyle.DropDownList };
             _model.Items.AddRange(new object[] { "Hiện trạng", "Thiết kế" });
             _model.SelectedIndex = ProjectState.Current.ActiveRole == ModelRole.Existing ? 0 : 1;
             _model.SelectedIndexChanged += (s, e) =>
@@ -54,50 +60,40 @@ namespace MiningVolume2023.UI
                 RebuildRows();
             };
             top.Controls.Add(_model);
-            top.Controls.Add(Button("Loại điểm", (s, e) => DisableSelectedVertices()));
-            top.Controls.Add(Button("Loại đối tượng", (s, e) => DisableSelectedEntities()));
-            top.Controls.Add(Button("Khôi phục", (s, e) => RestoreSelected()));
-            top.Controls.Add(Button("Khôi phục tất cả", (s, e) => RestoreAll()));
-            top.Controls.Add(Button("Sửa Z", (s, e) => EditZ()));
-            top.Controls.Add(Button("Zoom tới", (s, e) => ZoomSelected()));
             Controls.Add(top);
-            top.BringToFront();
 
-            var second = new FlowLayoutPanel
-            {
-                Dock = DockStyle.Top,
-                Height = 122,
-                WrapContents = true,
-                Padding = new Padding(0, 2, 0, 2),
-                AutoScroll = false
-            };
-            _build = Button("TẠO / CẬP NHẬT TIN", async (s, e) => await BuildTinAsync());
-            _build.Width = 220;
+            // Advanced source-point editing and TIN building are not normal
+            // management tasks: they are intentionally absent from this tab.
+            _build = Button("Tạo TIN", async (s, e) => await BuildTinAsync());
             _toggleTin = Button("Ẩn TIN", (s, e) => ToggleTin());
-            _toggleTin.Width = 90;
-            _view3D = Button("VIEW TIN 3D", (s, e) => ViewTin3D());
-            _view3D.Width = 115;
-            second.Controls.Add(_build);
-            var deleteTin = Button("Xóa TIN đã tạo", (s, e) => DeleteCurrentTin());
-            deleteTin.Width = 140;
-            second.Controls.Add(deleteTin);
-            second.Controls.Add(_toggleTin);
-            second.Controls.Add(_view3D);
-            _meanZBuild = Button("TIN Z TRUNG BÌNH – THỬ", async (s,e) => await BuildMeanZPreviewAsync());
-            _meanZBuild.Width = 224;
-            _meanZCancel = Button("HỦY DỰNG TIN", (s,e) => { _meanZCts?.Cancel(); _buildCts?.Cancel(); });
-            _meanZCancel.Width = 118;
+            _meanZBuild = Button("TIN Z trung bình", async (s,e) =>
+                await BuildMeanZPreviewAsync());
+            _meanZCancel = Button("Hủy dựng TIN", (s,e) =>
+            {
+                _meanZCts?.Cancel(); _buildCts?.Cancel();
+            });
             _meanZCancel.Enabled = false;
-            second.Controls.Add(_meanZBuild);
-            second.Controls.Add(_meanZCancel);
-            _progress = new ProgressBar { Width = 150, Height = 24, Style = ProgressBarStyle.Marquee, Visible = false, MarqueeAnimationSpeed = 25 };
-            second.Controls.Add(_progress);
-            Controls.Add(second);
-            second.BringToFront();
+
+            var operations = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Top, Height = 39,
+                WrapContents = false, Padding = new Padding(4, 3, 4, 3)
+            };
+            _view3D = Button("Xem TIN", (s, e) => ViewTin3D());
+            _view3D.Width = 112; _view3D.AutoSize = false;
+            operations.Controls.Add(_view3D);
+            var deleteAll = Button("Xóa toàn bộ TIN", (s, e) => DeleteAllTins());
+            deleteAll.AutoSize = false; deleteAll.Width = 136;
+            operations.Controls.Add(deleteAll);
+            _progress = new ProgressBar { Width = 110, Height = 24,
+                Style = ProgressBarStyle.Marquee, Visible = false,
+                MarqueeAnimationSpeed = 25 };
+            operations.Controls.Add(_progress);
+            Controls.Add(operations);
 
             _info = new Label
             {
-                Dock = DockStyle.Bottom,
+                Dock = DockStyle.Fill,
                 Height = 82,
                 Text = "Chưa có dữ liệu.",
                 ForeColor = Color.DimGray,
@@ -120,8 +116,8 @@ namespace MiningVolume2023.UI
             _grid.Columns.Add(new DataGridViewCheckBoxColumn { Name = "Use", HeaderText = "Dùng" });
             foreach (var c in new[] { "Loại", "Layer", "Handle", "Đỉnh", "X", "Y", "Z" }) _grid.Columns.Add(c, c);
             _grid.CellValueNeeded += GridCellValueNeeded;
-            Controls.Add(_grid);
-            _grid.BringToFront();
+            // The detailed point table is retained internally for compatibility
+            // with diagnostics, but hidden from the normal two-button TIN view.
 
             ProjectState.Current.Changed += StateChanged;
             RebuildRows();
@@ -133,6 +129,7 @@ namespace MiningVolume2023.UI
             {
                 _meanZCts?.Cancel();
                 ProjectState.Current.Changed -= StateChanged;
+                _grid?.Dispose();
             }
             base.Dispose(disposing);
         }
@@ -346,6 +343,95 @@ namespace MiningVolume2023.UI
             if (row != null) CadViewService.ZoomToHandle(row.Entity.Handle);
         }
 
+        private void DeleteAllTins()
+        {
+            if (_busy) return;
+            var doc = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument;
+            if (doc == null)
+            {
+                MessageBox.Show(this, "Không có DWG đang hoạt động.",
+                    "NAMVECTA VOLUME", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            var state = ProjectState.Current;
+            var names = new[] { state.Existing.TinLayer, state.Design.TinLayer };
+            int cadFaces;
+            try
+            {
+                // A reopened DWG may contain hundreds of thousands of real
+                // TIN 3DFACEs even when session.Tin == null and the counters
+                // have not yet been reconstructed. Inspect its CAD layers.
+                using (doc.LockDocument())
+                {
+                    var inspection = TinCadRenderer.InspectLayers(doc.Database, names);
+                    cadFaces = inspection[names[0]].Faces + inspection[names[1]].Faces;
+                    if (inspection[names[0]].Unexpected > 0 ||
+                        inspection[names[1]].Unexpected > 0)
+                    {
+                        MessageBox.Show(this,
+                            "Layer TIN chứa đối tượng không phải 3DFACE. Không xóa tự động " +
+                            "để bảo vệ dữ liệu CAD nguồn. Kiểm tra các layer:\r\n" +
+                            string.Join(" / ", names),
+                            "NAMVECTA VOLUME", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        return;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, "Không kiểm tra được TIN trong DWG:\r\n" +
+                    ex.Message, "NAMVECTA VOLUME",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+            bool hasSession = state.Existing.Tin != null ||
+                state.Existing.TinCadFaceCount > 0 || state.Design.Tin != null ||
+                state.Design.TinCadFaceCount > 0;
+            if (cadFaces == 0 && !hasSession)
+            {
+                MessageBox.Show(this,
+                    "Không tìm thấy 3DFACE TIN trên hai layer của NAMVECTA:\r\n" +
+                    string.Join(" / ", names) +
+                    "\r\nNếu TIN cũ nằm trên layer khác, hãy kiểm tra tên layer trước khi xóa.",
+                    "NAMVECTA VOLUME", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            if (MessageBox.Show(this,
+                "Xóa toàn bộ TIN hiện trạng và TIN thiết kế trong DWG này?\r\n" +
+                "Phát hiện " + cadFaces.ToString("n0") + " mặt TIN trên layer đầu ra.\r\n" +
+                "Mọi kết quả mặt cắt và khối lượng phụ thuộc sẽ mất hiệu lực.\r\n" +
+                "Điểm khảo sát, đường đồng mức, đối tượng CAD nguồn và " +
+                "hồ sơ Project sẽ được giữ nguyên.",
+                "Xác nhận xóa toàn bộ TIN",
+                MessageBoxButtons.YesNo, MessageBoxIcon.Warning,
+                MessageBoxDefaultButton.Button2) != DialogResult.Yes)
+                return;
+            if (!ReferenceEquals(doc,
+                Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument))
+                return;
+            try
+            {
+                if (Tin3DViewService.IsActive) Tin3DViewService.Stop();
+                // Physical DWG inspection + atomic erase + snapshot invalidation.
+                // Do not branch on the session counters after a drawing reopen.
+                int removed = SurfaceWorkflowService.DeleteAllTinsStoredInCurrentDrawing();
+                _info.Text = "Đã xóa " + removed.ToString("n0") +
+                    " mặt TIN trong DWG. Đã cập nhật trạng thái Project; nguồn giữ nguyên.";
+                RebuildRows();
+            }
+            catch (OperationCanceledException)
+            {
+                _info.Text = "Đã hủy. Chưa xóa TIN trong DWG.";
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this,
+                    "Không thể xóa toàn bộ TIN an toàn. Không tự động xóa dữ liệu khảo sát.\r\n" +
+                    ex.Message, "NAMVECTA VOLUME",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
         private void DeleteCurrentTin()
         {
             if (_busy) return;
@@ -354,13 +440,13 @@ namespace MiningVolume2023.UI
             var session = state.Get(role);
             if (session.Tin == null && session.TinCadFaceCount == 0) {
                 MessageBox.Show(this, "Mô hình TIN đang chọn chưa được tạo.",
-                    "IMSAT VOLUME", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    "NAMVECTA VOLUME", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
             var document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument;
             if (document == null) {
                 MessageBox.Show(this, "Không có bản vẽ AutoCAD đang hoạt động.",
-                    "IMSAT VOLUME", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    "NAMVECTA VOLUME", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
             string modelName = role == ModelRole.Existing ? "hiện trạng" : "thiết kế";
@@ -386,7 +472,7 @@ namespace MiningVolume2023.UI
             }
             catch (Exception ex) {
                 MessageBox.Show(this, "Không thể xóa TIN. Mô hình được giữ lại nếu thao tác CAD thất bại.\r\n" + ex.Message,
-                    "IMSAT VOLUME", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    "NAMVECTA VOLUME", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -415,7 +501,7 @@ namespace MiningVolume2023.UI
                     $"TIN {ProjectState.Current.Get(role).Name} đã tạo thành công.\r\n\r\n" +
                     $"Layer TIN: {ProjectState.Current.Get(role).TinLayer}\r\n" +
                     build.Summary,
-                    "IMSAT VOLUME - TIN",
+                    "NAMVECTA VOLUME - TIN",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Information);
             }
@@ -447,7 +533,7 @@ namespace MiningVolume2023.UI
                 .DocumentManager.MdiActiveDocument;
             if(startingDocument==null)
             {
-                MessageBox.Show(this,"Chưa mở bản vẽ AutoCAD.","IMSAT VOLUME",
+                MessageBox.Show(this,"Chưa mở bản vẽ AutoCAD.","NAMVECTA VOLUME",
                     MessageBoxButtons.OK,MessageBoxIcon.Warning);
                 return;
             }
@@ -457,7 +543,7 @@ namespace MiningVolume2023.UI
                 "Đường breakline KHÔNG được giữ như cạnh bắt buộc. "+
                 "Chỉ vẽ trên layer riêng TEST_ONLY, không thay TIN hiện trạng/thiết kế chính thức.\r\n\r\n"+
                 "KẾT QUẢ KHÔNG DÙNG TÍNH KHỐI LƯỢNG. Tiếp tục?",
-                "IMSAT VOLUME – TIN thử nghiệm",
+                "NAMVECTA VOLUME – TIN thử nghiệm",
                 MessageBoxButtons.YesNo,MessageBoxIcon.Warning,
                 MessageBoxDefaultButton.Button2)!=DialogResult.Yes) return;
 
@@ -500,7 +586,7 @@ namespace MiningVolume2023.UI
                     {
                         Filter="CSV phân tích trùng XY (*.csv)|*.csv",
                         DefaultExt="csv",AddExtension=true,OverwritePrompt=true,
-                        FileName="IMSAT_TIN_Z_TB_"+(role==ModelRole.Existing?"HT":"TK")+
+                        FileName="NAMVECTA_TIN_Z_TB_"+(role==ModelRole.Existing?"HT":"TK")+
                             "_THU_"+DateTime.Now.ToString("yyyyMMdd_HHmm")+".csv"
                     })
                         if(dlg.ShowDialog(this)==DialogResult.OK)
@@ -540,7 +626,7 @@ namespace MiningVolume2023.UI
             catch(OperationCanceledException)
             {
                 MessageBox.Show(this,"Đã hủy dựng TIN Z trung bình. Không thay TIN chính thức.",
-                    "IMSAT VOLUME",MessageBoxButtons.OK,MessageBoxIcon.Information);
+                    "NAMVECTA VOLUME",MessageBoxButtons.OK,MessageBoxIcon.Information);
             }
             catch(Exception ex)
             {
@@ -577,9 +663,15 @@ namespace MiningVolume2023.UI
                 if (Tin3DViewService.IsActive)
                     Tin3DViewService.Stop();
                 else
+                {
+                    if (!SurfaceWorkflowService.TryRestoreTinFromCad(CurrentRole))
+                        throw new InvalidOperationException(
+                            "Chưa tìm thấy TIN 3DFACE trên layer " + CurrentSession.TinLayer +
+                            ". Kiểm tra tên layer TIN trong bản vẽ.");
                     Tin3DViewService.Start(CurrentRole);
+                }
                 _view3D.Text = Tin3DViewService.IsActive
-                    ? "Trở về 2D" : "View TIN 3D";
+                    ? "Trở về 2D" : "Xem TIN";
                 _info.Text = Tin3DViewService.IsActive
                     ? "Đang xem TIN 3D khung dây, không tự chạy 3DORBIT. Bấm TRỞ VỀ 2D để khôi phục."
                     : "Đã khôi phục góc nhìn trước khi xem TIN 3D.";
@@ -605,8 +697,10 @@ namespace MiningVolume2023.UI
             _toggleTin.Enabled = !busy && CurrentSession.Tin != null;
             _meanZBuild.Enabled = !busy && CurrentSession.Source != null && CurrentSession.Source.Entities.Count > 0;
             _meanZCancel.Enabled = busy && (_meanZCts != null || _buildCts != null);
-            _view3D.Enabled = !busy && (Tin3DViewService.IsActive || CurrentSession.IsTinCurrent);
-            _view3D.Text = Tin3DViewService.IsActive ? "Trở về 2D" : "View TIN 3D";
+            // A reopened DWG has real CAD faces even before the calculation
+            // model has been reconstructed; allow View to import them on demand.
+            _view3D.Enabled = !busy;
+            _view3D.Text = Tin3DViewService.IsActive ? "Trở về 2D" : "Xem TIN";
             _model.Enabled = !busy;
             _grid.Enabled = !busy;
             _progress.Visible = busy;
@@ -630,7 +724,7 @@ namespace MiningVolume2023.UI
             Width = 330;
             Height = 150;
             Controls.Add(new Label { Text = prompt, Left = 12, Top = 15, Width = 105 });
-            _value = new NumericUpDown { Left = 120, Top = 12, Width = 180, DecimalPlaces = 3, Minimum = -1000000, Maximum = 1000000, Value = Clamp(current) };
+            _value = new NoWheelNumericUpDown { Left = 120, Top = 12, Width = 180, DecimalPlaces = 3, Minimum = -1000000, Maximum = 1000000, Value = Clamp(current) };
             Controls.Add(_value);
             var ok = new Button { Text = "OK", DialogResult = DialogResult.OK, Left = 140, Top = 55, Width = 75 };
             var cancel = new Button { Text = "Hủy", DialogResult = DialogResult.Cancel, Left = 225, Top = 55, Width = 75 };

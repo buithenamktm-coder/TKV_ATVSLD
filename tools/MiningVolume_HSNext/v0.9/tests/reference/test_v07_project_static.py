@@ -65,10 +65,10 @@ def test_restore_reloads_source_then_reapplies_user_edits():
     assert 'entity.Vertices[ve.Index].OverrideZ(ve.Z)' in s
 
 
-def test_restore_can_rebuild_tin_profiles_and_volume():
+def test_restore_reuses_stored_tin_profiles_and_volume():
     s = read('src/MiningVolume.Plugin2023/Services/ProjectPersistenceService.cs')
-    assert 'SurfaceWorkflowService.BuildCoreDetailed(role)' in s
-    assert 'SurfaceWorkflowService.DrawTin(role, build)' in s
+    assert 'SurfaceWorkflowService.TryRestoreTinFromCad(role)' in s
+    assert 'SurfaceWorkflowService.DrawTin(role, build)' not in s
     assert 'SectionWorkflowService.BuildProfiles()' in s
     assert 'VolumeWorkflowService.CalculateCore' in s
 
@@ -99,11 +99,13 @@ def test_project_autoload_on_palette_open_once_per_drawing():
     assert 'ProjectPersistenceService.LoadCurrentProject(true)' in s
 
 
-def test_ribbon_has_project_panel():
+def test_ribbon_exposes_only_toggle_and_software_information():
     s = read('src/MiningVolume.Plugin2023/RibbonBuilder.cs')
-    assert 'AddPanel(tab, "Dự án"' in s
-    assert 'EntryPoint.Open(AppPage.Project)' in s
-    assert 'EntryPoint.SaveProject();' in s
+    assert 'AddPanel(tab, "NAMVECTA VOLUME"' in s
+    assert 'Btn("Ẩn / hiện phần mềm", RibbonAction.TogglePalette)' in s
+    assert 'Btn("Thông tin phần mềm", RibbonAction.About)' in s
+    assert 'EntryPoint.Open(AppPage.License)' in s
+    assert 'Btn("Lưu dự án", RibbonAction.SaveProject)' not in s
 
 
 def test_project_scale_is_persisted_but_report_identity_is_fixed():

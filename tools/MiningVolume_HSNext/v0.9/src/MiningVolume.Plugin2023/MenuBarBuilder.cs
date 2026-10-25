@@ -6,8 +6,8 @@ namespace MiningVolume2023
     /// <summary>Classic AutoCAD menu, refreshed once per add-in load.</summary>
     internal static class MenuBarBuilder
     {
-        private const string MenuName = "IMSAT VOLUME";
-        private const string LegacyMenuName = "MINING VOLUME";
+        private const string MenuName = "NAMVECTA VOLUME";
+        private const string LegacyMenuName = "IMSAT VOLUME";
         private static bool _attempted;
 
         // ActiveX accepts control characters, as in Autodesk's AddMenuItem
@@ -52,16 +52,8 @@ namespace MiningVolume2023
                     menu.Item(i).Delete();
 
                 int p = 0;
-                menu.AddMenuItem(p++, "Hiện / Ẩn IMSAT VOLUME", CommandMacro("TKL"));
-                menu.AddSeparator(p++);
-                menu.AddMenuItem(p++, "Dự án", CommandMacro("MV_PROJECT"));
-                menu.AddMenuItem(p++, "Dữ liệu đầu vào", CommandMacro("MV_DATA"));
-                menu.AddMenuItem(p++, "TIN / Mô hình", CommandMacro("MV_MODEL"));
-                menu.AddMenuItem(p++, "Mặt cắt", CommandMacro("MV_SECTION"));
-                menu.AddMenuItem(p++, "Tính khối lượng", CommandMacro("MV_VOLUME"));
-                menu.AddMenuItem(p++, "Xuất Excel", CommandMacro("MV_EXPORT"));
-                menu.AddSeparator(p++);
-                menu.AddMenuItem(p++, "Thông tin IMSAT VOLUME", CommandMacro("MVABOUT"));
+                menu.AddMenuItem(p++, "Ẩn / hiện phần mềm", CommandMacro("TKL"));
+                menu.AddMenuItem(p++, "Thông tin phần mềm", CommandMacro("MVABOUT"));
 
                 if (!Convert.ToBoolean(menu.OnMenuBar))
                     menu.InsertInMenuBar(acad.MenuBar.Count + 1);
@@ -74,7 +66,7 @@ namespace MiningVolume2023
                 // Leave retry enabled for the next startup idle event.
                 // Report failure instead of silently leaving an inert menu.
                 doc.Editor.WriteMessage(
-                    "\nIMSAT VOLUME: chưa cập nhật được Menu Bar: " + ex.Message);
+                    "\nNAMVECTA VOLUME: chưa cập nhật được Menu Bar: " + ex.Message);
             }
         }
     }

@@ -36,7 +36,7 @@ def test_section_direction_is_perpendicular_to_two_selected_cad_points():
     page = read("src/MiningVolume.Plugin2023/UI/SectionPage.cs")
     select = read("src/MiningVolume.Plugin2023/Services/SelectionService.cs")
     assert "public static Vec2 PerpendicularToSelectedDirection(Vec2 selected)" in builder
-    assert "new Vec2(-selected.Y / length, selected.X / length)" in builder
+    assert "new Vec2(selected.Y / length, -selected.X / length)" in builder
     assert "SectionSystemBuilder.PerpendicularToSelectedDirection(r.Vector)" in page
     assert "SectionDirection = sectionDirection;" in page
     assert "Hướng MC (vuông góc)" in page
@@ -70,5 +70,5 @@ def test_high_contrast_live_palette_and_correct_seam_ore_label():
     assert "grid.DefaultCellStyle.SelectionForeColor = Color.White" in theme
     assert "private readonly bool _dark;" in theme
     assert "Color.FromArgb(212, 230, 248)" in theme
-    assert "Text = \"HỆ MẶT CẮT\"" in section
+    assert 'Text = _quickOnly ? "VẼ NHANH MẶT CẮT" : "HỆ MẶT CẮT"' in section
     assert "Font = new Font(\"Arial\", 9.5F, FontStyle.Bold)" in section

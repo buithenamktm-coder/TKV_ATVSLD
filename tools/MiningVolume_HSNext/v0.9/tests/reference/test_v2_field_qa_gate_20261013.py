@@ -61,9 +61,9 @@ def test_approved_ui_uses_sentence_case_no_white_menu_border_or_boxed_header():
     assert "header.Paint += (sender, args)" in palette
     assert 'const string title = "NAMVECTA VOLUME";' in palette
     assert "args.Graphics.DrawString(title, big, white, left, 12)" in palette
-    assert "top.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 160F))" in section
-    assert "_parameterLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 160F))" in section
-    assert "i < 2 ? 54F : 35F" in section
+    assert "top.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 112F))" in section
+    assert "compact ? 102F : 112F" in section
+    assert "i < 2 ? 36F : 32F" in section
 
 
 def test_quick_section_and_custom_ratio_do_not_corrupt_volume_stations():
@@ -95,7 +95,7 @@ def test_excel_hint_is_gone_and_user_brand_name_is_imsat_volume():
     title = src("MiningVolume.Plugin2023/UI/MainPaletteControl.cs")
     entry = src("MiningVolume.Plugin2023/EntryPoint.cs")
     assert '"NAMVECTA VOLUME"' in title
-    assert 'PaletteSet("IMSAT VOLUME"' in entry
+    assert 'PaletteSet("NAMVECTA VOLUME"' in entry
 
 
 
@@ -156,15 +156,15 @@ def test_field_qa_excel_wrapped_headers_have_enough_height_without_row_insert():
     assert "int firstDataRow = titleRows + noteRows +" in writer
 
 
-def test_field_qa_layer_buttons_have_dedicated_full_width_row():
+def test_field_qa_layer_buttons_are_compact_and_direct():
     data = src("MiningVolume.Plugin2023/UI/DataPage.cs")
-    assert "bool compact = width < 820;" in data
-    assert "_sourceBox.Height = 278;" in data
-    assert "new RowStyle(SizeType.Absolute, 46)" in data
-    assert "_sourceTable.Controls.Add(_sourceLoad[0],0,1);" in data
-    assert "_sourceTable.Controls.Add(_sourceChoose[0],1,1);" in data
-    assert "_sourceTable.Controls.Add(_sourceLoad[1],0,3);" in data
-    assert "_sourceTable.Controls.Add(_sourceChoose[1],1,3);" in data
+    assert "bool compact = width < 720;" in data
+    assert "_sourceBox.Height = 182;" in data
+    assert "new RowStyle(SizeType.Absolute, 38)" in data
+    assert "_sourceTable.Controls.Add(_sourceLoad[0], 0, 1);" in data
+    assert "_sourceTable.Controls.Add(_sourceChoose[0], 1, 1);" in data
+    assert "_sourceTable.Controls.Add(_sourceLoad[1], 0, 3);" in data
+    assert "_sourceTable.Controls.Add(_sourceChoose[1], 1, 3);" in data
     assert "new ColumnStyle(SizeType.Absolute, 92)" not in data
     assert "new ColumnStyle(SizeType.Absolute, 112)" not in data
 

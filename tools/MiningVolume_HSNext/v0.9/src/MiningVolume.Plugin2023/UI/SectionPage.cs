@@ -62,17 +62,17 @@ namespace MiningVolume2023.UI
                 BackColor = Color.White
             };
             root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 38F));   // title
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 440F));  // scrollable parameters
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 58F));   // spaced primary actions
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 110F));   // edit tools + CAD profile update
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 46F));   // multi-line status
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));   // title
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 370F));  // scrollable parameters
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 42F));   // spaced primary actions
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 80F));   // edit tools + CAD profile update
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 38F));   // multi-line status
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));   // grid
             Controls.Add(root);
 
             var title = new Label
             {
-                Text = "HỆ MẶT CẮT",
+                Text = _quickOnly ? "VẼ NHANH MẶT CẮT" : "HỆ MẶT CẮT",
                 Dock = DockStyle.Fill,
                 Font = new Font("Arial", 12F, FontStyle.Bold),
                 ForeColor = UiTheme.TextStrong,
@@ -86,16 +86,16 @@ namespace MiningVolume2023.UI
                 Dock = DockStyle.Fill,
                 ColumnCount = 3,
                 RowCount = 11,
-                Padding = new Padding(10, 8, 10, 8),
-                Margin = new Padding(0, 4, 0, 6),
+                Padding = new Padding(6, 4, 6, 4),
+                Margin = new Padding(0, 2, 0, 4),
                 AutoScroll = true, // compact 13-row parameters stay reachable in a 620px palette
                 BackColor = Color.FromArgb(246, 250, 255)
             };
             top.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 192F));
             top.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-            top.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 160F));
+            top.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 112F));
             for (int i = 0; i < 11; i++)
-                top.RowStyles.Add(new RowStyle(SizeType.Absolute, i < 2 ? 54F : 35F));
+                top.RowStyles.Add(new RowStyle(SizeType.Absolute, i < 2 ? 36F : 32F));
 
             _boundary = new Label
             {
@@ -150,43 +150,25 @@ namespace MiningVolume2023.UI
             root.Controls.Add(top, 0, 1);
 
             // Primary workflow actions must always remain visible.
-            var primary = new TableLayoutPanel
+            var primary = new FlowLayoutPanel
             {
-                Dock = DockStyle.Fill,
-                ColumnCount = 3,
-                RowCount = 1,
-                Padding = new Padding(10, 7, 10, 7),
-                Margin = Padding.Empty
+                Dock = DockStyle.Fill, WrapContents = true,
+                Padding = new Padding(6, 2, 6, 2), Margin = Padding.Empty
             };
-            primary.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.333F));
-            primary.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.333F));
-            primary.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.334F));
             var preview = Button("Xem trước tuyến trên bình đồ", Preview);
             preview.Name = "btnPreviewSections";
-            preview.Dock = DockStyle.Fill;
-            preview.AutoSize = false;
+            preview.AutoSize = false; preview.Width = 210;
             preview.Font = new Font("Arial", 9F, FontStyle.Bold);
             var draw = Button("Xuất / Vẽ mặt cắt", BuildProfiles);
             draw.Name = "btnDrawSections";
-            draw.Dock = DockStyle.Fill;
-            draw.AutoSize = false;
+            draw.AutoSize = false; draw.Width = 145;
             draw.Font = new Font("Arial", 9F, FontStyle.Bold);
             var quick = Button("Vẽ mặt cắt nhanh", DrawQuickSections);
             quick.Name = "btnQuickSections";
-            quick.Dock = DockStyle.Fill;
-            quick.AutoSize = false;
-            primary.Controls.Add(preview, 0, 0);
-            primary.Controls.Add(draw, 1, 0);
-            if (_quickOnly)
-                primary.Controls.Add(quick, 2, 0);
-            else
-            {
-                // The quick section belongs to independent group 4, not volume calculation.
-                primary.ColumnStyles[0].Width = 50F;
-                primary.ColumnStyles[1].Width = 50F;
-                primary.ColumnStyles[2].Width = 0F;
-                primary.ColumnStyles[2].SizeType = SizeType.Percent;
-            }
+            quick.AutoSize = false; quick.Width = 146;
+            if (_quickOnly) primary.Controls.Add(quick);
+            else { primary.Controls.Add(preview); primary.Controls.Add(draw); }
+
             root.Controls.Add(primary, 0, 2);
 
             var tools = new FlowLayoutPanel
@@ -195,23 +177,27 @@ namespace MiningVolume2023.UI
                 FlowDirection = FlowDirection.LeftToRight,
                 WrapContents = true,
                 AutoScroll = true,
-                Padding = new Padding(10, 9, 10, 9),
+                Padding = new Padding(6, 4, 6, 4),
                 Margin = Padding.Empty
             };
-            tools.Controls.Add(Button("Thêm tuyến", AddLine));
-            tools.Controls.Add(Button("Dịch tuyến", MoveLine));
-            tools.Controls.Add(Button("Xóa tuyến", DeleteLine));
-            tools.Controls.Add(Button("Xóa preview", (s, e) => SectionWorkflowService.ClearPreview()));
-            var updateEdited = Button("Cập nhật mặt cắt", UpdateEditedProfiles);
-            updateEdited.Name = "btnUpdateEditedSections";
-            updateEdited.Font = new Font("Arial", 9F, FontStyle.Bold);
-            updateEdited.MinimumSize = new Size(175, 36);
-            tools.Controls.Add(updateEdited);
-            if (!_quickOnly && _navigate != null)
+            if (!_quickOnly)
             {
-                tools.Controls.Add(Button("Tính khối lượng", (sender, args) => _navigate(AppPage.Volume)));
-                tools.Controls.Add(Button("Vỉa than/quặng", (sender, args) => _navigate(AppPage.Mineral)));
-                tools.Controls.Add(Button("Xuất CAD / Excel", (sender, args) => _navigate(AppPage.Export)));
+                // Quick sections are independent drawings, not the official
+                // station system used for earthwork. Never expose official
+                // station edits or "Tính toán khối lượng" in the Quick tab.
+                tools.Controls.Add(Button("Thêm tuyến", AddLine));
+                tools.Controls.Add(Button("Dịch tuyến", MoveLine));
+                tools.Controls.Add(Button("Xóa tuyến", DeleteLine));
+                tools.Controls.Add(Button("Xóa toàn bộ tuyến cũ", ClearOldStationLines));
+                tools.Controls.Add(Button("Xóa preview", (s, e) => SectionWorkflowService.ClearPreview()));
+                var updateEdited = Button("Tính toán khối lượng trên mặt cắt", UpdateEditedProfiles);
+                updateEdited.Name = "btnUpdateEditedSections";
+                updateEdited.Font = new Font("Arial", 9F, FontStyle.Bold);
+                updateEdited.AutoSize = false;
+                updateEdited.Width = 229;
+                tools.Controls.Add(updateEdited);
+                if (_navigate != null)
+                    tools.Controls.Add(Button("Xuất CAD / Excel", (sender, args) => _navigate(AppPage.Export)));
             }
             root.Controls.Add(tools, 0, 3);
 
@@ -265,7 +251,7 @@ namespace MiningVolume2023.UI
                 title.Text = "Vẽ nhanh mặt cắt";
                 preview.Visible = false;
                 draw.Visible = false;
-                primary.SetColumnSpan(quick, 3);
+                quick.Visible = true;
                 tools.Visible = false;
                 _grid.Visible = false;
                 _rootLayout.RowStyles[1].Height = 155F;
@@ -288,13 +274,19 @@ namespace MiningVolume2023.UI
         private void AdjustParameterHeightToAvailableSpace()
         {
             if (_rootLayout == null) return;
-            if (_quickOnly) { _rootLayout.RowStyles[1].Height = 155F; return; }
+            if (_quickOnly)
+            {
+                _rootLayout.RowStyles[1].Height = 140F;
+                _rootLayout.RowStyles[3].Height = 0F;
+                return;
+            }
             // Reserve usable space for the table of section results even on
             // 620px Windows palettes; the parameter panel scrolls internally.
             int visibleHeight = Math.Max(500, ClientSize.Height);
-            int reserved = 38 + 58 + 110 + 46 + Math.Max(105, visibleHeight / 5);
-            float maxParameters = Math.Max(210, visibleHeight - reserved);
-            float preferred = 440F;
+            int reserved = 34 + (_compactParameters ? 72 : 42) +
+                (_compactParameters ? 138 : 80) + 38 + Math.Max(105, visibleHeight / 5);
+            float maxParameters = Math.Max(185, visibleHeight - reserved);
+            float preferred = 370F;
             _rootLayout.RowStyles[1].Height = Math.Min(preferred, maxParameters);
         }
 
@@ -303,53 +295,37 @@ namespace MiningVolume2023.UI
             bool compact = ClientSize.Width < 560;
             if (_compactParameters == compact) return;
             _compactParameters = compact;
+            if (!_quickOnly)
+            {
+                _rootLayout.RowStyles[2].Height = compact ? 72F : 42F;
+                _rootLayout.RowStyles[3].Height = compact ? 138F : 80F;
+            }
             _parameterLayout.SuspendLayout();
             try
             {
-                // Reparent the SAME input controls: do not discard user values.
                 _parameterLayout.Controls.Clear();
                 _parameterLayout.RowStyles.Clear();
                 _parameterLayout.ColumnStyles.Clear();
-                _parameterLayout.ColumnCount = compact ? 2 : 3;
-                _parameterLayout.RowCount = compact ? 13 : 11;
-                if (compact)
-                {
-                    _parameterLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 174F));
-                    _parameterLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-                    for (int k = 0; k < 13; k++)
-                        _parameterLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, k < 4 ? 48F : 35F));
-                }
-                else
-                {
-                    _parameterLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 192F));
-                    _parameterLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-                    _parameterLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 160F));
-                    for (int k = 0; k < 11; k++)
-                        _parameterLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, k < 2 ? 54F : 35F));
-                }
+                _parameterLayout.ColumnCount = 3;
+                _parameterLayout.RowCount = 11;
+                _parameterLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,
+                    compact ? 125F : 182F));
+                _parameterLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+                _parameterLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,
+                    compact ? 102F : 112F));
+                for (int k = 0; k < 11; k++)
+                    _parameterLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 32F));
                 for (int i = 0; i < 11; i++)
                 {
-                    int row = compact ? i < 2 ? 2 * i : i + 2 : i;
-                    _parameterLayout.Controls.Add(_parameterLabels[i], 0, row);
-                    _parameterLayout.Controls.Add(_parameterValues[i], 1, row);
-                    if (compact)
-                    {
-                        if (i < 2)
-                        {
-                            var choose = _parameterActions[i];
-                            choose.Dock = DockStyle.Fill;
-                            _parameterLayout.Controls.Add(choose, 0, row + 1);
-                            _parameterLayout.SetColumnSpan(choose, 2);
-                        }
-                    }
-                    else
-                    {
-                        _parameterActions[i].Dock = DockStyle.Fill;
-                        _parameterLayout.SetColumnSpan(_parameterActions[i], 1);
-                        _parameterLayout.Controls.Add(_parameterActions[i], 2, row);
-                    }
+                    _parameterLayout.Controls.Add(_parameterLabels[i], 0, i);
+                    _parameterLayout.Controls.Add(_parameterValues[i], 1, i);
+                    var action = _parameterActions[i];
+                    action.Dock = DockStyle.None;
+                    action.Width = compact ? 98 : 108;
+                    action.Height = 28;
+                    action.Anchor = AnchorStyles.Left;
+                    _parameterLayout.Controls.Add(action, 2, i);
                 }
-                // Height is bounded by available palette space below.
             }
             finally { _parameterLayout.ResumeLayout(true); }
         }
@@ -362,7 +338,7 @@ namespace MiningVolume2023.UI
 
         private static NumericUpDown Num(decimal v, decimal min, decimal max)
         {
-            var n = new NumericUpDown
+            var n = new NoWheelNumericUpDown
             {
                 Minimum = min,
                 Maximum = max,
@@ -373,7 +349,7 @@ namespace MiningVolume2023.UI
             n.Value = Math.Max(min, Math.Min(max, v));
             return n;
         }
-        private static Button Button(string t, EventHandler h) { var b = new Button { Text = t, AutoSize = true, Height = 38, Margin = new Padding(6, 4, 6, 4) }; b.Click += h; return b; }
+        private static Button Button(string t, EventHandler h) { var b = new Button { Text = t, AutoSize = true, Height = 28, MinimumSize = new Size(0, 28), Margin = new Padding(2, 2, 2, 2) }; b.Click += h; return b; }
         private static void Add(TableLayoutPanel p, int r, string label, Control c, Control b) { p.Controls.Add(new Label { Text = label, Dock = DockStyle.Fill, AutoEllipsis = true,
                 Font = new Font("Arial", 9.5F, FontStyle.Bold), ForeColor = UiTheme.Text,
                 TextAlign = ContentAlignment.MiddleLeft }, 0, r); p.Controls.Add(c, 1, r); p.Controls.Add(b, 2, r); }
@@ -443,6 +419,28 @@ namespace MiningVolume2023.UI
                 RefreshGrid();
             }
             catch (Exception ex) { MessageBox.Show(ex.Message, "Dịch tuyến", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
+        }
+
+        private void ClearOldStationLines(object sender, EventArgs e)
+        {
+            if (MessageBox.Show(
+                "Xóa tất cả tuyến mặt cắt cũ trên bình đồ và danh sách tuyến đã tạo?\r\n" +
+                "Các kết quả mặt cắt và khối lượng sẽ mất hiệu lực.\r\n" +
+                "TIN, đường đồng mức, tuyến CAD nguồn và các mặt cắt đã xuất được giữ nguyên.",
+                "Xác nhận xóa toàn bộ tuyến cũ", MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.Yes)
+                return;
+            try
+            {
+                SectionWorkflowService.ClearAllStationLines();
+                RefreshGrid();
+                _status.Text = "Đã xóa toàn bộ tuyến mặt cắt cũ trên bình đồ; giữ nguyên dữ liệu CAD nguồn.";
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.Message, "Không xóa được tuyến cũ",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
 
         private void DeleteLine(object s, EventArgs e)
@@ -745,7 +743,7 @@ namespace MiningVolume2023.UI
                     throw new InvalidOperationException("Hãy xuất/vẽ hệ mặt cắt trước khi hiệu chỉnh.");
                 if (Math.Abs(state.FromLevel - state.ToLevel) < 1e-9)
                     throw new InvalidOperationException("Hãy thiết lập 'Tính từ mức' và 'Đến mức' trước khi cập nhật khối lượng.");
-                if (button != null) button.Text = "Hủy cập nhật mặt cắt";
+                if (button != null) button.Text = "Hủy tính mặt cắt";
                 UseWaitCursor = true;
                 SectionWorkflowService.EnsureProfileInputsReady();
                 var oldProfiles = state.SectionProfiles.ToArray();
@@ -789,7 +787,7 @@ namespace MiningVolume2023.UI
                 state.VolumeCalculatedUtc = DateTime.UtcNow;
                 state.VolumeCalculationSeconds = watch.Elapsed.TotalSeconds;
                 doc.Editor.Regen();
-                _status.Text = "Đã cập nhật " + edited.Count.ToString("n0") +
+                _status.Text = "Đã tính khối lượng trên " + edited.Count.ToString("n0") +
                     " mặt cắt và tính lại khối lượng: đào " + volume.TotalCutVolume.ToString("n2") +
                     " m³; đắp " + volume.TotalFillVolume.ToString("n2") + " m³.";
                 RefreshGrid();

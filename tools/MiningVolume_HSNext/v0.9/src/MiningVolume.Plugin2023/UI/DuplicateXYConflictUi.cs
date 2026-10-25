@@ -60,7 +60,7 @@ namespace MiningVolume2023.UI
             _requestBuildPreview=requestBuildPreview;
             _document=CadApplication.DocumentManager.MdiActiveDocument;
             _source=ProjectState.Current.Get(role).Source; _revision=_source.Revision;
-            Text="IMSAT VOLUME — Điểm trùng tọa độ — "+ProjectState.Current.Get(role).Name+
+            Text="NAMVECTA VOLUME — Điểm trùng tọa độ — "+ProjectState.Current.Get(role).Name+
                 (meanPreview?" — TIN thử (không tính khối lượng)":" — TIN chính thức");
             foreach(var entity in _source.Entities) _entityById[entity.Id]=entity;
             Font=new Font("Arial",9F); Size=new Size(1220,660); MinimumSize=new Size(800,460);

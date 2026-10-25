@@ -17,8 +17,8 @@ def test_three_step_navigation_keeps_advanced_commands():
     ui = source("UI/MainPaletteControl.cs")
     assert "_groups = { AppPage.Model, AppPage.Volume, AppPage.Export }" in ui
     assert '"1  Dữ liệu", "2  Tính toán", "3  Kết quả"' in ui
-    assert "AppPage.QuickSection: targetGroup = AppPage.Volume" in ui
-    assert "AppPage.Project: targetGroup = AppPage.Model" in ui
+    assert "AppPage.QuickSection: targetGroup = AppPage.Model" in ui
+    assert "case AppPage.Project:" in ui
     assert "AppPage.License: targetGroup = AppPage.Export" in ui
     assert "imsat_logo_64.png" not in ui
 
@@ -52,3 +52,44 @@ def test_workbook_defaults_compact_but_formula_dependency_retained():
     assert "BandSum" in export
     assert 'AddCheck(flow, "Tổng hợp toàn khu vực", true)' in ui
     assert "NAMVECTA_VOLUME_KhoiLuong_" in ui
+
+def test_project_restore_user_messages_use_namvecta_brand():
+    persistence = source("Services/ProjectPersistenceService.cs")
+    assert "Bản vẽ chưa có Project NAMVECTA VOLUME." in persistence
+    assert "Project IMSAT VOLUME" not in persistence
+
+def test_remaining_user_facing_runtime_strings_use_namvecta_brand():
+    cad_table = source("Services/CadVolumeTableService.cs")
+    mean_z = source("Services/MeanZPreviewWorkflowService.cs")
+    mineral_table = source("Services/MineralCadTableService.cs")
+    mineral_section = source("Services/MineralSectionRegionService.cs")
+    section_progress = source("Services/SectionCadProgress.cs")
+    tin_view = source("Services/Tin3DViewService.cs")
+    tin_progress = source("Services/TinCadProgress.cs")
+    duplicate_xy = source("UI/DuplicateXYConflictUi.cs")
+
+    assert "NAMVECTA VOLUME – TỔNG HỢP KHỐI LƯỢNG" in cad_table
+    assert "NAMVECTA VOLUME;TIN THU NGHIEM TRUNG BINH Z" in mean_z
+    assert "NAMVECTA VOLUME – KHOÁNG SẢN VÀ ĐẤT ĐÁ" in mineral_table
+    assert "NAMVECTA VOLUME 2.0 để tạo liên kết" in mineral_section
+    assert '"NAMVECTA: " + operation' in section_progress
+    assert "NAMVECTA VOLUME - VIEW TIN 3D" in tin_view
+    assert '"NAMVECTA: ghi " + layerName' in tin_progress
+    assert "NAMVECTA VOLUME — Điểm trùng tọa độ" in duplicate_xy
+
+    # Keep legacy storage/interoperability identifiers separately; they are not UI branding.
+    forbidden = (
+        "IMSAT VOLUME – TỔNG HỢP KHỐI LƯỢNG",
+        "IMSAT MININGVOLUME;TIN THU NGHIEM TRUNG BINH Z",
+        "IMSAT – KHOÁNG SẢN VÀ ĐẤT ĐÁ",
+        "bằng IMSAT VOLUME V2.0",
+        '"IMSAT: " + operation',
+        "IMSAT VOLUME - VIEW TIN 3D",
+        '"IMSAT: ghi " + layerName',
+        "IMSAT VOLUME — Điểm trùng tọa độ",
+    )
+    combined = "\n".join((cad_table, mean_z, mineral_table, mineral_section,
+                           section_progress, tin_view, tin_progress, duplicate_xy))
+    for legacy in forbidden:
+        assert legacy not in combined
+

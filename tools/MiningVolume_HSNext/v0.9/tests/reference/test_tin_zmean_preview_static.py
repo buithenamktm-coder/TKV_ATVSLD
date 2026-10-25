@@ -7,7 +7,8 @@ def code(path):
 def test_tin_z_mean_test_is_explicitly_opt_in_and_cannot_become_official_tin():
     ui=code("src/MiningVolume.Plugin2023/UI/ModelPage.cs")
     svc=code("src/MiningVolume.Plugin2023/Services/MeanZPreviewWorkflowService.cs")
-    assert 'TIN Z TRUNG BÌNH – THỬ' in ui
+    assert '_meanZBuild = Button("TIN Z trung bình"' in ui
+    assert 'operations.Controls.Add(_meanZBuild)' not in ui
     assert 'KHÔNG DÙNG LƯỚI NÀY ĐỂ TÍNH KHỐI LƯỢNG' in ui
     assert 'LicenseUiGuard.Check()' in ui
     assert 'MV_TIN_ZMEAN_HT_TEST_ONLY' in svc
@@ -70,7 +71,7 @@ def test_persisted_edits_require_matching_original_geometry():
     persistence=code("src/MiningVolume.Plugin2023/Services/ProjectPersistenceService.cs")
     snapshot=code("src/MiningVolume.Plugin2023/Services/ProjectSnapshot.cs")
     assert "edit.SourceFingerprint!=SourceFingerprint.Compute(entity)" in persistence
-    assert "rebuildDerived=false" in persistence
+    assert "rebuildDerived = false;" in persistence
     assert "s.EditHistory.AddRange(session.Source.EditHistory)" in persistence
     assert "128L*1024*1024" in snapshot
 

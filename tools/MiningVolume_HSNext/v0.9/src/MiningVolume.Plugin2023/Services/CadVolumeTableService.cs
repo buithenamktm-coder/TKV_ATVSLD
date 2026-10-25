@@ -56,7 +56,7 @@ namespace MiningVolume2023.Services
                     new Point3d(x, y, 0), 68))
                 {
                     summary.MergeCells(CellRange.Create(summary, 0, 0, 0, 1));
-                    summary.Cells[0, 0].TextString = "IMSAT VOLUME – TỔNG HỢP KHỐI LƯỢNG";
+                    summary.Cells[0, 0].TextString = "NAMVECTA VOLUME – TỔNG HỢP KHỐI LƯỢNG";
                     Set(summary, 1, "Hạng mục", "Giá trị");
                     Set(summary, 2, "Thời điểm xuất", DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss"));
                     Set(summary, 3, "Tổng khối lượng đào, m³", F(result.TotalCutVolume));

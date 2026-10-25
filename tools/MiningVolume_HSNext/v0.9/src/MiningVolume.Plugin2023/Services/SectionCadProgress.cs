@@ -14,7 +14,7 @@ namespace MiningVolume2023.Services
         private int _completed;
         internal SectionCadProgress(int total, string operation = "xuất mặt cắt")
         {
-            _meter.Start("IMSAT: " + operation + " — Esc để hủy");
+            _meter.Start("NAMVECTA: " + operation + " — Esc để hủy");
             _meter.SetLimit(Math.Max(1, total));
         }
         internal void Poll()

@@ -21,11 +21,13 @@ type installCandidate struct {
 // planCadInstallations intentionally fails closed: the discovered host's
 // exact flavor needs a separately built and integrity-validated payload.
 // A 2023-only package must never be offered for another AutoCAD release.
+// NAMVECTA V2.0 is deliberately limited to AutoCAD 2020-2024, even when
+// legacy SDK classification still detects a different AutoCAD generation.
 func planCadInstallations(hosts []cadHost, validatedPayloads map[string]string) []installCandidate {
     result:=make([]installCandidate,0,len(hosts))
     seen:=make(map[string]bool)
     for _,h:=range hosts {
-        if h.Year<2020 || h.Year>2026 { continue }
+        if h.Year<2020 || h.Year>2024 { continue }
         key:=strings.ToLower(filepath.Clean(h.Directory))
         if seen[key] {continue}
         seen[key]=true

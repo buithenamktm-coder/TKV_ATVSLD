@@ -50,7 +50,7 @@ namespace MiningVolume2023.Services
                     "3DORBIT/Conceptual tự động có thể làm AutoCAD mất phản hồi.\r\n\r\n" +
                     "Mở góc nhìn 3D khung dây, không khởi động Orbit, " +
                     "không giảm số tam giác TIN? Bấm TRỞ VỀ 2D khi xem xong.",
-                    "IMSAT VOLUME - VIEW TIN 3D",
+                    "NAMVECTA VOLUME - VIEW TIN 3D",
                     MessageBoxButtons.YesNo, MessageBoxIcon.Information);
                 if (accepted != DialogResult.Yes) return;
             }

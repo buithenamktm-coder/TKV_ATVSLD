@@ -17,7 +17,7 @@ def test_grid_uses_both_accepted_tins_without_building_again():
     assert "GridWorkflowService.Commit(result,options,existing,design" in grid
     assert "ĐÃ CÓ TIN HIỆN TRẠNG (" in grid
     assert "KHÔNG cần dựng TIN mới." in grid
-    assert "Chỉ tạo/cập nhật mô hình còn thiếu" in grid
+    assert "bấm Tính khối lượng để tự đọc lại TIN" in grid
 
 
 def test_reloading_identical_survey_retains_original_tins_and_approved_calculations():

@@ -10,28 +10,31 @@ namespace MiningVolume2023.Services
 {
     /// <summary>
     /// Tạo workbook riêng cho lưới ô vuông, dùng cùng định dạng Arial 12,
-    /// không tô nền, có công thức liên kết kết quả và logo IMSAT qua
+    /// không tô nền, có công thức liên kết kết quả và logo theo thiết kế NAMVECTA qua
     /// ExportWorkflowService.WriteXlsx.
     /// </summary>
     internal static class GridVolumeExcelReportBuilder
     {
         private const int FirstDataRow = 4; // 1 title + 1 note + 1 header.
-        public static SpreadsheetReport Build(GridVolumeReport grid, GridVolumeOptions options)
+        public static SpreadsheetReport Build(GridVolumeReport grid, GridVolumeOptions options, bool includeTechnicalSheets = false)
         {
             var state = ProjectState.Current;
             var report = Capture(grid, options);
-            return BuildDataSheets(grid, report, state.MiningUnitGroup, state.MiningUnitName, state.VolumePeriodLabel);
+            return BuildDataSheets(grid, report, state.MiningUnitGroup, state.MiningUnitName, state.VolumePeriodLabel,
+                includeTechnicalSheets ? Info(grid, options) : null);
         }
 
         // Called on the host thread. Capture all project metadata before yielding;
         // the worker only reads the accepted grid and owns its new workbook.
-        public static Task<SpreadsheetReport> BuildAsync(GridVolumeReport grid, GridVolumeOptions options, CancellationToken cancellationToken = default(CancellationToken))
+        public static Task<SpreadsheetReport> BuildAsync(GridVolumeReport grid, GridVolumeOptions options, CancellationToken cancellationToken = default(CancellationToken), bool includeTechnicalSheets = false)
         {
             var report = Capture(grid, options);
             string group = ProjectState.Current.MiningUnitGroup;
             string unit = ProjectState.Current.MiningUnitName;
             string period = ProjectState.Current.VolumePeriodLabel;
-            return Task.Run(() => BuildDataSheets(grid, report, group, unit, period, cancellationToken));
+            // Capture even the optional metadata sheet on the AutoCAD host thread.
+            var technicalInfo = includeTechnicalSheets ? Info(grid, options) : null;
+            return Task.Run(() => BuildDataSheets(grid, report, group, unit, period, technicalInfo, cancellationToken));
         }
 
         private static SpreadsheetReport Capture(GridVolumeReport grid, GridVolumeOptions options)
@@ -40,22 +43,29 @@ namespace MiningVolume2023.Services
             if (options == null) throw new ArgumentNullException(nameof(options));
             var r = new SpreadsheetReport
             {
-                Title = "IMSAT MININGVOLUME – KHỐI LƯỢNG LƯỚI Ô VUÔNG",
+                Title = "NAMVECTA VOLUME – KHỐI LƯỢNG LƯỚI Ô VUÔNG",
                 Creator = "Bùi Thế Nam", CreatedAt = DateTime.Now
             };
-            r.Sheets.Add(Info(grid, options));
             return r;
         }
 
         private static SpreadsheetReport BuildDataSheets(GridVolumeReport grid, SpreadsheetReport r,
-            string unitGroup, string unitName, string period, CancellationToken cancellationToken = default(CancellationToken))
+            string unitGroup, string unitName, string period, ReportSheet technicalInfo,
+            CancellationToken cancellationToken = default(CancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
-            r.Sheets.Add(Nodes(grid, cancellationToken));
-            r.Sheets.Add(Details(grid, cancellationToken));
-            r.Sheets.Add(GridSummary(grid, cancellationToken));
+            // Default: exactly two audit-ready sheets, same as section-volume export.
+            // Put the live formula summary first and its cell-by-cell source second.
             r.Sheets.Add(Totals(grid, unitGroup, unitName, period));
-            r.Sheets.Add(CalculationDetail(grid, cancellationToken));
+            r.Sheets.Add(Details(grid, cancellationToken));
+            if (technicalInfo != null)
+            {
+                // Optional detailed forensic export; not produced by the normal UI.
+                r.Sheets.Add(technicalInfo);
+                r.Sheets.Add(Nodes(grid, cancellationToken));
+                r.Sheets.Add(GridSummary(grid, cancellationToken));
+                r.Sheets.Add(CalculationDetail(grid, cancellationToken));
+            }
             cancellationToken.ThrowIfCancellationRequested();
             ExportWorkflowService.ApplyOrganizationHeader(r, unitGroup, unitName);
             return r;
@@ -161,7 +171,7 @@ namespace MiningVolume2023.Services
 
         private static ReportSheet Details(GridVolumeReport grid, CancellationToken cancellationToken)
         {
-            var s=Sheet("CHI TIẾT Ô LƯỚI","KHỐI LƯỢNG ĐÀO ĐẮP CHI TIẾT TỪNG Ô",
+            var s=Sheet("02 Chi tiết","KHỐI LƯỢNG ĐÀO ĐẮP CHI TIẾT TỪNG Ô",
                 "STT","Mã ô","I","J","S ô (m²)","S có TIN (m²)","S thiếu (m²)",
                 "V đào (m³)","V đắp (m³)","V thuần (m³)","Trạng thái");
             s.Notes.Add("V đào/V đắp do AutoCAD tích phân giao TIN, không phải thể tích trung bình 4 nút.");
@@ -191,12 +201,12 @@ namespace MiningVolume2023.Services
         {
             var s=Sheet("BẢNG LƯỚI TỔNG HỢP","BẢNG LƯỚI TỔNG HỢP LIÊN KẾT",
                 "Mã ô","Diện tích (m²)","V đào (m³)","V đắp (m³)","V thuần (m³)");
-            s.Notes.Add("Dữ liệu liên kết với CHI TIẾT Ô LƯỚI; ô có trạng thái chưa xác nhận giữ trống khối lượng.");
+            s.Notes.Add("Dữ liệu liên kết với 02 Chi tiết; ô có trạng thái chưa xác nhận giữ trống khối lượng.");
             foreach(var c in grid.Cells.Select((v,i)=>new{v,i}))
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 int n=FirstDataRow+c.i;
-                string pre="'CHI TIẾT Ô LƯỚI'!";
+                string pre="'02 Chi tiết'!";
                 s.Rows.Add(new ReportCell[]
                 {
                     ReportCell.Text(c.v.CellCode),
@@ -214,7 +224,7 @@ namespace MiningVolume2023.Services
 
         private static ReportSheet Totals(GridVolumeReport grid, string unitGroup, string unitName, string period)
         {
-            var s=Sheet("TỔNG HỢP KHỐI LƯỢNG","KHỐI LƯỢNG TỔNG HỢP LƯỚI Ô VUÔNG",
+            var s=Sheet("01 Tổng hợp","KHỐI LƯỢNG TỔNG HỢP LƯỚI Ô VUÔNG",
                 "Chỉ tiêu","Giá trị","Đơn vị");
             s.ColumnWidths[0] = 43;
             s.ColumnWidths[1] = 22;
@@ -225,7 +235,7 @@ namespace MiningVolume2023.Services
                 ? "Các ô có đầy đủ TIN hiện trạng và thiết kế."
                 : "CHƯA ĐẦY ĐỦ: chỉ là tổng phần hợp lệ; ô nhiều Z/thiếu TIN chưa xác nhận, không phải thể tích bằng 0.");
             int end=FirstDataRow+grid.Cells.Count-1;
-            string from="'CHI TIẾT Ô LƯỚI'!";
+            string from="'02 Chi tiết'!";
             s.Rows.Add(new ReportCell[]{ReportCell.Text("Tổng thể tích đào"),
                 ReportCell.Formula3("SUM("+from+"H"+FirstDataRow+":H"+end+")"),ReportCell.Text("m³")});
             s.Rows.Add(new ReportCell[]{ReportCell.Text("Tổng thể tích đắp"),
@@ -238,6 +248,12 @@ namespace MiningVolume2023.Services
                 ReportCell.Text(grid.IsComplete ? "ĐỦ DỮ LIỆU ĐỂ RÀ SOÁT" :
                     "CHƯA ĐẦY ĐỦ – TỔNG CHỈ LÀ PHẦN CÓ DỮ LIỆU"),
                 ReportCell.Text("")});
+            s.Rows.Add(new ReportCell[]{ReportCell.Text("Mã phiên tính (CalculationId)"),
+                ReportCell.Text(grid.CalculationId), ReportCell.Text("")});
+            s.Rows.Add(new ReportCell[]{ReportCell.Text("Phương pháp"),
+                ReportCell.Text(grid.Method), ReportCell.Text("")});
+            s.Rows.Add(new ReportCell[]{ReportCell.Text("Số ô lưới"),
+                ReportCell.Int(grid.Cells.Count), ReportCell.Text("ô")});
             // Sign-off area belongs to the same volume-summary worksheet.
             // Keep all formula row numbers intact by appending after totals.
             s.Rows.Add(new ReportCell[]{ReportCell.Text(""), ReportCell.Text(""), ReportCell.Text("")});
@@ -248,6 +264,12 @@ namespace MiningVolume2023.Services
                 ReportCell.Text(""),ReportCell.Text(unitName ?? "")});
             s.Rows.Add(new ReportCell[]{ReportCell.Text("Kỳ tính khối lượng",true),
                 ReportCell.Text(""),ReportCell.Text(period)});
+            // Contact used to exist only on the now-optional information sheet.
+            // Keep it on the visible summary, without adding a third worksheet.
+            s.Rows.Add(new ReportCell[]{ReportCell.Text("Người phát triển",true),
+                ReportCell.Text(""),ReportCell.Text("Bùi Thế Nam")});
+            s.Rows.Add(new ReportCell[]{ReportCell.Text("Điện thoại liên hệ",true),
+                ReportCell.Text(""),ReportCell.Text("0967280686")});
             s.Rows.Add(new ReportCell[]{ReportCell.Text(""),ReportCell.Text(""),ReportCell.Text("")});
             s.Rows.Add(new ReportCell[]{ReportCell.Text("NGƯỜI TÍNH TOÁN",true),
                 ReportCell.Text(""),ReportCell.Text("NGƯỜI KIỂM TRA",true)});
@@ -267,7 +289,7 @@ namespace MiningVolume2023.Services
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 int row=FirstDataRow+i;
-                string prefix="'CHI TIẾT Ô LƯỚI'!";
+                string prefix="'02 Chi tiết'!";
                 var c=grid.Cells[i];
                 s.Rows.Add(new ReportCell[]
                 {

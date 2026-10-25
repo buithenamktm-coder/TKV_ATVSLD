@@ -30,50 +30,113 @@ namespace MiningVolume2023.Services
                 ObjectId styleId = EnsureArialStyle(db, tr);
                 EnsureFrameRegApp(db, tr);
                 var ms = ModelSpace(db, tr, true);
+                ValidatePreviewOwnership(ms, tr, layerId, namesLayerId);
                 EraseOnLayers(ms, tr, new[] { layerId, namesLayerId });
 
-                foreach (var line in system.Lines)
+                // The ENTIRE plan section system is one selectable CAD BLOCK.
+                // Internal LINE and DBText geometry remains on reserved layers;
+                // named station updates still regenerate from SectionSystem.
+                var validLines = system.Lines.Where(line => line.Spans.Count > 0).ToArray();
+                if (validLines.Length > 0)
                 {
-                    foreach (var span in line.Spans)
-                    {
-                        var a = line.PointAt(span.StartT);
-                        var b = line.PointAt(span.EndT);
-                        AddLine(ms, tr, new Point3d(a.X, a.Y, 0), new Point3d(b.X, b.Y, 0), layerId);
-                    }
-                    if (line.Spans.Count > 0)
-                    {
-                        var p = line.PointAt(line.Spans[0].StartT);
-                        var txt = new DBText
-                        {
-                            // Draw labels outside the dense TIN and route
-                            // crossings; keep a separate toggleable label layer.
-                            Position = new Point3d(p.X-18.0*line.Direction.X,
-                                p.Y-18.0*line.Direction.Y,0),
-                            TextString = line.Name,
-                            Height = 3.0,
-                            Rotation = Math.Atan2(line.Direction.Y, line.Direction.X),
-                            LayerId = namesLayerId,
-                            TextStyleId = styleId
-                        };
-                        ms.AppendEntity(txt); tr.AddNewlyCreatedDBObject(txt, true);
-                    }
+                    var anchor2 = validLines[0].PointAt(validLines[0].Spans[0].StartT);
+                    var anchor = new Point3d(anchor2.X, anchor2.Y, 0);
+                    ObjectId blockId = UpdateStationSystemDefinition(db, tr,
+                        "NAMVECTA_MC_HE_TUYEN", validLines, anchor,
+                        layerId, namesLayerId, styleId);
+                    var instance = new BlockReference(anchor, blockId) { LayerId = layerId };
+                    ms.AppendEntity(instance);
+                    tr.AddNewlyCreatedDBObject(instance, true);
                 }
                 tr.Commit();
             }
         }
 
-        public static void ClearPreview(Database db)
+        private static ObjectId UpdateStationSystemDefinition(Database db, Transaction tr,
+            string blockName, IReadOnlyList<SectionLine> lines, Point3d basePoint,
+            ObjectId planLayer, ObjectId labelLayer, ObjectId styleId)
+        {
+            var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
+            BlockTableRecord definition;
+            if (bt.Has(blockName))
+            {
+                // Never overwrite a user-owned or modified block definition.
+                definition = (BlockTableRecord)tr.GetObject(bt[blockName], OpenMode.ForWrite);
+                ObjectId[] oldEntities = definition.Cast<ObjectId>().ToArray();
+                foreach (ObjectId id in oldEntities)
+                {
+                    var entity = tr.GetObject(id, OpenMode.ForRead) as Entity;
+                    if (entity == null ||
+                        (!(entity is Line) && !(entity is DBText)) ||
+                        (entity.LayerId != planLayer && entity.LayerId != labelLayer))
+                        throw new InvalidOperationException(
+                            "Block hệ mặt cắt chứa hình học ngoài NAMVECTA; không ghi đè.");
+                }
+                foreach (ObjectId id in oldEntities)
+                    (tr.GetObject(id, OpenMode.ForWrite) as Entity)?.Erase();
+            }
+            else
+            {
+                bt.UpgradeOpen();
+                definition = new BlockTableRecord { Name = blockName, Origin = Point3d.Origin };
+                bt.Add(definition);
+                tr.AddNewlyCreatedDBObject(definition, true);
+            }
+
+            foreach (var line in lines)
+            {
+                foreach (var span in line.Spans)
+                {
+                    var first = line.PointAt(span.StartT);
+                    var last = line.PointAt(span.EndT);
+                    var segment = new Line(
+                        new Point3d(first.X - basePoint.X, first.Y - basePoint.Y, 0),
+                        new Point3d(last.X - basePoint.X, last.Y - basePoint.Y, 0))
+                    {
+                        LayerId = planLayer
+                    };
+                    definition.AppendEntity(segment);
+                    tr.AddNewlyCreatedDBObject(segment, true);
+                }
+                var firstPoint = line.PointAt(line.Spans[0].StartT);
+                var label = new DBText
+                {
+                    Position = new Point3d(
+                        firstPoint.X - basePoint.X - 18.0 * line.Direction.X,
+                        firstPoint.Y - basePoint.Y - 18.0 * line.Direction.Y, 0),
+                    TextString = line.Name,
+                    Height = 3.0,
+                    Rotation = Math.Atan2(line.Direction.Y, line.Direction.X),
+                    LayerId = labelLayer,
+                    TextStyleId = styleId
+                };
+                definition.AppendEntity(label);
+                tr.AddNewlyCreatedDBObject(label, true);
+            }
+            return definition.ObjectId;
+        }
+
+        public static void ClearPreview(Database db,
+            Action<Transaction> onClearedInSameTransaction = null)
         {
             using (var tr = db.TransactionManager.StartTransaction())
             {
                 var lt = (LayerTable)tr.GetObject(db.LayerTableId, OpenMode.ForRead);
                 if (!lt.Has(PreviewLayer) && !lt.Has(PreviewLabelLayer))
-                { tr.Commit(); return; }
+                {
+                    onClearedInSameTransaction?.Invoke(tr);
+                    tr.Commit();
+                    return;
+                }
                 var ms = ModelSpace(db, tr, true);
                 var clear = new List<ObjectId>();
                 if(lt.Has(PreviewLayer))clear.Add(lt[PreviewLayer]);
                 if(lt.Has(PreviewLabelLayer))clear.Add(lt[PreviewLabelLayer]);
+                ValidatePreviewOwnership(ms, tr,
+                    lt.Has(PreviewLayer) ? lt[PreviewLayer] : ObjectId.Null,
+                    lt.Has(PreviewLabelLayer) ? lt[PreviewLabelLayer] : ObjectId.Null);
                 EraseOnLayers(ms, tr, clear);
+                onClearedInSameTransaction?.Invoke(tr);
                 tr.Commit();
             }
         }
@@ -346,6 +409,60 @@ namespace MiningVolume2023.Services
                 throw new InvalidOperationException("Mặt cắt " + profileName +
                     ": bước chia trục Z không biểu diễn được tại cao độ này. Hãy kiểm tra cao độ hoặc tăng bước chia trục Z.", ex);
             }
+        }
+
+        /// <summary>
+        /// Old versions wrote loose LINE/DBText objects. V2 writes named
+        /// BlockReferences. An unexpected entity on a reserved plan-preview
+        /// layer may belong to the user: refuse deletion rather than erase it.
+        /// </summary>
+        private static void ValidatePreviewOwnership(BlockTableRecord model,
+            Transaction tr, ObjectId planLayer, ObjectId nameLayer)
+        {
+            var faceClass = Autodesk.AutoCAD.Runtime.RXObject.GetClass(typeof(Face));
+            foreach (ObjectId id in model)
+            {
+                // EraseOnLayers deliberately never touches faces, so they
+                // also do not affect its ownership check.
+                if (id.ObjectClass.IsDerivedFrom(faceClass)) continue;
+                var entity = tr.GetObject(id, OpenMode.ForRead) as Entity;
+                if (entity == null) continue;
+                if (entity.LayerId == planLayer)
+                {
+                    if (entity is Line) continue;  // legacy NAMVECTA stations
+                    var block = entity as BlockReference;
+                    if (block != null && IsStationBlock(block, tr, planLayer, nameLayer))
+                        continue;
+                    throw new InvalidOperationException(
+                        "Layer MV_MC_BINHDO chứa đối tượng ngoài tuyến mặt cắt NAMVECTA. " +
+                        "Không xóa để bảo vệ hình học nguồn.");
+                }
+                if (entity.LayerId == nameLayer && !(entity is DBText))
+                    throw new InvalidOperationException(
+                        "Layer MV_MC_BINHDO_TEN chứa đối tượng ngoài nhãn mặt cắt. " +
+                        "Không xóa để bảo vệ dữ liệu CAD.");
+            }
+        }
+
+        private static bool IsStationBlock(BlockReference reference,
+            Transaction tr, ObjectId planLayer, ObjectId nameLayer)
+        {
+            var definition = tr.GetObject(reference.BlockTableRecord,
+                OpenMode.ForRead) as BlockTableRecord;
+            if (definition == null ||
+                !(definition.Name == "NAMVECTA_MC_HE_TUYEN" ||
+                   definition.Name.StartsWith("NAMVECTA_MC_TUYEN_", StringComparison.Ordinal)))
+                return false;
+            bool hasSegment = false;
+            foreach (ObjectId id in definition)
+            {
+                var entity = tr.GetObject(id, OpenMode.ForRead) as Entity;
+                if (entity is Line && entity.LayerId == planLayer)
+                    hasSegment = true;
+                else if (!(entity is DBText && entity.LayerId == nameLayer))
+                    return false;
+            }
+            return hasSegment;
         }
 
         private static BlockTableRecord ModelSpace(Database db, Transaction tr, bool write)

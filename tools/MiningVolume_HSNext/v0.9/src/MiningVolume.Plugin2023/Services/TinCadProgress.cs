@@ -13,7 +13,7 @@ namespace MiningVolume2023.Services
         private int _last;
         private readonly System.Diagnostics.Stopwatch _paintWatch=System.Diagnostics.Stopwatch.StartNew();
         internal TinCadProgress(int faces, string layerName, bool allowCancellation = true) {
-            _meter.Start("IMSAT: ghi " + layerName +
+            _meter.Start("NAMVECTA: ghi " + layerName +
                 (allowCancellation ? " — Esc để hủy" :
                     " — giai đoạn ghi bảo toàn dữ liệu (không hủy)"));
             _meter.SetLimit(Math.Max(1,(faces+1023)/1024));

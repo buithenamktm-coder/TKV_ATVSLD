@@ -15,7 +15,7 @@ def read(relative):
 def test_clear_cancellation_before_any_cad_mutation():
     renderer = read("src/MiningVolume.Plugin2023/Services/TinCadRenderer.cs")
     clear = renderer.split("public static int Clear(", 1)[1].split(
-        "public static int CountFaces(", 1
+        "public static TinSurface ReadStoredTin(", 1
     )[0]
     assert "Action pollCancellation = null" in clear
     assert clear.count("StartOpenCloseTransaction()") == 1

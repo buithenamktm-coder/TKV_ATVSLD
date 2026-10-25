@@ -36,7 +36,7 @@ def test_quick_section_selects_selected_routes_not_parallel_volume_stations():
     assert "total + segment.S1" in core
     assert "new SectionSpan(0, total)" in core
     out = cad.split("public static void DrawQuickProfiles(", 1)[1].split(
-        "private static BlockTableRecord ModelSpace(", 1
+        "private static void ValidatePreviewOwnership(", 1
     )[0]
     for layer in ["MV_MC_NHANH_HT", "MV_MC_NHANH_TK",
                   "MV_MC_NHANH_TRUC", "MV_MC_NHANH_CHU"]:
@@ -69,17 +69,17 @@ def test_buttons_have_breathing_room_and_are_not_all_caps():
     data = read("src/MiningVolume.Plugin2023/UI/DataPage.cs")
     project = read("src/MiningVolume.Plugin2023/UI/ProjectPage.cs")
     assert "button.Text = SentenceCaseButton(button.Text)" in theme
-    assert "Math.Max(5, button.Margin.Left)" in theme
-    assert "button.Padding = new Padding(12, 3, 12, 3)" in theme
+    assert "button.Margin = new Padding(2, 2, 2, 2);" in theme
+    assert "button.Padding = new Padding(4, 1, 4, 1)" in theme
     assert "button.FlatAppearance.BorderSize = 0;" in theme
     assert "kv.Value.FlatAppearance.BorderSize = 0;" in palette
-    assert "source.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 168));" in data
-    assert "bool compact = width < 820;" in data
-    assert "_sourceBox.Height = 278;" in data
-    assert "new RowStyle(SizeType.Absolute, 46)" in data
-    assert "Height = 173," in data
-    assert "_buildExisting.Margin = new Padding(5,5,7,5);" in data
-    assert "_buildDesign.Margin = new Padding(7,5,5,5);" in data
+    assert "_sourceTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 40));" in data
+    assert "bool compact = width < 720;" in data
+    assert "_sourceBox.Height = 182;" in data
+    assert "new RowStyle(SizeType.Absolute, 38)" in data
+    assert "Height = 182," in data
+    assert "actions.Controls.Add(_buildExisting);" in data
+    assert "actions.Controls.Add(_buildDesign);" in data
     assert "buttons.Height = ClientSize.Width < 650 ? 140 : 62;" in project
 
 

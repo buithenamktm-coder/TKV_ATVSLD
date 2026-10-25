@@ -166,6 +166,14 @@ namespace MiningVolume2023.Services
         public bool TinVisible { get; set; } = true;
         public int TinCadFaceCount { get; set; }
         public bool TinCadIsPreview { get; set; }
+        // A reopened DWG may contain the full, validated 3DFACE TIN while
+        // the in-memory source data has not been restored from a legacy file.
+        // This flag applies only to a checked CAD surface, never an arbitrary
+        // DWG layer or a synthetic empty mesh.
+        public bool TinRestoredFromCad { get; set; }
+        // Fail closed if the previously saved surveyed X/Y/Z fingerprint no
+        // longer matches the DWG. TIN CAD still exists but is not certified.
+        public bool CadRecoveryBlocked { get; set; }
         public bool IsTinCurrent
         {
             get
@@ -281,6 +289,10 @@ namespace MiningVolume2023.Services
 
         public void Reset()
         {
+            // Explicit MV_PROJECT_LOAD also calls Reset() within the SAME
+            // drawing. Discard its cached grid result before disposing any
+            // accepted old TIN, not only on AutoCAD DocumentActivated.
+            GridWorkflowService.Invalidate();
             ResetModel(Existing);
             ResetModel(Design);
             ActiveRole = ModelRole.Existing;
@@ -335,6 +347,8 @@ namespace MiningVolume2023.Services
             s.TinVisible = true;
             s.TinCadFaceCount = 0;
             s.TinCadIsPreview = false;
+            s.TinRestoredFromCad = false;
+            s.CadRecoveryBlocked = false;
             s.LastBuiltUtc = null;
             s.AllowedTypes.Clear();
         }
