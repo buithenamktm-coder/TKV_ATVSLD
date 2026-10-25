@@ -23,8 +23,11 @@ namespace MiningVolume.Core.Grid
         // An accepted positive TIN microface needs independent review.
         public bool HasUnresolvedSmallTriangles { get; internal set; }
         public bool IsComplete => CalculationArea > 1e-9 &&
-            !HasUnresolvedSmallTriangles &&
-            NoDataArea <= Math.Max(1e-8, CalculationArea * 1e-8);
+            CoveredArea > 0 && !HasUnresolvedSmallTriangles &&
+            // Never accept an almost-empty sliver merely because its entire
+            // missing footprint is below the old 1e-8 m2 absolute floor.
+            NoDataArea <= Math.Min(Math.Max(1e-8, CalculationArea * 1e-8),
+                CalculationArea * 1e-6);
     }
 
     /// <summary>
