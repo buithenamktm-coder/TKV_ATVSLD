@@ -316,6 +316,12 @@ namespace MiningVolume2023.UI
                     ? "Đã tính "+result.Cells.Count.ToString("n0")+" ô. Đào "+
                         result.TotalCutVolume.ToString("n2")+" m³; đắp "+
                         result.TotalFillVolume.ToString("n2")+" m³."
+                    : result.SmallTriangleCells > 0
+                        ? "Có " + result.SmallTriangleCells.ToString("n0") +
+                          " ô chứa tam giác TIN dương quá nhỏ chưa được tích phân; " +
+                          result.AmbiguousCells.ToString("n0") + " ô nhiều Z, " +
+                          result.TotalNoDataArea.ToString("n2") +
+                          " m² thiếu phủ. Khối lượng TẠM TÍNH, chưa nghiệm thu."
                     : result.AmbiguousCells > 0
                         ? "Đã tính phần hợp lệ; "+result.AmbiguousCells.ToString("n0")+
                           " ô ("+result.AmbiguousArea.ToString("n2")+
@@ -407,8 +413,9 @@ namespace MiningVolume2023.UI
                     if (!currentGrid.IsComplete)
                     {
                         var confirm = MessageBox.Show(
-                            "Hệ lưới còn " + currentGrid.AmbiguousCells.ToString("n0") +
-                            " ô nhiều Z và " + currentGrid.TotalNoDataArea.ToString("n2") +
+                            "Hệ lưới còn " + currentGrid.SmallTriangleCells.ToString("n0") +
+                            " ô có tam giác TIN quá nhỏ chưa được tích phân, " +
+                            currentGrid.AmbiguousCells.ToString("n0") +                            " ô nhiều Z và " + currentGrid.TotalNoDataArea.ToString("n2") +
                             " m² chưa xác nhận. Workbook sẽ ghi rõ TẠM TÍNH, các ô chưa có " +
                             "thể tích xác nhận để trống; không dùng tổng này làm khối lượng nghiệm thu. " +
                             "Anh có muốn xuất Excel để rà soát không?",
