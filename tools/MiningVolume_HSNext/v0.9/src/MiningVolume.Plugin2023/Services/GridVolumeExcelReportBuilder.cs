@@ -103,6 +103,7 @@ namespace MiningVolume2023.Services
             Row(s,"Góc xoay (độ)",opt.RotationDegrees.ToString("0.###"));
             Row(s,"Số ô tính",grid.Cells.Count.ToString());
             Row(s,"Số ô nhiều Z chưa xác nhận",grid.AmbiguousCells.ToString());
+            Row(s,"Số ô chứa tam giác TIN dương dưới ngưỡng tích phân",grid.SmallTriangleCells.ToString());
             Row(s,"Số ô thiếu phủ hiện trạng",grid.MissingExistingCells.ToString());
             Row(s,"Số ô thiếu phủ thiết kế",grid.MissingDesignCells.ToString());
             Row(s,"Số ô hai TIN đều phủ nhưng không giao đúng",grid.IntersectionMismatchCells.ToString());
