@@ -28,6 +28,7 @@ namespace MiningVolume2023.Services
             RunGroup("Quantity block rollback", () => { VerifyTableRollback(); }, errors, reportPassed);
             RunGroup("Grid calculation identity", () => { VerifyGridIdentity(); }, errors, reportPassed);
             RunGroup("Section layout and cancellation", VerifySectionLayoutAndCancellation, errors, reportPassed);
+            RunGroup("Volume preflight vs CAD grip edit", VerifyVolumePreflightRejectsCadGripEdits, errors, reportPassed);
             if (errors.Count > 0)
                 throw new AggregateException("CAD regression groups failed: " + errors.Count, errors);
         }
@@ -41,6 +42,65 @@ namespace MiningVolume2023.Services
                 return;
             }
             reportPassed?.Invoke(name);
+        }
+
+        private static void VerifyVolumePreflightRejectsCadGripEdits()
+        {
+            // Real AutoCAD side-database: changing a grip vertex must invalidate
+            // a previously accepted calculation even if ProjectState and the
+            // in-memory SectionProfile references remain unchanged.
+            using (var db = new Database(true, true))
+            {
+                var line = new SectionLine(1, "QA-GRIP", 0,
+                    new Vec2(1, 0), new Vec2(0, 1), new[] { new SectionSpan(0, 10) });
+                var seg = new SectionProfileSegment(0, 10,
+                    line.PointAt(0), line.PointAt(10), 100, 100, 95, 95);
+                var profiles = new[] {
+                    new SectionProfile(line, new[] { seg }, 50, 0, new string[0])
+                };
+                SectionCadRenderer.ReplaceProfiles(db, profiles, Point3d.Origin, 1000, 1000, 5);
+                EditableSectionCadService.EnsureProfilesMatch(db, profiles);
+                ObjectId changed = ObjectId.Null;
+                Point2d original = default(Point2d);
+                using (var tr = db.TransactionManager.StartTransaction())
+                {
+                    var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
+                    var ms = (BlockTableRecord)tr.GetObject(
+                        bt[BlockTableRecord.ModelSpace], OpenMode.ForRead);
+                    foreach (ObjectId id in ms)
+                    {
+                        if (!id.ObjectClass.IsDerivedFrom(
+                            Autodesk.AutoCAD.Runtime.RXObject.GetClass(typeof(Polyline))))
+                            continue;
+                        var poly = tr.GetObject(id, OpenMode.ForRead) as Polyline;
+                        if (poly == null || poly.Layer != "MV_MC_HIENTRANG") continue;
+                        changed = id;
+                        original = poly.GetPoint2dAt(1);
+                        poly.UpgradeOpen();
+                        poly.SetPointAt(1, new Point2d(original.X, original.Y + 2));
+                        break;
+                    }
+                    if (changed.IsNull)
+                        throw new InvalidOperationException("No editable HT Polyline was drawn.");
+                    tr.Commit();
+                }
+                bool rejected = false;
+                try { EditableSectionCadService.EnsureProfilesMatch(db, profiles); }
+                catch (InvalidOperationException) { rejected = true; }
+                if (!rejected)
+                    throw new InvalidOperationException(
+                        "Modified grip vertex silently reused stale quantities.");
+
+                // A failed freshness check is read-only; restoring the grip
+                // must recover the valid profile without rebuilding the TIN.
+                using (var tr = db.TransactionManager.StartTransaction())
+                {
+                    var poly = (Polyline)tr.GetObject(changed, OpenMode.ForWrite);
+                    poly.SetPointAt(1, original);
+                    tr.Commit();
+                }
+                EditableSectionCadService.EnsureProfilesMatch(db, profiles);
+            }
         }
 
         private static void VerifySectionLayoutAndCancellation()
