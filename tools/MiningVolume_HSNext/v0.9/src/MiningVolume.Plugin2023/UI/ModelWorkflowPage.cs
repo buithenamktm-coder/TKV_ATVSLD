@@ -1,5 +1,6 @@
 using System;
 using System.Drawing;
+using System.Linq;
 using System.Windows.Forms;
 
 namespace MiningVolume2023.UI
@@ -24,6 +25,12 @@ namespace MiningVolume2023.UI
             _steps.TabPages.Add(data);
             _steps.TabPages.Add(model);
             Controls.Add(_steps);
+        }
+
+        internal void RefreshForNewDrawing()
+        {
+            var data = _steps.TabPages[0].Controls.OfType<DataPage>().FirstOrDefault();
+            data?.RefreshForNewDrawing();
         }
 
         public void ShowInput() { _steps.SelectedIndex = 0; }
