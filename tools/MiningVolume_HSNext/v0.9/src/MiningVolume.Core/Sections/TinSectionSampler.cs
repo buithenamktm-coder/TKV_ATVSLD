@@ -136,6 +136,13 @@ namespace MiningVolume.Core.Sections
                 knots.Sort();
                 knots = Deduplicate(knots, tol * 10);
 
+                // Adjacent segments share the identical knot from this sorted
+                // array. Reuse only a successful DIRECT TIN lookup. A fallback
+                // probe near a boundary depends on the current segment's
+                // interior midpoint and cannot safely be reused across it.
+                double previousEndT = double.NaN;
+                double previousExistingZ = 0, previousDesignZ = 0;
+                bool previousExistingDirect = false, previousDesignDirect = false;
                 for (int i = 0; i < knots.Count - 1; i++)
                 {
                     if ((i & 255) == 0) cancellationToken.ThrowIfCancellationRequested();
@@ -154,15 +161,31 @@ namespace MiningVolume.Core.Sections
                     }
 
                     Vec2 p0 = line.PointAt(t0), p1 = line.PointAt(t1);
-                    double eh0, eh1, dh0, dh1;
-                    if (!TryElevationRobust(existing, p0, pm, tol, out eh0) ||
-                        !TryElevationRobust(existing, p1, pm, tol, out eh1) ||
-                        !TryElevationRobust(design, p0, pm, tol, out dh0) ||
-                        !TryElevationRobust(design, p1, pm, tol, out dh1))
+                    double eh0 = previousExistingZ, eh1 = 0;
+                    double dh0 = previousDesignZ, dh1 = 0;
+                    bool ignoredDirect, existingEndDirect = false, designEndDirect = false;
+                    bool existingStartOk = previousExistingDirect && t0 == previousEndT ||
+                        TryElevationRobust(existing, p0, pm, tol, out eh0, out ignoredDirect);
+                    bool ok = existingStartOk &&
+                        TryElevationRobust(existing, p1, pm, tol, out eh1, out existingEndDirect);
+                    if (ok)
                     {
+                        bool designStartOk = previousDesignDirect && t0 == previousEndT ||
+                            TryElevationRobust(design, p0, pm, tol, out dh0, out ignoredDirect);
+                        ok = designStartOk &&
+                            TryElevationRobust(design, p1, pm, tol, out dh1, out designEndDirect);
+                    }
+                    if (!ok)
+                    {
+                        previousExistingDirect = previousDesignDirect = false;
                         warnings.Add($"{line.Name}: bỏ qua một đoạn không xác định đủ cao độ TIN.");
                         continue;
                     }
+                    previousEndT = t1;
+                    previousExistingZ = eh1;
+                    previousDesignZ = dh1;
+                    previousExistingDirect = existingEndDirect;
+                    previousDesignDirect = designEndDirect;
 
                     double s0 = t0 - globalMinT, s1 = t1 - globalMinT;
                     var seg = new SectionProfileSegment(s0, s1, p0, p1, eh0, eh1, dh0, dh1);
@@ -268,9 +291,17 @@ namespace MiningVolume.Core.Sections
             Vec2 p,
             Vec2 interior,
             double tol,
-            out double z)
+            out double z,
+            out bool direct)
         {
-            if (index.TryElevation(p, tol * 20, out z)) return true;
+            if (index.TryElevation(p, tol * 20, out z))
+            {
+                direct = true;
+                return true;
+            }
+            direct = false;
+            // The inward probe depends on which side of the current segment
+            // was verified. Never cache its result at the shared endpoint.
             var q = new Vec2(
                 p.X + (interior.X - p.X) * 1e-8,
                 p.Y + (interior.Y - p.Y) * 1e-8);
