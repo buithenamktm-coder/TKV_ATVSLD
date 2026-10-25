@@ -71,7 +71,7 @@ def test_persisted_edits_require_matching_original_geometry():
     persistence=code("src/MiningVolume.Plugin2023/Services/ProjectPersistenceService.cs")
     snapshot=code("src/MiningVolume.Plugin2023/Services/ProjectSnapshot.cs")
     assert "edit.SourceFingerprint!=SourceFingerprint.Compute(entity)" in persistence
-    assert "rebuildDerived=false" in persistence
+    assert "rebuildDerived = false;" in persistence
     assert "s.EditHistory.AddRange(session.Source.EditHistory)" in persistence
     assert "128L*1024*1024" in snapshot
 
