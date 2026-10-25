@@ -26,6 +26,7 @@ EAction.getToolBar = (label, id) => {
 const ribbonPages = [];
 const ribbonButtons = [];
 const ribbonCaptions = [];
+const preferences = new Map();
 function QWidget(parent) { this.parent = parent; }
 function QHBoxLayout(page) {
   this.page = page;
@@ -53,12 +54,18 @@ function QToolButton(parent) {
 }
 function QTabWidget(parent) {
   this.parent = parent;
+  this.setMaximumHeight = height => { this.maximumHeight = height; };
   this.addTab = (page, label) => ribbonPages.push({ page, label });
   this.setTabText = (index, label) => { ribbonPages[index].label = label; };
   Object.defineProperty(this, 'count', { get: () => ribbonPages.length });
 }
 const context = {
-  include() {}, EAction, qsTr: x => x, Qt: { TopToolBarArea: 1, ToolButtonTextUnderIcon: 2, ToolButtonIconOnly: 3 },
+  RSettings: {
+    setValue(key, value) { preferences.set(key, value); },
+    getStringValue(key, fallback) { return preferences.has(key) ? preferences.get(key) : fallback; },
+    getBoolValue(key, fallback) { return preferences.has(key) ? preferences.get(key) : fallback; }
+  },
+  include() {}, EAction, qsTr: x => x, Qt: { TopToolBarArea: 1, ToolButtonTextUnderIcon: 2, ToolButtonIconOnly: 3, ToolButtonTextBesideIcon: 4 },
   QWidget, QHBoxLayout, QVBoxLayout, QGridLayout, QLabel, QToolButton, QTabWidget,
   isNull: x => x == null, qWarning: x => warnings.push(x),
   RMainWindowQt: { getMainWindow: () => ({ handleUserMessage: x => messages.push(x) }) },
@@ -428,3 +435,18 @@ assert(warnings.slice(recoveryWarningStart).some(x =>
 menu.addAction = originalMenuAdd;
 context.RGuiAction.getByScriptFile = originalRecoveryLookup;
 console.log("IMSAT CAD mocked runtime PASS:", toolbars.size, "toolbars,", menuCount, "unique menu actions");
+
+// Preferences survive a new shell and invalid locales never replace a valid one.
+assert(context.IMSATCAD.setRibbonLanguage("en"));
+assert.strictEqual(preferences.get("IMSATCAD/RibbonLanguage"), "en");
+assert.strictEqual(context.IMSATCAD.setRibbonLanguage("bad"), false);
+assert.strictEqual(preferences.get("IMSATCAD/RibbonLanguage"), "en");
+const collapse = context.IMSATCAD._ribbonCollapseButton;
+collapse.click();
+assert.strictEqual(context.IMSATCAD._ribbonTabsWidget.maximumHeight, 36);
+assert.strictEqual(preferences.get("IMSATCAD/RibbonCollapsed"), true);
+collapse.click();
+assert.strictEqual(context.IMSATCAD._ribbonTabsWidget.maximumHeight, 16777215);
+assert.strictEqual(preferences.get("IMSATCAD/RibbonCollapsed"), false);
+assert(context.IMSATCAD.setRibbonLanguage("vi"));
+console.log("Ribbon locale persistence and collapse/expand PASS (mocked API)");

@@ -21,7 +21,7 @@ PrivilegesRequired=admin
 #ifexist "native-cad-stage\branding\imsatcad.ico"
 UninstallDisplayIcon={app}\branding\imsatcad.ico
 #else
-UninstallDisplayIcon={app}\qcad.exe
+UninstallDisplayIcon={app}\IMSATCAD.exe
 #endif
 AppComments=IMSAT CAD V1.0 — CAD 2D based on QCAD Community Edition (GPLv3)
 AppCopyright=IMSAT CAD integration; QCAD Community Edition copyright belongs to its respective authors
@@ -33,6 +33,9 @@ VersionInfoDescription=IMSAT CAD V1.0 Installer
 SetupIconFile=native-cad-stage\branding\imsatcad.ico
 #endif
 LicenseFile=native-cad-stage\licenses\QCAD-LICENSE.txt
+[Languages]
+Name: "en"; MessagesFile: "compiler:Default.isl"
+Name: "vi"; MessagesFile: "compiler:Default.isl,installer\vi-override.isl"
 [Files]
 Source: "native-cad-stage\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 [Icons]
@@ -44,5 +47,8 @@ Name: "{group}\IMSAT CAD V1.0"; Filename: "{app}\IMSATCAD.exe"; WorkingDir: "{ap
 Name: "{autodesktop}\IMSAT CAD V1.0"; Filename: "{app}\IMSATCAD.exe"; WorkingDir: "{app}"
 #endif
 Name: "{group}\Uninstall IMSAT CAD"; Filename: "{uninstallexe}"
+[CustomMessages]
+en.LaunchCAD=Launch IMSAT CAD V1.0
+vi.LaunchCAD=Khởi động IMSAT CAD V1.0
 [Run]
-Filename: "{app}\IMSATCAD.exe"; Description: "Launch IMSAT CAD V1.0"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\IMSATCAD.exe"; Description: "{cm:LaunchCAD}"; Flags: nowait postinstall skipifsilent

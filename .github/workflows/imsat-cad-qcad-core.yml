@@ -433,6 +433,8 @@ jobs:
           }
           "NativeBrandingResourceIdentity=PASS" | Add-Content "native-executable-origin.txt"
           Write-Host "Native IMSAT CAD VERSIONINFO identity PASS (upstream GPLv3 license preserved)"
+          New-Item -ItemType Directory -Force "installer" | Out-Null
+          Copy-Item "tools/IMSAT_CAD_V1/installer/vi-override.isl" "installer/vi-override.isl" -Force
           Copy-Item "tools/IMSAT_CAD_V1/imsatcad-native-v1.iss" "imsatcad-native-build.iss" -Force
           & $compiler "imsatcad-native-build.iss"
           if ($LASTEXITCODE -ne 0) { throw "Native Inno Setup compilation failed" }
@@ -1071,6 +1073,21 @@ jobs:
               }
             }
           } finally {
+            # Capture the actual installed Windows GUI even if acceptance fails.
+            # A screenshot is review evidence, not an automatic visual PASS.
+            try {
+              if (-not $gui.HasExited -and $null -ne $root) {
+                Add-Type -AssemblyName System.Drawing
+                $captureBounds = $root.Current.BoundingRectangle
+                $bitmap = [System.Drawing.Bitmap]::new([int]$captureBounds.Width, [int]$captureBounds.Height)
+                $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+                try {
+                  $graphics.CopyFromScreen([int]$captureBounds.Left, [int]$captureBounds.Top,
+                    0, 0, $bitmap.Size)
+                  $bitmap.Save((Join-Path $PWD "native-gui-acceptance.png"), [System.Drawing.Imaging.ImageFormat]::Png)
+                } finally { $graphics.Dispose(); $bitmap.Dispose() }
+              }
+            } catch { Write-Warning "Windows screenshot unavailable: $($_.Exception.Message)" }
             if (-not $gui.HasExited) { Stop-Process -Id $gui.Id -Force -ErrorAction SilentlyContinue }
             $null = $gui.WaitForExit(5000)
           }
@@ -1284,6 +1301,7 @@ jobs:
             native-installed-startup.txt
             native-gui-startup.txt
             native-gui-uia.txt
+            native-gui-acceptance.png
             native-gui-startup-output.txt
             native-branding-audit.txt
             native-executable-origin.txt

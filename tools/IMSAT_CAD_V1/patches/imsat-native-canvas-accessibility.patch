@@ -2,27 +2,41 @@ diff --git a/src/gui/RGraphicsViewQt.cpp b/src/gui/RGraphicsViewQt.cpp
 index 9fa43102..69b68c9b 100644
 --- a/src/gui/RGraphicsViewQt.cpp
 +++ b/src/gui/RGraphicsViewQt.cpp
-@@ -24,2 +24,5 @@
+@@ -22,6 +22,9 @@
+ #include <QPainter>
+ 
  #include "RDocumentInterface.h"
 +#include "RDocument.h"
 +#include "RAction.h"
 +#include "RGuiAction.h"
  #include "RGraphicsViewImage.h"
-@@ -46,2 +49,6 @@ RGraphicsViewQt::RGraphicsViewQt(QWidget* parent, bool showFocus)
-
+ #include "RGraphicsViewQt.h"
+ #include "RMainWindow.h"
+@@ -44,6 +47,10 @@ RGraphicsViewQt::RGraphicsViewQt(QWidget* parent, bool showFocus)
+       gotMouseButtonPress(false),
+       imageView(NULL) {
+ 
 +    // IMSAT CAD (GPLv3): expose the native drawing surface to Windows UIA.
 +    setObjectName("IMSATCADGraphicsCanvas");
 +    setAccessibleName("IMSAT CAD drawing canvas");
 +
      setFocusPolicy(Qt::WheelFocus);
-@@ -294,2 +301,6 @@ void RGraphicsViewQt::mousePressEvent(QMouseEvent* event) {
+     setMouseTracking(true);
+ 
+@@ -292,6 +299,10 @@ void RGraphicsViewQt::mousePressEvent(QMouseEvent* event) {
+     mousePressModelPosition = e.getModelPosition();
+     mouseClickTimer.start();
      imageView->handleMousePressEvent(e);
 +    // Diagnostic is enabled only on Windows acceptance runners.
 +    if (qEnvironmentVariableIsSet("IMSATCAD_MOUSE_QA") && event->button()==Qt::LeftButton) {
 +        qWarning() << "IMSATCAD_MOUSE_QA PRESS" << event->pos().x() << event->pos().y();
 +    }
      lastButtonState = event->buttons();
-@@ -346,2 +357,13 @@ void RGraphicsViewQt::mouseReleaseEvent(QMouseEvent* event) {
+     event->accept();
+ }
+@@ -344,6 +355,17 @@ void RGraphicsViewQt::mouseReleaseEvent(QMouseEvent* event) {
+         e.setModelPosition(mousePressModelPosition);
+     }
      imageView->handleMouseReleaseEvent(e);
 +    if (qEnvironmentVariableIsSet("IMSATCAD_MOUSE_QA") && event->button()==Qt::LeftButton) {
 +        RDocumentInterface* auditDi = imageView->getDocumentInterface();
@@ -36,3 +50,5 @@ index 9fa43102..69b68c9b 100644
 +                   << "Action" << auditScript;
 +    }
      lastButtonState = event->buttons();
+     event->accept();
+ }

@@ -86,6 +86,18 @@
             }
         }
         note("BilingualNativeQtSwitch", "PASS");
+        if (RSettings.getStringValue("IMSATCAD/RibbonLanguage", "") !== "vi") {
+            throw new Error("Ribbon language preference was not persisted");
+        }
+        if (!IMSATCAD.setRibbonCollapsed(true) ||
+                !RSettings.getBoolValue("IMSATCAD/RibbonCollapsed", false)) {
+            throw new Error("Native Ribbon minimize failed");
+        }
+        if (!IMSATCAD.setRibbonCollapsed(false) ||
+                RSettings.getBoolValue("IMSATCAD/RibbonCollapsed", true)) {
+            throw new Error("Native Ribbon expand failed");
+        }
+        note("NativeRibbonPreferences", "PASS");
         // Native GUI document and real QCAD LINE tool action. Coordinates are
         // dispatched as QCAD coordinate events (not physical mouse clicks).
         include("scripts/File/NewFile/NewFile.js");

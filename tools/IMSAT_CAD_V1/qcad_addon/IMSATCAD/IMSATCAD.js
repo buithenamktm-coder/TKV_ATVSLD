@@ -501,10 +501,40 @@ IMSATCAD.setRibbonLanguage = function(language) {
         }
         return false;
     }
+    IMSATCAD.saveRibbonPreference("RibbonLanguage", language);
+    if (!isNull(IMSATCAD._ribbonCollapseButton)) {
+        IMSATCAD.setRibbonCollapsed(IMSATCAD._ribbonCollapsed === true);
+    }
+    return true;
+};
+// User preferences affect only the IMSAT shell, never upstream CAD state.
+IMSATCAD.saveRibbonPreference = function(key, value) {
+    try {
+        if (typeof RSettings !== "undefined") { RSettings.setValue("IMSATCAD/" + key, value); }
+    } catch (error) { qWarning("IMSAT CAD: preference could not be saved: " + error); }
+};
+IMSATCAD.setRibbonCollapsed = function(collapsed) {
+    var tabs = IMSATCAD._ribbonTabsWidget;
+    if (isNull(tabs) || typeof tabs.setMaximumHeight !== "function") { return false; }
+    tabs.setMaximumHeight(collapsed ? 36 : 16777215);
+    IMSATCAD._ribbonCollapsed = collapsed;
+    if (!isNull(IMSATCAD._ribbonCollapseButton)) {
+        IMSATCAD._ribbonCollapseButton.setText(collapsed ? "▾" : "▴");
+        IMSATCAD._ribbonCollapseButton.setToolTip(IMSATCAD._ribbonLanguage === "vi" ?
+            (collapsed ? "Mở rộng Ribbon" : "Thu gọn Ribbon") :
+            (collapsed ? "Expand Ribbon" : "Minimize Ribbon"));
+    }
+    IMSATCAD.saveRibbonPreference("RibbonCollapsed", collapsed);
     return true;
 };
 IMSATCAD.createRibbon = function() {
     if (IMSATCAD._ribbonCreated) { return true; }
+    try {
+        if (typeof RSettings !== "undefined") {
+            var savedLanguage = RSettings.getStringValue("IMSATCAD/RibbonLanguage", "vi");
+            IMSATCAD._ribbonLanguage = savedLanguage === "en" ? "en" : "vi";
+        }
+    } catch (preferenceError) { qWarning("IMSAT CAD: using default Ribbon language"); }
     if (typeof QTabWidget === "undefined" || typeof QToolButton === "undefined" ||
         typeof QWidget === "undefined" || typeof QHBoxLayout === "undefined" ||
         typeof QVBoxLayout === "undefined" || typeof QGridLayout === "undefined" || typeof QLabel === "undefined") {
@@ -575,7 +605,9 @@ IMSATCAD.createRibbon = function() {
                     var button = new QToolButton(buttons);
                     button.objectName = "IMSATCADRibbonAction_" + scripts[i].replace(/[^A-Za-z0-9]/g, "_");
                     button.setDefaultAction(action);
-                    button.toolButtonStyle = Qt.ToolButtonTextUnderIcon;
+                    // Three rows of compact commands preserve canvas height.
+                    button.toolButtonStyle = Qt.ToolButtonTextBesideIcon;
+                    if (typeof button.setMinimumHeight === "function") { button.setMinimumHeight(28); }
                     // Avoid truncated script aliases in the native Ribbon.
                     // Native QAction text is often an abbreviated command name;
                     // use a full descriptive label derived from the action script.
@@ -626,13 +658,26 @@ IMSATCAD.createRibbon = function() {
         // Add widgets only after both Ribbon pages and language signal are valid.
         shellLayout.addWidget(tabs);
         shellLayout.addWidget(languageButton);
+        var collapseButton = new QToolButton(ribbonShell);
+        collapseButton.objectName = "IMSATCADRibbonCollapse";
+        collapseButton.setText("▴");
+        collapseButton.clicked.connect(function() {
+            IMSATCAD.setRibbonCollapsed(!IMSATCAD._ribbonCollapsed);
+        });
+        shellLayout.addWidget(collapseButton);
         host.addWidget(ribbonShell);
+        IMSATCAD._ribbonCollapseButton = collapseButton;
         IMSATCAD._ribbonTabsWidget = tabs;
         IMSATCAD._ribbonCaptions = panelCaptions;
         IMSATCAD._ribbonButtonCaptions = commandCaptions;
         IMSATCAD._ribbonLanguageButton = languageButton;
         IMSATCAD._ribbonHost = host;
         IMSATCAD._ribbonCreated = true;
+        var collapsed = false;
+        if (typeof RSettings !== "undefined") {
+            collapsed = RSettings.getBoolValue("IMSATCAD/RibbonCollapsed", false);
+        }
+        IMSATCAD.setRibbonCollapsed(collapsed);
         qWarning("IMSAT CAD Ribbon initialized: " + tabs.count + " tabs, " + totalActions + " actions");
         return true;
     } catch (error) {
