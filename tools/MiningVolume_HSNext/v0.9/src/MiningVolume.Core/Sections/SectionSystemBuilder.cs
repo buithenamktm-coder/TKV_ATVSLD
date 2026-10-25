@@ -21,7 +21,10 @@ namespace MiningVolume.Core.Sections
                 throw new ArgumentException(
                     "Hai điểm xác định phương chuẩn phải khác nhau và hợp lệ.",
                     nameof(selected));
-            return new Vec2(-selected.Y / length, selected.X / length);
+            // The builder's normal is (-direction.Y, direction.X) and stations
+            // are numbered by ascending normal projection. Rotate clockwise
+            // so the normal aligns with the user's point 1 -> point 2.
+            return new Vec2(selected.Y / length, -selected.X / length);
         }
 
         public SectionSystem Build(IReadOnlyList<Vec2> boundary, Vec2 directionInput, SectionGenerationOptions options)
