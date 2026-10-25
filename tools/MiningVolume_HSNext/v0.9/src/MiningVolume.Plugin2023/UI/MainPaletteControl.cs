@@ -252,7 +252,6 @@ namespace MiningVolume2023.UI
             // The latter caused opaque rectangular patches behind the title
             // in AutoCAD's palette host (as shown in the field QA capture).
             const string title = "NAMVECTA VOLUME";
-            string buildLabel = "V2.0 QA · " + RuntimeBuildIdentity.ShortTag();
             const string subtitle = "Bùi Thế Nam  •  0967280686";
             int left = textLeft;
             header.Paint += (sender, args) =>
@@ -266,8 +265,6 @@ namespace MiningVolume2023.UI
                 {
                     args.Graphics.DrawString(title, big, white, left, 12);
                     args.Graphics.DrawString(subtitle, small, muted, left + 1, 43);
-                    using (var buildFont = new Font("Arial", 7F, FontStyle.Bold))
-                        args.Graphics.DrawString(buildLabel, buildFont, white, left + 1, 61);
                 }
             };
 
