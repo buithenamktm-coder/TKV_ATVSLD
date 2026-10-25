@@ -4,7 +4,7 @@ Static contract only: this does not execute AutoCAD or claim MVSELFTEST PASS.
 """
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[4]
+ROOT = Path(__file__).resolve().parents[5]
 WORKFLOW = ROOT / ".github/workflows/verify-imsat-volume-v2-autocad2023.yml"
 
 
