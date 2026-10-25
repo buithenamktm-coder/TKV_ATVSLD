@@ -871,6 +871,42 @@ internal static class CoreRegression
                 Check(MineralSectionPolygonCalculator.OverlapArea(a,c)<1e-8,
                     "Unrelated regions falsely overlap");
             },
+            ["section_knot_reuse_preserves_analytic_cut_fill"] = ()=>{
+                // Five adjacent strips force repeated shared TIN edge knots.
+                // Regression protects the independent exact integral while the
+                // sampler caches only direct (never interior-probed) elevations.
+                var z = new double[] { 2, 1, -1, -2, 0, 3 };
+                var existingTris = new List<Triangle3>();
+                var designTris = new List<Triangle3>();
+                for (int i=0;i<z.Length-1;i++)
+                {
+                    var a=P(i,0,z[i]);var b=P(i+1,0,z[i+1]);
+                    var d=P(i,1,z[i]);var e=P(i+1,1,z[i+1]);
+                    existingTris.Add(new Triangle3(a,b,e));
+                    existingTris.Add(new Triangle3(a,e,d));
+                    var ba=P(i,0);var bb=P(i+1,0);
+                    var bd=P(i,1);var be=P(i+1,1);
+                    designTris.Add(new Triangle3(ba,bb,be));
+                    designTris.Add(new Triangle3(ba,be,bd));
+                }
+                var issues=Array.Empty<ValidationIssue>();
+                var ht=new TinSurface("five-strip HT",existingTris,issues);
+                var tk=new TinSurface("five-strip TK",designTris,issues);
+                var line=new SectionLine(1,"MC-KNOT",0.5,new Vec2(1,0),
+                    new Vec2(0,1),new[]{new SectionSpan(0,5)});
+                var profile=new TinSectionSampler().BuildProfile(line,ht,tk);
+                Check(profile.Segments.Count>=5 && profile.Warnings.Count==0,
+                    "Shared TIN knots were skipped or produced false missing-coverage warnings");
+                Check(Math.Abs(profile.CutArea-3.25)<1e-7 &&
+                    Math.Abs(profile.FillArea-2.75)<1e-7,
+                    "Endpoint reuse changed exact cut/fill across a zero crossing");
+                var gap=new SectionLine(2,"MC-KNOT-GAP",0.5,new Vec2(1,0),
+                    new Vec2(0,1),new[]{new SectionSpan(0,2),new SectionSpan(3,5)});
+                var gapProfile=new TinSectionSampler().BuildProfile(gap,ht,tk);
+                Check(Math.Abs(gapProfile.CutArea-3.25)<1e-7 &&
+                    Math.Abs(gapProfile.FillArea-1.25)<1e-7,
+                    "A cached endpoint crossed a break between independent spans");
+            },
             ["grid_exact_constant_cut"] = ()=>{
                 var a=new[]{new Triangle3(P(0,0,2),P(20,0,2),P(20,20,2)),
                     new Triangle3(P(0,0,2),P(20,20,2),P(0,20,2))};
