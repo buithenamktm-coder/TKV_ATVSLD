@@ -21,6 +21,19 @@ namespace MiningVolume2023.Services
             public EditedSectionPath Path;
         }
 
+        // A previously produced section output leaves dedicated layers
+        // even when the user erases every tagged HT/TK Polyline. This cheap
+        // evidence survives DWG save/reopen and must block TIN-only restore.
+        internal static bool HasOfficialSectionLayers(Database db)
+        {
+            if (db == null) return false;
+            using (var tr = db.TransactionManager.StartOpenCloseTransaction())
+            {
+                var table = (LayerTable)tr.GetObject(db.LayerTableId, OpenMode.ForRead);
+                return table.Has("MV_MC_HIENTRANG") || table.Has("MV_MC_THIETKE");
+            }
+        }
+
         internal static bool HasEditableProfiles(Database db)
         {
             using (var tr = db.TransactionManager.StartOpenCloseTransaction())
