@@ -56,5 +56,8 @@ def test_explicit_saved_project_load_updates_existing_palette_state():
         "private static void EnsureCurrentDrawingProjectLoaded()", 1)[0]
     assert 'Services.ProjectPersistenceService.LoadCurrentProject(true)' in method
     assert 'MainControl.RefreshForNewDrawing();' in method
+    assert "if (!r.Found)" in method
+    assert method.index("if (!r.Found)") < method.index("ProjectState.Current.Reset();") < method.index(
+        "MainControl.RefreshForNewDrawing();")
     assert method.index("MainControl.RefreshForNewDrawing();") < method.index(
         "Open(AppPage.Project);")
