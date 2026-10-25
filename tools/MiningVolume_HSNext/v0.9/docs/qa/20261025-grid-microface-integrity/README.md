@@ -131,3 +131,36 @@ remove the cost of actually creating native CAD entities. There is no verified
 85-section host speedup until before/after telemetry on matching DWG geometry
 and hardware is available. The new side-Database host test is compiled during
 CI but needs a licensed AutoCAD host to execute.
+
+
+## Follow-up — CAD section freshness while recalculating volumes
+
+Issue: `VolumePage.CalculateClicked` used in-memory `SectionProfiles` after
+a user grip-edited tagged CAD polylines; only `ExportPage` checked CAD freshness,
+too late to prevent displaying newly computed but stale volumes.
+
+Code changes:
+1. Reject a volume calculation at entry if tagged CAD geometry does not match
+   the approved profiles, explaining the need for **Cập nhật mặt cắt**.
+2. Repeat the comparison on the AutoCAD UI thread **after** the asynchronous
+   calculation and **before** `VolumeWorkflowService.Commit`; compare also
+   independent `TinRegionRevision` to reject a mid-run boundary change.
+3. If both official tagged HT/TK polylines have been manually deleted but
+   their dedicated output layers still exist, reject the old
+   `allowMissingUnedited` fallback. The fallback remains allowed when CAD
+   section layers were never created at all, to support first-time TIN-only
+   calculations.
+4. Add static Python contract checks and a real-AutoCAD side-Database QA group
+   `Volume preflight vs CAD grip edit`. The fixture changes a tagged
+   Polyline grip, verifies preflight rejects, restores the point and verifies
+   recovery, then erases both section Polyline entities and verifies refusal.
+5. Update the existing static QA contract to expect eight independent CAD
+   diagnostic groups, instead of hard-coding an obsolete count of seven.
+
+**Scope/limits:** The Python test is source-only. The new AutoCAD regression
+fixture compiles in CI but still must be executed on a licensed Windows
+AutoCAD host (`MVSELFTEST`). If the entire drawing's output layers themselves
+are purged, the runtime may lack evidence that official sections once existed;
+a persisted project snapshot with `HadEditableSectionCad` is an additional
+restore-time guard, but complete hostile deletion of all evidence is not
+certified here. No host CAD/Excel equality or runtime speedup is claimed.
