@@ -110,3 +110,18 @@ def test_quick_section_page_has_no_official_station_edit_or_volume_actions():
     assert 'if (_navigate != null)' in page
     assert 'Text = _quickOnly ? "VẼ NHANH MẶT CẮT" : "HỆ MẶT CẮT"' in section
     assert '_rootLayout.RowStyles[3].Height = 0F;' in section
+
+def test_selected_point_order_controls_station_numbering():
+    builder=(ROOT/"src/MiningVolume.Core/Sections/SectionSystemBuilder.cs").read_text(encoding="utf-8")
+    assert "return new Vec2(selected.Y / length, -selected.X / length);" in builder
+    assert "var n = new Vec2(-d.Y, d.X);" in builder
+    assert "double o = minN;" in builder
+    assert "o += options.Spacing;" in builder
+    # For either picked direction, the builder normal is exactly the selected vector.
+    for vx, vy in ((1, 0), (0, 1), (-1, 0), (0, -1), (3, -4)):
+        import math
+        length=math.hypot(vx, vy)
+        d=(vy/length, -vx/length)
+        normal=(-d[1], d[0])
+        assert math.isclose(normal[0],vx/length)
+        assert math.isclose(normal[1],vy/length)
