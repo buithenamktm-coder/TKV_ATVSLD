@@ -19,7 +19,12 @@ namespace MiningVolume.Core.Grid
         public double ExistingSurfaceArea { get; internal set; }
         public double DesignSurfaceArea { get; internal set; }
         public double NoDataArea => Math.Max(0, CalculationArea - CoveredArea);
-        public bool IsComplete => NoDataArea <= Math.Max(1e-8, CalculationArea * 1e-8);
+        // Zero/sub-threshold positive XY area was never integrated.
+        // An accepted positive TIN microface needs independent review.
+        public bool HasUnresolvedSmallTriangles { get; internal set; }
+        public bool IsComplete => CalculationArea > 1e-9 &&
+            !HasUnresolvedSmallTriangles &&
+            NoDataArea <= Math.Max(1e-8, CalculationArea * 1e-8);
     }
 
     /// <summary>
@@ -96,6 +101,13 @@ namespace MiningVolume.Core.Grid
                 throw new InvalidOperationException("Diện tích lỗ vượt quá vùng tính; hãy kiểm tra đường bao.");
             result.CalculationArea = Math.Max(0, result.CalculationArea);
             if (result.CalculationArea <= Eps) return result;
+
+            // A positive face below the overlay's area threshold may still
+            // contribute meaningful volume if the height difference is large.
+            // Retain partial calculations but never certify them as complete.
+            result.HasUnresolvedSmallTriangles =
+                HasIgnoredPositiveFace(existing, cell, boundary, cancellationToken) ||
+                HasIgnoredPositiveFace(design, cell, boundary, cancellationToken);
 
             ValidateSingleSheet(existing,cell,boundary,"hiện trạng",cancellationToken);
             ValidateSingleSheet(design,cell,boundary,"thiết kế",cancellationToken);
@@ -249,6 +261,32 @@ namespace MiningVolume.Core.Grid
                             "(hai lớp cao độ); không thể tính khối lượng lưới 2,5D chính xác.");
                 }
             }
+        }
+
+        // Only clip faces that are actually skipped by the normal kernel.
+        // Check participation in the accepted region, excluding holes.
+        private static bool HasIgnoredPositiveFace(
+            IReadOnlyList<Triangle3> triangles, IReadOnlyList<Vec2> cell,
+            PreparedBoundary boundary, CancellationToken token)
+        {
+            foreach (var triangle in triangles)
+            {
+                token.ThrowIfCancellationRequested();
+                double area = triangle.Area2D;
+                if (area <= 0 || area > Eps || !Overlaps(cell, triangle)) continue;
+                var insideCell = Clip(cell, Triangle(triangle));
+                if (Area(insideCell) <= 0) continue;
+                double participating = 0;
+                if (boundary.Outer == null)
+                    participating = Area(insideCell);
+                else
+                    foreach (var outer in boundary.Outer)
+                        participating += Area(Clip(insideCell, outer));
+                foreach (var hole in boundary.Exclusions)
+                    participating -= Area(Clip(insideCell, hole));
+                if (participating > 0) return true;
+            }
+            return false;
         }
 
         private static void Accumulate(List<Vec2> poly, Triangle3 tn, Triangle3 tk,
