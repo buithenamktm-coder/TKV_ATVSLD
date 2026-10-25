@@ -22,7 +22,7 @@ on:
       - "tools/IMSAT_CAD_V1/patches/**"
 concurrency:
   group: imsat-cad-native-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 jobs:
   native-cad-core:
     runs-on: windows-2022
@@ -903,8 +903,8 @@ jobs:
                   $candidate = $controls.Item($vi)
                   $id = [string]$candidate.Current.AutomationId
                   $name = [string]$candidate.Current.Name
-                  if ($id -notmatch '(^|\.)IMSATCADGraphicsCanvas$' -and
-                      $name -ne "IMSAT CAD drawing canvas") { continue }
+                  if ($name -cne "IMSAT CAD acceptance drawing canvas" -or
+                      $candidate.Current.IsOffscreen) { continue }
                   $canvasCandidates++
                   $rect = $candidate.Current.BoundingRectangle
                   if ($rect.Width -gt 250 -and $rect.Height -gt 180) {
@@ -915,8 +915,9 @@ jobs:
                     }
                   }
                 }
-                if ($null -eq $canvas) {
-                  $mouseDetail = "Native IMSATCADGraphicsCanvas not found/visible through UIA (candidates=$canvasCandidates)"
+                if ($null -eq $canvas -or $canvasCandidates -ne 1) {
+                  $mouseResult = "FAIL"
+                  $mouseDetail = "Expected exactly one visible acceptance-document canvas (candidates=$canvasCandidates)"
                 } else {
                   $bounds = $canvas.Current.BoundingRectangle
                   $px = [int][Math]::Round($bounds.Left)
@@ -975,6 +976,7 @@ jobs:
                           throw "SetCursorPos failed at $clickX,$clickY"
                         }
                         Start-Sleep -Milliseconds 250
+                        $hit = $null
                         $hitLabel = "UNAVAILABLE"
                         try {
                           $hit = [System.Windows.Automation.AutomationElement]::FromPoint(
@@ -986,6 +988,10 @@ jobs:
                           $hitLabel = "UIA FromPoint unavailable: $($_.Exception.Message)"
                         }
                         $mouseHitTargets += "$($step+1):($clickX,$clickY)=$hitLabel"
+                        if ($null -eq $hit -or
+                            [string]$hit.Current.Name -cne "IMSAT CAD acceptance drawing canvas") {
+                          throw "Mouse point is not on the acceptance document: $hitLabel"
+                        }
                         $pressOk = [IMSATCADWinMouse]::SendButton(2)
                         Start-Sleep -Milliseconds 130
                         $releaseOk = [IMSATCADWinMouse]::SendButton(4)
@@ -1026,7 +1032,18 @@ jobs:
                       $entityValues = @()
                       foreach ($release in $qtReleases) { $entityValues += [int]$release.Groups[1].Value }
                       $mouseQtEntityCounts = if ($entityValues.Count) { $entityValues -join ',' } else { "NO_QT_RELEASE" }
-                      if ($mouseQtReleaseCount -lt 2) {
+                      $documentReleases = [regex]::Matches($nativeMouseTrace,
+                        'IMSATCAD_MOUSE_QA RELEASE[^\r\n]*FileName\s+"([^"\r\n]+)"\s+Action\s+"([^"\r\n]+)"')
+                      $sameDocumentLineAction = $documentReleases.Count -eq 2
+                      foreach ($release in $documentReleases) {
+                        if ($release.Groups[1].Value.Replace('\','/') -cne $drawingFile.Replace('\','/') -or
+                            $release.Groups[2].Value -cne 'scripts/Draw/Line/Line2P/Line2P.js') {
+                          $sameDocumentLineAction = $false
+                        }
+                      }
+                      if (-not $sameDocumentLineAction) {
+                        $mouseDetail = "Mouse releases did not both use LINE on the named acceptance DXF; inspect native GUI trace"
+                      } elseif ($mouseQtReleaseCount -lt 2) {
                         $mouseDetail = "Win32 clicks did not reach native CAD viewport: press=$mouseQtPressCount release=$mouseQtReleaseCount"
                       } elseif ($after -eq ($before+1) -and $entityValues[-1] -eq ($before+1)) {
                         $mouseResult = "PASS"
@@ -1064,7 +1081,8 @@ jobs:
             $probeState = if ($probeLines -contains "Status=PASS" -and
                 $probeLines -contains "NativeGuiLineActionGeometry=PASS" -and
                 $probeLines -contains "NativeGuiLineDXFRoundtrip=PASS" -and
-                $probeLines -contains "NativeAliasDispatch=PASS") { "PASS" } else { "FAIL" }
+                $probeLines -contains "NativeAliasDispatch=PASS" -and
+                $probeLines -contains "NativeMouseDocumentReady=PASS") { "PASS" } else { "FAIL" }
           } else {
             "Status=NOT_TESTED" | Set-Content "native-ribbon-probe.txt" -Encoding UTF8
             "Failure=Native -exec probe produced no evidence" | Add-Content "native-ribbon-probe.txt"
@@ -1237,19 +1255,19 @@ jobs:
           if ($probeState -ne "PASS") {
             throw "Native installed Ribbon probe $probeState; inspect native-ribbon-probe.txt and native-gui-startup-output.txt"
           }
-          if ($uiaTabInteraction -eq "FAIL") {
+          if ($uiaTabInteraction -ne "PASS") {
             throw "Native UIA Ribbon tab selection failed; inspect native-gui-uia.txt"
           }
-          if ($uiaLanguageInteraction -eq "FAIL") {
+          if ($uiaLanguageInteraction -ne "PASS") {
             throw "Native UIA Ribbon language interaction failed; inspect native-gui-uia.txt"
           }
-          if ($uiaCadAction -eq "FAIL") {
+          if ($uiaCadAction -ne "PASS") {
             throw "Native LINE Ribbon invocation failed; inspect native-gui-uia.txt"
           }
-          if ($keyboardResult -eq "FAIL") {
+          if ($keyboardResult -ne "PASS") {
             throw "Native Space command-line keyboard test failed; inspect native-gui-uia.txt"
           }
-          if ($mouseResult -eq "FAIL") {
+          if ($mouseResult -ne "PASS") {
             throw "Native mouse CAD drawing failed; inspect native-gui-uia.txt and DXF evidence"
           }
       # Upload diagnostics even when compilation, installation, or GUI smoke fails.

@@ -92,7 +92,11 @@
         include("scripts/simple.js");
         var mdi = NewFile.createMdiChild();
         if (isNull(mdi)) { throw new Error("Native GUI document creation failed"); }
-        var drawing = app.getDocumentInterface();
+        // Bind to the child we created, not whichever startup tab last had focus.
+        var drawing = mdi.getDocumentInterface();
+        app.getMdiArea().setActiveSubWindow(mdi);
+        mdi.showMaximized();
+        QCoreApplication.processEvents();
         if (isNull(drawing)) { throw new Error("No active native CAD GUI document"); }
         function countLines(doc) {
             var ids = doc.queryAllEntities();
@@ -187,6 +191,25 @@
             drawing.terminateCurrentAction();
         }
         note("NativeAliasDispatch", "PASS");
+        // Run #161 clicked the generic canvas of Untitled1 (0 entities),
+        // while this named acceptance document already contained one LINE.
+        // Mark only this child's QWidget; never choose a canvas by its area.
+        app.getMdiArea().setActiveSubWindow(mdi);
+        mdi.showMaximized();
+        NewFile.updateTitle(mdi);
+        var mouseCanvas = mdi.findChild("GraphicsView");
+        if (isNull(mouseCanvas)) { throw new Error("Acceptance document canvas missing"); }
+        mouseCanvas.setAccessibleName("IMSAT CAD acceptance drawing canvas");
+        mouseCanvas.setFocus();
+        QCoreApplication.processEvents();
+        var focusedDrawing = app.getDocumentInterface();
+        if (isNull(focusedDrawing) ||
+                String(focusedDrawing.getDocument().getFileName()) !== guiDXF ||
+                countLines(focusedDrawing.getDocument()) !== createdLines) {
+            throw new Error("Acceptance document is not active before keyboard input");
+        }
+        note("NativeMouseDocumentReady", "PASS");
+        note("NativeMouseCanvasName", "IMSAT CAD acceptance drawing canvas");
         // Expose QCAD's native command input to Windows UI Automation.
         var commandDock = app.findChild("CommandLineDock");
         var commandBox = !isNull(commandDock) ? commandDock.findChild("CommandEdit") : null;
