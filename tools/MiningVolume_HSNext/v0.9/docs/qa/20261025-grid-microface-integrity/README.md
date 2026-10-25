@@ -18,7 +18,8 @@ Furthermore, a grid with no resulting cells passed `Cells.All(...)` vacuously.
 1. Keep every cell with **strictly positive** accepted calculation area in the report,
    including sub-threshold slivers; its volume is not automatically certified.
 2. Mark cells with `CalculationArea <= 1e-9 m2` as incomplete rather than
-   pretending an unevaluated positive-area cell represents zero earthwork.
+   pretending an unevaluated positive-area cell represents zero earthwork. A partially
+   covered sliver also cannot pass solely due to the absolute 1e-8 m2 no-data tolerance.
 3. For each accepted cell, detect positive faces with area `<= 1e-9 m2` present
    in the accepted region (subtracting holes) and expose
    `HasUnresolvedSmallTriangles`. Continue to show partial results but never mark
@@ -26,9 +27,10 @@ Furthermore, a grid with no resulting cells passed `Cells.All(...)` vacuously.
 4. A report with no cells is **not** `IsComplete`.
 5. Show the number of flagged cells in the CAD UI warning and in the Excel
    information sheet; individual rows show an unverified-geometry status.
-6. Add three executable C# regression cases:
+6. Add four executable C# regression cases:
    `grid_empty_report_is_not_accepted`,
-   `grid_positive_subthreshold_cell_is_not_accepted` and
+   `grid_positive_subthreshold_cell_is_not_accepted`,
+   `grid_partially_covered_sliver_is_not_accepted`, and
    `grid_positive_tiny_tin_face_is_not_silently_accepted`.
 
 ## What this does not prove
@@ -57,7 +59,7 @@ sections; do not infer speedups from synthetic .NET test runs.
 
 ## Acceptance checklist
 
-- [ ] C# executable core regression (including three new cases) passes
+- [ ] C# executable core regression (including four new cases) passes
 - [ ] Python regressions pass
 - [ ] Windows plugin compile succeeds for each targeted CAD version
 - [ ] Host `MVSELFTEST` passes with raw log
