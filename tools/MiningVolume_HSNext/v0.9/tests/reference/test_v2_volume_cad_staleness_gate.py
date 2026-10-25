@@ -42,6 +42,11 @@ def test_edited_geometry_is_compared_to_approved_profiles():
     assert "ReadEditedProfiles(db, approved, allowMissingUnedited: true)" in s
     assert "EditedSectionProfileBuilder.SameGeometry(approved, actual)" in s
     assert "Hãy bấm CẬP NHẬT MẶT CẮT" in s
+    # If every tagged Polyline was erased, original values are never valid
+    # merely because no CAD edit record remains.
+    assert 'lt.Has("MV_MC_HIENTRANG")' in s
+    assert 'lt.Has("MV_MC_THIETKE")' in s
+    assert "if (outputLayerExists ||" in s
 
 
 def test_actual_autocad_host_regression_protects_manual_grip_edit():
@@ -51,3 +56,4 @@ def test_actual_autocad_host_regression_protects_manual_grip_edit():
     assert "EditableSectionCadService.EnsureProfilesMatch(db, profiles)" in s
     assert "poly.SetPointAt(" in s
     assert "Modified grip vertex silently reused stale quantities" in s
+    assert "Deleting all CAD section polylines silently reused stale quantities." in s
