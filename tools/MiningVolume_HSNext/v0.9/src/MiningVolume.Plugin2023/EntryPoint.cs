@@ -264,6 +264,12 @@ namespace MiningVolume2023
         public static void LoadProject()
         {
             var r = Services.ProjectPersistenceService.LoadCurrentProject(true);
+            if (!r.Found)
+            {
+                // No saved Xrecord means a BLANK project. A previous drawing's
+                // singleton TIN/source state must never remain accepted here.
+                ProjectState.Current.Reset();
+            }
             AcApp.DocumentManager.MdiActiveDocument?.Editor.WriteMessage("\nNAMVECTA VOLUME: " + r.Message);
             _loadedDocument = AcApp.DocumentManager.MdiActiveDocument;
             _loadedDrawingFingerprint = CurrentFingerprint();
