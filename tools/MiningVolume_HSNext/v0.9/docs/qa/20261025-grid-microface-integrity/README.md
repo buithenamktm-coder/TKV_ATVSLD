@@ -174,3 +174,30 @@ survived but no valid tagged CAD section is available. The reference contract
 If the user purges **all layers and metadata as well**, no generic renderer
 can prove their earlier existence without another durable record. This remains
 a separate host acceptance boundary. No host CAD/Excel equality or runtime speedup is claimed.
+
+
+## Follow-up: licensed AutoCAD 2023 runtime execution route
+
+The root V2 host QA workflow `.github/workflows/verify-imsat-volume-v2-autocad2023.yml`
+previously restricted `source_ref` to ancestors of
+`miningvolume-v2-chatgpt-p0-continuation`. PR #54 is a separate authorized
+V2 repair branch, so a dispatch with its SHA was blocked before any host tests.
+The allowlist now admits **only** descendants of either this original V2 line
+or `namvecta-volume-v2-grid-accuracy-gate-20261025`; it still rejects arbitrary
+GitHub branches/SHAs. A new Python static contract tests that limitation.
+
+Host QA is not automatic on PR push: it is `workflow_dispatch`, needs the
+`self-hosted, Windows, X64, autocad2023` runner with a real licensed AutoCAD
+2023 installation and **interactive Administrator Windows desktop**, plus a
+pinned `IMSAT_VOLUME_V2_RSA_PUBLIC_XML_B64` secret and
+`IMSAT_VOLUME_V2_RSA_PUBLIC_SHA256` variable. When running the root workflow
+via its GitHub Actions UI, set `source_ref` to the exact tested branch SHA,
+verify that the executed workflow definition includes this PR's allowlist
+(the default-branch workflow may differ), and retain the resulting host
+runtime log artifact and run ID. Do not put private keys in CI.
+
+A successful ordinary GitHub compile/build job does **not** execute the
+native side-database CAD QA group or 85-section host benchmark. Do not
+change ReleaseStatus=BLOCKED until these results and complete user acceptance
+are documented. This commit makes the correct QA source **eligible**; it does
+not run the workflow or prove its runner is available.
