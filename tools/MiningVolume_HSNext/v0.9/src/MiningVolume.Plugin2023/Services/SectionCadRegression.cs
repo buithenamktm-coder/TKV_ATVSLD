@@ -369,8 +369,27 @@ namespace MiningVolume2023.Services
                 };
                 if (TinCadRenderer.CountFaces(db, tinLayer) != 2048)
                     throw new InvalidOperationException("TIN regression fixture was not created.");
+                // First export has no existing output layers. The fast path
+                // must skip full ModelSpace erase but still write both
+                // editable profiles and preserve the 2048 source TIN faces.
                 SectionCadRenderer.ReplaceProfiles(db, profiles, Point3d.Origin, 1000, 1000, 5);
+                int firstExisting = TinCadRenderer.CountUnexpectedEntities(db, "MV_MC_HIENTRANG");
+                int firstDesign = TinCadRenderer.CountUnexpectedEntities(db, "MV_MC_THIETKE");
+                int firstAxis = TinCadRenderer.CountUnexpectedEntities(db, "MV_MC_TRUC");
+                int firstText = TinCadRenderer.CountUnexpectedEntities(db, "MV_MC_TEXT");
+                if (firstExisting != 1 || firstDesign != 1 ||
+                    firstAxis < 3 || firstText < 2)
+                    throw new InvalidOperationException(
+                        "First-export fast path failed to write complete section geometry.");
+                // Redraw must STILL erase all objects from existing output
+                // layers and may not leave duplicate polylines/axis labels.
                 SectionCadRenderer.ReplaceProfiles(db, profiles, Point3d.Origin, 1000, 1000, 5);
+                if (TinCadRenderer.CountUnexpectedEntities(db, "MV_MC_HIENTRANG") != firstExisting ||
+                    TinCadRenderer.CountUnexpectedEntities(db, "MV_MC_THIETKE") != firstDesign ||
+                    TinCadRenderer.CountUnexpectedEntities(db, "MV_MC_TRUC") != firstAxis ||
+                    TinCadRenderer.CountUnexpectedEntities(db, "MV_MC_TEXT") != firstText)
+                    throw new InvalidOperationException(
+                        "Section redraw accumulated duplicates or lost original geometry.");
                 if (TinCadRenderer.CountFaces(db, tinLayer) != 2048)
                     throw new InvalidOperationException("Section redraw deleted unrelated TIN geometry.");
                 bool canceled = false;
