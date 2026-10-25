@@ -75,3 +75,30 @@ sections; do not infer speedups from synthetic .NET test runs.
 - [ ] Runtime performance regression checks pass
 
 Do not merge or publish a Setup while any release gate is unverified.
+
+
+## Follow-up 2026-10-25 — Section TIN shared-knot sampling (P0 performance)
+
+A first source-level optimization reuses a successfully queried DIRECT elevation of
+the previous segment's ending knot as the next segment's starting elevation.
+It is confined to `TinSectionSampler.BuildProfileIndexed`, with two independent
+last-value caches for HT and TK, reset for each `SectionSpan`.
+
+Safety boundaries:
+- Only an exact shared sorted knot `t0 == previousEndT` may reuse a value.
+- A boundary fallback query (offset toward the segment interior) is **not**
+  cached: adjacent segments may need different interior-side queries.
+- Neither knot list construction, midpoint coverage checks, cut/fill formula,
+  triangle index, TIN topology nor output CAD geometry is modified.
+- Cancellation polling and missing-coverage invalidation remain in place.
+
+Added executable geometry test:
+`section_knot_reuse_preserves_analytic_cut_fill` with adjacent 3D TIN strips,
+positive/negative signed differences, and a disconnected two-span route.
+The expected full-section cut/fill is 3.25/2.75 square metres; with a span
+gap, 3.25/1.25 square metres.
+
+This eliminates repeated direct endpoint lookups; **no speedup is claimed**
+until same-data, same-hardware before/after benchmarks and native AutoCAD
+85-section CAD export logs are available. The existing
+`tests/performance/report_autocad2023_host.py` remains the host comparison tool.
