@@ -102,3 +102,32 @@ This eliminates repeated direct endpoint lookups; **no speedup is claimed**
 until same-data, same-hardware before/after benchmarks and native AutoCAD
 85-section CAD export logs are available. The existing
 `tests/performance/report_autocad2023_host.py` remains the host comparison tool.
+
+
+## Follow-up — first CAD section/preview export ModelSpace fast path
+
+The old section renderer always scanned ModelSpace for old geometry before
+creating fresh section/preview entities, even on the first export into a
+DWG where the dedicated output layers did not yet exist. This unnecessarily
+enumerated potentially millions of unrelated TIN 3DFACE identifiers.
+
+Changes:
+- `SectionCadRenderer.ExistingLayerIds` reads the layer table **before**
+  creating any section/preview layers and returns only old layer IDs.
+- On initial preview or official section output where none of the target
+  layers pre-existed, skip the full `EraseOnLayers` traversal.
+- If *any* target layer already exists, still run the normal erase over
+  those pre-existing layers. No foreign layers or TIN 3DFACEs may be erased.
+- Preserve 20-profile batching, outer rollback transaction, Esc polling,
+  section XData, editability, coordinate transforms and volume formulae.
+- Added source-based reference regression
+  `tests/reference/test_v2_section_first_export_fast_path.py` and
+  strengthened **host-only** `VerifySectionEraseSkipsTinFaces` to compare
+  native section entity counts on the first export and second redraw.
+
+This improvement helps **first export only** when all dedicated output layers
+are new. It does not accelerate replacement of already-existing sections, or
+remove the cost of actually creating native CAD entities. There is no verified
+85-section host speedup until before/after telemetry on matching DWG geometry
+and hardware is available. The new side-Database host test is compiled during
+CI but needs a licensed AutoCAD host to execute.
