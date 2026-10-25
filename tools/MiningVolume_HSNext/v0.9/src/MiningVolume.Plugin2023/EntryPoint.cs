@@ -295,6 +295,8 @@ namespace MiningVolume2023
             }
             _loadedDocument = doc;
             _loadedDrawingFingerprint = fingerprint;
+            if (MainControl != null && !MainControl.IsDisposed)
+                MainControl.RefreshForNewDrawing();
         }
 
         private static string CurrentFingerprint()
