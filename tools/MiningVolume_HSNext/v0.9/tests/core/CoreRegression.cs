@@ -935,6 +935,41 @@ internal static class CoreRegression
                     "Missing TIN data must not be silently treated as fill=0");
             },
 
+            ["grid_empty_report_is_not_accepted"] = ()=>{
+                var empty = new GridVolumeReport { Cells = Array.Empty<GridVolumeCell>() };
+                Check(!empty.IsComplete, "Zero computed cells must not certify volume=0");
+            },
+            ["grid_positive_subthreshold_cell_is_not_accepted"] = ()=>{
+                var tiny = new GridCellVolume {
+                    CalculationArea = 5e-10, CoveredArea = 0
+                };
+                Check(tiny.CalculationArea > 0 && !tiny.IsComplete,
+                    "A positive clipped sliver must not be reported as a valid zero-volume cell");
+            },
+            ["grid_positive_tiny_tin_face_is_not_silently_accepted"] = ()=>{
+                // A 5e-10 m2 projected face is accepted by the TIN renderer
+                // but cannot be integrated by the grid kernel at Eps=1e-9.
+                // Its large delta-Z makes silent omission unacceptable.
+                var small = new Triangle3(P(4,4,100000), P(4.00001,4,100000),
+                    P(4,4.0001,100000));
+                Check(small.Area2D > 0 && small.Area2D < 1e-9,
+                    "Microface fixture must remain positive and subthreshold");
+                var existing = new[]{
+                    new Triangle3(P(0,0,100),P(20,0,100),P(20,20,100)),
+                    new Triangle3(P(0,0,100),P(20,20,100),P(0,20,100)),
+                    small
+                };
+                var design = new[]{
+                    new Triangle3(P(0,0),P(20,0),P(20,20)),
+                    new Triangle3(P(0,0),P(20,20),P(0,20))
+                };
+                var cell = new[]{new Vec2(0,0),new Vec2(20,0),
+                    new Vec2(20,20),new Vec2(0,20)};
+                var result = ExactGridCellCalculator.Calculate(existing,design,cell);
+                Check(result.HasUnresolvedSmallTriangles && !result.IsComplete,
+                    "Positive subthreshold TIN face must flag the result as not accepted");
+            },
+
             ["all_sites_referenced"] = ()=>{var p=Prepare(Corners().Concat(new[]{P(2,3),P(6,7),P(5,5)}));Coverage(p,Build(p));},
             ["single_constraint"] = ()=>{var p=Prepare(Corners(),new[]{new Segment3(P(0,0),P(10,10))});Constraints(p,Build(p));},
             ["crossing_same_z"] = ()=>{var p=Prepare(Corners(),new[]{new Segment3(P(0,0),P(10,10)),new Segment3(P(0,10),P(10,0))});Check(!p.HasErrors&&p.Sites.Any(v=>v.X==5&&v.Y==5),"Crossing not noded");Constraints(p,Build(p));},
