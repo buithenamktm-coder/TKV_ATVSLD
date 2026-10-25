@@ -69,6 +69,15 @@ namespace MiningVolume2023.UI
             settings.Controls.Add(_boundary,1,0);
             settings.SetColumnSpan(_boundary,3);
             var pick=_pickBoundary=Btn("Chọn trên CAD",(s,e)=>ChooseBoundary());
+            // Width/height are stable at all Palette sizes; a compact layout
+            // must never leave Dock=Fill behind after being expanded.
+            pick.AutoSize=false;
+            pick.Dock=DockStyle.None;
+            pick.Anchor=AnchorStyles.Left;
+            pick.Width=148;
+            pick.Height=28;
+            pick.MinimumSize=new Size(0,28);
+            pick.MaximumSize=new Size(0,28);
             settings.Controls.Add(pick,4,0);settings.SetColumnSpan(pick,2);
             _sizeX=Num(20,0.1M,100000);
             _sizeY=Num(20,0.1M,100000);
@@ -155,7 +164,10 @@ namespace MiningVolume2023.UI
                     _settingsGrid.Controls.Add(_scopeCaption,0,0);
                     _settingsGrid.SetColumnSpan(_boundary,1);
                     _settingsGrid.Controls.Add(_boundary,1,0);
-                    _pickBoundary.Dock=DockStyle.Fill;
+                    _pickBoundary.Dock=DockStyle.None;
+                    _pickBoundary.Anchor=AnchorStyles.Left;
+                    _pickBoundary.Width=148;
+                    _pickBoundary.Height=28;
                     _settingsGrid.Controls.Add(_pickBoundary,0,1);
                     _settingsGrid.SetColumnSpan(_pickBoundary,2);
                     _settingsGrid.Controls.Add(_xCaption,0,2); _settingsGrid.Controls.Add(_sizeX,1,2);
@@ -171,6 +183,10 @@ namespace MiningVolume2023.UI
                     _settingsGrid.Controls.Add(_scopeCaption,0,0);
                     _settingsGrid.Controls.Add(_boundary,1,0);
                     _settingsGrid.SetColumnSpan(_boundary,3);
+                    _pickBoundary.Dock=DockStyle.None;
+                    _pickBoundary.Anchor=AnchorStyles.Left;
+                    _pickBoundary.Width=148;
+                    _pickBoundary.Height=28;
                     _settingsGrid.Controls.Add(_pickBoundary,4,0);
                     _settingsGrid.SetColumnSpan(_pickBoundary,2);
                     _settingsGrid.Controls.Add(_xCaption,0,1); _settingsGrid.Controls.Add(_sizeX,1,1);
