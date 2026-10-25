@@ -196,8 +196,9 @@ def test_multi_z_volume_and_grid_are_localized_and_never_certify_missing_cells()
     assert "var tk = designIndex.Candidates(" in grid
     assert "IsVerticalConflict = false" in grid
     assert "AmbiguousCells" in grid and "AmbiguousArea" in grid
-    assert 'c.IsVerticalConflict || c.Volume.CoveredArea<=1e-9' in excel
-    assert 'c.v.IsVerticalConflict || c.v.Volume.CoveredArea<=1e-9' in excel
+    assert 'c.IsVerticalConflict || c.Volume.HasUnresolvedSmallTriangles || c.Volume.CoveredArea<=1e-9' in excel
+    assert 'c.v.IsVerticalConflict || c.v.Volume.HasUnresolvedSmallTriangles || c.v.Volume.CoveredArea<=1e-9' in excel
     assert '"Số ô thiếu phủ hiện trạng"' in excel
     assert '"Số ô thiếu phủ thiết kế"' in excel
-    assert "NHIỀU Z - CHƯA XÁC NHẬN" in excel
+    assert "HÌNH HỌC TIN - CHƯA XÁC NHẬN" in excel
+    assert "Số ô chứa tam giác TIN dương dưới ngưỡng tích phân" in excel
