@@ -163,4 +163,14 @@ AutoCAD host (`MVSELFTEST`). If the entire drawing's output layers themselves
 are purged, the runtime may lack evidence that official sections once existed;
 a persisted project snapshot with `HadEditableSectionCad` is an additional
 restore-time guard, but complete hostile deletion of all evidence is not
-certified here. No host CAD/Excel equality or runtime speedup is claimed.
+certified here.
+
+Follow-up for ordinary DWG restore: `EditableSectionCadService.HasOfficialSectionLayers`
+checks the persistent official HT/TK output layer names even if every section
+Polyline was deleted. `ProjectPersistenceService.Restore` refuses TIN-only
+recovery when `HadEditableSectionCad` is true **OR** either output layer
+survived but no valid tagged CAD section is available. The reference contract
+`test_v2_section_persistence_safety.py` now enforces the stronger condition.
+If the user purges **all layers and metadata as well**, no generic renderer
+can prove their earlier existence without another durable record. This remains
+a separate host acceptance boundary. No host CAD/Excel equality or runtime speedup is claimed.
