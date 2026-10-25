@@ -48,3 +48,13 @@ def test_manual_project_reload_invalidates_old_grid_before_disposing_tin():
         "ResetModel(Existing);")
     cache = source("Services/GridWorkflowService.cs")
     assert "_report = null; _options = null; _existing = null; _design = null;" in cache
+
+
+def test_explicit_saved_project_load_updates_existing_palette_state():
+    ep = source("EntryPoint.cs")
+    method = ep.split("public static void LoadProject()", 1)[1].split(
+        "private static void EnsureCurrentDrawingProjectLoaded()", 1)[0]
+    assert 'Services.ProjectPersistenceService.LoadCurrentProject(true)' in method
+    assert 'MainControl.RefreshForNewDrawing();' in method
+    assert method.index("MainControl.RefreshForNewDrawing();") < method.index(
+        "Open(AppPage.Project);")
