@@ -578,6 +578,11 @@ jobs:
           $mouseQtEntityCounts = "NOT_TESTED"
           $mouseDxfBefore = "NOT_TESTED"
           $mouseDxfAfter = "NOT_TESTED"
+          $nativeCanvasFocus = "NOT_TESTED"
+          $foregroundBefore = [IntPtr]::Zero
+          $foregroundAfter = [IntPtr]::Zero
+          $mouseHitTargets = @()
+          $mouseNativePerClick = @()
           try {
             for ($attempt = 0; $attempt -lt 30; $attempt++) {
               Start-Sleep -Seconds 1
@@ -940,18 +945,60 @@ jobs:
                       $mouseResult = "FAIL"
                       $mouseDetail = "Native DXF baseline not recognized (LINE count=$before)"
                     } else {
-                      Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public static class IMSATCADWinMouse { [DllImport("user32.dll",SetLastError=true)] public static extern bool SetCursorPos(int x,int y); [DllImport("user32.dll")] public static extern void mouse_event(uint flags,uint dx,uint dy,uint data,UIntPtr extra); }' -ErrorAction Stop
+                      # SendInput is the supported Win32 hardware-input path.
+                      # Older mouse_event could reach QCAD only once on CI.
+                      # Record the UIA hit target and native Qt release count
+                      # independently for each click to isolate lost input.
+                      Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public static class IMSATCADWinMouse { [StructLayout(LayoutKind.Sequential)] public struct MOUSEINPUT { public int dx; public int dy; public uint mouseData; public uint dwFlags; public uint time; public UIntPtr dwExtraInfo; } [StructLayout(LayoutKind.Sequential)] public struct INPUT { public uint type; public MOUSEINPUT mi; } [DllImport("user32.dll", SetLastError=true)] public static extern bool SetCursorPos(int x,int y); [DllImport("user32.dll", SetLastError=true)] public static extern bool SetForegroundWindow(IntPtr hwnd); [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow(); [DllImport("user32.dll", SetLastError=true)] public static extern uint SendInput(uint count, INPUT[] data,int size); public static bool SendButton(uint flag) { INPUT data = new INPUT { type=0, mi=new MOUSEINPUT { dwFlags=flag } }; return SendInput(1,new INPUT[]{data},Marshal.SizeOf(typeof(INPUT)))==1; } }' -ErrorAction Stop
+                      $nativeCanvasFocus = "NOT_TESTED"
+                      try {
+                        $canvas.SetFocus()
+                        $nativeCanvasFocus = "PASS"
+                      } catch {
+                        $nativeCanvasFocus = "UIA SetFocus unavailable: $($_.Exception.Message)"
+                      }
+                      $foregroundBefore = [IMSATCADWinMouse]::GetForegroundWindow()
+                      $null = [IMSATCADWinMouse]::SetForegroundWindow($gui.MainWindowHandle)
+                      Start-Sleep -Milliseconds 220
+                      $foregroundAfter = [IMSATCADWinMouse]::GetForegroundWindow()
+                      $mouseHitTargets = @()
+                      $mouseNativePerClick = @()
                       for ($step = 0; $step -lt 2; $step++) {
-                        $clickX = if ($step -eq 0) { $x1 } else { $x2 }
-                        $clickY = if ($step -eq 0) { $y1 } else { $y2 }
-                        if (-not [IMSATCADWinMouse]::SetCursorPos([int]$clickX,[int]$clickY)) {
+                        # Re-read the live native canvas rectangle after the
+                        # previous coordinate may have altered the GUI layout.
+                        $currentBounds = $canvas.Current.BoundingRectangle
+                        $clickX = [int][Math]::Round($currentBounds.Left +
+                          $currentBounds.Width * $(if ($step -eq 0) { 0.44 } else { 0.57 }))
+                        $clickY = [int][Math]::Round($currentBounds.Top +
+                          $currentBounds.Height * $(if ($step -eq 0) { 0.44 } else { 0.54 }))
+                        if (-not [IMSATCADWinMouse]::SetCursorPos($clickX,$clickY)) {
                           throw "SetCursorPos failed at $clickX,$clickY"
                         }
-                        Start-Sleep -Milliseconds 180
-                        [IMSATCADWinMouse]::mouse_event(2,0,0,0,[UIntPtr]::Zero)
-                        Start-Sleep -Milliseconds 85
-                        [IMSATCADWinMouse]::mouse_event(4,0,0,0,[UIntPtr]::Zero)
-                        Start-Sleep -Milliseconds 400
+                        Start-Sleep -Milliseconds 250
+                        $hitLabel = "UNAVAILABLE"
+                        try {
+                          $hit = [System.Windows.Automation.AutomationElement]::FromPoint(
+                            [System.Windows.Point]::new([double]$clickX,[double]$clickY))
+                          if ($null -ne $hit) {
+                            $hitLabel = "$([string]$hit.Current.AutomationId) [$([string]$hit.Current.Name)]"
+                          }
+                        } catch {
+                          $hitLabel = "UIA FromPoint unavailable: $($_.Exception.Message)"
+                        }
+                        $mouseHitTargets += "$($step+1):($clickX,$clickY)=$hitLabel"
+                        $pressOk = [IMSATCADWinMouse]::SendButton(2)
+                        Start-Sleep -Milliseconds 130
+                        $releaseOk = [IMSATCADWinMouse]::SendButton(4)
+                        if (-not $pressOk -or -not $releaseOk) {
+                          throw "Windows SendInput failed at click $($step+1): down=$pressOk up=$releaseOk"
+                        }
+                        Start-Sleep -Milliseconds 600
+                        $stepMouseTrace = ((Get-Content $guiStdout -Raw -ErrorAction SilentlyContinue) +
+                          [Environment]::NewLine +
+                          (Get-Content $guiStderr -Raw -ErrorAction SilentlyContinue))
+                        $observedReleaseCount = [regex]::Matches($stepMouseTrace,
+                          'IMSATCAD_MOUSE_QA RELEASE').Count
+                        $mouseNativePerClick += "$($step+1):$observedReleaseCount"
                       }
                       # Save the same named GUI document using native Ctrl+S.
                       [System.Windows.Forms.SendKeys]::SendWait("^{s}")
@@ -1032,6 +1079,7 @@ jobs:
           Write-Host "Native Windows Space-key dispatch: $keyboardResult ($keyboardDetail)"
           Write-Host "Native Windows mouse and Ctrl+S: $mouseResult ($mouseDetail)"
           Write-Host "Native Qt mouse events: press=$mouseQtPressCount release=$mouseQtReleaseCount entityCounts=$mouseQtEntityCounts; DXF=$mouseDxfBefore->$mouseDxfAfter"
+          Write-Host "Native canvas focus=$nativeCanvasFocus foreground before=$foregroundBefore after=$foregroundAfter; hits=$($mouseHitTargets -join ' | '); releases=$($mouseNativePerClick -join ' | ')"
           Get-Content "native-ribbon-probe.txt" | Select-Object -First 32
           $guiLineDxf = Join-Path $env:TEMP "imsat-cad-gui-line-roundtrip.dxf"
           if (Test-Path $guiLineDxf) {
@@ -1043,6 +1091,9 @@ jobs:
             "NativeMouseQtPressCount=$mouseQtPressCount",
             "NativeMouseQtReleaseCount=$mouseQtReleaseCount",
             "NativeMouseEntityCounts=$mouseQtEntityCounts",
+            "NativeCanvasUIAFocus=$nativeCanvasFocus",
+            "NativeMouseHitTargets=$($mouseHitTargets -join ' | ')",
+            "NativeMouseReleaseCountsPerClick=$($mouseNativePerClick -join ' | ')",
             "DXFLinesBefore=$mouseDxfBefore",
             "DXFLinesAfter=$mouseDxfAfter",
             "Commit=$env:GITHUB_SHA"
@@ -1067,6 +1118,9 @@ jobs:
             "NativeMouseQtPressCount=$mouseQtPressCount",
             "NativeMouseQtReleaseCount=$mouseQtReleaseCount",
             "NativeMouseEntityCounts=$mouseQtEntityCounts",
+            "NativeCanvasUIAFocus=$nativeCanvasFocus",
+            "NativeMouseHitTargets=$($mouseHitTargets -join ' | ')",
+            "NativeMouseReleaseCountsPerClick=$($mouseNativePerClick -join ' | ')",
             "MouseDXFLineCountBefore=$mouseDxfBefore",
             "MouseDXFLineCountAfter=$mouseDxfAfter",
             "NativeOffscreenCADGeometryAndDXFPersistence=$geometryGate"
