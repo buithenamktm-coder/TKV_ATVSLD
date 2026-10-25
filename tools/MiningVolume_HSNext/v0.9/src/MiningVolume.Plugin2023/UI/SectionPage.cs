@@ -72,7 +72,7 @@ namespace MiningVolume2023.UI
 
             var title = new Label
             {
-                Text = "HỆ MẶT CẮT",
+                Text = _quickOnly ? "VẼ NHANH MẶT CẮT" : "HỆ MẶT CẮT",
                 Dock = DockStyle.Fill,
                 Font = new Font("Arial", 12F, FontStyle.Bold),
                 ForeColor = UiTheme.TextStrong,
@@ -180,21 +180,24 @@ namespace MiningVolume2023.UI
                 Padding = new Padding(6, 4, 6, 4),
                 Margin = Padding.Empty
             };
-            tools.Controls.Add(Button("Thêm tuyến", AddLine));
-            tools.Controls.Add(Button("Dịch tuyến", MoveLine));
-            tools.Controls.Add(Button("Xóa tuyến", DeleteLine));
             if (!_quickOnly)
-                tools.Controls.Add(Button("Xóa toàn bộ tuyến cũ", ClearOldStationLines));
-            tools.Controls.Add(Button("Xóa preview", (s, e) => SectionWorkflowService.ClearPreview()));
-            var updateEdited = Button("Tính toán khối lượng trên mặt cắt", UpdateEditedProfiles);
-            updateEdited.Name = "btnUpdateEditedSections";
-            updateEdited.Font = new Font("Arial", 9F, FontStyle.Bold);
-            updateEdited.AutoSize = false;
-            updateEdited.Width = 229;
-            tools.Controls.Add(updateEdited);
-            if (!_quickOnly && _navigate != null)
             {
-                tools.Controls.Add(Button("Xuất CAD / Excel", (sender, args) => _navigate(AppPage.Export)));
+                // Quick sections are independent drawings, not the official
+                // station system used for earthwork. Never expose official
+                // station edits or "Tính toán khối lượng" in the Quick tab.
+                tools.Controls.Add(Button("Thêm tuyến", AddLine));
+                tools.Controls.Add(Button("Dịch tuyến", MoveLine));
+                tools.Controls.Add(Button("Xóa tuyến", DeleteLine));
+                tools.Controls.Add(Button("Xóa toàn bộ tuyến cũ", ClearOldStationLines));
+                tools.Controls.Add(Button("Xóa preview", (s, e) => SectionWorkflowService.ClearPreview()));
+                var updateEdited = Button("Tính toán khối lượng trên mặt cắt", UpdateEditedProfiles);
+                updateEdited.Name = "btnUpdateEditedSections";
+                updateEdited.Font = new Font("Arial", 9F, FontStyle.Bold);
+                updateEdited.AutoSize = false;
+                updateEdited.Width = 229;
+                tools.Controls.Add(updateEdited);
+                if (_navigate != null)
+                    tools.Controls.Add(Button("Xuất CAD / Excel", (sender, args) => _navigate(AppPage.Export)));
             }
             root.Controls.Add(tools, 0, 3);
 
@@ -271,7 +274,12 @@ namespace MiningVolume2023.UI
         private void AdjustParameterHeightToAvailableSpace()
         {
             if (_rootLayout == null) return;
-            if (_quickOnly) { _rootLayout.RowStyles[1].Height = 140F; return; }
+            if (_quickOnly)
+            {
+                _rootLayout.RowStyles[1].Height = 140F;
+                _rootLayout.RowStyles[3].Height = 0F;
+                return;
+            }
             // Reserve usable space for the table of section results even on
             // 620px Windows palettes; the parameter panel scrolls internally.
             int visibleHeight = Math.Max(500, ClientSize.Height);
