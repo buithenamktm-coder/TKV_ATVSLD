@@ -68,8 +68,16 @@ namespace MiningVolume2023.Services
                 Action poll = pollCancellation ?? progress.Poll;
                 poll();
                 var grouped = new Dictionary<string, List<Tagged>>(StringComparer.OrdinalIgnoreCase);
+                // A saved/generated section may have had every tagged
+                // Polyline manually deleted. Empty XData then must NOT be
+                // confused with "never exported". The dedicated output
+                // layer is independent evidence that CAD sections existed.
+                bool outputLayerExists = false;
                 using (var tr = db.TransactionManager.StartOpenCloseTransaction())
                 {
+                    var lt = (LayerTable)tr.GetObject(db.LayerTableId, OpenMode.ForRead);
+                    outputLayerExists = lt.Has("MV_MC_HIENTRANG") ||
+                        lt.Has("MV_MC_THIETKE");
                     var ms = GetModelSpace(db, tr);
                     var polyClass = Autodesk.AutoCAD.Runtime.RXObject.GetClass(typeof(Polyline));
                     int scanned = 0;
@@ -95,10 +103,11 @@ namespace MiningVolume2023.Services
                 // that have never been exported for manual editing.
                 if (grouped.Count == 0 && allowMissingUnedited)
                 {
-                    if (originals.Any(p => p != null && p.IsUserEdited))
+                    if (outputLayerExists ||
+                        originals.Any(p => p != null && p.IsUserEdited))
                         throw new InvalidOperationException(
-                            "Hệ mặt cắt đã hiệu chỉnh không còn tồn tại trên CAD. " +
-                            "Không xuất số liệu cũ; hãy khôi phục đường đã chỉnh.");
+                            "Các layer mặt cắt CAD đã tồn tại nhưng không còn đường mặt cắt có ID hợp lệ. " +
+                            "Không tính lại từ dữ liệu cũ; hãy khôi phục mặt cắt CAD hoặc vẽ lại có xác nhận.");
                     poll();
                     return originals;
                 }
