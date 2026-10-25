@@ -70,3 +70,24 @@ def test_deleting_station_blocks_clears_only_saved_section_snapshot():
         "public static void ReplaceProfiles(",1)[0]
     assert "onClearedInSameTransaction?.Invoke(tr);" in clear
     assert clear.index("EraseOnLayers(ms, tr, clear);") < clear.rindex("onClearedInSameTransaction?.Invoke(tr);") < clear.rindex("tr.Commit();")
+
+
+def test_section_clear_preflight_preserves_foreign_cad_objects():
+    # Validate both initial preview replacement and explicit removal.
+    pre=renderer.split("public static void ReplacePreview(",1)[1].split(
+        "private static ObjectId UpdateStationDefinition(",1)[0]
+    clear=renderer.split("public static void ClearPreview(Database db,",1)[1].split(
+        "public static void ReplaceProfiles(",1)[0]
+    assert pre.index("ValidatePreviewOwnership(") < pre.index("EraseOnLayers(")
+    assert clear.index("ValidatePreviewOwnership(") < clear.index("EraseOnLayers(")
+    method=renderer.split("private static void ValidatePreviewOwnership(",1)[1].split(
+        "private static bool IsStationBlock(",1)[0]
+    assert "if (entity is Line) continue;" in method
+    assert "entity.LayerId == nameLayer && !(entity is DBText)" in method
+    assert "block != null && IsStationBlock(" in method
+    assert "throw new InvalidOperationException(" in method
+    block=renderer.split("private static bool IsStationBlock(",1)[1].split(
+        "private static BlockTableRecord ModelSpace(",1)[0]
+    assert 'StartsWith("NAMVECTA_MC_TUYEN_", StringComparison.Ordinal)' in block
+    assert "entity is Line && entity.LayerId == planLayer" in block
+    assert "entity is DBText && entity.LayerId == nameLayer" in block
