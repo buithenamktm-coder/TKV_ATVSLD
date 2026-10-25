@@ -910,12 +910,18 @@ jobs:
                   $py = [int][Math]::Round($bounds.Top)
                   $pw = [int][Math]::Round($bounds.Width)
                   $ph = [int][Math]::Round($bounds.Height)
-                  $point1 = @($px+[int]($pw*.35),$py+[int]($ph*.35))
-                  $point2 = @($px+[int]($pw*.65),$py+[int]($ph*.55))
+                  # Coordinates must be four scalar integers. PowerShell can
+                  # interpret @($px + x, $py + y) as an Object[] addition.
+                  $x1 = [int]($px + [Math]::Round($pw * 0.35))
+                  $y1 = [int]($py + [Math]::Round($ph * 0.35))
+                  $x2 = [int]($px + [Math]::Round($pw * 0.65))
+                  $y2 = [int]($py + [Math]::Round($ph * 0.55))
                   $frame = $root.Current.BoundingRectangle
+                  $mouseResult = "FAIL"
                   if ($pw -lt 250 -or $ph -lt 180 -or
-                      $point1[0] -lt $frame.Left -or $point2[0] -gt $frame.Right -or
-                      $point1[1] -lt $frame.Top -or $point2[1] -gt $frame.Bottom) {
+                      $x1 -lt $frame.Left -or $x2 -gt $frame.Right -or
+                      $y1 -lt $frame.Top -or $y2 -gt $frame.Bottom) {
+                    $mouseResult = "NOT_TESTED"
                     $mouseDetail = "UIA canvas bounds inconsistent with live CAD window: x=$px y=$py width=$pw height=$ph"
                   } else {
                     $drawingFile = Join-Path $env:TEMP "imsat-cad-gui-line-roundtrip.dxf"
@@ -923,13 +929,15 @@ jobs:
                     $linePattern = '(?m)^[ \t]*0\r?\nLINE\r?$'
                     $before = [regex]::Matches((Get-Content $drawingFile -Raw),$linePattern).Count
                     if ($before -ne 1) {
+                      $mouseResult = "FAIL"
                       $mouseDetail = "Native DXF baseline not recognized (LINE count=$before)"
                     } else {
                       Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public static class IMSATCADWinMouse { [DllImport("user32.dll",SetLastError=true)] public static extern bool SetCursorPos(int x,int y); [DllImport("user32.dll")] public static extern void mouse_event(uint flags,uint dx,uint dy,uint data,UIntPtr extra); }' -ErrorAction Stop
-                      $mouseResult = "FAIL"
-                      foreach ($point in @($point1,$point2)) {
-                        if (-not [IMSATCADWinMouse]::SetCursorPos([int]$point[0],[int]$point[1])) {
-                          throw "SetCursorPos failed"
+                      for ($step = 0; $step -lt 2; $step++) {
+                        $clickX = if ($step -eq 0) { $x1 } else { $x2 }
+                        $clickY = if ($step -eq 0) { $y1 } else { $y2 }
+                        if (-not [IMSATCADWinMouse]::SetCursorPos([int]$clickX,[int]$clickY)) {
+                          throw "SetCursorPos failed at $clickX,$clickY"
                         }
                         Start-Sleep -Milliseconds 180
                         [IMSATCADWinMouse]::mouse_event(2,0,0,0,[UIntPtr]::Zero)
@@ -951,14 +959,15 @@ jobs:
                         $mouseResult = "PASS"
                         $mouseDetail = "Two Win32 clicks and Ctrl+S increased LINE count from $before to $after"
                       } else {
-                        $mouseDetail = "DXF did not gain one LINE: $before -> $after; points=$($point1 -join ','),$($point2 -join ',')"
+                        $mouseDetail = "DXF did not gain one LINE: $before -> $after; points=($x1,$y1),($x2,$y2)"
                       }
                     }
                   }
                 }
               } catch {
+                # If native canvas exists and the test started, unexpected
+                # PowerShell/Win32 errors are FAIL, not an invisible skip.
                 $mouseDetail = "Native mouse drawing exception: $($_.Exception.Message)"
-                if ($mouseResult -ne "FAIL") { $mouseResult = "NOT_TESTED" }
               }
             }
             if (-not (Test-Path $probeFile)) {
