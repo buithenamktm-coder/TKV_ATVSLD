@@ -399,6 +399,17 @@ namespace MiningVolume2023.UI
             }
         }
 
+        internal void RefreshForNewDrawing()
+        {
+            if (IsDisposed) return;
+            if (_pages.TryGetValue(AppPage.Data, out var control) &&
+                control is ModelWorkflowPage workflow)
+                workflow.RefreshForNewDrawing();
+            // Reset() does not dispatch Changed; force all pages to reflect
+            // the new DWG, including a blank drawing without a saved Project.
+            ProjectState.Current.NotifyChanged();
+        }
+
         public void ShowGroup(AppPage group)
         {
             _updatingNav = true;
