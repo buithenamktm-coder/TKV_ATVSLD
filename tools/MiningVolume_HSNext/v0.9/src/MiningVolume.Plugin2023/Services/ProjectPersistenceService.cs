@@ -386,11 +386,17 @@ namespace MiningVolume2023.Services
             state.MarkTinRegionChanged();
             if (snap.HasDirection) state.SectionDirection = new Vec2(snap.DirectionX, snap.DirectionY);
 
+            // A non-source warning (legacy drawing scale, duplicate hidden
+            // mineral body, etc.) must not disable restoration of otherwise
+            // verified stored TINs. Only warnings newly produced while
+            // validating HT/TK sources make downstream calculations unsafe.
+            int warningsBeforeSourceRestore = warnings.Count;
             RestoreModel(ModelRole.Existing, snap.Existing, warnings);
             RestoreModel(ModelRole.Design, snap.Design, warnings);
-            if(warnings.Count>0) {
-                rebuildDerived=false;
-                warnings.Add("Nguồn cần kiểm tra lại; không tự dựng TIN/mặt cắt/khối lượng từ dữ liệu chưa xác minh.");
+            if (warnings.Count > warningsBeforeSourceRestore)
+            {
+                rebuildDerived = false;
+                warnings.Add("Nguồn HT/TK cần kiểm tra lại; chặn tự tính mặt cắt/khối lượng cho đến khi xác minh.");
             }
 
             if (snap.SectionLines != null && snap.SectionLines.Count > 0 && snap.Boundary != null && snap.Boundary.Count >= 3)
