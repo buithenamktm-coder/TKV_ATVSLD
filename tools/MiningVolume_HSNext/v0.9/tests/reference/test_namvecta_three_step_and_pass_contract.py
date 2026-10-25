@@ -52,3 +52,9 @@ def test_workbook_defaults_compact_but_formula_dependency_retained():
     assert "BandSum" in export
     assert 'AddCheck(flow, "Tổng hợp toàn khu vực", true)' in ui
     assert "NAMVECTA_VOLUME_KhoiLuong_" in ui
+
+def test_project_restore_user_messages_use_namvecta_brand():
+    persistence = source("Services/ProjectPersistenceService.cs")
+    assert "Bản vẽ chưa có Project NAMVECTA VOLUME." in persistence
+    assert "Project IMSAT VOLUME" not in persistence
+
