@@ -36,7 +36,7 @@ def test_section_direction_is_perpendicular_to_two_selected_cad_points():
     page = read("src/MiningVolume.Plugin2023/UI/SectionPage.cs")
     select = read("src/MiningVolume.Plugin2023/Services/SelectionService.cs")
     assert "public static Vec2 PerpendicularToSelectedDirection(Vec2 selected)" in builder
-    assert "new Vec2(-selected.Y / length, selected.X / length)" in builder
+    assert "new Vec2(selected.Y / length, -selected.X / length)" in builder
     assert "SectionSystemBuilder.PerpendicularToSelectedDirection(r.Vector)" in page
     assert "SectionDirection = sectionDirection;" in page
     assert "Hướng MC (vuông góc)" in page
