@@ -133,6 +133,3 @@ jobs:
           if-no-files-found: error
           path: |
             tools/MiningVolume_HSNext/v0.9/dist/namvecta-work/Output/NAMVECTA-VOLUME-2.0-Setup-QA-NOT-RELEASE.exe
-            tools/MiningVolume_HSNext/v0.9/dist/namvecta-work/Output/QA_BUILD_RECEIPT.json
-            tools/MiningVolume_HSNext/v0.9/dist/namvecta-work/Bundles/STAGING_QA.json
-            tools/MiningVolume_HSNext/v0.9/dist/namvecta-work/Branding/BRANDING_QA.json
