@@ -102,6 +102,12 @@ namespace MiningVolume2023.UI
                 var doc = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument;
                 if (doc == null)
                     throw new InvalidOperationException("Không có bản vẽ AutoCAD đang hoạt động.");
+                // The user may have grip-edited a tagged CAD section without
+                // pressing "Cập nhật mặt cắt". Never silently recompute from
+                // stale in-memory SectionProfiles in that situation. Checking
+                // here also avoids wasting CPU on a result we must reject.
+                EditableSectionCadService.EnsureProfilesMatch(
+                    doc.Database, st.SectionProfiles.ToArray());
                 double from = st.FromLevel, to = st.ToLevel, step = st.LevelStep;
                 double calculationFrom = from, calculationTo = to;
                 string autoLevelNote = "";
@@ -133,6 +139,7 @@ namespace MiningVolume2023.UI
                 var design = st.Design.Tin;
                 long revisionExisting = st.Existing.Source.Revision;
                 long revisionDesign = st.Design.Source.Revision;
+                long regionRevision = st.TinRegionRevision;
                 var watch = Stopwatch.StartNew();
                 var result = await Task.Run(() => VolumeWorkflowService.CalculateCore(system, profiles, existing, design, calculationFrom, calculationTo, step, token));
                 token.ThrowIfCancellationRequested();
@@ -145,11 +152,19 @@ namespace MiningVolume2023.UI
                     !st.Existing.IsTinCurrent || !st.Design.IsTinCurrent ||
                     revisionExisting != st.Existing.Source.Revision ||
                     revisionDesign != st.Design.Source.Revision ||
+                    regionRevision != st.TinRegionRevision ||
                     from != st.FromLevel || to != st.ToLevel || step != st.LevelStep ||
                     profiles.Length != st.SectionProfiles.Count ||
                     profiles.Where((p, i) => !ReferenceEquals(p, st.SectionProfiles[i])).Any())
                     throw new InvalidOperationException(
                         "DWG, dữ liệu TIN hoặc mặt cắt đã thay đổi khi tính. Đã giữ nguyên kết quả cũ; hãy tính lại.");
+                // The Task.Run computation yielded UI control. A user can
+                // edit CAD during that interval without replacing the in-memory
+                // profile objects. Verify the ACTUAL tagged polyline geometry
+                // once more, immediately before accepting the new volume.
+                // The validation reads only and never rewrites a CAD entity.
+                EditableSectionCadService.EnsureProfilesMatch(doc.Database, profiles);
+                token.ThrowIfCancellationRequested();
                 VolumeWorkflowService.Commit(result, calculationFrom, calculationTo, step);
                 watch.Stop();
                 st.VolumeCalculatedUtc = DateTime.UtcNow;
