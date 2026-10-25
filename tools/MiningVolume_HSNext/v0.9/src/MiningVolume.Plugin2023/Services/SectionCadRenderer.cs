@@ -30,6 +30,7 @@ namespace MiningVolume2023.Services
                 ObjectId styleId = EnsureArialStyle(db, tr);
                 EnsureFrameRegApp(db, tr);
                 var ms = ModelSpace(db, tr, true);
+                ValidatePreviewOwnership(ms, tr, layerId, namesLayerId);
                 EraseOnLayers(ms, tr, new[] { layerId, namesLayerId });
 
                 // Each station line (all segments + its label) is ONE native
@@ -142,6 +143,9 @@ namespace MiningVolume2023.Services
                 var clear = new List<ObjectId>();
                 if(lt.Has(PreviewLayer))clear.Add(lt[PreviewLayer]);
                 if(lt.Has(PreviewLabelLayer))clear.Add(lt[PreviewLabelLayer]);
+                ValidatePreviewOwnership(ms, tr,
+                    lt.Has(PreviewLayer) ? lt[PreviewLayer] : ObjectId.Null,
+                    lt.Has(PreviewLabelLayer) ? lt[PreviewLabelLayer] : ObjectId.Null);
                 EraseOnLayers(ms, tr, clear);
                 onClearedInSameTransaction?.Invoke(tr);
                 tr.Commit();
@@ -416,6 +420,59 @@ namespace MiningVolume2023.Services
                 throw new InvalidOperationException("Mặt cắt " + profileName +
                     ": bước chia trục Z không biểu diễn được tại cao độ này. Hãy kiểm tra cao độ hoặc tăng bước chia trục Z.", ex);
             }
+        }
+
+        /// <summary>
+        /// Old versions wrote loose LINE/DBText objects. V2 writes named
+        /// BlockReferences. An unexpected entity on a reserved plan-preview
+        /// layer may belong to the user: refuse deletion rather than erase it.
+        /// </summary>
+        private static void ValidatePreviewOwnership(BlockTableRecord model,
+            Transaction tr, ObjectId planLayer, ObjectId nameLayer)
+        {
+            var faceClass = Autodesk.AutoCAD.Runtime.RXObject.GetClass(typeof(Face));
+            foreach (ObjectId id in model)
+            {
+                // EraseOnLayers deliberately never touches faces, so they
+                // also do not affect its ownership check.
+                if (id.ObjectClass.IsDerivedFrom(faceClass)) continue;
+                var entity = tr.GetObject(id, OpenMode.ForRead) as Entity;
+                if (entity == null) continue;
+                if (entity.LayerId == planLayer)
+                {
+                    if (entity is Line) continue;  // legacy NAMVECTA stations
+                    var block = entity as BlockReference;
+                    if (block != null && IsStationBlock(block, tr, planLayer, nameLayer))
+                        continue;
+                    throw new InvalidOperationException(
+                        "Layer MV_MC_BINHDO chứa đối tượng ngoài tuyến mặt cắt NAMVECTA. " +
+                        "Không xóa để bảo vệ hình học nguồn.");
+                }
+                if (entity.LayerId == nameLayer && !(entity is DBText))
+                    throw new InvalidOperationException(
+                        "Layer MV_MC_BINHDO_TEN chứa đối tượng ngoài nhãn mặt cắt. " +
+                        "Không xóa để bảo vệ dữ liệu CAD.");
+            }
+        }
+
+        private static bool IsStationBlock(BlockReference reference,
+            Transaction tr, ObjectId planLayer, ObjectId nameLayer)
+        {
+            var definition = tr.GetObject(reference.BlockTableRecord,
+                OpenMode.ForRead) as BlockTableRecord;
+            if (definition == null ||
+                !definition.Name.StartsWith("NAMVECTA_MC_TUYEN_", StringComparison.Ordinal))
+                return false;
+            bool hasSegment = false;
+            foreach (ObjectId id in definition)
+            {
+                var entity = tr.GetObject(id, OpenMode.ForRead) as Entity;
+                if (entity is Line && entity.LayerId == planLayer)
+                    hasSegment = true;
+                else if (!(entity is DBText && entity.LayerId == nameLayer))
+                    return false;
+            }
+            return hasSegment;
         }
 
         private static BlockTableRecord ModelSpace(Database db, Transaction tr, bool write)
