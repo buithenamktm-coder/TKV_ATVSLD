@@ -34,10 +34,19 @@ jobs:
         shell: pwsh
         run: |
           $sha=(git rev-parse HEAD).Trim()
-          git fetch origin miningvolume-v2-chatgpt-p0-continuation --no-tags
-          if ($LASTEXITCODE -ne 0) { throw 'V2 branch not available.' }
-          git merge-base --is-ancestor $sha origin/miningvolume-v2-chatgpt-p0-continuation
-          if ($LASTEXITCODE -ne 0) { throw 'BLOCKED: supplied source is not part of V2.' }
+          # Check only these approved V2 source lines. Reject arbitrary refs.
+          $approved=@(
+            'miningvolume-v2-chatgpt-p0-continuation',
+            'namvecta-volume-v2-grid-accuracy-gate-20261025'
+          )
+          $authorized=$false
+          foreach ($line in $approved) {
+            git fetch origin $line --no-tags
+            if ($LASTEXITCODE -ne 0) { continue }
+            git merge-base --is-ancestor $sha ("origin/" + $line)
+            if ($LASTEXITCODE -eq 0) { $authorized=$true; break }
+          }
+          if (-not $authorized) { throw "BLOCKED: source $sha is not reachable from approved V2 branches." }
           "SOURCE_SHA=$sha" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Require real licensed AutoCAD 2023 installation
