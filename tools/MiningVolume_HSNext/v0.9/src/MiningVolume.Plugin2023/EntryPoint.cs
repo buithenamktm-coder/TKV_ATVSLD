@@ -267,6 +267,8 @@ namespace MiningVolume2023
             AcApp.DocumentManager.MdiActiveDocument?.Editor.WriteMessage("\nNAMVECTA VOLUME: " + r.Message);
             _loadedDocument = AcApp.DocumentManager.MdiActiveDocument;
             _loadedDrawingFingerprint = CurrentFingerprint();
+            if (MainControl != null && !MainControl.IsDisposed)
+                MainControl.RefreshForNewDrawing();
             Open(AppPage.Project);
         }
 
