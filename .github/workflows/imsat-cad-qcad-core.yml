@@ -816,6 +816,61 @@ jobs:
             # is observed and Space clears it through commandConfirmed.
             try {
               Add-Type -AssemblyName System.Windows.Forms -ErrorAction Stop
+              # A focused QMdiChild is not proof of the frontmost document.
+              # Run #163 found the marked DXF canvas, but FromPoint hit Untitled1.
+              # Select the document through the native tab bar before dispatching
+              # LINE, and verify screen hit testing before sending any keys.
+              $documentTabs = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants,
+                [System.Windows.Automation.PropertyCondition]::new(
+                  [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
+                  [System.Windows.Automation.ControlType]::TabItem))
+              $documentTab = $null
+              $documentTabNames = @()
+              for ($di = 0; $di -lt $documentTabs.Count; $di++) {
+                $tab = $documentTabs.Item($di)
+                $tabName = [string]$tab.Current.Name
+                $documentTabNames += $tabName
+                if ($tabName.Trim([char[]]' *') -ceq 'imsat-cad-gui-line-roundtrip.dxf') {
+                  if ($null -ne $documentTab) { throw "Ambiguous acceptance DXF document tabs" }
+                  $documentTab = $tab
+                }
+              }
+              if ($null -eq $documentTab) {
+                throw "Acceptance DXF tab missing; observed: $($documentTabNames -join ' | ')"
+              }
+              $documentSelection = $null
+              if (-not $documentTab.TryGetCurrentPattern(
+                  [System.Windows.Automation.SelectionItemPattern]::Pattern, [ref]$documentSelection)) {
+                throw "Acceptance DXF tab lacks native SelectionItemPattern"
+              }
+              $keyboardResult = "FAIL"
+              $documentSelection.Select()
+              $documentFrontmost = $false
+              $documentHitName = "NONE"
+              for ($docPoll = 0; $docPoll -lt 15; $docPoll++) {
+                Start-Sleep -Milliseconds 200
+                $documentCanvas = $root.FindFirst([System.Windows.Automation.TreeScope]::Descendants,
+                  [System.Windows.Automation.PropertyCondition]::new(
+                    [System.Windows.Automation.AutomationElement]::NameProperty,
+                    "IMSAT CAD acceptance drawing canvas"))
+                if ($null -eq $documentCanvas -or $documentCanvas.Current.IsOffscreen) { continue }
+                $docBounds = $documentCanvas.Current.BoundingRectangle
+                if ($docBounds.Width -le 0 -or $docBounds.Height -le 0) { continue }
+                $docHit = [System.Windows.Automation.AutomationElement]::FromPoint(
+                  [System.Windows.Point]::new($docBounds.Left + $docBounds.Width * 0.44,
+                    $docBounds.Top + $docBounds.Height * 0.44))
+                if ($null -ne $docHit) { $documentHitName = [string]$docHit.Current.Name }
+                if ($documentSelection.Current.IsSelected -and
+                    $documentHitName -ceq "IMSAT CAD acceptance drawing canvas") {
+                  $documentFrontmost = $true
+                  break
+                }
+              }
+              "DocumentTab=$($documentTab.Current.Name); Selected=$($documentSelection.Current.IsSelected); Hit=$documentHitName" |
+                Set-Content "native-active-document-audit.txt" -Encoding UTF8
+              if (-not $documentFrontmost) {
+                throw "Selected DXF document is not frontmost; screen hit=$documentHitName"
+              }
               $edits = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants,
                 [System.Windows.Automation.PropertyCondition]::new(
                   [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
@@ -1316,6 +1371,7 @@ jobs:
             native-dxf-roundtrip.dxf
             native-gui-line-roundtrip.dxf
             native-mouse-event-audit.txt
+            native-active-document-audit.txt
             native-commit-report.txt
             native-qt-dependencies.txt
             native-plugin-dependencies.txt
