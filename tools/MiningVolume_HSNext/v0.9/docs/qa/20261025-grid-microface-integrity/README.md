@@ -25,13 +25,19 @@ Furthermore, a grid with no resulting cells passed `Cells.All(...)` vacuously.
    `HasUnresolvedSmallTriangles`. Continue to show partial results but never mark
    them ready for technical acceptance.
 4. A report with no cells is **not** `IsComplete`.
-5. Show the number of flagged cells in the CAD UI warning and in the Excel
-   information sheet; individual rows show an unverified-geometry status.
+5. Show flagged cell counts in the CAD UI and Excel. Any microface cell with
+   unresolved volume has blank volume cells across Excel detail, linked grid
+   summary and method sheets; verified cells retain their numeric/formula values.
+   Nodes sharing an unresolved cell are marked as geometry-unverified.
 6. Add four executable C# regression cases:
    `grid_empty_report_is_not_accepted`,
    `grid_positive_subthreshold_cell_is_not_accepted`,
    `grid_partially_covered_sliver_is_not_accepted`, and
    `grid_positive_tiny_tin_face_is_not_silently_accepted`.
+7. Add real C# report-builder regression
+   `grid_unresolved_microface_is_blank_in_all_excel_volume_sheets`, checking
+   both blank unconfirmed quantities and intact confirmed-cell formulas.
+   Update (do not disable) older static contract checks for the stronger guard.
 
 ## What this does not prove
 
@@ -59,7 +65,7 @@ sections; do not infer speedups from synthetic .NET test runs.
 
 ## Acceptance checklist
 
-- [ ] C# executable core regression (including four new cases) passes
+- [ ] C# executable core/report regression (four geometry + one Excel QA case) passes
 - [ ] Python regressions pass
 - [ ] Windows plugin compile succeeds for each targeted CAD version
 - [ ] Host `MVSELFTEST` passes with raw log
