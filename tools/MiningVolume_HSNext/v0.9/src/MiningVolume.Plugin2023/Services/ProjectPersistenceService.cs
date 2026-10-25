@@ -343,10 +343,13 @@ namespace MiningVolume2023.Services
                         var doc = Application.DocumentManager.MdiActiveDocument;
                         bool cadSectionsAvailable = doc != null &&
                             EditableSectionCadService.HasEditableProfiles(doc.Database);
-                        if (snap.HadEditableSectionCad && !cadSectionsAvailable)
+                        if (!cadSectionsAvailable &&
+                            (snap.HadEditableSectionCad ||
+                             EditableSectionCadService.HasOfficialSectionLayers(doc.Database)))
                             throw new InvalidOperationException(
-                                "Project đã lưu có hệ mặt cắt CAD hoặc đường đã hiệu chỉnh, nhưng hiện không tìm thấy. " +
-                                "Không được tính lại từ TIN thay cho mặt cắt người dùng đã sửa. Hãy khôi phục bản vẽ hoặc hệ mặt cắt gốc.");
+                                "Project đã lưu có dấu vết hệ mặt cắt CAD nhưng hiện không còn Polyline mang ID hợp lệ. " +
+                                "Không tự dựng lại khối lượng từ TIN khi đường mặt cắt đã bị xóa. " +
+                                "Hãy khôi phục mặt cắt CAD hoặc vẽ lại có xác nhận.");
                         if (cadSectionsAvailable)
                         {
                             // Persisted CAD polylines are authoritative. Even when
