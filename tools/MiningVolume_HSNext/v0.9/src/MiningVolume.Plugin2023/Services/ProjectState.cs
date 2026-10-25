@@ -289,6 +289,10 @@ namespace MiningVolume2023.Services
 
         public void Reset()
         {
+            // Explicit MV_PROJECT_LOAD also calls Reset() within the SAME
+            // drawing. Discard its cached grid result before disposing any
+            // accepted old TIN, not only on AutoCAD DocumentActivated.
+            GridWorkflowService.Invalidate();
             ResetModel(Existing);
             ResetModel(Design);
             ActiveRole = ModelRole.Existing;
