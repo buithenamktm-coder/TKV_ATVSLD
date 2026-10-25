@@ -100,6 +100,39 @@ namespace MiningVolume2023.Services
                     tr.Commit();
                 }
                 EditableSectionCadService.EnsureProfilesMatch(db, profiles);
+
+                // Deleting BOTH official tagged polylines previously passed
+                // the allowMissingUnedited fallback. Keep the dedicated
+                // output layers to prove this is NOT an untouched TIN-only
+                // calculation and never accept the now-empty CAD geometry.
+                using (var tr = db.TransactionManager.StartTransaction())
+                {
+                    var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
+                    var ms = (BlockTableRecord)tr.GetObject(
+                        bt[BlockTableRecord.ModelSpace], OpenMode.ForRead);
+                    var remove = new List<ObjectId>();
+                    var polyClass = Autodesk.AutoCAD.Runtime.RXObject.GetClass(typeof(Polyline));
+                    foreach (ObjectId id in ms)
+                    {
+                        if (!id.ObjectClass.IsDerivedFrom(polyClass)) continue;
+                        var poly = tr.GetObject(id, OpenMode.ForRead) as Polyline;
+                        if (poly != null &&
+                            (poly.Layer == "MV_MC_HIENTRANG" ||
+                             poly.Layer == "MV_MC_THIETKE"))
+                            remove.Add(id);
+                    }
+                    if (remove.Count != 2)
+                        throw new InvalidOperationException("Expected exactly two tagged QA polylines.");
+                    foreach (ObjectId id in remove)
+                        ((Entity)tr.GetObject(id, OpenMode.ForWrite)).Erase();
+                    tr.Commit();
+                }
+                bool missingRejected = false;
+                try { EditableSectionCadService.EnsureProfilesMatch(db, profiles); }
+                catch (InvalidOperationException) { missingRejected = true; }
+                if (!missingRejected)
+                    throw new InvalidOperationException(
+                        "Deleting all CAD section polylines silently reused stale quantities.");
             }
         }
 
