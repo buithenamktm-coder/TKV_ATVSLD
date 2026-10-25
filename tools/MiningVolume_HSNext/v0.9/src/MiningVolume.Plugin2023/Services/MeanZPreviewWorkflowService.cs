@@ -151,7 +151,7 @@ namespace MiningVolume2023.Services
             var data=preview.Analysis;
             using (var writer=new StreamWriter(filename,false,new UTF8Encoding(true)))
             {
-                writer.WriteLine("IMSAT MININGVOLUME;TIN THU NGHIEM TRUNG BINH Z;KHONG DUNG TINH KHOI LUONG");
+                writer.WriteLine("NAMVECTA VOLUME;TIN THU NGHIEM TRUNG BINH Z;KHONG DUNG TINH KHOI LUONG");
                 writer.WriteLine("Mo hinh;"+(preview.Role==ModelRole.Existing?"Hien trang":"Thiet ke"));
                 writer.WriteLine("So dinh goc;"+data.OriginalVertexCount.ToString(CultureInfo.InvariantCulture));
                 writer.WriteLine("So dinh sau gop;"+data.Prepared.Sites.Count.ToString(CultureInfo.InvariantCulture));

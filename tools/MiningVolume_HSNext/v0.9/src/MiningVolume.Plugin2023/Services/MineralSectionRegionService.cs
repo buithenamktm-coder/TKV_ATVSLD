@@ -273,7 +273,7 @@ namespace MiningVolume2023.Services
             }
             return result ?? throw new InvalidOperationException(
                 "Không tìm thấy tọa độ khung mặt cắt "+name+
-                ". Hãy vẽ lại hệ mặt cắt bằng IMSAT VOLUME V2.0 để tạo liên kết.");
+                ". Hãy vẽ lại hệ mặt cắt bằng NAMVECTA VOLUME 2.0 để tạo liên kết.");
         }
 
         private static bool TryReadFrame(Entity entity,string name,out SectionFrame frame)

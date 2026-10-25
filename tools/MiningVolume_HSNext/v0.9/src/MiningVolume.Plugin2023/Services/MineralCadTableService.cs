@@ -35,7 +35,7 @@ namespace MiningVolume2023.Services
                 double y = origin.Y;
 
                 var totals = Create(db, layer, 8, 2, new Point3d(origin.X, y, 0), 62);
-                Cells(totals, 0, "IMSAT – KHOÁNG SẢN VÀ ĐẤT ĐÁ", "Giá trị");
+                Cells(totals, 0, "NAMVECTA VOLUME – KHOÁNG SẢN VÀ ĐẤT ĐÁ", "Giá trị");
                 Cells(totals, 1, "Tổng đào (m³)", Format(summary.TotalCutCubicMetres));
                 Cells(totals, 2, "Than/quặng (m³)", Format(summary.TotalMineralCubicMetres));
                 Cells(totals, 3, "Than/quặng (tấn)", Format(summary.TotalMineralTonnes));
