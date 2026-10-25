@@ -375,7 +375,19 @@ namespace MiningVolume2023.UI
             p.Controls.Add(selectButton, 3, r);
         }
 
-        private void RefreshLayers()
+        /// <summary>
+        /// Called when the active DWG changes. Never retain the ComboBox
+        /// selection from the previous drawing when no source was restored.
+        /// </summary>
+        internal void RefreshForNewDrawing()
+        {
+            if (IsDisposed) return;
+            RefreshLayers(preservePriorSelection: false);
+            RefreshTinRegionStatus();
+            RefreshBuildButtons();
+        }
+
+        private void RefreshLayers(bool preservePriorSelection = true)
         {
             try
             {
@@ -387,8 +399,8 @@ namespace MiningVolume2023.UI
                     layers.Exists(x => string.Equals(x, "- nam4", StringComparison.OrdinalIgnoreCase));
                 if (via4 && _existingLayer.Items.Count == 0 && string.IsNullOrEmpty(existing)) existing = "ht";
                 if (via4 && _designLayer.Items.Count == 0 && string.IsNullOrEmpty(design)) design = "- nam4";
-                Fill(_existingLayer, layers, existing);
-                Fill(_designLayer, layers, design);
+                Fill(_existingLayer, layers, existing, preservePriorSelection);
+                Fill(_designLayer, layers, design, preservePriorSelection);
                 _via4Preset.Enabled = via4 && layers.Exists(x => string.Equals(x, "LO_TINHKL", StringComparison.OrdinalIgnoreCase));
                 _status.Text = layers.Count.ToString("n0") + " layer trong bản vẽ.";
             }
@@ -420,9 +432,11 @@ namespace MiningVolume2023.UI
             finally { _via4Preset.Enabled = true; }
         }
 
-        private static void Fill(ComboBox cb, List<string> values, string preferred)
+        private static void Fill(ComboBox cb, List<string> values, string preferred,
+            bool preservePriorSelection = true)
         {
-            var old = string.IsNullOrWhiteSpace(preferred) ? cb.Text : preferred;
+            var old = string.IsNullOrWhiteSpace(preferred)
+                ? (preservePriorSelection ? cb.Text : string.Empty) : preferred;
             cb.Items.Clear();
             foreach (var x in values) cb.Items.Add(x);
             if (cb.Items.Count > 0)
