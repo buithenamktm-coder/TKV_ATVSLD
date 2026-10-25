@@ -91,3 +91,18 @@ def test_section_clear_preflight_preserves_foreign_cad_objects():
     assert 'StartsWith("NAMVECTA_MC_TUYEN_", StringComparison.Ordinal)' in block
     assert "entity is Line && entity.LayerId == planLayer" in block
     assert "entity is DBText && entity.LayerId == nameLayer" in block
+
+
+def test_quick_section_page_has_no_official_station_edit_or_volume_actions():
+    # Fast CAD section drawings never act on the official SectionSystem or
+    # calculated earthwork. Toolbar actions are gated by !_quickOnly.
+    page = section.split('var tools = new FlowLayoutPanel', 1)[1].split(
+        'root.Controls.Add(tools, 0, 3);', 1)[0]
+    assert 'if (!_quickOnly)' in page
+    assert page.index('if (!_quickOnly)') < page.index(
+        'tools.Controls.Add(Button("Thêm tuyến", AddLine));')
+    assert 'Button("Tính toán khối lượng trên mặt cắt", UpdateEditedProfiles)' in page
+    assert 'tools.Controls.Add(updateEdited);' in page
+    assert 'if (_navigate != null)' in page
+    assert 'Text = _quickOnly ? "VẼ NHANH MẶT CẮT" : "HỆ MẶT CẮT"' in section
+    assert '_rootLayout.RowStyles[3].Height = 0F;' in section
