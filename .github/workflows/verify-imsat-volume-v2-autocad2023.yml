@@ -1,6 +1,10 @@
 name: IMSAT VOLUME V2.0 AutoCAD 2023 Host QA (NOT RELEASE)
 
 on:
+  # Narrow authorized PR comment trigger for the fixed QA commit.
+  # Other comments cannot acquire or start the licensed Windows runner.
+  issue_comment:
+    types: [created]
   workflow_dispatch:
     inputs:
       source_ref:
@@ -18,22 +22,36 @@ concurrency:
 
 jobs:
   host-qa:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'issue_comment' &&
+       github.event.issue.pull_request != null &&
+       github.event.issue.number == 54 &&
+       github.event.comment.user.login == github.repository_owner &&
+       github.event.comment.body == '/host-qa-v2-pr54')
     runs-on: [self-hosted, Windows, X64, autocad2023]
     timeout-minutes: 60
     env:
       MV_ROOT: tools/MiningVolume_HSNext/v0.9
+      # issue_comment workflows execute from main, never from the PR head.
+      # Pin the exact tested SHA to eliminate time-of-check/time-of-use drift.
+      REQUESTED_REF: ${{ github.event_name == 'issue_comment' && '1415468f617b4499efe015b255d6555f89c6020c' || inputs.source_ref }}
       PUBLIC_RSA_B64: ${{ secrets.IMSAT_VOLUME_V2_RSA_PUBLIC_XML_B64 }}
       APPROVED_RSA_SHA256: ${{ vars.IMSAT_VOLUME_V2_RSA_PUBLIC_SHA256 }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.source_ref }}
+          ref: ${{ env.REQUESTED_REF }}
           fetch-depth: 0
 
       - name: Verify V2 source and exact commit
         shell: pwsh
         run: |
           $sha=(git rev-parse HEAD).Trim()
+          if ('${{ github.event_name }}' -eq 'issue_comment' -and
+              $sha -ne '1415468f617b4499efe015b255d6555f89c6020c') {
+            throw 'BLOCKED: the comment-triggered host QA must use the pinned PR54 SHA.'
+          }
           # Check only these approved V2 source lines. Reject arbitrary refs.
           $approved=@(
             'miningvolume-v2-chatgpt-p0-continuation',
