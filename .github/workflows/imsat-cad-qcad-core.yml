@@ -194,6 +194,22 @@ jobs:
             throw "IMSAT native Space command-bar patch was not installed"
           }
           Write-Host "IMSAT native Space command-bar source integration PASS (runtime keyboard test NOT_TESTED)"
+      - name: Identify native CAD canvas for Windows mouse acceptance
+        shell: pwsh
+        run: |
+          # Pinned QCAD CE remains GPLv3; patch only the native QWidget
+          # accessibility identity so real on-screen UIA bounds can be used.
+          $patch = (Resolve-Path "tools/IMSAT_CAD_V1/patches/imsat-native-canvas-accessibility.patch").Path
+          git -C native/qcad apply --check "$patch"
+          if ($LASTEXITCODE -ne 0) { throw "Pinned QCAD drawing canvas accessibility patch is incompatible" }
+          git -C native/qcad apply "$patch"
+          if ($LASTEXITCODE -ne 0) { throw "Native canvas UIA integration patch failed" }
+          $cpp = Get-Content "native/qcad/src/gui/RGraphicsViewQt.cpp" -Raw
+          if ($cpp -notmatch 'setObjectName\("IMSATCADGraphicsCanvas"\)' -or
+              $cpp -notmatch 'setAccessibleName\("IMSAT CAD drawing canvas"\)') {
+            throw "IMSAT CAD native drawing canvas accessibility identity was not installed"
+          }
+          Write-Host "Native Qt canvas accessibility source patch: PASS (mouse input runtime NOT_TESTED)"
       - name: Build QCAD core
         shell: pwsh
         run: |
@@ -863,23 +879,44 @@ jobs:
             # to the same DXF using the actual Ctrl+S shortcut.
             if ($keyboardResult -eq "PASS" -and (Test-Path $probeFile)) {
               try {
-                $canvasLine = @(Get-Content $probeFile | Where-Object { $_ -match '^NativeGuiCanvasBounds=' } | Select-Object -First 1)
-                if ($canvasLine.Count -eq 0 -or $canvasLine[0] -eq "NativeGuiCanvasBounds=NOT_TESTED") {
-                  $mouseDetail = "QCAD Qt graphics widget bounds unavailable; not tested"
+                # RGraphicsViewQt inherits QWidget. The GPLv3 native patch
+                # gives it a stable objectName and accessibleName; unlike
+                # QtScript's getRGraphicsView(), UIA exposes screen coordinates.
+                $canvas = $null
+                $canvasCandidates = 0
+                $controls = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants,
+                  [System.Windows.Automation.Condition]::TrueCondition)
+                for ($vi = 0; $vi -lt $controls.Count; $vi++) {
+                  $candidate = $controls.Item($vi)
+                  $id = [string]$candidate.Current.AutomationId
+                  $name = [string]$candidate.Current.Name
+                  if ($id -notmatch '(^|\.)IMSATCADGraphicsCanvas$' -and
+                      $name -ne "IMSAT CAD drawing canvas") { continue }
+                  $canvasCandidates++
+                  $rect = $candidate.Current.BoundingRectangle
+                  if ($rect.Width -gt 250 -and $rect.Height -gt 180) {
+                    if ($null -eq $canvas -or
+                        ($rect.Width * $rect.Height) -gt
+                        ($canvas.Current.BoundingRectangle.Width * $canvas.Current.BoundingRectangle.Height)) {
+                      $canvas = $candidate
+                    }
+                  }
+                }
+                if ($null -eq $canvas) {
+                  $mouseDetail = "Native IMSATCADGraphicsCanvas not found/visible through UIA (candidates=$canvasCandidates)"
                 } else {
-                  $coords = ([string]$canvasLine[0]).Split('=')[1].Split(',')
-                  if ($coords.Count -ne 4) { throw "Invalid native viewport bounding box" }
-                  $px = [int][double]::Parse($coords[0],[Globalization.CultureInfo]::InvariantCulture)
-                  $py = [int][double]::Parse($coords[1],[Globalization.CultureInfo]::InvariantCulture)
-                  $pw = [int][double]::Parse($coords[2],[Globalization.CultureInfo]::InvariantCulture)
-                  $ph = [int][double]::Parse($coords[3],[Globalization.CultureInfo]::InvariantCulture)
+                  $bounds = $canvas.Current.BoundingRectangle
+                  $px = [int][Math]::Round($bounds.Left)
+                  $py = [int][Math]::Round($bounds.Top)
+                  $pw = [int][Math]::Round($bounds.Width)
+                  $ph = [int][Math]::Round($bounds.Height)
                   $point1 = @($px+[int]($pw*.35),$py+[int]($ph*.35))
                   $point2 = @($px+[int]($pw*.65),$py+[int]($ph*.55))
                   $frame = $root.Current.BoundingRectangle
                   if ($pw -lt 250 -or $ph -lt 180 -or
                       $point1[0] -lt $frame.Left -or $point2[0] -gt $frame.Right -or
                       $point1[1] -lt $frame.Top -or $point2[1] -gt $frame.Bottom) {
-                    $mouseDetail = "QCAD canvas bounds inconsistent with live window"
+                    $mouseDetail = "UIA canvas bounds inconsistent with live CAD window: x=$px y=$py width=$pw height=$ph"
                   } else {
                     $drawingFile = Join-Path $env:TEMP "imsat-cad-gui-line-roundtrip.dxf"
                     if (-not (Test-Path $drawingFile)) { throw "Installed GUI source DXF missing" }

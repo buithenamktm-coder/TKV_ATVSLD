@@ -1,0 +1,15 @@
+diff --git a/src/gui/RGraphicsViewQt.cpp b/src/gui/RGraphicsViewQt.cpp
+--- a/src/gui/RGraphicsViewQt.cpp
++++ b/src/gui/RGraphicsViewQt.cpp
+@@ -42,7 +42,11 @@ RGraphicsViewQt::RGraphicsViewQt(QWidget* parent, bool showFocus)
+       focusFrameWidget(NULL),
+       gesturesEnabled(true),
+       gotMouseButtonPress(false),
+       imageView(NULL) {
+ 
++    // IMSAT CAD (GPLv3): expose the native drawing surface to Windows UIA.
++    setObjectName("IMSATCADGraphicsCanvas");
++    setAccessibleName("IMSAT CAD drawing canvas");
++
+     setFocusPolicy(Qt::WheelFocus);
+     setMouseTracking(true);

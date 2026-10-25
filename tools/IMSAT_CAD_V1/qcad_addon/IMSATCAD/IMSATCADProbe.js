@@ -177,25 +177,7 @@
         var commandDock = app.findChild("CommandLineDock");
         var commandBox = !isNull(commandDock) ? commandDock.findChild("CommandEdit") : null;
         var commandReady = !isNull(commandDock) && !isNull(commandBox);
-        // Map real QCAD QWidget canvas bounds into Windows screen coordinates.
-        try {
-            var canvas = getRGraphicsView(view);
-            if (isNull(canvas) || typeof canvas.mapToGlobal !== "function") {
-                throw new Error("QCAD graphics widget lacks QWidget.mapToGlobal");
-            }
-            var origin = canvas.mapToGlobal(new QPoint(0,0));
-            var w = typeof canvas.width === "function" ? canvas.width() : canvas.width;
-            var h = typeof canvas.height === "function" ? canvas.height() : canvas.height;
-            var x = typeof origin.x === "function" ? origin.x() : origin.x;
-            var y = typeof origin.y === "function" ? origin.y() : origin.y;
-            if (!(w > 250 && h > 180 && isFinite(x) && isFinite(y))) {
-                throw new Error("Invalid QCAD canvas bounds");
-            }
-            note("NativeGuiCanvasBounds", [x,y,w,h].join(","));
-        } catch (canvasError) {
-            note("NativeGuiCanvasBounds", "NOT_TESTED");
-            note("NativeGuiCanvasDiagnostic", String(canvasError));
-        }
+        note("NativeGuiCanvasCoordinateSource", "WindowsUIAutomation");
         note("NativeCommandInputReady", commandReady);
         if (commandReady) {
             commandDock.visible = true;
