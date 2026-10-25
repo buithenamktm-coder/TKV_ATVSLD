@@ -128,13 +128,13 @@ namespace MiningVolume2023.Services
                     var key=(x,y);
                     double? tn=c.ExistingNodeHeights?[k], tk=c.DesignNodeHeights?[k];
                     if(!nodes.ContainsKey(key))
-                        nodes[key]=(c.Corners[k].X,c.Corners[k].Y,tn,tk,c.IsVerticalConflict);
+                        nodes[key]=(c.Corners[k].X,c.Corners[k].Y,tn,tk,(c.IsVerticalConflict || c.Volume.HasUnresolvedSmallTriangles));
                     else
                     {
                         var previous=nodes[key];
                         nodes[key]=(previous.x,previous.y,
                             previous.tn ?? tn,previous.tk ?? tk,
-                            previous.uncertain || c.IsVerticalConflict);
+                            previous.uncertain || (c.IsVerticalConflict || c.Volume.HasUnresolvedSmallTriangles));
                     }
                 }
             }
@@ -152,7 +152,7 @@ namespace MiningVolume2023.Services
                     valid?ReportCell.N3(p.tn.Value):ReportCell.Text(""),
                     valid?ReportCell.N3(p.tk.Value):ReportCell.Text(""),
                     valid?ReportCell.Formula3("G"+row+"-H"+row):ReportCell.Text(""),
-                    ReportCell.Text(p.uncertain?"NHIỀU Z - CHƯA XÁC NHẬN":
+                    ReportCell.Text(p.uncertain?"HÌNH HỌC TIN - CHƯA XÁC NHẬN":
                         valid?"Đủ":"THIẾU Z")
                 });
                 row++;
@@ -165,7 +165,7 @@ namespace MiningVolume2023.Services
             var s=Sheet("CHI TIẾT Ô LƯỚI","KHỐI LƯỢNG ĐÀO ĐẮP CHI TIẾT TỪNG Ô",
                 "STT","Mã ô","I","J","S ô (m²)","S có TIN (m²)","S thiếu (m²)",
                 "V đào (m³)","V đắp (m³)","V thuần (m³)","Trạng thái");
-            s.Notes.Add("V đào/V đắp do AutoCAD tích phân giao TIN, không phải thể tích trung bình 4 nút.");
+            s.Notes.Add("V đào/V đắp do AutoCAD tích phân giao TIN, không phải thể tích trung bình 4 nút. Ô có tam giác quá nhỏ chưa tích phân để trống khối lượng; phải sửa TIN và tính lại.");
             int row=FirstDataRow,i=0;
             foreach(var c in grid.Cells)
             {
@@ -175,11 +175,11 @@ namespace MiningVolume2023.Services
                     ReportCell.Int(++i),ReportCell.Text(c.CellCode),ReportCell.Int(c.I),ReportCell.Int(c.J),
                     ReportCell.N3(c.Volume.CalculationArea),ReportCell.N3(c.Volume.CoveredArea),
                     ReportCell.N3(c.Volume.NoDataArea),
-                    c.IsVerticalConflict || c.Volume.CoveredArea<=1e-9
+                    c.IsVerticalConflict || c.Volume.HasUnresolvedSmallTriangles || c.Volume.CoveredArea<=1e-9
                         ? ReportCell.Text("") : ReportCell.N3(c.Volume.CutVolume),
-                    c.IsVerticalConflict || c.Volume.CoveredArea<=1e-9
+                    c.IsVerticalConflict || c.Volume.HasUnresolvedSmallTriangles || c.Volume.CoveredArea<=1e-9
                         ? ReportCell.Text("") : ReportCell.N3(c.Volume.FillVolume),
-                    c.IsVerticalConflict || c.Volume.CoveredArea<=1e-9
+                    c.IsVerticalConflict || c.Volume.HasUnresolvedSmallTriangles || c.Volume.CoveredArea<=1e-9
                         ? ReportCell.Text("") : ReportCell.Formula3("H"+row+"-I"+row),
                     ReportCell.Text(c.CoverageStatus)
                 });
@@ -192,7 +192,7 @@ namespace MiningVolume2023.Services
         {
             var s=Sheet("BẢNG LƯỚI TỔNG HỢP","BẢNG LƯỚI TỔNG HỢP LIÊN KẾT",
                 "Mã ô","Diện tích (m²)","V đào (m³)","V đắp (m³)","V thuần (m³)");
-            s.Notes.Add("Dữ liệu liên kết với CHI TIẾT Ô LƯỚI; ô có trạng thái chưa xác nhận giữ trống khối lượng.");
+            s.Notes.Add("Dữ liệu liên kết CHI TIẾT Ô LƯỚI; ô nhiều Z, ô có tam giác quá nhỏ chưa tích phân hoặc không có dữ liệu để trống khối lượng. Ô thiếu phủ một phần chỉ là tạm tính.");
             foreach(var c in grid.Cells.Select((v,i)=>new{v,i}))
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -202,11 +202,11 @@ namespace MiningVolume2023.Services
                 {
                     ReportCell.Text(c.v.CellCode),
                     ReportCell.Formula3(pre+"E"+n),
-                    c.v.IsVerticalConflict || c.v.Volume.CoveredArea<=1e-9
+                    c.v.IsVerticalConflict || c.v.Volume.HasUnresolvedSmallTriangles || c.v.Volume.CoveredArea<=1e-9
                         ? ReportCell.Text("") : ReportCell.Formula3(pre+"H"+n),
-                    c.v.IsVerticalConflict || c.v.Volume.CoveredArea<=1e-9
+                    c.v.IsVerticalConflict || c.v.Volume.HasUnresolvedSmallTriangles || c.v.Volume.CoveredArea<=1e-9
                         ? ReportCell.Text("") : ReportCell.Formula3(pre+"I"+n),
-                    c.v.IsVerticalConflict || c.v.Volume.CoveredArea<=1e-9
+                    c.v.IsVerticalConflict || c.v.Volume.HasUnresolvedSmallTriangles || c.v.Volume.CoveredArea<=1e-9
                         ? ReportCell.Text("") : ReportCell.Formula3("C"+n+"-D"+n)
                 });
             }
@@ -224,7 +224,7 @@ namespace MiningVolume2023.Services
             s.HasSignatures = true;
             s.Notes.Add(grid.IsComplete
                 ? "Các ô có đầy đủ TIN hiện trạng và thiết kế."
-                : "CHƯA ĐẦY ĐỦ: chỉ là tổng phần hợp lệ; ô nhiều Z/thiếu TIN chưa xác nhận, không phải thể tích bằng 0.");
+                : "CHƯA ĐẦY ĐỦ: tổng tạm tính, bỏ qua ô nhiều Z/ô có tam giác quá nhỏ; các ô thiếu TIN có thể chỉ là phần tính được, không được nghiệm thu.");
             int end=FirstDataRow+grid.Cells.Count-1;
             string from="'CHI TIẾT Ô LƯỚI'!";
             s.Rows.Add(new ReportCell[]{ReportCell.Text("Tổng thể tích đào"),
@@ -274,9 +274,9 @@ namespace MiningVolume2023.Services
                 {
                     ReportCell.Text(c.CellCode),ReportCell.Text("TIN overlay exact"),
                     ReportCell.Formula3(prefix+"F"+row),
-                    c.IsVerticalConflict || c.Volume.CoveredArea<=1e-9
+                    c.IsVerticalConflict || c.Volume.HasUnresolvedSmallTriangles || c.Volume.CoveredArea<=1e-9
                         ? ReportCell.Text("") : ReportCell.Formula3(prefix+"H"+row),
-                    c.IsVerticalConflict || c.Volume.CoveredArea<=1e-9
+                    c.IsVerticalConflict || c.Volume.HasUnresolvedSmallTriangles || c.Volume.CoveredArea<=1e-9
                         ? ReportCell.Text("") : ReportCell.Formula3(prefix+"I"+row),
                     ReportCell.Text(c.CoverageStatus)
                 });
