@@ -25,12 +25,17 @@ namespace MiningVolume2023.Services
         {
             using (var tr = db.TransactionManager.StartTransaction())
             {
+                // A brand-new preview layer cannot contain existing CAD
+                // entities. Avoid traversing millions of unrelated TIN faces
+                // in a first-time preview on a dense mine drawing.
+                var oldLayers = ExistingLayerIds(db, tr, PreviewLayer, PreviewLabelLayer);
                 ObjectId layerId = EnsureLayer(db, tr, PreviewLayer, 2);
                 ObjectId namesLayerId = EnsureLayer(db, tr, PreviewLabelLayer, 2);
                 ObjectId styleId = EnsureArialStyle(db, tr);
                 EnsureFrameRegApp(db, tr);
                 var ms = ModelSpace(db, tr, true);
-                EraseOnLayers(ms, tr, new[] { layerId, namesLayerId });
+                if (oldLayers.Count > 0)
+                    EraseOnLayers(ms, tr, oldLayers);
 
                 foreach (var line in system.Lines)
                 {
@@ -116,6 +121,12 @@ namespace MiningVolume2023.Services
 
             using (var tr = db.TransactionManager.StartTransaction())
             {
+                // Only pre-existing output layers can contain old sections.
+                // Skipping the million-face ModelSpace erase traversal on a
+                // first export preserves the exact same clean output.
+                var oldLayers = clearFirst
+                    ? ExistingLayerIds(db, tr, ExistingLayer, DesignLayer, AxisLayer, TextLayer)
+                    : null;
                 EnsureFrameRegApp(db, tr);
                 ObjectId exLayer = EnsureLayer(db, tr, ExistingLayer, 1); // đỏ
                 ObjectId deLayer = EnsureLayer(db, tr, DesignLayer, 5);   // xanh dương
@@ -123,8 +134,8 @@ namespace MiningVolume2023.Services
                 ObjectId txLayer = EnsureLayer(db, tr, TextLayer, 7);
                 ObjectId styleId = EnsureArialStyle(db, tr);
                 var ms = ModelSpace(db, tr, true);
-                if (clearFirst)
-                    EraseOnLayers(ms, tr, new[] { exLayer, deLayer, axLayer, txLayer }, pollCancellation);
+                if (clearFirst && oldLayers.Count > 0)
+                    EraseOnLayers(ms, tr, oldLayers, pollCancellation);
 
                 double baseX = insertion.X;
                 double currentY = batchStartY ?? insertion.Y;
@@ -352,6 +363,20 @@ namespace MiningVolume2023.Services
         {
             var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
             return (BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace], write ? OpenMode.ForWrite : OpenMode.ForRead);
+        }
+
+        // Consult the layer table BEFORE creating output layers; any absent
+        // layer is guaranteed not to own old section/preview objects.
+        // For existing layers, preserve full erase behavior even if their
+        // content was manually edited by the user.
+        private static List<ObjectId> ExistingLayerIds(
+            Database db, Transaction tr, params string[] names)
+        {
+            var table = (LayerTable)tr.GetObject(db.LayerTableId, OpenMode.ForRead);
+            var result = new List<ObjectId>(names.Length);
+            foreach (var name in names)
+                if (table.Has(name)) result.Add(table[name]);
+            return result;
         }
 
         private static void EraseOnLayers(BlockTableRecord ms, Transaction tr, IEnumerable<ObjectId> layers, Action pollCancellation = null)
