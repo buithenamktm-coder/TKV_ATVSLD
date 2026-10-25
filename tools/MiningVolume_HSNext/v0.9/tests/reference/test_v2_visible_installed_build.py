@@ -13,7 +13,7 @@ def source(rel):
     return (ROOT / rel).read_text(encoding="utf-8-sig")
 
 
-def test_installed_v2_build_is_visible_in_palette_and_about():
+def test_installed_v2_build_is_available_in_diagnostics_without_qa_palette_label():
     identity = source("src/MiningVolume.Plugin2023/Services/RuntimeBuildIdentity.cs")
     palette = source("src/MiningVolume.Plugin2023/UI/MainPaletteControl.cs")
     entry = source("src/MiningVolume.Plugin2023/EntryPoint.cs")
@@ -23,9 +23,10 @@ def test_installed_v2_build_is_visible_in_palette_and_about():
     assert 'sha.Substring(0, 8)' in identity
     assert "BUILD UNVERIFIED" in identity
     assert 'const string title = "NAMVECTA VOLUME";' in palette
-    assert '"V2.0 QA · " + RuntimeBuildIdentity.ShortTag()' in palette
-    assert "RuntimeBuildIdentity.ShortTag()" in palette
-    assert "args.Graphics.DrawString(buildLabel" in palette
+    header = palette.split("private static Panel BuildHeader()", 1)[1].split("private static Panel BuildSidebar(", 1)[0]
+    assert "V2.0 QA" not in header
+    assert "RuntimeBuildIdentity.ShortTag()" not in header
+    assert "args.Graphics.DrawString(buildLabel" not in header
     assert '"NAMVECTA VOLUME", new Guid(' in entry
     assert "MVBUILDINFO" in entry
     assert "EntryPoint.Open(AppPage.License)" in ribbon
