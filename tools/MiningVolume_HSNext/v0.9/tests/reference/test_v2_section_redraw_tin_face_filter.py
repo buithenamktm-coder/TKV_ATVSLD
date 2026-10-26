@@ -22,7 +22,9 @@ def test_section_erase_classifies_ids_before_opening_entities():
         "tr.GetObject(id, OpenMode.ForRead)"
     )
     assert "set.Contains(e.LayerId)" in erase
-    assert "e.UpgradeOpen(); e.Erase();" in erase
+    assert "e.UpgradeOpen();" in erase
+    assert "trackErased?.Invoke(id);" in erase
+    assert "e.Erase();" in erase
     assert "pollCancellation?.Invoke()" in erase
 
 
