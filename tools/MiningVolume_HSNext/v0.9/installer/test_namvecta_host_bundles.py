@@ -84,5 +84,31 @@ class HostBundleTests(unittest.TestCase):
         self.assertNotIn(2025, core.VERSIONS)
 
 
+    def test_accepted_cc0a6cb7_ui_and_inno_setup_are_byte_identical(self):
+        """Protect the user's approved UI and installer from accidental branch merges.
+
+        Git's blob hash is SHA1("blob <byte length>\\0" + raw bytes).
+        These eight expected blobs were read from commit cc0a6cb7.
+        """
+        approved = {
+            "src/MiningVolume.Plugin2023/UI/MainPaletteControl.cs": "799409885e8749dfa10e688005f2cf5ef1f2cc97",
+            "src/MiningVolume.Plugin2023/UI/ModelWorkflowPage.cs": "e0841c0b0b65238561e42607779804dad8295605",
+            "src/MiningVolume.Plugin2023/UI/SectionPage.cs": "6a6b6e7d139b2a8ef56325c942fd0250fb549e67",
+            "src/MiningVolume.Plugin2023/UI/GridPage.cs": "d38017af3927f5b651a291fb79cc19ad121a0e56",
+            "src/MiningVolume.Plugin2023/UI/ExportPage.cs": "2dbdb79a89d50c0b8f16b95926d8520b6b80a5d8",
+            "installer/NAMVECTA_Volume_V2.iss": "a21f67ad6ff917c7aeed7a93f153ea0c543c9397",
+            "installer/prepare_namvecta_branding.py": "0f4d9ba65670db33053d4944b6f948ef9571e18e",
+            "installer/namvecta_host_bundles.py": "e9e56e75cfe91a9cb2c2134a36d4a34da1072a35",
+        }
+        root = Path(__file__).resolve().parent.parent
+        for relative, expected_git_sha in approved.items():
+            raw = (root / relative).read_bytes()
+            actual = hashlib.sha1(
+                b"blob " + str(len(raw)).encode("ascii") + b"\\0" + raw
+            ).hexdigest()
+            self.assertEqual(actual, expected_git_sha,
+                             "Accepted cc0a6cb7 UI/installer drifted: " + relative)
+
+
 if __name__ == "__main__":
     unittest.main()
