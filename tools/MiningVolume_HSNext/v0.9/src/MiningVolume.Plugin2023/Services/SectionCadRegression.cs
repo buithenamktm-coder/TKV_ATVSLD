@@ -542,8 +542,16 @@ namespace MiningVolume2023.Services
                     int oldCount = 0, newCount = 0;
                     foreach (ObjectId id in model)
                     {
-                        var poly = tr.GetObject(id, OpenMode.ForRead) as Polyline;
-                        if (poly == null) throw new InvalidOperationException("Grid identity added unexpected entities.");
+                        var entity = tr.GetObject(id, OpenMode.ForRead) as Entity;
+                        // AutoCAD side databases may contain stock viewports or
+                        // unrelated modelspace objects. Only grid output layers
+                        // are under this regression's control.
+                        if (entity == null || !entity.Layer.StartsWith("MV_LUOI_", StringComparison.OrdinalIgnoreCase))
+                            continue;
+                        var poly = entity as Polyline;
+                        if (poly == null)
+                            throw new InvalidOperationException(
+                                "Grid geometry output layer contains an unexpected entity type: " + entity.GetType().Name);
                         using (var data = poly.GetXDataForApplication(GridCadRenderer.CalculationIdApp))
                         {
                             var values = data?.AsArray();
