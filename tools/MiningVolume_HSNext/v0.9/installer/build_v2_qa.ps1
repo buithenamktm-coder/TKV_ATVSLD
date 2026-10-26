@@ -148,7 +148,7 @@ try {
     }
     $hash = (Get-FileHash -Algorithm SHA256 $exe).Hash
     $lines = @(
-        'NAMVECTA VOLUME 2.0 QA - NOT RELEASE',
+        'NAMVECTA VOLUME 2.0 QA - NOT A RELEASE',
         ('Build UTC: ' + [DateTime]::UtcNow.ToString('o')),
         ('Source SHA: ' + $env:SOURCE_SHA),
         ('SHA256 EXE: ' + $hash),
