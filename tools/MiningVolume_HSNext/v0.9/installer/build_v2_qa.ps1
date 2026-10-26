@@ -90,12 +90,33 @@ try {
                 $g.DrawImage($sourceImage, [int]((256 - $w) / 2), [int]((256 - $h) / 2), $w, $h)
             }
             finally { $g.Dispose() }
-            $handle = $bitmap.GetHicon()
-            $icon = [System.Drawing.Icon]::FromHandle($handle)
+            # Bitmap.GetHicon/Icon.Save can quantize 24-bit PA3 colors to an
+            # indexed palette. Instead, store the exact 32-bit PNG inside a
+            # standards-compliant 256px ICO resource to preserve blue/orange.
+            $pngStream = New-Object System.IO.MemoryStream
+            try {
+                $bitmap.Save($pngStream, [System.Drawing.Imaging.ImageFormat]::Png)
+                $pngData = $pngStream.ToArray()
+            }
+            finally { $pngStream.Dispose() }
             $ico = Join-Path $setupDir 'namvecta-pa3.ico'
             $iconStream = [System.IO.File]::Create($ico)
-            try { $icon.Save($iconStream) }
-            finally { $iconStream.Dispose(); $icon.Dispose() }
+            $writer = New-Object System.IO.BinaryWriter($iconStream)
+            try {
+                $writer.Write([UInt16]0)    # reserved
+                $writer.Write([UInt16]1)    # image type: ICO
+                $writer.Write([UInt16]1)    # one 256x256 image
+                $writer.Write([byte]0)      # width 256 encoded as 0
+                $writer.Write([byte]0)      # height 256 encoded as 0
+                $writer.Write([byte]0)      # palette not used
+                $writer.Write([byte]0)      # reserved
+                $writer.Write([UInt16]1)    # one color plane
+                $writer.Write([UInt16]32)   # 32-bit true color
+                $writer.Write([UInt32]$pngData.Length)
+                $writer.Write([UInt32]22)   # header + one 16-byte directory entry
+                $writer.Write($pngData)
+            }
+            finally { $writer.Dispose() }
         }
         finally { $bitmap.Dispose(); $sourceImage.Dispose() }
         $rsrc = Join-Path ((go env GOPATH).Trim()) 'bin/rsrc.exe'
