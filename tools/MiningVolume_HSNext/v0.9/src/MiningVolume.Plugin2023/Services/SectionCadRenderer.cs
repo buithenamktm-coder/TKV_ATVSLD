@@ -267,6 +267,10 @@ namespace MiningVolume2023.Services
             pollCancellation?.Invoke();
             using (var tr = db.TransactionManager.StartTransaction())
             {
+                // A host-verified cancellation must roll back every quick
+                // profile line, text and layer mutation in this transaction.
+                try
+                {
                 EnsureFrameRegApp(db, tr);
                 var ht = EnsureLayer(db, tr, "MV_MC_NHANH_HT", 1);
                 var tk = EnsureLayer(db, tr, "MV_MC_NHANH_TK", 5);
@@ -323,6 +327,12 @@ namespace MiningVolume2023.Services
                 }
                 pollCancellation?.Invoke();
                 tr.Commit();
+                }
+                catch
+                {
+                    tr.Abort();
+                    throw;
+                }
             }
         }
 
