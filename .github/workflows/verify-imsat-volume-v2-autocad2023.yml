@@ -110,10 +110,18 @@ jobs:
           foreach ($exe in ($paths | Select-Object -Unique)) {
             if (-not $exe -or -not (Test-Path $exe)) { continue }
             try {
-              $version = (& $exe -c 'import sys, encodings, ssl; print(str(sys.version_info.major)+"."+str(sys.version_info.minor))' 2>$null | Select-Object -Last 1)
-              if ($LASTEXITCODE -ne 0 -or $version -notin @('3.12', '3.13')) { continue }
+              # Windows PowerShell 5.1 strips nested double quotes from
+              # native -c arguments; print numeric fields without quotes.
+              $version = (& $exe -c 'import sys, encodings, ssl; print(sys.version_info.major, sys.version_info.minor)' 2>$null | Select-Object -Last 1)
+              if ($LASTEXITCODE -ne 0 -or $version -notin @('3 12', '3 13')) {
+                Write-Host "Reject Python candidate (stdlib/version): $exe; exit=$LASTEXITCODE; version=$version"
+                continue
+              }
               & $exe -m pip --version *> $null
-              if ($LASTEXITCODE -ne 0) { continue }
+              if ($LASTEXITCODE -ne 0) {
+                Write-Host "Reject Python candidate (pip unavailable): $exe; exit=$LASTEXITCODE"
+                continue
+              }
               $candidate = $exe
               Write-Host "Verified Python $version with stdlib, SSL, pip: $candidate"
               break
