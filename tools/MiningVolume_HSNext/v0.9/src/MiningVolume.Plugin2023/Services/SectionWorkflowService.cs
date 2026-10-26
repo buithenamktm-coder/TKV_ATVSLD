@@ -186,6 +186,11 @@ namespace MiningVolume2023.Services
             var clock = Stopwatch.StartNew();
             var batchMs = new List<double>((total + batchSize - 1) / batchSize);
             string outcome = "FAILED";
+            // Keep a journal across every inner batch; aborting the outer
+            // transaction does not reliably undo nested commits in AutoCAD
+            // side-databases.
+            var createdByExport = new List<Autodesk.AutoCAD.DatabaseServices.ObjectId>();
+            var erasedByExport = new List<Autodesk.AutoCAD.DatabaseServices.ObjectId>();
             try
             {
                 using (var meter = new SectionCadProgress(total))
@@ -213,7 +218,9 @@ namespace MiningVolume2023.Services
                             start == 0,
                             layoutGap,
                             nextY,
-                            meter.Poll);
+                            meter.Poll,
+                            createdByExport.Add,
+                            erasedByExport.Add);
                         batchMs.Add((clock.ElapsedTicks - beginTicks) *
                             1000.0 / Stopwatch.Frequency);
                         meter.Report(start + count);
@@ -225,9 +232,43 @@ namespace MiningVolume2023.Services
                 }
                 outcome = "PASS";
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException ex)
             {
                 outcome = "CANCELED";
+                try
+                {
+                    // The outer drawing lock is disposed before reaching this
+                    // catch. Reacquire it while restoring CAD entities in the
+                    // active document, not merely in the isolated QA database.
+                    using (doc.LockDocument())
+                        SectionCadRenderer.RecoverFailedSectionExport(
+                            doc.Database, createdByExport, erasedByExport);
+                }
+                catch (Exception cleanup)
+                {
+                    throw new AggregateException(
+                        "Hủy xuất mặt cắt nhưng không thể khôi phục bản vẽ đã chấp nhận.",
+                        ex, cleanup);
+                }
+                throw;
+            }
+            catch (Exception ex)
+            {
+                try
+                {
+                    // The outer drawing lock is disposed before reaching this
+                    // catch. Reacquire it while restoring CAD entities in the
+                    // active document, not merely in the isolated QA database.
+                    using (doc.LockDocument())
+                        SectionCadRenderer.RecoverFailedSectionExport(
+                            doc.Database, createdByExport, erasedByExport);
+                }
+                catch (Exception cleanup)
+                {
+                    throw new AggregateException(
+                        "Xuất mặt cắt lỗi và không thể khôi phục bản vẽ đã chấp nhận.",
+                        ex, cleanup);
+                }
                 throw;
             }
             finally
@@ -245,30 +286,6 @@ namespace MiningVolume2023.Services
                 }
                 catch { /* A logging failure must not mask the CAD transaction result. */ }
             }
-        }
-
-        /// <summary>
-        /// Remove ALL NAMVECTA-generated station lines and labels from the
-        /// drawing, including old DWGs whose current SectionSystem was not
-        /// restored. CAD clearing commits before invalidating calculated data;
-        /// no survey route, TIN layer or separately exported profile is touched.
-        /// </summary>
-        public static void ClearAllStationLines()
-        {
-            var doc = Application.DocumentManager.MdiActiveDocument
-                ?? throw new InvalidOperationException("Không có bản vẽ AutoCAD đang hoạt động.");
-            using (doc.LockDocument())
-                SectionCadRenderer.ClearPreview(doc.Database,
-                    tr => ProjectPersistenceService.MarkStationLinesDeletedInTransaction(
-                        doc.Database, tr));
-            var state = ProjectState.Current;
-            state.SectionSystem = null;
-            state.SectionProfiles.Clear();
-            state.VolumeResult = null;
-            state.VolumeCalculatedUtc = null;
-            state.VolumeCalculationSeconds = null;
-            state.NotifyChanged();
-            doc.Editor.Regen();
         }
 
         public static void ClearPreview()
