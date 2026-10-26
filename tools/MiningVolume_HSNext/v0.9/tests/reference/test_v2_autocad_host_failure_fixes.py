@@ -32,7 +32,7 @@ def test_grid_identity_only_inspects_grid_output_not_foreign_modelspace_objects(
     assert "labelLayer ? !(entity is DBText) : !(entity is Polyline)" in s
     assert "oldLabels != first.Cells.Count || newLabels != second.Cells.Count" in s
     assert "Missing grid calculation XData." in s
-    assert "Later grid export overwrote earlier identity." in s
+    assert "Later grid export overwrote earlier identity or lost labeled cell identity." in s
 
 
 def test_primary_section_action_fits_small_autocad_palette():
