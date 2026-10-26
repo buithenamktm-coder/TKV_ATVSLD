@@ -239,8 +239,8 @@ internal static class FinalAuditRegression
             state.MiningUnitName="Original grid unit";
             var options=new GridVolumeOptions { Boundary=Boundary, SizeX=1, SizeY=1 };
             var grid=new GridVolumeCalculator().Calculate(Plane(5),Plane(0),options);
-            var expected=GridVolumeExcelReportBuilder.Build(grid,options);
-            var pending=GridVolumeExcelReportBuilder.BuildAsync(grid,options);
+            var expected=GridVolumeExcelReportBuilder.Build(grid,options,true);
+            var pending=GridVolumeExcelReportBuilder.BuildAsync(grid,options,default(System.Threading.CancellationToken),true);
             state.MiningUnitName="Changed after export started";
             var actual=pending.GetAwaiter().GetResult();
             Check(actual.Sheets.Count==6,"Async grid lost sheets");
@@ -285,7 +285,7 @@ internal static class FinalAuditRegression
             Check(!grid.IsComplete && grid.SmallTriangleCells==1,
                 "Microface grid should remain unconfirmed");
             var book=GridVolumeExcelReportBuilder.Build(grid,
-                new GridVolumeOptions { Boundary=footprint,SizeX=20,SizeY=20 });
+                new GridVolumeOptions { Boundary=footprint,SizeX=20,SizeY=20 },true);
             var details=book.Sheets.First(x=>x.Name=="CHI TIẾT Ô LƯỚI");
             var summary=book.Sheets.First(x=>x.Name=="BẢNG LƯỚI TỔNG HỢP");
             var trace=book.Sheets.First(x=>x.Name=="CHI TIẾT TÍNH TOÁN");
@@ -996,7 +996,7 @@ internal static class FinalAuditRegression
                 reversed.MissingDesignCells==0 &&
                 reversed.Cells.All(c=>c.CoverageStatus=="Thiếu phủ TIN hiện trạng"),
                 "Missing existing-TIN cells were misclassified");
-            var reportXlsx=GridVolumeExcelReportBuilder.Build(report,opts);
+            var reportXlsx=GridVolumeExcelReportBuilder.Build(report,opts,true);
             var detail=reportXlsx.Sheets.First(x=>x.Name=="CHI TIẾT Ô LƯỚI");
             Check(detail.Rows.Count>0 &&
                 detail.Rows.All(row=>row[7].Value.ToString()=="" &&
