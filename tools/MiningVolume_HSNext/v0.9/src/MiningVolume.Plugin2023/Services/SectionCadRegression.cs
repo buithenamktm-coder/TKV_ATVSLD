@@ -160,8 +160,19 @@ namespace MiningVolume2023.Services
                     try { SectionCadRenderer.DrawQuickProfiles(quick, profiles, Point3d.Origin, 1000, 500, 5, 90,
                         () => { if (++count == cancelAt) throw new OperationCanceledException(); }); }
                     catch (OperationCanceledException) { canceled = true; }
-                    if (!canceled || Snapshot(quick, true) != accepted)
-                        throw new InvalidOperationException("Quick-section cancellation did not restore original drawing.");
+                    string after = Snapshot(quick, true);
+                    if (!canceled || after != accepted)
+                    {
+                        int firstDiff = 0;
+                        while (firstDiff < accepted.Length && firstDiff < after.Length &&
+                               accepted[firstDiff] == after[firstDiff]) firstDiff++;
+                        throw new InvalidOperationException(
+                            "Quick-section cancellation did not restore original drawing." +
+                            " CancelAt=" + cancelAt + "; canceled=" + canceled +
+                            "; baselineLength=" + accepted.Length +
+                            "; afterLength=" + after.Length +
+                            "; firstDifference=" + firstDiff);
+                    }
                 }
                 var inspection = TinCadRenderer.InspectLayers(quick, new[] { "MV_MC_NHANH_HT", "ABSENT_QA" });
                 if (!inspection["MV_MC_NHANH_HT"].Exists || inspection["MV_MC_NHANH_HT"].Faces != 0 ||
@@ -659,7 +670,9 @@ namespace MiningVolume2023.Services
                             continue; // ModelSpace may contain stock viewports and unrelated objects.
                         var poly = entity as Polyline;
                         if (poly == null) throw new InvalidOperationException(
-                            "Grid output layer contains unexpected non-Polyline entities.");
+                            "Grid output layer contains unexpected non-Polyline entities." +
+                            " Layer=" + entity.Layer + "; type=" + entity.GetType().FullName +
+                            "; handle=" + entity.Handle.ToString());
                         using (var data = poly.GetXDataForApplication(GridCadRenderer.CalculationIdApp))
                         {
                             var values = data?.AsArray();
@@ -773,7 +786,10 @@ namespace MiningVolume2023.Services
                     if (tables != 3) throw new InvalidOperationException("Each quantity block must contain three tables.");
                 }
                 if (references != expectedExports || definitions != expectedExports)
-                    throw new InvalidOperationException("Quantity export leaked a block reference/definition.");
+                    throw new InvalidOperationException(
+                        "Quantity export leaked a block reference/definition." +
+                        " References=" + references + "; definitions=" + definitions +
+                        "; expected=" + expectedExports);
             }
             if (count != expectedExports * 3) throw new InvalidOperationException("Unexpected quantity table count.");
             return output.ToString();
