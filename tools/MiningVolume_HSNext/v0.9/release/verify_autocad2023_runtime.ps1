@@ -63,6 +63,9 @@ if ($acadVersion -notmatch '^R?24\.2') {
 if (Get-Process acad -ErrorAction SilentlyContinue) {
     throw 'AutoCAD đang chạy. Runtime gate yêu cầu đóng toàn bộ acad.exe trước khi kiểm thử.'
 }
+if ($ProductVersion -eq '2.0' -and $KeepInstalled) {
+    throw 'BLOCKED: V2 host QA may only stage a temporary bundle and must restore existing installations.'
+}
 
 $bundle = (Resolve-Path $BundlePath).Path
 $packageXml = Get-Content (Join-Path $bundle 'PackageContents.xml') -Raw
@@ -85,9 +88,10 @@ foreach ($rel in $required) {
 
 $programData = if ($env:ProgramData) { $env:ProgramData } else { 'C:\ProgramData' }
 $appPlugins = Join-Path $programData 'Autodesk\ApplicationPlugins'
-$target = Join-Path $appPlugins 'MiningVolume2023.bundle'
+$target = Join-Path $appPlugins $(if ($ProductVersion -eq '2.0') { 'NAMVECTAVolume2023.bundle' } else { 'MiningVolume2023.bundle' })
 $startupLog = Join-Path $programData 'MiningVolume2023\Logs\startup.log'
-$backup = Join-Path $appPlugins 'MiningVolume2023.bundle.runtimeverify.bak'
+$backup = $target + '.runtimeverify.bak'
+$isolatedBundles = New-Object System.Collections.ArrayList
 $temp = Join-Path $env:TEMP ("MiningVolumeRuntime_" + [Guid]::NewGuid().ToString('N'))
 $scriptPath = Join-Path $temp 'runtime_selftest.scr'
 New-Item -ItemType Directory -Force $temp | Out-Null
@@ -96,10 +100,13 @@ Remove-Item $SelfTestPath -Force -ErrorAction SilentlyContinue
 Remove-Item $OutputPath -Force -ErrorAction SilentlyContinue
 Remove-Item $startupLog -Force -ErrorAction SilentlyContinue
 
-# Recover from an interrupted earlier runtime verification before starting.
-if (Test-Path $backup) {
-    Remove-Item $target -Recurse -Force -ErrorAction SilentlyContinue
-    Move-Item $backup $target -Force
+# Recover from an interrupted earlier runtime verification without ever
+# overwriting/deleting the user's existing installation.
+if (Test-Path -LiteralPath $backup) {
+    if (Test-Path -LiteralPath $target) {
+        throw "BLOCKED: target and interrupted QA backup both exist; preserved $target / $backup"
+    }
+    Move-Item -LiteralPath $backup -Destination $target
 }
 
 $hadPrevious = Test-Path $target
@@ -107,20 +114,62 @@ try {
     if ($hadPrevious) { Move-Item $target $backup -Force }
     Copy-Directory $bundle $target
 
+    if ($ProductVersion -eq '2.0') {
+        # AutoCAD scans machine and user ApplicationPlugins. An older V2 DLL
+        # was observed loading first from NAMVECTAVolume2023.bundle; it must
+        # not steal command registration from the pinned V2 build.
+        $pluginRoots = @(
+            $appPlugins,
+            (Join-Path $env:APPDATA 'Autodesk\ApplicationPlugins'),
+            (Join-Path $env:ProgramFiles 'Autodesk\ApplicationPlugins')
+        ) | Select-Object -Unique
+        foreach ($pluginRoot in $pluginRoots) {
+            foreach ($bundleName in @('MiningVolume2023.bundle', 'NAMVECTAVolume2023.bundle')) {
+                $candidate = Join-Path $pluginRoot $bundleName
+                if ([string]::Equals($candidate, $target, [StringComparison]::OrdinalIgnoreCase)) {
+                    continue
+                }
+                $parked = $candidate + '.hostqa-disabled'
+                if (Test-Path -LiteralPath $parked) {
+                    if (Test-Path -LiteralPath $candidate) {
+                        throw "BLOCKED: competing installed bundle and stranded backup: $candidate"
+                    }
+                    Move-Item -LiteralPath $parked -Destination $candidate
+                }
+                if (Test-Path -LiteralPath $candidate) {
+                    Move-Item -LiteralPath $candidate -Destination $parked
+                    [void]$isolatedBundles.Add(@{ Original=$candidate; Parked=$parked })
+                    Write-Host "[HOST-QA] Temporarily isolated prior plugin: $candidate"
+                }
+            }
+        }
+        Write-Host "[HOST-QA] Active QA bundle: $target"
+    }
+
     $pluginDll = Join-Path $target 'Contents\Windows\MiningVolume2023.dll'
     if (-not (Test-Path $pluginDll)) {
         throw "Không tìm thấy DLL plugin để NETLOAD: $pluginDll"
     }
 
-    # Runtime CI must not block on AutoCAD's unsigned-DLL dialog. The production
-    # bundle still keeps its normal startup behavior; only this temporary runtime
-    # copy is changed to manual NETLOAD. SECURELOAD is disabled only inside the
-    # dedicated CI AutoCAD session, then restored before QUIT.
+    # V2 must autoload the pinned DLL on startup: the /b queue may be
+    # held by profile startup commands. Idle auto-selftest is gated to V2
+    # and the explicit QA environment; preserve V1 manual NETLOAD behavior.
     $runtimePackage = Join-Path $target 'PackageContents.xml'
     $packageText = Get-Content $runtimePackage -Raw
-    $packageText = $packageText -replace 'LoadOnAutoCADStartup="True"', 'LoadOnAutoCADStartup="False"'
+    if ($ProductVersion -eq '1.0') {
+        $packageText = $packageText -replace 'LoadOnAutoCADStartup="True"', 'LoadOnAutoCADStartup="False"'
+    } elseif ($packageText -notmatch 'LoadOnAutoCADStartup="True"') {
+        throw 'BLOCKED: V2 QA bundle must autoload the pinned DLL.'
+    }
     Set-Content -Path $runtimePackage -Value $packageText -Encoding UTF8
 
+    # Use a QA-specific V2 command to avoid silently calling MVSELFTEST
+    # registered by another installed plugin in the same AutoCAD session.
+    $selfTestCommand = if ($ProductVersion -eq '2.0') {
+        'NAMVECTA_QA_SELFTEST_V2'
+    } else {
+        'MVSELFTEST'
+    }
     @(
         'FILEDIA'
         '0'
@@ -130,15 +179,23 @@ try {
         '(setvar "SECURELOAD" 0)'
         '_.NETLOAD'
         ('"' + $pluginDll + '"')
-        'MVSELFTEST'
+        $selfTestCommand
         '(setvar "SECURELOAD" mv_secureload_old)'
         '_.QUIT'
     ) | Set-Content -Path $scriptPath -Encoding ASCII
 
     $oldSelfTest = $env:MININGVOLUME_SELFTEST_FILE
     $oldProductVersion = $env:MININGVOLUME_RUNTIME_PRODUCT_VERSION
+    $oldQaAutorun = $env:MININGVOLUME_QA_HOST_AUTORUN
     $env:MININGVOLUME_SELFTEST_FILE = $SelfTestPath
     $env:MININGVOLUME_RUNTIME_PRODUCT_VERSION = $ProductVersion
+    if ($ProductVersion -eq '2.0') {
+        # Host-only explicit authorization; the V2 plugin self-tests on Idle
+        # if the /b command queue is blocked by AutoCAD startup UI.
+        $env:MININGVOLUME_QA_HOST_AUTORUN = '1'
+    } else {
+        Remove-Item Env:MININGVOLUME_QA_HOST_AUTORUN -ErrorAction SilentlyContinue
+    }
     try {
         $proc = Start-Process -FilePath $acad -ArgumentList @('/nologo','/b',"`"$scriptPath`"") -PassThru
         $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
@@ -177,8 +234,19 @@ Startup log hiện tại:
 $startupDetail"
         }
         $result = Get-Content $SelfTestPath -Raw
+        # A PASS proof from an older autoloaded DLL must never be accepted.
+        if ($ProductVersion -eq '2.0' -and $env:SOURCE_SHA -match '^[0-9a-fA-F]{40}$') {
+            $startupDetail = if (Test-Path $startupLog) {
+                Get-Content $startupLog -Raw
+            } else { '' }
+            $expectedPluginDir = Join-Path $target 'Contents\Windows'
+            if (-not $startupDetail.Contains('Loaded plugin directory: ' + $expectedPluginDir) -or
+                -not $startupDetail.Contains('SOURCE_SHA=' + $env:SOURCE_SHA)) {
+                throw "BLOCKED: MVSELFTEST proof is not from pinned QA DLL $env:SOURCE_SHA at $expectedPluginDir."
+            }
+        }
         $expectedBanner = if ($ProductVersion -eq '2.0') {
-            'IMSAT VOLUME V2.0 runtime self-test'
+            'NAMVECTA VOLUME 2.0 runtime self-test'
         } else {
             'MiningVolume HS-Next v1.0 runtime self-test'
         }
@@ -228,14 +296,42 @@ $startupDetail"
     finally {
         $env:MININGVOLUME_SELFTEST_FILE = $oldSelfTest
         $env:MININGVOLUME_RUNTIME_PRODUCT_VERSION = $oldProductVersion
+        if ($null -eq $oldQaAutorun) {
+            Remove-Item Env:MININGVOLUME_QA_HOST_AUTORUN -ErrorAction SilentlyContinue
+        } else {
+            $env:MININGVOLUME_QA_HOST_AUTORUN = $oldQaAutorun
+        }
     }
 }
 finally {
-    if (-not $KeepInstalled) {
-        Remove-Item $target -Recurse -Force -ErrorAction SilentlyContinue
-        if (Test-Path $backup) { Move-Item $backup $target -Force }
-    } else {
-        Remove-Item $backup -Recurse -Force -ErrorAction SilentlyContinue
+    try {
+        if (-not $KeepInstalled) {
+            if (Test-Path -LiteralPath $target) {
+                Remove-Item -LiteralPath $target -Recurse -Force -ErrorAction Stop
+            }
+            if (Test-Path -LiteralPath $backup) {
+                if (Test-Path -LiteralPath $target) {
+                    throw "BLOCKED: cannot restore prior bundle while QA target exists: $target"
+                }
+                Move-Item -LiteralPath $backup -Destination $target -ErrorAction Stop
+            }
+        } else {
+            Remove-Item $backup -Recurse -Force -ErrorAction SilentlyContinue
+        }
     }
-    Remove-Item $temp -Recurse -Force -ErrorAction SilentlyContinue
+    finally {
+        # Always restore the user's previously installed add-ins.
+        for ($i = $isolatedBundles.Count - 1; $i -ge 0; $i--) {
+            $entry = $isolatedBundles[$i]
+            if (Test-Path -LiteralPath $entry.Original) {
+                Write-Warning "BLOCKED: existing path occupied; preserved backup at $($entry.Parked)"
+                continue
+            }
+            if (Test-Path -LiteralPath $entry.Parked) {
+                Move-Item -LiteralPath $entry.Parked -Destination $entry.Original
+                Write-Host "[HOST-QA] Restored prior installed bundle: $($entry.Original)"
+            }
+        }
+        Remove-Item $temp -Recurse -Force -ErrorAction SilentlyContinue
+    }
 }

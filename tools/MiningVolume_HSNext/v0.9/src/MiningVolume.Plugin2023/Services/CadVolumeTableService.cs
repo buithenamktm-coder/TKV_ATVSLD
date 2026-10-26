@@ -32,11 +32,23 @@ namespace MiningVolume2023.Services
             if (!IsFinite(insertion.X) || !IsFinite(insertion.Y) || !IsFinite(insertion.Z))
                 throw new InvalidOperationException("Điểm chèn bảng không hợp lệ (NaN/Infinity).");
 
+            // AutoCAD side-databases can retain block-table records after
+            // Transaction.Abort. Track this export's unique name/reference so
+            // cancellation cannot leave an orphaned definition or reference.
+            string exportBlockName = BlockPrefix + result.CalculationId + "_" + Guid.NewGuid().ToString("N");
+            ObjectId exportReferenceId = ObjectId.Null;
+            try
+            {
             using (var tr = database.TransactionManager.StartTransaction())
             using (var block = new BlockTableRecord {
-                Name = BlockPrefix + result.CalculationId + "_" + Guid.NewGuid().ToString("N"),
+                Name = exportBlockName,
                 Origin = Point3d.Origin })
             {
+                // An aborted AutoCAD side-database transaction may otherwise
+                // retain an unreferenced block definition. Abort explicitly
+                // before disposal on Esc or validation failure.
+                try
+                {
                 pollCancellation?.Invoke();
                 var layer = EnsureOutputLayer(database, tr);
                 var arial = EnsureArialTextStyle(database, tr);
@@ -154,7 +166,7 @@ namespace MiningVolume2023.Services
                 using (var reference = new BlockReference(
                     new Point3d(insertion.X, insertion.Y, 0), blockId) { LayerId = layer })
                 {
-                    model.AppendEntity(reference);
+                    exportReferenceId = model.AppendEntity(reference);
                     tr.AddNewlyCreatedDBObject(reference, true);
                 }
                 // A cancel or callback failure rolls back the definition,
@@ -162,6 +174,57 @@ namespace MiningVolume2023.Services
                 // tables already appended earlier in this transaction.
                 reportProgress?.Invoke(result.Intervals.Count + result.Levels.Count + 2);
                 pollCancellation?.Invoke();
+                tr.Commit();
+                }
+                catch
+                {
+                    tr.Abort();
+                    throw;
+                }
+            }
+            }
+            catch (Exception original)
+            {
+                // Run only AFTER the writing transaction is disposed. Never
+                // erase a pre-existing block: the name was generated uniquely
+                // for this attempted export and is never shared.
+                try { RemoveAbortedExport(database, exportBlockName, exportReferenceId); }
+                catch (Exception cleanupError)
+                {
+                    throw new AggregateException(
+                        "Không thể hoàn nguyên block khối lượng sau khi xuất thất bại.",
+                        original, cleanupError);
+                }
+                throw;
+            }
+        }
+
+        private static void RemoveAbortedExport(Database db, string name, ObjectId referenceId)
+        {
+            using (var tr = db.TransactionManager.StartTransaction())
+            {
+                var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
+                // The registered BlockReference may have survived a side-DB
+                // abort; erase it before erasing its orphaned definition.
+                if (!referenceId.IsNull && referenceId.IsValid && !referenceId.IsErased)
+                {
+                    var obj = tr.GetObject(referenceId, OpenMode.ForWrite, true) as BlockReference;
+                    if (obj != null && !obj.IsErased)
+                    {
+                        var definition = tr.GetObject(obj.BlockTableRecord, OpenMode.ForRead) as BlockTableRecord;
+                        if (definition == null ||
+                            !string.Equals(definition.Name, name, StringComparison.Ordinal))
+                            throw new InvalidOperationException(
+                                "Refusing to erase a reference not owned by the aborted quantity export.");
+                        obj.Erase();
+                    }
+                }
+                if (bt.Has(name))
+                {
+                    var record = (BlockTableRecord)tr.GetObject(bt[name], OpenMode.ForWrite, true);
+                    if (record != null && !record.IsErased)
+                        record.Erase();
+                }
                 tr.Commit();
             }
         }
@@ -172,10 +235,22 @@ namespace MiningVolume2023.Services
             var table = (TextStyleTable)tr.GetObject(db.TextStyleTableId, OpenMode.ForRead);
             if (table.Has(style)) return table[style];
             table.UpgradeOpen();
-            var record = new TextStyleTableRecord { Name = style, FileName = "arial.ttf" };
-            ObjectId id = table.Add(record);
-            tr.AddNewlyCreatedDBObject(record, true);
-            return id;
+            // Newly created text style records depend on WorkingDatabase.
+            // The export may be tested against an isolated side database,
+            // which differs from AutoCAD's active document database.
+            var previous = HostApplicationServices.WorkingDatabase;
+            try
+            {
+                if (previous != db) HostApplicationServices.WorkingDatabase = db;
+                var record = new TextStyleTableRecord { Name = style, FileName = "arial.ttf" };
+                ObjectId id = table.Add(record);
+                tr.AddNewlyCreatedDBObject(record, true);
+                return id;
+            }
+            finally
+            {
+                if (previous != db) HostApplicationServices.WorkingDatabase = previous;
+            }
         }
 
         private static void StyleSimpleTable(Autodesk.AutoCAD.DatabaseServices.Table table,

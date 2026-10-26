@@ -18,7 +18,9 @@ def test_v2_workflow_isolated_from_v1_and_rejects_unpinned_keys():
     assert "runs-on: [self-hosted, Windows, X64, autocad2023]" in wf
     assert "default: miningvolume-v2-chatgpt-p0-continuation" in wf
     assert "git merge-base --is-ancestor" in wf
-    assert "source is not part of V2" in wf
+    assert "not reachable from approved V2 branches" in wf
+    assert "'namvecta-volume-v2-grid-accuracy-gate-20261025'" in wf
+    assert "if (-not $authorized)" in wf
     assert "secrets.IMSAT_VOLUME_V2_RSA_PUBLIC_XML_B64" in wf
     assert "vars.IMSAT_VOLUME_V2_RSA_PUBLIC_SHA256" in wf
     assert "-ExpectedPublicKeySha256 $env:APPROVED_RSA_SHA256" in wf
@@ -70,8 +72,8 @@ def test_real_v2_runtime_has_version_specific_selftest():
     assert "AppVersion=" in verifier
     assert "MININGVOLUME_RUNTIME_PRODUCT_VERSION" in verifier
     assert "ProductVersion=" in verifier
-    assert "IMSAT VOLUME V2.0 runtime self-test" in verifier
-    assert "IMSAT VOLUME V2.0 runtime self-test" in test
+    assert "NAMVECTA VOLUME 2.0 runtime self-test" in verifier
+    assert "NAMVECTA VOLUME 2.0 runtime self-test" in test
     assert "MiningVolume HS-Next v1.0 runtime self-test" in test
     assert "MiningVolume HS-Next v1.0 runtime self-test" in verifier
     assert "MININGVOLUME_RUNTIME_PRODUCT_VERSION = $oldProductVersion" in verifier

@@ -21,10 +21,15 @@ def test_project_snapshot_carries_cad_section_preservation_marker():
     assert "HadEditableSectionCad" in snap
     assert "snapshot.HadEditableSectionCad =" in project
     assert "EditableSectionCadService.HasEditableProfiles(doc.Database)" in project
-    assert "snap.HadEditableSectionCad && !cadSectionsAvailable" in project
+    assert "if (!cadSectionsAvailable &&" in project
+    assert "snap.HadEditableSectionCad ||" in project
+    assert "EditableSectionCadService.HasOfficialSectionLayers(doc.Database)" in project
     assert "throw new InvalidOperationException(" in project
-    assert project.index("snap.HadEditableSectionCad && !cadSectionsAvailable") < project.index(
+    assert project.index("if (!cadSectionsAvailable &&") < project.index(
         "EditableSectionCadService.ReadEditedProfiles(")
+    editable = _read(SERVICES / "EditableSectionCadService.cs")
+    assert "internal static bool HasOfficialSectionLayers(Database db)" in editable
+    assert 'table.Has("MV_MC_HIENTRANG") || table.Has("MV_MC_THIETKE")' in editable
 
 
 def test_user_must_confirm_before_replacing_existing_cad_sections():

@@ -15,8 +15,12 @@ def test_three_main_groups_and_exactly_two_default_volume_methods():
     assert '[AppPage.QuickSection] = new SectionPage(true)' in main
     assert '[AppPage.License] = new ContactInfoPage()' in main
     assert 'case AppPage.Volume: return new[] { AppPage.Section, AppPage.Grid };' in main
-    assert 'case AppPage.Model: return new[] { AppPage.Data };' in main
-    assert 'AppPage.Volume, AppPage.QuickSection, AppPage.Mineral' in main  # preserved behind advanced view
+    assert 'case AppPage.Model: return new[] { AppPage.Project, AppPage.Data, AppPage.QuickSection };' in main
+    assert 'case AppPage.Model: return new[] { AppPage.Project, AppPage.Data, AppPage.QuickSection };' in main
+    assert 'UpdatePageButtons(pages);' in main
+    assert '_advancedVolumeButton.Visible = false;' in main
+    assert 'AppPage.Volume, AppPage.Mineral' in main  # advanced volume pages remain reachable
+    assert 'case AppPage.Volume: return new[] { AppPage.Section, AppPage.Grid };' in main
 
 
 def test_model_contains_input_then_tin_management():

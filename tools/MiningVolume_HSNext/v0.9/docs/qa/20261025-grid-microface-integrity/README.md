@@ -1,0 +1,203 @@
+# NAMVECTA VOLUME 2.0 — P0 grid microface/empty-region integrity gate
+
+Date: 2026-10-25. Baseline: PR #52 head `9e3bd0b9f8309724cef5dbd7db3295e049f5995e`.
+Branch: `namvecta-volume-v2-grid-accuracy-gate-20261025`.
+Status: **SOURCE PATCH; NOT TESTED on AutoCAD/Windows; NOT A RELEASE.**
+
+## Why
+
+The CAD/TIN quality gate accepts a triangle if its projected XY area is strictly positive, but
+`ExactGridCellCalculator` skips intersections whose XY area is at or below
+`Eps = 1e-9 m2`. Large elevation differences mean a small omitted footprint need not have
+negligible volume. Previously an incomplete grid cell could still pass `IsComplete`
+because its no-data footprint was below absolute coverage tolerance `1e-8 m2`.
+Furthermore, a grid with no resulting cells passed `Cells.All(...)` vacuously.
+
+## Changes (conservative, no change to signed integration formulas)
+
+1. Keep every cell with **strictly positive** accepted calculation area in the report,
+   including sub-threshold slivers; its volume is not automatically certified.
+2. Mark cells with `CalculationArea <= 1e-9 m2` as incomplete rather than
+   pretending an unevaluated positive-area cell represents zero earthwork. A partially
+   covered sliver also cannot pass solely due to the absolute 1e-8 m2 no-data tolerance.
+3. For each accepted cell, detect positive faces with area `<= 1e-9 m2` present
+   in the accepted region (subtracting holes) and expose
+   `HasUnresolvedSmallTriangles`. Continue to show partial results but never mark
+   them ready for technical acceptance.
+4. A report with no cells is **not** `IsComplete`.
+5. Show flagged cell counts in the CAD UI and Excel. Any microface cell with
+   unresolved volume has blank volume cells across Excel detail, linked grid
+   summary and method sheets; verified cells retain their numeric/formula values.
+   Nodes sharing an unresolved cell are marked as geometry-unverified.
+6. Add four executable C# regression cases:
+   `grid_empty_report_is_not_accepted`,
+   `grid_positive_subthreshold_cell_is_not_accepted`,
+   `grid_partially_covered_sliver_is_not_accepted`, and
+   `grid_positive_tiny_tin_face_is_not_silently_accepted`.
+7. Add real C# report-builder regression
+   `grid_unresolved_microface_is_blank_in_all_excel_volume_sheets`, checking
+   both blank unconfirmed quantities and intact confirmed-cell formulas.
+   Update (do not disable) older static contract checks for the stronger guard.
+
+## What this does not prove
+
+- It does not fix the underlying integration of microfaces. This is a
+  fail-closed **diagnostic gate** only; the signed integral is unchanged.
+- An extremely small face whose footprint collapses under the clipping geometry's
+  coordinate tolerance might not be detected by this preliminary diagnostic;
+  testing numerical conditioning and large survey coordinates remains required.
+- No claims about 85-section CAD speed, DWG editing, CAD/Excel parity, AutoCAD
+  2020–2024 runtime or Setup. These remain independent release blockers.
+
+## Test commands on a development host
+
+From `tools/MiningVolume_HSNext/v0.9`:
+
+```sh
+python tests/core/run_core.py
+python -m pytest tests/reference compat/test_compatibility.py -q
+```
+
+On the licensed Windows/AutoCAD 2023 host, run `MVSELFTEST` and the 16 independent
+DXF fixtures; compare excavated/backfill totals and CalculationId between CAD
+and Excel. Record CPU/RAM, source SHA and repeat timings for the same 85
+sections; do not infer speedups from synthetic .NET test runs.
+
+## Acceptance checklist
+
+- [ ] C# executable core/report regression (four geometry + one Excel QA case) passes
+- [ ] Python regressions pass
+- [ ] Windows plugin compile succeeds for each targeted CAD version
+- [ ] Host `MVSELFTEST` passes with raw log
+- [ ] No false 'Đủ' on empty/tiny/unresolved inputs
+- [ ] Complete normal inputs retain identical unrounded volume totals
+- [ ] CAD & Excel show the same CalculationId and volumes after edits
+- [ ] Runtime performance regression checks pass
+
+Do not merge or publish a Setup while any release gate is unverified.
+
+
+## Follow-up 2026-10-25 — Section TIN shared-knot sampling (P0 performance)
+
+A first source-level optimization reuses a successfully queried DIRECT elevation of
+the previous segment's ending knot as the next segment's starting elevation.
+It is confined to `TinSectionSampler.BuildProfileIndexed`, with two independent
+last-value caches for HT and TK, reset for each `SectionSpan`.
+
+Safety boundaries:
+- Only an exact shared sorted knot `t0 == previousEndT` may reuse a value.
+- A boundary fallback query (offset toward the segment interior) is **not**
+  cached: adjacent segments may need different interior-side queries.
+- Neither knot list construction, midpoint coverage checks, cut/fill formula,
+  triangle index, TIN topology nor output CAD geometry is modified.
+- Cancellation polling and missing-coverage invalidation remain in place.
+
+Added executable geometry test:
+`section_knot_reuse_preserves_analytic_cut_fill` with adjacent 3D TIN strips,
+positive/negative signed differences, and a disconnected two-span route.
+The expected full-section cut/fill is 3.25/2.75 square metres; with a span
+gap, 3.25/1.25 square metres.
+
+This eliminates repeated direct endpoint lookups; **no speedup is claimed**
+until same-data, same-hardware before/after benchmarks and native AutoCAD
+85-section CAD export logs are available. The existing
+`tests/performance/report_autocad2023_host.py` remains the host comparison tool.
+
+
+## Follow-up — first CAD section/preview export ModelSpace fast path
+
+The old section renderer always scanned ModelSpace for old geometry before
+creating fresh section/preview entities, even on the first export into a
+DWG where the dedicated output layers did not yet exist. This unnecessarily
+enumerated potentially millions of unrelated TIN 3DFACE identifiers.
+
+Changes:
+- `SectionCadRenderer.ExistingLayerIds` reads the layer table **before**
+  creating any section/preview layers and returns only old layer IDs.
+- On initial preview or official section output where none of the target
+  layers pre-existed, skip the full `EraseOnLayers` traversal.
+- If *any* target layer already exists, still run the normal erase over
+  those pre-existing layers. No foreign layers or TIN 3DFACEs may be erased.
+- Preserve 20-profile batching, outer rollback transaction, Esc polling,
+  section XData, editability, coordinate transforms and volume formulae.
+- Added source-based reference regression
+  `tests/reference/test_v2_section_first_export_fast_path.py` and
+  strengthened **host-only** `VerifySectionEraseSkipsTinFaces` to compare
+  native section entity counts on the first export and second redraw.
+
+This improvement helps **first export only** when all dedicated output layers
+are new. It does not accelerate replacement of already-existing sections, or
+remove the cost of actually creating native CAD entities. There is no verified
+85-section host speedup until before/after telemetry on matching DWG geometry
+and hardware is available. The new side-Database host test is compiled during
+CI but needs a licensed AutoCAD host to execute.
+
+
+## Follow-up — CAD section freshness while recalculating volumes
+
+Issue: `VolumePage.CalculateClicked` used in-memory `SectionProfiles` after
+a user grip-edited tagged CAD polylines; only `ExportPage` checked CAD freshness,
+too late to prevent displaying newly computed but stale volumes.
+
+Code changes:
+1. Reject a volume calculation at entry if tagged CAD geometry does not match
+   the approved profiles, explaining the need for **Cập nhật mặt cắt**.
+2. Repeat the comparison on the AutoCAD UI thread **after** the asynchronous
+   calculation and **before** `VolumeWorkflowService.Commit`; compare also
+   independent `TinRegionRevision` to reject a mid-run boundary change.
+3. If both official tagged HT/TK polylines have been manually deleted but
+   their dedicated output layers still exist, reject the old
+   `allowMissingUnedited` fallback. The fallback remains allowed when CAD
+   section layers were never created at all, to support first-time TIN-only
+   calculations.
+4. Add static Python contract checks and a real-AutoCAD side-Database QA group
+   `Volume preflight vs CAD grip edit`. The fixture changes a tagged
+   Polyline grip, verifies preflight rejects, restores the point and verifies
+   recovery, then erases both section Polyline entities and verifies refusal.
+5. Update the existing static QA contract to expect eight independent CAD
+   diagnostic groups, instead of hard-coding an obsolete count of seven.
+
+**Scope/limits:** The Python test is source-only. The new AutoCAD regression
+fixture compiles in CI but still must be executed on a licensed Windows
+AutoCAD host (`MVSELFTEST`). If the entire drawing's output layers themselves
+are purged, the runtime may lack evidence that official sections once existed;
+a persisted project snapshot with `HadEditableSectionCad` is an additional
+restore-time guard, but complete hostile deletion of all evidence is not
+certified here.
+
+Follow-up for ordinary DWG restore: `EditableSectionCadService.HasOfficialSectionLayers`
+checks the persistent official HT/TK output layer names even if every section
+Polyline was deleted. `ProjectPersistenceService.Restore` refuses TIN-only
+recovery when `HadEditableSectionCad` is true **OR** either output layer
+survived but no valid tagged CAD section is available. The reference contract
+`test_v2_section_persistence_safety.py` now enforces the stronger condition.
+If the user purges **all layers and metadata as well**, no generic renderer
+can prove their earlier existence without another durable record. This remains
+a separate host acceptance boundary. No host CAD/Excel equality or runtime speedup is claimed.
+
+
+## Follow-up: licensed AutoCAD 2023 runtime execution route
+
+The root V2 host QA workflow `.github/workflows/verify-imsat-volume-v2-autocad2023.yml`
+previously restricted `source_ref` to ancestors of
+`miningvolume-v2-chatgpt-p0-continuation`. PR #54 is a separate authorized
+V2 repair branch, so a dispatch with its SHA was blocked before any host tests.
+The allowlist now admits **only** descendants of either this original V2 line
+or `namvecta-volume-v2-grid-accuracy-gate-20261025`; it still rejects arbitrary
+GitHub branches/SHAs. A new Python static contract tests that limitation.
+
+Host QA is not automatic on PR push: it is `workflow_dispatch`, needs the
+`self-hosted, Windows, X64, autocad2023` runner with a real licensed AutoCAD
+2023 installation and **interactive Administrator Windows desktop**, plus a
+pinned `IMSAT_VOLUME_V2_RSA_PUBLIC_XML_B64` secret and
+`IMSAT_VOLUME_V2_RSA_PUBLIC_SHA256` variable. When running the root workflow
+via its GitHub Actions UI, set `source_ref` to the exact tested branch SHA,
+verify that the executed workflow definition includes this PR's allowlist
+(the default-branch workflow may differ), and retain the resulting host
+runtime log artifact and run ID. Do not put private keys in CI.
+
+A successful ordinary GitHub compile/build job does **not** execute the
+native side-database CAD QA group or 85-section host benchmark. Do not
+change ReleaseStatus=BLOCKED until these results and complete user acceptance
+are documented. This commit makes the correct QA source **eligible**; it does
+not run the workflow or prove its runner is available.

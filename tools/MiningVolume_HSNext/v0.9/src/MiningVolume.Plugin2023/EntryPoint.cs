@@ -18,6 +18,9 @@ namespace MiningVolume2023
         private static bool _idleHooked;
         private static bool _documentHooked;
         private static bool _startupUiOpened;
+        // Only the dedicated V2 AutoCAD-host QA session can opt into the
+        // deterministic Idle self-test. Normal AutoCAD use never auto-tests.
+        private static bool _hostQaSelfTestTriggered;
         internal static string StartupUiError { get; private set; }
         private static string _loadedDrawingFingerprint;
         private static Autodesk.AutoCAD.ApplicationServices.Document _loadedDocument;
@@ -121,6 +124,54 @@ namespace MiningVolume2023
                                 ex.Message + "\n\nXem log tại: " + StartupLogPath());
                         }
                         catch { }
+                    }
+                }
+            }
+
+            // AutoCAD's /b script may be held by a startup command or ribbon
+            // event after NETLOAD; never infer a PASS from plugin startup.
+            // An explicit host-only flag lets the *loaded plugin* execute the
+            // same substantive self-test once, after the active document and
+            // palette initialization are ready. The verifier still checks
+            // the produced file, status, banner and actual DLL hashes.
+            if (_startupUiOpened && !_hostQaSelfTestTriggered &&
+                AcApp.DocumentManager.MdiActiveDocument != null &&
+                string.Equals(Environment.GetEnvironmentVariable("MININGVOLUME_QA_HOST_AUTORUN"),
+                    "1", StringComparison.Ordinal) &&
+                string.Equals(Environment.GetEnvironmentVariable("MININGVOLUME_RUNTIME_PRODUCT_VERSION"),
+                    "2.0", StringComparison.Ordinal) &&
+                !string.IsNullOrWhiteSpace(
+                    Environment.GetEnvironmentVariable("MININGVOLUME_SELFTEST_FILE")))
+            {
+                _hostQaSelfTestTriggered = true;
+                if (_idleHooked)
+                {
+                    AcApp.Idle -= OnIdle;
+                    _idleHooked = false;
+                }
+                StartupLog("V2 host QA: Idle self-test starting");
+                try
+                {
+                    var result = SelfTestService.Run();
+                    StartupLog("V2 host QA: Idle self-test ended; status=" +
+                        (result.Passed ? "PASS" : "FAIL") +
+                        "; file=" + result.OutputFile);
+                }
+                catch (System.Exception ex)
+                {
+                    StartupLog("V2 host QA: Idle self-test threw: " + ex);
+                    try
+                    {
+                        // A host-side exception is a FAIL, never an absent
+                        // proof that could later be misread as success.
+                        File.WriteAllLines(
+                            Environment.GetEnvironmentVariable("MININGVOLUME_SELFTEST_FILE"),
+                            new[] { "NAMVECTA VOLUME 2.0 runtime self-test",
+                                    "Status=FAIL", "Unhandled=" + ex });
+                    }
+                    catch (System.Exception writeEx)
+                    {
+                        StartupLog("V2 host QA: failed to write FAIL proof: " + writeEx.Message);
                     }
                 }
             }
@@ -314,6 +365,26 @@ namespace MiningVolume2023
                 ed?.WriteMessage("\nIMSAT VOLUME v1.0 SELFTEST: PASS (" + r.Checks.Count + " checks). Log: " + r.OutputFile);
             else
                 ed?.WriteMessage("\nIMSAT VOLUME v1.0 SELFTEST: FAIL (" + r.Errors.Count + " errors). Log: " + r.OutputFile);
+        }
+
+        // Host QA must never accidentally execute MVSELFTEST registered by an
+        // older V1/NAMVECTA bundle that AutoCAD autoloaded before our NETLOAD.
+        // The unique QA command exists only in this repaired V2 build.
+        [CommandMethod("NAMVECTA_QA_SELFTEST_V2", CommandFlags.Session)]
+        public static void QaSelfTestV2()
+        {
+            // If the explicit CI Idle route already ran, an unblocked /b
+            // script must not overwrite its result with a second selftest.
+            bool hostMode = string.Equals(
+                Environment.GetEnvironmentVariable("MININGVOLUME_QA_HOST_AUTORUN"),
+                "1", StringComparison.Ordinal);
+            if (hostMode && _hostQaSelfTestTriggered)
+            {
+                StartupLog("V2 host QA: script command skipped; self-test already invoked");
+                return;
+            }
+            if (hostMode) _hostQaSelfTestTriggered = true;
+            SelfTest();
         }
 
         [CommandMethod("MVABOUT")]

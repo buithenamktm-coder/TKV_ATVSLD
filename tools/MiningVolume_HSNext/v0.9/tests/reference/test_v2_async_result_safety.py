@@ -122,7 +122,10 @@ def test_section_export_blocks_cad_grip_changes_and_dwg_switch():
     assert "var report = await Task.Run(" in start
     assert "await ExportWorkflowService.WriteValidatedXlsxAsync(" in start
     assert "var actual = ReadEditedProfiles(db, approved, allowMissingUnedited: true)" in cad
-    assert "if (originals.Any(p => p != null && p.IsUserEdited))" in cad
+    assert "if (outputLayerExists ||" in cad
+    assert "originals.Any(p => p != null && p.IsUserEdited))" in cad
+    assert 'lt.Has("MV_MC_HIENTRANG")' in cad
+    assert 'lt.Has("MV_MC_THIETKE")' in cad
     assert "Decode(poly, data, poll)" in cad
     assert "EditedSectionProfileBuilder.SameGeometry(approved, actual)" in cad
 
