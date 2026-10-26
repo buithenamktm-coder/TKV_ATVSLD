@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Text;
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.Geometry;
@@ -24,6 +25,7 @@ namespace MiningVolume2023.Services
             RunGroup("Boundary selection", () => { VerifyBoundarySelectionSkipsTinAndSupportsCancel(); }, errors, reportPassed);
             RunGroup("TIN clear rollback", () => { VerifyTinClearRollbackOnCancelAndForeignObject(); }, errors, reportPassed);
             RunGroup("TIN pair rollback", () => { VerifyTinPairRollbackAfterSecondSurfaceFailure(); }, errors, reportPassed);
+            RunGroup("Stored CAD TIN degenerate-face safety", VerifyStoredCadTinDegenerateFaceSafety, errors, reportPassed);
             RunGroup("Section erase preserves TIN", () => { VerifySectionEraseSkipsTinFaces(); }, errors, reportPassed);
             RunGroup("Quantity block rollback", () => { VerifyTableRollback(); }, errors, reportPassed);
             RunGroup("Grid calculation identity", () => { VerifyGridIdentity(); }, errors, reportPassed);
@@ -325,6 +327,72 @@ namespace MiningVolume2023.Services
                 if (TinCadRenderer.Clear(db, layer) != 2300 ||
                     TinCadRenderer.CountFaces(db, layer) != 0)
                     throw new InvalidOperationException("TIN delete did not recover after cancellation.");
+            }
+        }
+
+        private static void VerifyStoredCadTinDegenerateFaceSafety()
+        {
+            // Real AutoCAD 3DFACE and side-database fixture. Only a collapsed
+            // face whose surviving exact 3D edge is also a valid TIN edge
+            // may be ignored; do not mutate accepted AutoCAD geometry.
+            using (var db = new Database(true, true))
+            {
+                string redundantHandle;
+                string unsafeHandle;
+                using (var tr = db.TransactionManager.StartTransaction())
+                {
+                    var layers = (LayerTable)tr.GetObject(db.LayerTableId, OpenMode.ForWrite);
+                    var okLayer = new LayerTableRecord { Name = "QA_TIN_REDUNDANT" };
+                    var okId = layers.Add(okLayer);
+                    tr.AddNewlyCreatedDBObject(okLayer, true);
+                    var badLayer = new LayerTableRecord { Name = "QA_TIN_UNSAFE" };
+                    var badId = layers.Add(badLayer);
+                    tr.AddNewlyCreatedDBObject(badLayer, true);
+                    var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
+                    var ms = (BlockTableRecord)tr.GetObject(
+                        bt[BlockTableRecord.ModelSpace], OpenMode.ForWrite);
+                    var a = new Point3d(0, 0, 10);
+                    var b = new Point3d(10, 0, 10);
+                    var c = new Point3d(0, 10, 10);
+                    var real = new Face(a, b, c, c, true, true, true, false)
+                    { LayerId = okId };
+                    ms.AppendEntity(real);
+                    tr.AddNewlyCreatedDBObject(real, true);
+                    var redundant = new Face(a, a, b, b, true, true, true, false)
+                    { LayerId = okId };
+                    ms.AppendEntity(redundant);
+                    tr.AddNewlyCreatedDBObject(redundant, true);
+                    redundantHandle = redundant.Handle.ToString();
+                    var orphanA = new Point3d(100, 100, 10);
+                    var orphanB = new Point3d(110, 100, 10);
+                    var orphan = new Face(orphanA, orphanA, orphanB, orphanB,
+                        true, true, true, false) { LayerId = badId };
+                    ms.AppendEntity(orphan);
+                    tr.AddNewlyCreatedDBObject(orphan, true);
+                    unsafeHandle = orphan.Handle.ToString();
+                    tr.Commit();
+                }
+                var tin = TinCadRenderer.ReadStoredTin(db, "QA_TIN_REDUNDANT", "QA");
+                if (tin == null || tin.Triangles.Count != 1 ||
+                    tin.VerticalFaces.Count != 0 ||
+                    tin.VerifiedRedundantCadFaces != 1 ||
+                    !tin.Issues.Any(issue =>
+                        issue.Code == "REDUNDANT_ZERO_EDGE_CAD_FACE" &&
+                        issue.Message.Contains(redundantHandle)) ||
+                    TinCadRenderer.CountFaces(db, "QA_TIN_REDUNDANT") != 2)
+                    throw new InvalidOperationException(
+                        "A redundant collapsed CAD face was not proven or the drawing changed.");
+                bool blocked = false;
+                try { TinCadRenderer.ReadStoredTin(db, "QA_TIN_UNSAFE", "QA"); }
+                catch (InvalidOperationException ex)
+                {
+                    blocked = ex.Message.Contains(unsafeHandle) &&
+                              ex.Message.Contains("không") &&
+                              ex.Message.Contains("Handle");
+                }
+                if (!blocked || TinCadRenderer.CountFaces(db, "QA_TIN_UNSAFE") != 1)
+                    throw new InvalidOperationException(
+                        "An unproven degenerate CAD face must reject recovery with its exact Handle.");
             }
         }
 
