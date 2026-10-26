@@ -172,10 +172,22 @@ namespace MiningVolume2023.Services
             var table = (TextStyleTable)tr.GetObject(db.TextStyleTableId, OpenMode.ForRead);
             if (table.Has(style)) return table[style];
             table.UpgradeOpen();
-            var record = new TextStyleTableRecord { Name = style, FileName = "arial.ttf" };
-            ObjectId id = table.Add(record);
-            tr.AddNewlyCreatedDBObject(record, true);
-            return id;
+            // Newly created text style records depend on WorkingDatabase.
+            // The export may be tested against an isolated side database,
+            // which differs from AutoCAD's active document database.
+            var previous = HostApplicationServices.WorkingDatabase;
+            try
+            {
+                if (previous != db) HostApplicationServices.WorkingDatabase = db;
+                var record = new TextStyleTableRecord { Name = style, FileName = "arial.ttf" };
+                ObjectId id = table.Add(record);
+                tr.AddNewlyCreatedDBObject(record, true);
+                return id;
+            }
+            finally
+            {
+                if (previous != db) HostApplicationServices.WorkingDatabase = previous;
+            }
         }
 
         private static void StyleSimpleTable(Autodesk.AutoCAD.DatabaseServices.Table table,
