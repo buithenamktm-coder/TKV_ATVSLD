@@ -72,6 +72,73 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
+      - name: Locate usable host Python with pip (3.12 or 3.13)
+        id: host-python
+        shell: powershell
+        run: |
+          $candidate = $null
+          $paths = @(
+            (Join-Path $env:LOCALAPPDATA 'Programs\Python\Python312\python.exe'),
+            (Join-Path $env:LOCALAPPDATA 'Programs\Python\Python313\python.exe'),
+            (Join-Path $env:ProgramFiles 'Python312\python.exe'),
+            (Join-Path $env:ProgramFiles 'Python313\python.exe'),
+            'C:\Python312\python.exe',
+            'C:\Python313\python.exe'
+          )
+          $launcher = Get-Command py.exe -ErrorAction SilentlyContinue
+          if ($launcher) {
+            foreach ($minor in @('3.12', '3.13')) {
+              try {
+                $exe = (& $launcher.Source ("-" + $minor) -c 'import sys; print(sys.executable)' 2>$null | Select-Object -Last 1)
+                if ($LASTEXITCODE -eq 0 -and $exe) { $paths = @($exe) + $paths }
+              } catch { }
+            }
+          }
+          foreach ($exe in ($paths | Select-Object -Unique)) {
+            if (-not $exe -or -not (Test-Path $exe)) { continue }
+            try {
+              # Windows PowerShell 5.1 strips nested double quotes from
+              # native -c arguments; print numeric fields without quotes.
+              $version = (& $exe -c 'import sys, encodings, ssl; print(sys.version_info.major, sys.version_info.minor)' 2>$null | Select-Object -Last 1)
+              if ($LASTEXITCODE -ne 0 -or $version -notin @('3 12', '3 13')) {
+                Write-Host "Reject Python candidate (stdlib/version): $exe; exit=$LASTEXITCODE; version=$version"
+                continue
+              }
+              & $exe -m pip --version *> $null
+              if ($LASTEXITCODE -ne 0) {
+                Write-Host "Reject Python candidate (pip unavailable): $exe; exit=$LASTEXITCODE"
+                continue
+              }
+              $candidate = $exe
+              Write-Host "Verified Python $version with stdlib, SSL, pip: $candidate"
+              break
+            } catch { }
+          }
+          if ($candidate) {
+            (Split-Path $candidate -Parent) | Out-File $env:GITHUB_PATH -Encoding ascii -Append
+            "found=true" | Out-File $env:GITHUB_OUTPUT -Encoding ascii -Append
+          } else {
+            Write-Host 'No complete host Python found. GitHub setup-python fallback required.'
+            "found=false" | Out-File $env:GITHUB_OUTPUT -Encoding ascii -Append
+          }
+          # Rejected candidates are expected and must not fail the step just
+          # because the last probed native executable returned a nonzero code.
+          $global:LASTEXITCODE = 0
+          exit 0
+
+      - uses: actions/setup-python@v5
+        if: steps.host-python.outputs.found != 'true'
+        with:
+          python-version: '3.12'
+
+      - name: Verify Python is actually runnable
+        shell: powershell
+        run: |
+          python -c "import sys, encodings, ssl; assert sys.version_info[:2] in ((3,12),(3,13)), sys.version; print(sys.version)"
+          if ($LASTEXITCODE -ne 0) { throw 'BLOCKED: Python 3.12/3.13 standard library is not usable.' }
+          python -m pip --version
+          if ($LASTEXITCODE -ne 0) { throw 'BLOCKED: Python pip is missing.' }
+
       - name: Compile approved baseline against installed AutoCAD assemblies
         shell: pwsh
         run: |
