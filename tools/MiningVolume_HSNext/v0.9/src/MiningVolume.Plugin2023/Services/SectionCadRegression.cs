@@ -398,6 +398,50 @@ namespace MiningVolume2023.Services
                     throw new InvalidOperationException(
                         "An unproven degenerate CAD face must reject recovery with its exact Handle.");
             }
+            VerifyLegacyDwgRecognitionReadOnly();
+        }
+
+        private static void VerifyLegacyDwgRecognitionReadOnly()
+        {
+            using (var db = new Database(true, true))
+            {
+                using (var tr = db.TransactionManager.StartTransaction())
+                {
+                    var layers = (LayerTable)tr.GetObject(db.LayerTableId, OpenMode.ForWrite);
+                    var tk = new LayerTableRecord { Name = "MV_TIN_THIETKE" };
+                    ObjectId tkId = layers.Add(tk);
+                    tr.AddNewlyCreatedDBObject(tk, true);
+                    var mc = new LayerTableRecord { Name = "MV_MC_HIENTRANG" };
+                    ObjectId mcId = layers.Add(mc);
+                    tr.AddNewlyCreatedDBObject(mc, true);
+                    var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
+                    var model = (BlockTableRecord)tr.GetObject(
+                        bt[BlockTableRecord.ModelSpace], OpenMode.ForWrite);
+                    var a = new Point3d(0, 0, 0);
+                    var b = new Point3d(5, 0, 0);
+                    var c = new Point3d(0, 5, 0);
+                    var face = new Face(a, b, c, c, true, true, true, false)
+                    { LayerId = tkId };
+                    model.AppendEntity(face);
+                    tr.AddNewlyCreatedDBObject(face, true);
+                    var section = new Polyline { LayerId = mcId };
+                    section.AddVertexAt(0, new Point2d(0, 0), 0, 0, 0);
+                    section.AddVertexAt(1, new Point2d(5, 5), 0, 0, 0);
+                    model.AppendEntity(section);
+                    tr.AddNewlyCreatedDBObject(section, true);
+                    tr.Commit();
+                }
+                string before = DwgRecognitionDiagnostic.Inspect(db, false);
+                string after = DwgRecognitionDiagnostic.Inspect(db, true);
+                if (!before.Contains("TIN thiết kế: 1 mặt 3DFACE") ||
+                    !before.Contains("Đường mặt cắt CAD: HT 1, TK 0") ||
+                    !before.Contains("KHÔNG CÓ / CHƯA TÌM THẤY") ||
+                    !before.Contains("KHÔNG tự tạo lại hay ghi đè") ||
+                    !after.Contains("Project Xrecord: CÓ") ||
+                    TinCadRenderer.CountFaces(db, "MV_TIN_THIETKE") != 1)
+                    throw new InvalidOperationException(
+                        "Legacy DWG diagnostic did not recognize existing CAD evidence safely.");
+            }
         }
 
         private static void VerifySectionEraseSkipsTinFaces()
