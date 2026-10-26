@@ -67,18 +67,22 @@ namespace MiningVolume2023.Services
             }
         }
 
-        public static void ClearPreview(Database db)
+        public static void ClearPreview(Database db, Action<Transaction> updateSavedProject = null)
         {
             using (var tr = db.TransactionManager.StartTransaction())
             {
                 var lt = (LayerTable)tr.GetObject(db.LayerTableId, OpenMode.ForRead);
-                if (!lt.Has(PreviewLayer) && !lt.Has(PreviewLabelLayer))
-                { tr.Commit(); return; }
-                var ms = ModelSpace(db, tr, true);
-                var clear = new List<ObjectId>();
-                if(lt.Has(PreviewLayer))clear.Add(lt[PreviewLayer]);
-                if(lt.Has(PreviewLabelLayer))clear.Add(lt[PreviewLabelLayer]);
-                EraseOnLayers(ms, tr, clear);
+                if (lt.Has(PreviewLayer) || lt.Has(PreviewLabelLayer))
+                {
+                    var ms = ModelSpace(db, tr, true);
+                    var clear = new List<ObjectId>();
+                    if (lt.Has(PreviewLayer)) clear.Add(lt[PreviewLayer]);
+                    if (lt.Has(PreviewLabelLayer)) clear.Add(lt[PreviewLabelLayer]);
+                    EraseOnLayers(ms, tr, clear);
+                }
+                // Keep DWG project snapshot and station-entity erasure in one
+                // transaction, including drawings with no surviving preview layer.
+                updateSavedProject?.Invoke(tr);
                 tr.Commit();
             }
         }
