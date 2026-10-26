@@ -85,7 +85,11 @@ def test_installer_and_runtime_verifier_recover_interrupted_backups_safely():
     assert "if exists(backup)" in installer
     assert "func restoreBackup(backup,target string) error" in installer
     assert "Recover from an interrupted earlier runtime verification" in runtime
-    assert "Move-Item $backup $target -Force" in runtime
+    # Recovery must never overwrite an existing installation when a stale
+    # .runtimeverify.bak exists. Restore only into a verified-empty target.
+    assert "target and interrupted QA backup both exist" in runtime
+    assert "Move-Item -LiteralPath $backup -Destination $target -ErrorAction Stop" in runtime
+    assert "cannot restore prior bundle while QA target exists" in runtime
 
 def test_runtime_pass_requires_critical_tin_checks_and_interactive_admin_session():
     installer = read("installer/main.go")
