@@ -55,3 +55,15 @@ def test_quick_section_cancel_tracks_only_new_entities():
     assert 'entity.Layer.StartsWith("MV_MC_NHANH_"' in service
     assert "entity.Erase();" in service
     assert "CancelAt=" in regression and "afterLength=" in regression
+
+
+
+def test_cancelled_section_area_labels_restore_original_text_and_identity():
+    service = load("src/MiningVolume.Plugin2023/Services/EditableSectionCadService.cs")
+    assert "var originalText = new Dictionary<ObjectId, string>();" in service
+    assert "originalText.Add(label.ObjectId, label.TextString);" in service
+    assert "RestoreAbortedAreaLabels(db, originalText);" in service
+    assert "label.TextString = pair.Value;" in service
+    assert "GetXDataForApplication(SectionCadRenderer.AreaRegApp)" in service
+    assert '"Refusing to restore an area label with invalid calculation identity."' in service
+    assert "throw new AggregateException(" in service
