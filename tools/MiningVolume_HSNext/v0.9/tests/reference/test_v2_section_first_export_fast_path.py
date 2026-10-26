@@ -41,7 +41,7 @@ def test_section_first_draw_checks_existing_layers_before_creating_any():
     assert draw.index("var oldLayers = clearFirst") < draw.index(
         "EnsureLayer(db, tr, ExistingLayer, 1)"
     )
-    assert "if (clearFirst && oldLayers.Count > 0)\n                    EraseOnLayers(ms, tr, oldLayers, pollCancellation);" in draw
+    assert "if (clearFirst && oldLayers.Count > 0)\n                    EraseOnLayers(ms, tr, oldLayers, pollCancellation, erasedBySection.Add);" in draw
     assert draw.index("EraseOnLayers(ms, tr, oldLayers") < draw.index(
         "for (int pi = startIndex;"
     )
@@ -63,5 +63,7 @@ def test_previously_existing_layers_are_preserved_as_erase_targets():
     )[0]
     assert "id.ObjectClass.IsDerivedFrom(faceClass)" in erase
     assert "set.Contains(e.LayerId)" in erase
-    assert "e.UpgradeOpen(); e.Erase();" in erase
+    assert "e.UpgradeOpen();" in erase
+    assert "trackErased?.Invoke(id);" in erase
+    assert "e.Erase();" in erase
     assert "pollCancellation?.Invoke();" in erase
