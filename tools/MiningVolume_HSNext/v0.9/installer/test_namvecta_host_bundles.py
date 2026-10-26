@@ -104,7 +104,7 @@ class HostBundleTests(unittest.TestCase):
         for relative, expected_git_sha in approved.items():
             raw = (root / relative).read_bytes()
             actual = hashlib.sha1(
-                b"blob " + str(len(raw)).encode("ascii") + b"\\0" + raw
+                b"blob " + str(len(raw)).encode("ascii") + b"\0" + raw
             ).hexdigest()
             self.assertEqual(actual, expected_git_sha,
                              "Accepted cc0a6cb7 UI/installer drifted: " + relative)
