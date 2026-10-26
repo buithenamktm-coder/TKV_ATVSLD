@@ -264,8 +264,24 @@ jobs:
         run: |
           Set-Location $env:MV_ROOT
           $root=(Get-Location).Path
-          & './release/verify_autocad2023_runtime.ps1' -ProductVersion '2.0' -BundlePath (Join-Path $root 'dist/v2-host/MiningVolume2023.bundle') -OutputPath (Join-Path $root 'dist/V2_RUNTIME_VERIFICATION.txt') -SelfTestPath (Join-Path $root 'dist/V2_MVSELFTEST_RUNTIME.txt')
-          if ($LASTEXITCODE -ne 0) { throw 'V2 AutoCAD runtime smoke failed.' }
+          $selfTestPath=(Join-Path $root 'dist/V2_MVSELFTEST_RUNTIME.txt')
+          try {
+            & './release/verify_autocad2023_runtime.ps1' -ProductVersion '2.0' -BundlePath (Join-Path $root 'dist/v2-host/MiningVolume2023.bundle') -OutputPath (Join-Path $root 'dist/V2_RUNTIME_VERIFICATION.txt') -SelfTestPath $selfTestPath
+          } catch {
+            # Keep the version boundary: capture only safe header/status lines,
+            # never force PASS or accept a stale V1 MVSELFTEST proof.
+            if (Test-Path $selfTestPath) {
+              $lines=@(Get-Content $selfTestPath -TotalCount 3)
+              foreach ($line in $lines) {
+                Write-Host ("[HOST-DIAGNOSTIC] " + $line)
+              }
+              Write-Host ('[HOST-DIAGNOSTIC] SourceSHA=' + $env:SOURCE_SHA)
+            } else {
+              Write-Host '[HOST-DIAGNOSTIC] No MVSELFTEST proof file produced.'
+            }
+            throw
+          }
+          if (-not $?) { throw 'V2 AutoCAD runtime smoke failed.' }
           $proof=Get-Content 'dist/V2_RUNTIME_VERIFICATION.txt' -Raw
           if ($proof -notmatch 'ProductVersion=2.0' -or $proof -notmatch 'Status=PASS') {
             throw 'BLOCKED: V2.0 host smoke proof missing.'
@@ -299,6 +315,17 @@ jobs:
             'BrandingAcceptance=NOT_TESTED'
             'ReleaseStatus=BLOCKED'
           ) | Set-Content 'dist/V2_HOST_QA_NOT_RELEASE.txt' -Encoding UTF8
+
+      - name: Upload MVSELFTEST diagnostic on host failure (NOT release)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: NAMVECTA-V2-AutoCAD2023-MVSELFTEST-FAIL-DIAGNOSTIC
+          retention-days: 7
+          if-no-files-found: warn
+          path: |
+            tools/MiningVolume_HSNext/v0.9/dist/V2_MVSELFTEST_RUNTIME.txt
+            tools/MiningVolume_HSNext/v0.9/dist/V2_LICENSE_OFFLINE_PASS_PROOF.txt
 
       - name: Upload NAMVECTA offline-pass V2 QA evidence only
         uses: actions/upload-artifact@v4
