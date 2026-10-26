@@ -22,7 +22,9 @@ def test_section_erase_classifies_ids_before_opening_entities():
         "tr.GetObject(id, OpenMode.ForRead)"
     )
     assert "set.Contains(e.LayerId)" in erase
-    assert "e.UpgradeOpen(); e.Erase();" in erase
+    assert "e.UpgradeOpen(); trackErased?.Invoke(id); e.Erase();" in erase
+    assert "Action<ObjectId> trackErased = null" in erase
+    assert "RecoverFailedSectionExport" in renderer
     assert "pollCancellation?.Invoke()" in erase
 
 
@@ -34,6 +36,8 @@ def test_section_redraw_preserves_atomic_rollback_and_tagged_polylines():
     assert "allSections = doc.Database.TransactionManager.StartTransaction()" in draw
     assert "meter.Poll" in draw
     assert draw.index("ReplaceProfilesBatched(") < draw.index("allSections.Commit()")
+    assert "createdByExport.Add" in draw and "erasedByExport.Add" in draw
+    assert "RecoverFailedSectionExport(" in draw
     renderer = read("src/MiningVolume.Plugin2023/Services/SectionCadRenderer.cs")
     assert "StampSection(a, section, \"HT\"" in renderer
     assert "StampSection(c, section, \"TK\"" in renderer
