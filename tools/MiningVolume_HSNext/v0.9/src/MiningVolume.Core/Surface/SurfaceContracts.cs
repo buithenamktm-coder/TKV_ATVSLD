@@ -99,7 +99,8 @@ namespace MiningVolume.Core.Surface
     {
         public TinSurface(string name, IReadOnlyList<Triangle3> triangles, IReadOnlyList<ValidationIssue> issues,
             IReadOnlyList<Triangle3> verticalFaces = null, IReadOnlyList<ConflictGroup> verticalConflicts = null,
-            int sameXYZDuplicates = 0, int relaxedBreaklineConstraints = 0)
+            int sameXYZDuplicates = 0, int relaxedBreaklineConstraints = 0,
+            int verifiedRedundantCadFaces = 0)
         {
             Name = name;
             Triangles = triangles;
@@ -108,6 +109,7 @@ namespace MiningVolume.Core.Surface
             VerticalConflicts = verticalConflicts ?? MiningVolume.Core.Compatibility.EmptyArray<ConflictGroup>.Value;
             SameXYZDuplicateVertices = sameXYZDuplicates;
             RelaxedBreaklineConstraints = relaxedBreaklineConstraints;
+            VerifiedRedundantCadFaces = verifiedRedundantCadFaces;
         }
         public string Name { get; }
         public IReadOnlyList<Triangle3> Triangles { get; }
@@ -116,6 +118,9 @@ namespace MiningVolume.Core.Surface
         public IReadOnlyList<ConflictGroup> VerticalConflicts { get; }
         public int SameXYZDuplicateVertices { get; }
         public int RelaxedBreaklineConstraints { get; }
+        // Non-destructive DWG restore: count only exact zero-3D-edge faces
+        // whose remaining edge is independently present in a valid support face.
+        public int VerifiedRedundantCadFaces { get; }
         public bool RequiresSectionReview => VerticalConflicts.Count > 0 || RelaxedBreaklineConstraints > 0;
         public IReadOnlyList<ValidationIssue> Issues { get; }
     }
