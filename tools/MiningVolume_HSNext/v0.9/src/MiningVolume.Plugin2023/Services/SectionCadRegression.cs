@@ -641,8 +641,8 @@ namespace MiningVolume2023.Services
             }
             using (var db = new Database(true,true))
             {
-                GridCadRenderer.Draw(db, first, false);
-                GridCadRenderer.Draw(db, second, false);
+                GridCadRenderer.Draw(db, first, true);
+                GridCadRenderer.Draw(db, second, true);
                 // Cancel before mutation, after 64 cells, and just before commit.
                 foreach (int cancelAt in new[] { 1, 3, 4 })
                 {
@@ -662,30 +662,43 @@ namespace MiningVolume2023.Services
                 {
                     var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
                     var model = (BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForRead);
-                    int oldCount = 0, newCount = 0;
+                    int oldCount = 0, newCount = 0, oldLabels = 0, newLabels = 0;
                     foreach (ObjectId id in model)
                     {
                         var entity = tr.GetObject(id, OpenMode.ForRead) as Entity;
                         if (entity == null || !entity.Layer.StartsWith("MV_LUOI_", StringComparison.OrdinalIgnoreCase))
                             continue; // ModelSpace may contain stock viewports and unrelated objects.
-                        var poly = entity as Polyline;
-                        if (poly == null) throw new InvalidOperationException(
-                            "Grid output layer contains unexpected non-Polyline entities." +
-                            " Layer=" + entity.Layer + "; type=" + entity.GetType().FullName +
-                            "; handle=" + entity.Handle.ToString());
-                        using (var data = poly.GetXDataForApplication(GridCadRenderer.CalculationIdApp))
+                        // The grid-label layer intentionally contains DBText;
+                        // the five geometry layers must contain ONLY editable
+                        // Polyline cells. Do not weaken either contract.
+                        bool labelLayer = string.Equals(entity.Layer, "MV_LUOI_NHAN",
+                            StringComparison.OrdinalIgnoreCase);
+                        if (labelLayer ? !(entity is DBText) : !(entity is Polyline))
+                            throw new InvalidOperationException(
+                                "Grid output layer contains unexpected entity type." +
+                                " Layer=" + entity.Layer + "; type=" + entity.GetType().FullName +
+                                "; handle=" + entity.Handle.ToString());
+                        using (var data = entity.GetXDataForApplication(GridCadRenderer.CalculationIdApp))
                         {
                             var values = data?.AsArray();
                             if (values == null || values.Length != 2)
                                 throw new InvalidOperationException("Missing grid calculation XData.");
                             string value = values[1].Value as string;
-                            if (value == first.CalculationId) oldCount++;
-                            else if (value == second.CalculationId) newCount++;
+                            if (value == first.CalculationId)
+                            {
+                                if (labelLayer) oldLabels++; else oldCount++;
+                            }
+                            else if (value == second.CalculationId)
+                            {
+                                if (labelLayer) newLabels++; else newCount++;
+                            }
                             else throw new InvalidOperationException("Wrong grid calculation identity.");
                         }
                     }
-                    if (oldCount != first.Cells.Count || newCount != second.Cells.Count)
-                        throw new InvalidOperationException("Later grid export overwrote earlier identity.");
+                    if (oldCount != first.Cells.Count || newCount != second.Cells.Count ||
+                        oldLabels != first.Cells.Count || newLabels != second.Cells.Count)
+                        throw new InvalidOperationException(
+                            "Later grid export overwrote earlier identity or lost labeled cell identity.");
                 }
             }
         }
