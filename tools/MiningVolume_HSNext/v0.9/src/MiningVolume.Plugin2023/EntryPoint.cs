@@ -190,6 +190,22 @@ namespace MiningVolume2023
             MainControl.ShowPage(page);
         }
 
+        [CommandMethod("MV_DWG_CHECK", CommandFlags.Session)]
+        public static void CheckOldDrawingCadEvidence()
+        {
+            var doc = AcApp.DocumentManager.MdiActiveDocument;
+            if (doc == null) return;
+            // Inspect existing native entities WITHOUT auto-importing, erasing,
+            // regenerating, or approving a saved mine volume calculation.
+            string report = Services.DwgRecognitionDiagnostic.Inspect(doc.Database,
+                Services.ProjectPersistenceService.HasSavedProject());
+            doc.Editor.WriteMessage("\n" + report);
+            System.Windows.Forms.MessageBox.Show(report,
+                "NAMVECTA — Nhận dạng TIN / mặt cắt DWG cũ",
+                System.Windows.Forms.MessageBoxButtons.OK,
+                System.Windows.Forms.MessageBoxIcon.Information);
+        }
+
         [CommandMethod("MVBUILDINFO", CommandFlags.Session)]
         public static void BuildInfo()
         {
