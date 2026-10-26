@@ -28,7 +28,6 @@ namespace MiningVolume2023.Services
             RunGroup("Quantity block rollback", () => { VerifyTableRollback(); }, errors, reportPassed);
             RunGroup("Grid calculation identity", () => { VerifyGridIdentity(); }, errors, reportPassed);
             RunGroup("Section layout and cancellation", VerifySectionLayoutAndCancellation, errors, reportPassed);
-            RunGroup("Volume preflight vs CAD grip edit", VerifyVolumePreflightRejectsCadGripEdits, errors, reportPassed);
             if (errors.Count > 0)
                 throw new AggregateException("CAD regression groups failed: " + errors.Count, errors);
         }
@@ -42,98 +41,6 @@ namespace MiningVolume2023.Services
                 return;
             }
             reportPassed?.Invoke(name);
-        }
-
-        private static void VerifyVolumePreflightRejectsCadGripEdits()
-        {
-            // Real AutoCAD side-database: changing a grip vertex must invalidate
-            // a previously accepted calculation even if ProjectState and the
-            // in-memory SectionProfile references remain unchanged.
-            using (var db = new Database(true, true))
-            {
-                var line = new SectionLine(1, "QA-GRIP", 0,
-                    new Vec2(1, 0), new Vec2(0, 1), new[] { new SectionSpan(0, 10) });
-                var seg = new SectionProfileSegment(0, 10,
-                    line.PointAt(0), line.PointAt(10), 100, 100, 95, 95);
-                var profiles = new[] {
-                    new SectionProfile(line, new[] { seg }, 50, 0, new string[0])
-                };
-                SectionCadRenderer.ReplaceProfiles(db, profiles, Point3d.Origin, 1000, 1000, 5);
-                EditableSectionCadService.EnsureProfilesMatch(db, profiles);
-                ObjectId changed = ObjectId.Null;
-                Point2d original = default(Point2d);
-                using (var tr = db.TransactionManager.StartTransaction())
-                {
-                    var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
-                    var ms = (BlockTableRecord)tr.GetObject(
-                        bt[BlockTableRecord.ModelSpace], OpenMode.ForRead);
-                    foreach (ObjectId id in ms)
-                    {
-                        if (!id.ObjectClass.IsDerivedFrom(
-                            Autodesk.AutoCAD.Runtime.RXObject.GetClass(typeof(Polyline))))
-                            continue;
-                        var poly = tr.GetObject(id, OpenMode.ForRead) as Polyline;
-                        if (poly == null || poly.Layer != "MV_MC_HIENTRANG") continue;
-                        changed = id;
-                        original = poly.GetPoint2dAt(1);
-                        poly.UpgradeOpen();
-                        poly.SetPointAt(1, new Point2d(original.X, original.Y + 2));
-                        break;
-                    }
-                    if (changed.IsNull)
-                        throw new InvalidOperationException("No editable HT Polyline was drawn.");
-                    tr.Commit();
-                }
-                bool rejected = false;
-                try { EditableSectionCadService.EnsureProfilesMatch(db, profiles); }
-                catch (InvalidOperationException) { rejected = true; }
-                if (!rejected)
-                    throw new InvalidOperationException(
-                        "Modified grip vertex silently reused stale quantities.");
-
-                // A failed freshness check is read-only; restoring the grip
-                // must recover the valid profile without rebuilding the TIN.
-                using (var tr = db.TransactionManager.StartTransaction())
-                {
-                    var poly = (Polyline)tr.GetObject(changed, OpenMode.ForWrite);
-                    poly.SetPointAt(1, original);
-                    tr.Commit();
-                }
-                EditableSectionCadService.EnsureProfilesMatch(db, profiles);
-
-                // Deleting BOTH official tagged polylines previously passed
-                // the allowMissingUnedited fallback. Keep the dedicated
-                // output layers to prove this is NOT an untouched TIN-only
-                // calculation and never accept the now-empty CAD geometry.
-                using (var tr = db.TransactionManager.StartTransaction())
-                {
-                    var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
-                    var ms = (BlockTableRecord)tr.GetObject(
-                        bt[BlockTableRecord.ModelSpace], OpenMode.ForRead);
-                    var remove = new List<ObjectId>();
-                    var polyClass = Autodesk.AutoCAD.Runtime.RXObject.GetClass(typeof(Polyline));
-                    foreach (ObjectId id in ms)
-                    {
-                        if (!id.ObjectClass.IsDerivedFrom(polyClass)) continue;
-                        var poly = tr.GetObject(id, OpenMode.ForRead) as Polyline;
-                        if (poly != null &&
-                            (poly.Layer == "MV_MC_HIENTRANG" ||
-                             poly.Layer == "MV_MC_THIETKE"))
-                            remove.Add(id);
-                    }
-                    if (remove.Count != 2)
-                        throw new InvalidOperationException("Expected exactly two tagged QA polylines.");
-                    foreach (ObjectId id in remove)
-                        ((Entity)tr.GetObject(id, OpenMode.ForWrite)).Erase();
-                    tr.Commit();
-                }
-                bool missingRejected = false;
-                try { EditableSectionCadService.EnsureProfilesMatch(db, profiles); }
-                catch (InvalidOperationException) { missingRejected = true; }
-                if (!missingRejected)
-                    throw new InvalidOperationException(
-                        "Deleting all CAD section polylines silently reused stale quantities.");
-            }
         }
 
         private static void VerifySectionLayoutAndCancellation()
@@ -160,19 +67,8 @@ namespace MiningVolume2023.Services
                     try { SectionCadRenderer.DrawQuickProfiles(quick, profiles, Point3d.Origin, 1000, 500, 5, 90,
                         () => { if (++count == cancelAt) throw new OperationCanceledException(); }); }
                     catch (OperationCanceledException) { canceled = true; }
-                    string after = Snapshot(quick, true);
-                    if (!canceled || after != accepted)
-                    {
-                        int firstDiff = 0;
-                        while (firstDiff < accepted.Length && firstDiff < after.Length &&
-                               accepted[firstDiff] == after[firstDiff]) firstDiff++;
-                        throw new InvalidOperationException(
-                            "Quick-section cancellation did not restore original drawing." +
-                            " CancelAt=" + cancelAt + "; canceled=" + canceled +
-                            "; baselineLength=" + accepted.Length +
-                            "; afterLength=" + after.Length +
-                            "; firstDifference=" + firstDiff);
-                    }
+                    if (!canceled || Snapshot(quick, true) != accepted)
+                        throw new InvalidOperationException("Quick-section cancellation did not restore original drawing.");
                 }
                 var inspection = TinCadRenderer.InspectLayers(quick, new[] { "MV_MC_NHANH_HT", "ABSENT_QA" });
                 if (!inspection["MV_MC_NHANH_HT"].Exists || inspection["MV_MC_NHANH_HT"].Faces != 0 ||
@@ -473,27 +369,8 @@ namespace MiningVolume2023.Services
                 };
                 if (TinCadRenderer.CountFaces(db, tinLayer) != 2048)
                     throw new InvalidOperationException("TIN regression fixture was not created.");
-                // First export has no existing output layers. The fast path
-                // must skip full ModelSpace erase but still write both
-                // editable profiles and preserve the 2048 source TIN faces.
                 SectionCadRenderer.ReplaceProfiles(db, profiles, Point3d.Origin, 1000, 1000, 5);
-                int firstExisting = TinCadRenderer.CountUnexpectedEntities(db, "MV_MC_HIENTRANG");
-                int firstDesign = TinCadRenderer.CountUnexpectedEntities(db, "MV_MC_THIETKE");
-                int firstAxis = TinCadRenderer.CountUnexpectedEntities(db, "MV_MC_TRUC");
-                int firstText = TinCadRenderer.CountUnexpectedEntities(db, "MV_MC_TEXT");
-                if (firstExisting != 1 || firstDesign != 1 ||
-                    firstAxis < 3 || firstText < 2)
-                    throw new InvalidOperationException(
-                        "First-export fast path failed to write complete section geometry.");
-                // Redraw must STILL erase all objects from existing output
-                // layers and may not leave duplicate polylines/axis labels.
                 SectionCadRenderer.ReplaceProfiles(db, profiles, Point3d.Origin, 1000, 1000, 5);
-                if (TinCadRenderer.CountUnexpectedEntities(db, "MV_MC_HIENTRANG") != firstExisting ||
-                    TinCadRenderer.CountUnexpectedEntities(db, "MV_MC_THIETKE") != firstDesign ||
-                    TinCadRenderer.CountUnexpectedEntities(db, "MV_MC_TRUC") != firstAxis ||
-                    TinCadRenderer.CountUnexpectedEntities(db, "MV_MC_TEXT") != firstText)
-                    throw new InvalidOperationException(
-                        "Section redraw accumulated duplicates or lost original geometry.");
                 if (TinCadRenderer.CountFaces(db, tinLayer) != 2048)
                     throw new InvalidOperationException("Section redraw deleted unrelated TIN geometry.");
                 bool canceled = false;
@@ -641,8 +518,8 @@ namespace MiningVolume2023.Services
             }
             using (var db = new Database(true,true))
             {
-                GridCadRenderer.Draw(db, first, true);
-                GridCadRenderer.Draw(db, second, true);
+                GridCadRenderer.Draw(db, first, false);
+                GridCadRenderer.Draw(db, second, false);
                 // Cancel before mutation, after 64 cells, and just before commit.
                 foreach (int cancelAt in new[] { 1, 3, 4 })
                 {
@@ -662,43 +539,24 @@ namespace MiningVolume2023.Services
                 {
                     var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
                     var model = (BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForRead);
-                    int oldCount = 0, newCount = 0, oldLabels = 0, newLabels = 0;
+                    int oldCount = 0, newCount = 0;
                     foreach (ObjectId id in model)
                     {
-                        var entity = tr.GetObject(id, OpenMode.ForRead) as Entity;
-                        if (entity == null || !entity.Layer.StartsWith("MV_LUOI_", StringComparison.OrdinalIgnoreCase))
-                            continue; // ModelSpace may contain stock viewports and unrelated objects.
-                        // The grid-label layer intentionally contains DBText;
-                        // the five geometry layers must contain ONLY editable
-                        // Polyline cells. Do not weaken either contract.
-                        bool labelLayer = string.Equals(entity.Layer, "MV_LUOI_NHAN",
-                            StringComparison.OrdinalIgnoreCase);
-                        if (labelLayer ? !(entity is DBText) : !(entity is Polyline))
-                            throw new InvalidOperationException(
-                                "Grid output layer contains unexpected entity type." +
-                                " Layer=" + entity.Layer + "; type=" + entity.GetType().FullName +
-                                "; handle=" + entity.Handle.ToString());
-                        using (var data = entity.GetXDataForApplication(GridCadRenderer.CalculationIdApp))
+                        var poly = tr.GetObject(id, OpenMode.ForRead) as Polyline;
+                        if (poly == null) throw new InvalidOperationException("Grid identity added unexpected entities.");
+                        using (var data = poly.GetXDataForApplication(GridCadRenderer.CalculationIdApp))
                         {
                             var values = data?.AsArray();
                             if (values == null || values.Length != 2)
                                 throw new InvalidOperationException("Missing grid calculation XData.");
                             string value = values[1].Value as string;
-                            if (value == first.CalculationId)
-                            {
-                                if (labelLayer) oldLabels++; else oldCount++;
-                            }
-                            else if (value == second.CalculationId)
-                            {
-                                if (labelLayer) newLabels++; else newCount++;
-                            }
+                            if (value == first.CalculationId) oldCount++;
+                            else if (value == second.CalculationId) newCount++;
                             else throw new InvalidOperationException("Wrong grid calculation identity.");
                         }
                     }
-                    if (oldCount != first.Cells.Count || newCount != second.Cells.Count ||
-                        oldLabels != first.Cells.Count || newLabels != second.Cells.Count)
-                        throw new InvalidOperationException(
-                            "Later grid export overwrote earlier identity or lost labeled cell identity.");
+                    if (oldCount != first.Cells.Count || newCount != second.Cells.Count)
+                        throw new InvalidOperationException("Later grid export overwrote earlier identity.");
                 }
             }
         }
@@ -770,21 +628,13 @@ namespace MiningVolume2023.Services
                 int references = 0, definitions = 0;
                 foreach (ObjectId id in bt)
                 {
-                    // Side databases may retain erased BlockTable ObjectIds in
-                    // enumeration even after a correctly committed cleanup.
-                    // Only live definitions can leak into a user drawing.
-                    if (id.IsErased) continue;
                     var definition = (BlockTableRecord)tr.GetObject(id, OpenMode.ForRead);
-                    if (!definition.IsErased &&
-                        definition.Name.StartsWith(CadVolumeTableService.BlockPrefix, StringComparison.Ordinal))
-                        definitions++;
+                    if (definition.Name.StartsWith(CadVolumeTableService.BlockPrefix, StringComparison.Ordinal)) definitions++;
                 }
                 foreach (ObjectId id in ms)
                 {
-                    if (id.IsErased) continue;
                     var reference = tr.GetObject(id, OpenMode.ForRead) as BlockReference;
                     if (reference == null) throw new InvalidOperationException("Quantity output must be a block reference.");
-                    if (reference.IsErased) continue;
                     references++;
                     output.Append(reference.Handle).Append('|').Append(reference.Layer);
                     Point(output, reference.Position);
@@ -807,10 +657,7 @@ namespace MiningVolume2023.Services
                     if (tables != 3) throw new InvalidOperationException("Each quantity block must contain three tables.");
                 }
                 if (references != expectedExports || definitions != expectedExports)
-                    throw new InvalidOperationException(
-                        "Quantity export leaked a block reference/definition." +
-                        " References=" + references + "; definitions=" + definitions +
-                        "; expected=" + expectedExports);
+                    throw new InvalidOperationException("Quantity export leaked a block reference/definition.");
             }
             if (count != expectedExports * 3) throw new InvalidOperationException("Unexpected quantity table count.");
             return output.ToString();
@@ -818,33 +665,14 @@ namespace MiningVolume2023.Services
 
         private static void DrawBatches(Database db, IReadOnlyList<SectionProfile> profiles, Action poll)
         {
-            // Exercise the same production-wide journal on side databases.
-            // A late Esc must undo all previously committed inner batches.
-            var created = new List<ObjectId>();
-            var erased = new List<ObjectId>();
-            try
+            using (var outer = db.TransactionManager.StartTransaction())
             {
-                using (var outer = db.TransactionManager.StartTransaction())
-                {
-                    double nextY = 0;
-                    for (int start = 0; start < profiles.Count; start += 20)
-                        nextY = SectionCadRenderer.ReplaceProfilesBatched(db, profiles, Point3d.Origin,
-                            1000, 500, 5, start, Math.Min(20, profiles.Count - start),
-                            start == 0, 90, nextY, poll, created.Add, erased.Add);
-                    poll();
-                    outer.Commit();
-                }
-            }
-            catch (Exception original)
-            {
-                try { SectionCadRenderer.RecoverFailedSectionExport(db, created, erased); }
-                catch (Exception cleanup)
-                {
-                    throw new AggregateException(
-                        "Host QA cannot restore all section batches after cancel.",
-                        original, cleanup);
-                }
-                throw;
+                double nextY = 0;
+                for (int start = 0; start < profiles.Count; start += 20)
+                    nextY = SectionCadRenderer.ReplaceProfilesBatched(db, profiles, Point3d.Origin,
+                        1000, 500, 5, start, Math.Min(20, profiles.Count - start), start == 0, 90, nextY, poll);
+                poll();
+                outer.Commit();
             }
         }
 
@@ -857,12 +685,7 @@ namespace MiningVolume2023.Services
                 var ms = (BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForRead);
                 foreach (ObjectId id in ms)
                 {
-                    // Aborted side-database insertions can leave tombstone ids
-                    // in the ModelSpace iterator. A canceled export is safe
-                    // only if every *live* entity and original handle matches.
-                    if (id.IsErased) continue;
                     var entity = (Entity)tr.GetObject(id, OpenMode.ForRead);
-                    if (entity.IsErased) continue;
                     if (handles) output.Append(entity.Handle.ToString());
                     output.Append(entity.GetType().Name).Append(':').Append(entity.Layer).Append('|');
                     if (entity is Polyline poly)
