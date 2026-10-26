@@ -37,6 +37,10 @@ namespace MiningVolume2023.Services
                 new TypedValue((int)DxfCode.ExtendedDataRegAppName, CalculationIdApp),
                 new TypedValue((int)DxfCode.ExtendedDataAsciiString, report.CalculationId)))
             {
+                // Explicitly abort before leaving scope on Esc; real AutoCAD
+                // host regression found canceled labels persisted as DBText.
+                try
+                {
                 var apps = (RegAppTable)tr.GetObject(database.RegAppTableId, OpenMode.ForRead);
                 if (!apps.Has(CalculationIdApp))
                 {
@@ -116,6 +120,12 @@ namespace MiningVolume2023.Services
                 pollCancellation?.Invoke();
                 // Commit once only: any failure leaves no partial CAD grid.
                 tr.Commit();
+                }
+                catch
+                {
+                    tr.Abort();
+                    throw;
+                }
             }
         }
 
