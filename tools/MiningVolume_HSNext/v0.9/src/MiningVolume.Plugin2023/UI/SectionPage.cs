@@ -62,12 +62,16 @@ namespace MiningVolume2023.UI
                 BackColor = Color.White
             };
             root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 38F));   // title
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 440F));  // scrollable parameters
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 58F));   // spaced primary actions
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 110F));   // edit tools + CAD profile update
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 46F));   // multi-line status
-            root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));   // grid
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 38F));  // title
+            // A 440px absolute parameter row previously pushed the primary
+            // drawing action below short docked palettes (real host QA FAIL).
+            // The parameter panel already has AutoScroll, so split the
+            // remaining height instead of hiding Export / Draw Sections.
+            root.RowStyles.Add(new RowStyle(SizeType.Percent, 75F));   // scrollable parameters
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 58F));  // spaced primary actions
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 110F)); // edit tools + CAD profile update
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 46F));  // multi-line status
+            root.RowStyles.Add(new RowStyle(SizeType.Percent, 25F));   // grid
             Controls.Add(root);
 
             var title = new Label
