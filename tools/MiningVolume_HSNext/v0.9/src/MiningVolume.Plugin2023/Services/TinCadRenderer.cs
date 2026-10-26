@@ -399,6 +399,7 @@ namespace MiningVolume2023.Services
 
             var support = new List<MiningVolume.Core.Geometry.Triangle3>();
             var vertical = new List<MiningVolume.Core.Geometry.Triangle3>();
+            var zeroEdges = new List<RedundantCadFaceCandidate>();
             using (var progress = new SectionCadProgress(1, "đọc TIN đã lưu trong DWG"))
             using (var tr = db.TransactionManager.StartOpenCloseTransaction())
             {
@@ -441,8 +442,25 @@ namespace MiningVolume2023.Services
                         double d01 = p0.DistanceTo(p1), d12 = p1.DistanceTo(p2),
                             d20 = p2.DistanceTo(p0);
                         if (d01 <= 1e-9 || d12 <= 1e-9 || d20 <= 1e-9)
-                            throw new InvalidOperationException(
-                                "Layer " + layerName + " có tam giác suy biến (cạnh bằng 0).");
+                        {
+                            // Never round a very short, meaningful edge to zero.
+                            // Only exactly coincident 3D points qualify for proof.
+                            Point3d e0, e1;
+                            if (Same3D(p0, p1)) { e0 = p0; e1 = p2; }
+                            else if (Same3D(p1, p2)) { e0 = p1; e1 = p0; }
+                            else if (Same3D(p2, p0)) { e0 = p2; e1 = p1; }
+                            else throw InvalidStoredCadFace(layerName, face.Handle.ToString(),
+                                "Cạnh 3D rất ngắn nhưng hai đỉnh không trùng chính xác");
+                            if (Same3D(e0, e1))
+                                throw InvalidStoredCadFace(layerName, face.Handle.ToString(),
+                                    "Cả ba đỉnh trùng nhau, không có cạnh để đối chiếu");
+                            zeroEdges.Add(new RedundantCadFaceCandidate(e0, e1,
+                                face.Handle.ToString()));
+                            if (zeroEdges.Count > 32)
+                                throw InvalidStoredCadFace(layerName, face.Handle.ToString(),
+                                    "Có quá 32 mặt nghi vấn; cần kiểm tra lại nguồn TIN");
+                            continue;
+                        }
                         vertical.Add(triangle);
                     }
                     else
@@ -452,14 +470,76 @@ namespace MiningVolume2023.Services
             }
             if (support.Count == 0)
             {
-                if (vertical.Count == 0) return null;
+                if (vertical.Count == 0 && zeroEdges.Count == 0) return null;
                 throw new InvalidOperationException(
-                    "Layer " + layerName + " chỉ có mặt đứng, không có tam giác TIN phủ XY.");
+                    "Layer " + layerName + " không có tam giác TIN hợp lệ phủ XY; " +
+                    "không tự loại mặt lỗi để tạo kết quả tính khối lượng.");
             }
-            return new TinSurface(modelName, support,
-                MiningVolume.Core.Compatibility.EmptyArray<MiningVolume.Core.Surface.ValidationIssue>.Value,
-                vertical);
+            foreach (var suspect in zeroEdges)
+            {
+                // Safe redundancy requires exact preservation of the surviving
+                // 3D edge in a valid XY-support triangle. Otherwise an
+                // independent surveyed line/vertex could be lost.
+                bool proven = false;
+                foreach (var t in support)
+                {
+                    if (HasExact3DEdge(t, suspect.A, suspect.B))
+                    {
+                        proven = true;
+                        break;
+                    }
+                }
+                if (!proven)
+                    throw InvalidStoredCadFace(layerName, suspect.Handle,
+                        "Cạnh còn lại không thuộc tam giác TIN hợp lệ. " +
+                        "Không chứng minh được việc bỏ qua là an toàn");
+            }
+            var issues = new List<ValidationIssue>();
+            if (zeroEdges.Count > 0)
+                issues.Add(new ValidationIssue(ValidationSeverity.Warning,
+                    "REDUNDANT_ZERO_EDGE_CAD_FACE",
+                    layerName + ": xác minh " + zeroEdges.Count +
+                    " mặt 3DFACE suy biến có cạnh còn lại trùng chính xác cạnh TIN hợp lệ; " +
+                    "không sửa/xóa DWG. Handle đầu tiên: " +
+                    zeroEdges[0].Handle, zeroEdges[0].Handle));
+            return new TinSurface(modelName, support, issues, vertical,
+                verifiedRedundantCadFaces: zeroEdges.Count);
         }
+
+        private sealed class RedundantCadFaceCandidate
+        {
+            public RedundantCadFaceCandidate(Point3d a, Point3d b, string handle)
+            { A = a; B = b; Handle = handle; }
+            public Point3d A { get; }
+            public Point3d B { get; }
+            public string Handle { get; }
+        }
+
+        private static bool Same3D(Point3d a, Point3d b)
+            => a.X == b.X && a.Y == b.Y && a.Z == b.Z;
+
+        private static bool Same3D(MiningVolume.Core.Geometry.Vec3 a, Point3d b)
+            => a.X == b.X && a.Y == b.Y && a.Z == b.Z;
+
+        private static bool HasExact3DEdge(MiningVolume.Core.Geometry.Triangle3 t,
+            Point3d a, Point3d b)
+        {
+            var p = t.A; var q = t.B; var r = t.C;
+            return (Same3D(p, a) && Same3D(q, b)) ||
+                   (Same3D(p, b) && Same3D(q, a)) ||
+                   (Same3D(q, a) && Same3D(r, b)) ||
+                   (Same3D(q, b) && Same3D(r, a)) ||
+                   (Same3D(r, a) && Same3D(p, b)) ||
+                   (Same3D(r, b) && Same3D(p, a));
+        }
+
+        private static InvalidOperationException InvalidStoredCadFace(
+            string layer, string handle, string reason)
+            => new InvalidOperationException(
+                "Layer " + layer + " có 3DFACE suy biến, Handle " + handle +
+                ". " + reason +
+                ". Giữ nguyên DWG; kiểm tra đối tượng theo Handle hoặc dựng lại " +
+                "TIN từ nguồn trên bản sao DWG trước khi tính khối lượng.");
 
         private static bool Finite(Point3d point)
             => !double.IsNaN(point.X) && !double.IsNaN(point.Y) &&
