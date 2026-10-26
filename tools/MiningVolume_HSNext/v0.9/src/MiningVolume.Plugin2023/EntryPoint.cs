@@ -316,6 +316,12 @@ namespace MiningVolume2023
                 ed?.WriteMessage("\nIMSAT VOLUME v1.0 SELFTEST: FAIL (" + r.Errors.Count + " errors). Log: " + r.OutputFile);
         }
 
+        // Host QA must never accidentally execute MVSELFTEST registered by an
+        // older V1/NAMVECTA bundle that AutoCAD autoloaded before our NETLOAD.
+        // The unique QA command exists only in this repaired V2 build.
+        [CommandMethod("NAMVECTA_QA_SELFTEST_V2", CommandFlags.Session)]
+        public static void QaSelfTestV2() => SelfTest();
+
         [CommandMethod("MVABOUT")]
         public void About()
         {
