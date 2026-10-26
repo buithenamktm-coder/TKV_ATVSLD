@@ -178,7 +178,7 @@ $startupDetail"
         }
         $result = Get-Content $SelfTestPath -Raw
         $expectedBanner = if ($ProductVersion -eq '2.0') {
-            'IMSAT VOLUME V2.0 runtime self-test'
+            'NAMVECTA VOLUME 2.0 runtime self-test'
         } else {
             'MiningVolume HS-Next v1.0 runtime self-test'
         }
