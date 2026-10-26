@@ -9,11 +9,15 @@ def read(p):
 def test_v2_qa_has_separate_installer_and_icon_resource_without_overwriting_v1():
     build = read("installer/build_v2_qa.ps1")
     workflow = read("../../.github/workflows/build-miningvolume-autocad2023.yml") if False else None
-    assert "IMSAT_MiningVolume_V2_0_QA_CANDIDATE.exe" in build
+    assert "NAMVECTA_VOLUME_2_0_QA_NOT_RELEASE.exe" in build
     assert 'AppVersion="2.0.0"' in build
     assert "rsrc_windows_amd64.syso" in build
-    assert "imsat.ico" in build
-    assert "QA Candidate" in build
+    assert "imsat.ico" not in build
+    assert "namvecta-pa3-reference/image2.png" in build
+    assert "91aa653548ce361d158fc6be01893c87aea5bad54726a1d6083b9c234ade9161" in build
+    assert "Get-FileHash" in build
+    assert "namvecta-pa3.ico" in build
+    assert "main.productName=NAMVECTA VOLUME 2.0 QA (AutoCAD 2023)" in build
     assert "V2_QA_CANDIDATE_NOT_RELEASE.txt" in build
     assert "Remove-Item $work" in build
     original = read("installer/main.go")
