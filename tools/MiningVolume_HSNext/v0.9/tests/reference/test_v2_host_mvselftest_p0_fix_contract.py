@@ -75,11 +75,27 @@ def test_canceled_final_section_redraw_restores_original_handles():
     qa = load("src/MiningVolume.Plugin2023/Services/SectionCadRegression.cs")
     assert "var createdBySection = new List<ObjectId>();" in src
     assert "var erasedBySection = new List<ObjectId>();" in src
-    assert "EraseOnLayers(ms, tr, oldLayers, pollCancellation, erasedBySection.Add)" in src
-    assert "trackCreated: createdBySection.Add" in src
+    assert "EraseOnLayers(ms, tr, oldLayers, pollCancellation, recordErased)" in src
+    assert "trackCreated: recordCreated" in src
     assert "RecoverFailedSectionExport(db, createdBySection, erasedBySection)" in src
     assert "trackErased?.Invoke(id);" in src
     assert "if (entity.IsErased) entity.Erase(false);" in src
     assert '"Refusing to erase foreign entity after section redraw failure."' in src
     assert '"Refusing to unerase foreign entity after section redraw failure."' in src
     assert "Final renderer cancellation failed to restore drawing." in qa
+
+
+
+def test_outer_batched_sections_recover_previous_geometry_even_after_child_commits():
+    renderer = load("src/MiningVolume.Plugin2023/Services/SectionCadRenderer.cs")
+    workflow = load("src/MiningVolume.Plugin2023/Services/SectionWorkflowService.cs")
+    regression = load("src/MiningVolume.Plugin2023/Services/SectionCadRegression.cs")
+    assert "Action<ObjectId> trackCreatedForBatch = null" in renderer
+    assert "Action<ObjectId> trackErasedForBatch = null" in renderer
+    assert "internal static void RecoverFailedSectionExport" in renderer
+    assert "createdByExport.Add," in workflow
+    assert "erasedByExport.Add);" in workflow
+    assert "SectionCadRenderer.RecoverFailedSectionExport(" in workflow
+    assert "created.Add, erased.Add);" in regression
+    assert "SectionCadRenderer.RecoverFailedSectionExport(db, created, erased);" in regression
+    assert "Canceled section export did not restore original entities." in regression
