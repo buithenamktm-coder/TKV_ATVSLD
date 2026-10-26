@@ -313,8 +313,3 @@ jobs:
         shell: pwsh
         run: |
           Write-Host 'NAMVECTA offline-pass host QA; release remains blocked until full acceptance.'
-
-        if: always()
-        shell: pwsh
-        run: |
-          Remove-Item (Join-Path $env:RUNNER_TEMP 'imsat-v2-public.xml') -Force -ErrorAction SilentlyContinue
