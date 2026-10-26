@@ -100,15 +100,16 @@ class HostBundleTests(unittest.TestCase):
             "installer/prepare_namvecta_branding.py": "0f4d9ba65670db33053d4944b6f948ef9571e18e",
             "installer/namvecta_host_bundles.py": "e9e56e75cfe91a9cb2c2134a36d4a34da1072a35",
         }
-        root = Path(__file__).resolve().parent.parent
+        # Compare committed Git blobs, not Windows worktree files: checkout
+        # may convert LF to CRLF without changing the actual source revision.
+        import subprocess
+        repository = Path(__file__).resolve().parents[4]
+        prefix = "tools/MiningVolume_HSNext/v0.9/"
         for relative, expected_git_sha in approved.items():
-            raw = (root / relative).read_bytes()
-            # Windows actions/checkout may materialize text as CRLF even when
-            # Git stores LF. Compare canonical Git blob bytes, not checkout EOL.
-            canonical = raw.replace(b"\r\n", b"\n")
-            actual = hashlib.sha1(
-                b"blob " + str(len(canonical)).encode("ascii") + b"\0" + canonical
-            ).hexdigest()
+            actual = subprocess.check_output(
+                ["git", "rev-parse", "HEAD:" + prefix + relative],
+                cwd=str(repository), text=True
+            ).strip()
             self.assertEqual(actual, expected_git_sha,
                              "Accepted cc0a6cb7 UI/installer drifted: " + relative)
 
