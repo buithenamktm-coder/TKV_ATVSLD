@@ -159,6 +159,9 @@ jobs:
           New-Item -ItemType Directory -Force (Split-Path $dest -Parent) | Out-Null
           Copy-Item $source $dest -Recurse -Force
           $w=Join-Path $dest 'Contents/Windows'
+          # The accepted repository bundle deliberately tracks PackageContents.xml
+          # only; all runtime DLLs are generated during this host job.
+          New-Item -ItemType Directory -Path $w -Force | Out-Null
           $files=@{
             'MiningVolume2023.dll'='src/MiningVolume.Plugin2023/bin/Release/net48/MiningVolume2023.dll'
             'MiningVolume.Core.dll'='src/MiningVolume.Core/bin/Release/net48/MiningVolume.Core.dll'
