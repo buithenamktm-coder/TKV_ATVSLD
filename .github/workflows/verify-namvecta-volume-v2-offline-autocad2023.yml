@@ -234,8 +234,10 @@ jobs:
           Copy-Item 'src/MiningVolume.Surface/Native/NOTICE.txt' "$w/NOTICE.txt" -Force
           Copy-Item 'src/MiningVolume.Plugin2023/Assets/imsat_logo_64.png' "$w/Assets/imsat_logo_64.png" -Force
           "SOURCE_SHA=$env:SOURCE_SHA" | Set-Content "$w/BUILD_IDENTITY.txt" -Encoding ascii
+          # .ps1 scripts do not necessarily set LASTEXITCODE. A stale
+          # native exit code from a previous command is not proof of failure.
           & './release/verify_release.ps1'
-          if ($LASTEXITCODE -ne 0 -or -not $?) { throw 'Source bundle layout invalid.' }
+          if (-not $?) { throw 'Source bundle layout invalid.' }
           $src='bundle/MiningVolume2023.bundle'
           $dest='dist/v2-host/MiningVolume2023.bundle'
           if (Test-Path $dest) { Remove-Item $dest -Recurse -Force }
@@ -277,7 +279,7 @@ jobs:
           go install github.com/akavel/rsrc@latest
           if ($LASTEXITCODE -ne 0) { throw 'Icon tool install failed.' }
           & './installer/build_v2_qa.ps1'
-          if ($LASTEXITCODE -ne 0 -or -not $?) { throw 'V2 offline QA candidate build failed.' }
+          if (-not $?) { throw 'V2 offline QA candidate build failed.' }
           $exe='dist/IMSAT_MiningVolume_V2_0_QA_CANDIDATE.exe'
           if (!(Test-Path $exe)) { throw 'QA executable not built.' }
           $hash=(Get-FileHash $exe -Algorithm SHA256).Hash.ToLowerInvariant()
