@@ -111,6 +111,10 @@ namespace MiningVolume2023.Services
                         };
                         model.AppendEntity(label);
                         tr.AddNewlyCreatedDBObject(label,true);
+                        // Labels belong to the same export as their editable
+                        // cell. Preserve CalculationId when saving/reopening
+                        // the DWG or exporting another grid with labels.
+                        label.XData = identity;
                     }
                     completed++;
                     if ((completed & 1023) == 0 || completed == total)
