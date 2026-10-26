@@ -63,6 +63,9 @@ if ($acadVersion -notmatch '^R?24\.2') {
 if (Get-Process acad -ErrorAction SilentlyContinue) {
     throw 'AutoCAD đang chạy. Runtime gate yêu cầu đóng toàn bộ acad.exe trước khi kiểm thử.'
 }
+if ($ProductVersion -eq '2.0' -and $KeepInstalled) {
+    throw 'BLOCKED: V2 host QA may only stage a temporary bundle and must restore existing installations.'
+}
 
 $bundle = (Resolve-Path $BundlePath).Path
 $packageXml = Get-Content (Join-Path $bundle 'PackageContents.xml') -Raw
@@ -98,10 +101,13 @@ Remove-Item $SelfTestPath -Force -ErrorAction SilentlyContinue
 Remove-Item $OutputPath -Force -ErrorAction SilentlyContinue
 Remove-Item $startupLog -Force -ErrorAction SilentlyContinue
 
-# Recover from an interrupted earlier runtime verification before starting.
-if (Test-Path $backup) {
-    Remove-Item $target -Recurse -Force -ErrorAction SilentlyContinue
-    Move-Item $backup $target -Force
+# Recover an interrupted earlier QA without deleting or overwriting any
+# pre-existing user installation. Ambiguous state requires manual inspection.
+if (Test-Path -LiteralPath $backup) {
+    if (Test-Path -LiteralPath $target) {
+        throw "BLOCKED: target and interrupted QA backup both exist; preserved: $target / $backup"
+    }
+    Move-Item -LiteralPath $backup -Destination $target
 }
 
 $hadPrevious = Test-Path $target
@@ -369,8 +375,15 @@ finally {
 finally {
     try {
         if (-not $KeepInstalled) {
-            Remove-Item $target -Recurse -Force -ErrorAction SilentlyContinue
-            if (Test-Path $backup) { Move-Item $backup $target -Force }
+            if (Test-Path -LiteralPath $target) {
+                Remove-Item -LiteralPath $target -Recurse -Force -ErrorAction Stop
+            }
+            if (Test-Path -LiteralPath $backup) {
+                if (Test-Path -LiteralPath $target) {
+                    throw "BLOCKED: cannot restore prior plugin while QA target exists: $target"
+                }
+                Move-Item -LiteralPath $backup -Destination $target -ErrorAction Stop
+            }
         } else {
             Remove-Item $backup -Recurse -Force -ErrorAction SilentlyContinue
         }
