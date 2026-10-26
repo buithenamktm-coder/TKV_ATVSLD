@@ -235,8 +235,15 @@ namespace MiningVolume2023.Services
             catch (OperationCanceledException ex)
             {
                 outcome = "CANCELED";
-                try { SectionCadRenderer.RecoverFailedSectionExport(
-                    doc.Database, createdByExport, erasedByExport); }
+                try
+                {
+                    // The outer drawing lock is disposed before reaching this
+                    // catch. Reacquire it while restoring CAD entities in the
+                    // active document, not merely in the isolated QA database.
+                    using (doc.LockDocument())
+                        SectionCadRenderer.RecoverFailedSectionExport(
+                            doc.Database, createdByExport, erasedByExport);
+                }
                 catch (Exception cleanup)
                 {
                     throw new AggregateException(
@@ -247,8 +254,15 @@ namespace MiningVolume2023.Services
             }
             catch (Exception ex)
             {
-                try { SectionCadRenderer.RecoverFailedSectionExport(
-                    doc.Database, createdByExport, erasedByExport); }
+                try
+                {
+                    // The outer drawing lock is disposed before reaching this
+                    // catch. Reacquire it while restoring CAD entities in the
+                    // active document, not merely in the isolated QA database.
+                    using (doc.LockDocument())
+                        SectionCadRenderer.RecoverFailedSectionExport(
+                            doc.Database, createdByExport, erasedByExport);
+                }
                 catch (Exception cleanup)
                 {
                     throw new AggregateException(
