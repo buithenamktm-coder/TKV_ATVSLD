@@ -371,7 +371,21 @@ namespace MiningVolume2023
         // older V1/NAMVECTA bundle that AutoCAD autoloaded before our NETLOAD.
         // The unique QA command exists only in this repaired V2 build.
         [CommandMethod("NAMVECTA_QA_SELFTEST_V2", CommandFlags.Session)]
-        public static void QaSelfTestV2() => SelfTest();
+        public static void QaSelfTestV2()
+        {
+            // If the explicit CI Idle route already ran, an unblocked /b
+            // script must not overwrite its result with a second selftest.
+            bool hostMode = string.Equals(
+                Environment.GetEnvironmentVariable("MININGVOLUME_QA_HOST_AUTORUN"),
+                "1", StringComparison.Ordinal);
+            if (hostMode && _hostQaSelfTestTriggered)
+            {
+                StartupLog("V2 host QA: script command skipped; self-test already invoked");
+                return;
+            }
+            if (hostMode) _hostQaSelfTestTriggered = true;
+            SelfTest();
+        }
 
         [CommandMethod("MVABOUT")]
         public void About()
