@@ -184,11 +184,11 @@ namespace MiningVolume2023.Services
                     ReportCell.Int(++i),ReportCell.Text(c.CellCode),ReportCell.Int(c.I),ReportCell.Int(c.J),
                     ReportCell.N3(c.Volume.CalculationArea),ReportCell.N3(c.Volume.CoveredArea),
                     ReportCell.N3(c.Volume.NoDataArea),
-                    c.IsVerticalConflict || c.Volume.CoveredArea<=1e-9
+                    c.IsVerticalConflict || c.Volume.HasUnresolvedSmallTriangles || c.Volume.CoveredArea<=1e-9
                         ? ReportCell.Text("") : ReportCell.N3(c.Volume.CutVolume),
-                    c.IsVerticalConflict || c.Volume.CoveredArea<=1e-9
+                    c.IsVerticalConflict || c.Volume.HasUnresolvedSmallTriangles || c.Volume.CoveredArea<=1e-9
                         ? ReportCell.Text("") : ReportCell.N3(c.Volume.FillVolume),
-                    c.IsVerticalConflict || c.Volume.CoveredArea<=1e-9
+                    c.IsVerticalConflict || c.Volume.HasUnresolvedSmallTriangles || c.Volume.CoveredArea<=1e-9
                         ? ReportCell.Text("") : ReportCell.Formula3("H"+row+"-I"+row),
                     ReportCell.Text(c.CoverageStatus)
                 });
@@ -211,11 +211,11 @@ namespace MiningVolume2023.Services
                 {
                     ReportCell.Text(c.v.CellCode),
                     ReportCell.Formula3(pre+"E"+n),
-                    c.v.IsVerticalConflict || c.v.Volume.CoveredArea<=1e-9
+                    c.v.IsVerticalConflict || c.v.Volume.HasUnresolvedSmallTriangles || c.v.Volume.CoveredArea<=1e-9
                         ? ReportCell.Text("") : ReportCell.Formula3(pre+"H"+n),
-                    c.v.IsVerticalConflict || c.v.Volume.CoveredArea<=1e-9
+                    c.v.IsVerticalConflict || c.v.Volume.HasUnresolvedSmallTriangles || c.v.Volume.CoveredArea<=1e-9
                         ? ReportCell.Text("") : ReportCell.Formula3(pre+"I"+n),
-                    c.v.IsVerticalConflict || c.v.Volume.CoveredArea<=1e-9
+                    c.v.IsVerticalConflict || c.v.Volume.HasUnresolvedSmallTriangles || c.v.Volume.CoveredArea<=1e-9
                         ? ReportCell.Text("") : ReportCell.Formula3("C"+n+"-D"+n)
                 });
             }
@@ -295,9 +295,9 @@ namespace MiningVolume2023.Services
                 {
                     ReportCell.Text(c.CellCode),ReportCell.Text("TIN overlay exact"),
                     ReportCell.Formula3(prefix+"F"+row),
-                    c.IsVerticalConflict || c.Volume.CoveredArea<=1e-9
+                    c.IsVerticalConflict || c.Volume.HasUnresolvedSmallTriangles || c.Volume.CoveredArea<=1e-9
                         ? ReportCell.Text("") : ReportCell.Formula3(prefix+"H"+row),
-                    c.IsVerticalConflict || c.Volume.CoveredArea<=1e-9
+                    c.IsVerticalConflict || c.Volume.HasUnresolvedSmallTriangles || c.Volume.CoveredArea<=1e-9
                         ? ReportCell.Text("") : ReportCell.Formula3(prefix+"I"+row),
                     ReportCell.Text(c.CoverageStatus)
                 });
