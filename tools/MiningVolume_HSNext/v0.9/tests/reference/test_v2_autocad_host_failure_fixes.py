@@ -27,7 +27,10 @@ def test_arial_style_uses_correct_database_and_restores_ambient_context():
 def test_grid_identity_only_inspects_grid_output_not_foreign_modelspace_objects():
     s = src("src/MiningVolume.Plugin2023/Services/SectionCadRegression.cs")
     assert 'entity.Layer.StartsWith("MV_LUOI_", StringComparison.OrdinalIgnoreCase)' in s
-    assert "Grid output layer contains unexpected non-Polyline entities." in s
+    assert "Grid output layer contains unexpected entity type." in s
+    assert 'string.Equals(entity.Layer, "MV_LUOI_NHAN"' in s
+    assert "labelLayer ? !(entity is DBText) : !(entity is Polyline)" in s
+    assert "oldLabels != first.Cells.Count || newLabels != second.Cells.Count" in s
     assert "Missing grid calculation XData." in s
     assert "Later grid export overwrote earlier identity." in s
 
