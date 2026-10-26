@@ -37,6 +37,11 @@ namespace MiningVolume2023.Services
                 Name = BlockPrefix + result.CalculationId + "_" + Guid.NewGuid().ToString("N"),
                 Origin = Point3d.Origin })
             {
+                // An aborted AutoCAD side-database transaction may otherwise
+                // retain an unreferenced block definition. Abort explicitly
+                // before disposal on Esc or validation failure.
+                try
+                {
                 pollCancellation?.Invoke();
                 var layer = EnsureOutputLayer(database, tr);
                 var arial = EnsureArialTextStyle(database, tr);
@@ -163,6 +168,12 @@ namespace MiningVolume2023.Services
                 reportProgress?.Invoke(result.Intervals.Count + result.Levels.Count + 2);
                 pollCancellation?.Invoke();
                 tr.Commit();
+                }
+                catch
+                {
+                    tr.Abort();
+                    throw;
+                }
             }
         }
 
