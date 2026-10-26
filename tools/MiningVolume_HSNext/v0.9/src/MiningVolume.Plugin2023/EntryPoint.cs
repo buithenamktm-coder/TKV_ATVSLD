@@ -312,6 +312,14 @@ namespace MiningVolume2023
                     if (r.Warnings.Count > 0)
                         doc.Editor.WriteMessage("\nNAMVECTA VOLUME: Project đã nạp với " + r.Warnings.Count + " cảnh báo. Mở trang Dự án để xem/kiểm soát.");
                 }
+                else
+                {
+                    // A legacy DWG can contain NAMVECTA-owned 3DFACE TIN layers
+                    // but no Project Xrecord. Recover both meshes read-only;
+                    // do not infer deleted routes, edited section geometry or
+                    // historical earthwork volumes from missing metadata.
+                    TryRecognizeLegacyCadTin(doc);
+                }
             }
             catch (System.Exception ex)
             {
@@ -321,6 +329,47 @@ namespace MiningVolume2023
             _loadedDrawingFingerprint = fingerprint;
             if (MainControl != null && !MainControl.IsDisposed)
                 MainControl.RefreshForNewDrawing();
+        }
+
+        private static void TryRecognizeLegacyCadTin(
+            Autodesk.AutoCAD.ApplicationServices.Document doc)
+        {
+            int recovered = 0;
+            foreach (ModelRole role in new[] { ModelRole.Existing, ModelRole.Design })
+            {
+                var session = ProjectState.Current.Get(role);
+                try
+                {
+                    if (SurfaceWorkflowService.TryRestoreTinFromCad(role))
+                    {
+                        recovered++;
+                        doc.Editor.WriteMessage("\\n[NAMVECTA] Đã nhận diện TIN từ 3DFACE cũ: " +
+                            session.TinLayer + " (" + session.Tin.Triangles.Count +
+                            " tam giác hợp lệ). DWG không bị thay đổi.");
+                    }
+                }
+                catch (System.Exception ex)
+                {
+                    doc.Editor.WriteMessage("\\n[NAMVECTA] Không thể xác nhận " +
+                        session.TinLayer + ": " + ex.Message);
+                }
+            }
+            try
+            {
+                if (EditableSectionCadService.HasOfficialSectionLayers(doc.Database))
+                    doc.Editor.WriteMessage(
+                        "\\n[NAMVECTA] Phát hiện layer mặt cắt cũ. Thiếu Project lưu kèm: " +
+                        "không tự tái tạo tuyến, chỉnh sửa hoặc tính lại khối lượng.");
+            }
+            catch (System.Exception ex)
+            {
+                doc.Editor.WriteMessage(
+                    "\\n[NAMVECTA] Không kiểm tra được mặt cắt cũ: " + ex.Message);
+            }
+            if (recovered > 0)
+                doc.Editor.WriteMessage(
+                    "\\n[NAMVECTA] Đã đọc TIN cũ để kiểm tra; trước khi tính " +
+                    "cần xác nhận ranh giới, hệ mặt cắt và Project.");
         }
 
         private static string CurrentFingerprint()

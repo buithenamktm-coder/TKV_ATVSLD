@@ -456,9 +456,6 @@ namespace MiningVolume2023.Services
                                     "Cả ba đỉnh trùng nhau, không có cạnh để đối chiếu");
                             zeroEdges.Add(new RedundantCadFaceCandidate(e0, e1,
                                 face.Handle.ToString()));
-                            if (zeroEdges.Count > 32)
-                                throw InvalidStoredCadFace(layerName, face.Handle.ToString(),
-                                    "Có quá 32 mặt nghi vấn; cần kiểm tra lại nguồn TIN");
                             continue;
                         }
                         vertical.Add(triangle);
@@ -475,24 +472,33 @@ namespace MiningVolume2023.Services
                     "Layer " + layerName + " không có tam giác TIN hợp lệ phủ XY; " +
                     "không tự loại mặt lỗi để tạo kết quả tính khối lượng.");
             }
+            // Check each distinct suspect edge against valid support edges in
+            // a SINGLE pass. Prior code rescanned every TIN triangle for every
+            // collapsed face (O(suspects * triangles)) and rejected at 32.
+            // Never accept an unproven edge; never modify the saved 3DFACEs.
+            var unproven = new HashSet<ExactStoredEdge>();
             foreach (var suspect in zeroEdges)
+                unproven.Add(new ExactStoredEdge(suspect.A, suspect.B));
+            if (unproven.Count > 0)
             {
-                // Safe redundancy requires exact preservation of the surviving
-                // 3D edge in a valid XY-support triangle. Otherwise an
-                // independent surveyed line/vertex could be lost.
-                bool proven = false;
                 foreach (var t in support)
                 {
-                    if (HasExact3DEdge(t, suspect.A, suspect.B))
-                    {
-                        proven = true;
-                        break;
-                    }
+                    unproven.Remove(new ExactStoredEdge(
+                        new Point3d(t.A.X, t.A.Y, t.A.Z),
+                        new Point3d(t.B.X, t.B.Y, t.B.Z)));
+                    unproven.Remove(new ExactStoredEdge(
+                        new Point3d(t.B.X, t.B.Y, t.B.Z),
+                        new Point3d(t.C.X, t.C.Y, t.C.Z)));
+                    unproven.Remove(new ExactStoredEdge(
+                        new Point3d(t.C.X, t.C.Y, t.C.Z),
+                        new Point3d(t.A.X, t.A.Y, t.A.Z)));
+                    if (unproven.Count == 0) break;
                 }
-                if (!proven)
-                    throw InvalidStoredCadFace(layerName, suspect.Handle,
-                        "Cạnh còn lại không thuộc tam giác TIN hợp lệ. " +
-                        "Không chứng minh được việc bỏ qua là an toàn");
+                foreach (var suspect in zeroEdges)
+                    if (unproven.Contains(new ExactStoredEdge(suspect.A, suspect.B)))
+                        throw InvalidStoredCadFace(layerName, suspect.Handle,
+                            "Cạnh còn lại không thuộc tam giác TIN hợp lệ. " +
+                            "Không chứng minh được việc bỏ qua là an toàn");
             }
             var issues = new List<ValidationIssue>();
             if (zeroEdges.Count > 0)
@@ -515,23 +521,42 @@ namespace MiningVolume2023.Services
             public string Handle { get; }
         }
 
+        private struct ExactStoredEdge : IEquatable<ExactStoredEdge>
+        {
+            internal readonly Point3d A, B;
+            internal ExactStoredEdge(Point3d a, Point3d b) { A = a; B = b; }
+            public bool Equals(ExactStoredEdge e)
+                => (Same3D(A, e.A) && Same3D(B, e.B)) ||
+                   (Same3D(A, e.B) && Same3D(B, e.A));
+            public override bool Equals(object value)
+                => value is ExactStoredEdge && Equals((ExactStoredEdge)value);
+            public override int GetHashCode()
+            {
+                // Symmetric hash for the same undirected 3D edge. Normalize -0.
+                unchecked { return PointHash(A) ^ PointHash(B); }
+            }
+            private static int PointHash(Point3d p)
+            {
+                unchecked
+                {
+                    int h = 17;
+                    h = h * 31 + NormalizedBitsHash(p.X);
+                    h = h * 31 + NormalizedBitsHash(p.Y);
+                    return h * 31 + NormalizedBitsHash(p.Z);
+                }
+            }
+            private static int NormalizedBitsHash(double value)
+            {
+                long bits = BitConverter.DoubleToInt64Bits(value == 0.0 ? 0.0 : value);
+                return unchecked((int)bits ^ (int)(bits >> 32));
+            }
+        }
+
         private static bool Same3D(Point3d a, Point3d b)
             => a.X == b.X && a.Y == b.Y && a.Z == b.Z;
 
         private static bool Same3D(MiningVolume.Core.Geometry.Vec3 a, Point3d b)
             => a.X == b.X && a.Y == b.Y && a.Z == b.Z;
-
-        private static bool HasExact3DEdge(MiningVolume.Core.Geometry.Triangle3 t,
-            Point3d a, Point3d b)
-        {
-            var p = t.A; var q = t.B; var r = t.C;
-            return (Same3D(p, a) && Same3D(q, b)) ||
-                   (Same3D(p, b) && Same3D(q, a)) ||
-                   (Same3D(q, a) && Same3D(r, b)) ||
-                   (Same3D(q, b) && Same3D(r, a)) ||
-                   (Same3D(r, a) && Same3D(p, b)) ||
-                   (Same3D(r, b) && Same3D(p, a));
-        }
 
         private static InvalidOperationException InvalidStoredCadFace(
             string layer, string handle, string reason)

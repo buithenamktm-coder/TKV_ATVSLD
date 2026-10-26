@@ -363,6 +363,13 @@ namespace MiningVolume2023.Services
                     ms.AppendEntity(redundant);
                     tr.AddNewlyCreatedDBObject(redundant, true);
                     redundantHandle = redundant.Handle.ToString();
+                    for (int i = 0; i < 48; i++)
+                    {
+                        var repeated = new Face(a, a, b, b, true, true, true, false)
+                        { LayerId = okId };
+                        ms.AppendEntity(repeated);
+                        tr.AddNewlyCreatedDBObject(repeated, true);
+                    }
                     var otherSupport = new Face(a, b, c, c, true, true, true, false)
                     { LayerId = badId };
                     ms.AppendEntity(otherSupport);
@@ -379,11 +386,11 @@ namespace MiningVolume2023.Services
                 var tin = TinCadRenderer.ReadStoredTin(db, "QA_TIN_REDUNDANT", "QA");
                 if (tin == null || tin.Triangles.Count != 1 ||
                     tin.VerticalFaces.Count != 0 ||
-                    tin.VerifiedRedundantCadFaces != 1 ||
+                    tin.VerifiedRedundantCadFaces != 49 ||
                     !tin.Issues.Any(issue =>
                         issue.Code == "REDUNDANT_ZERO_EDGE_CAD_FACE" &&
                         issue.Message.Contains(redundantHandle)) ||
-                    TinCadRenderer.CountFaces(db, "QA_TIN_REDUNDANT") != 2)
+                    TinCadRenderer.CountFaces(db, "QA_TIN_REDUNDANT") != 50)
                     throw new InvalidOperationException(
                         "A redundant collapsed CAD face was not proven or the drawing changed.");
                 bool blocked = false;

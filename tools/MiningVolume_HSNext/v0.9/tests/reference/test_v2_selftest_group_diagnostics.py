@@ -17,3 +17,18 @@ def test_cad_selftest_collects_independent_group_errors_and_retains_inner_trace(
     assert 'SectionCadRegression.Run(name => Check(r, true, "CAD: " + name))' in service
     assert "r.Errors.Add(ex.ToString())" in service
     assert "r.Passed = r.Errors.Count == 0" in service
+
+def test_legacy_dwg_restores_only_own_tin_without_reconstructing_unsaved_sections():
+    entry = (ROOT / "src/MiningVolume.Plugin2023/EntryPoint.cs").read_text(encoding="utf-8")
+    reader = (ROOT / "src/MiningVolume.Plugin2023/Services/TinCadRenderer.cs").read_text(encoding="utf-8")
+    assert "TryRecognizeLegacyCadTin(doc);" in entry
+    legacy = entry.split("private static void TryRecognizeLegacyCadTin(", 1)[1].split(
+        "private static string CurrentFingerprint()", 1)[0]
+    assert "SurfaceWorkflowService.TryRestoreTinFromCad(role)" in legacy
+    assert "EditableSectionCadService.HasOfficialSectionLayers(doc.Database)" in legacy
+    assert "không tự tái tạo tuyến" in legacy
+    assert "var unproven = new HashSet<ExactStoredEdge>();" in reader
+    assert "HasExact3DEdge" not in reader
+    assert "zeroEdges.Count > 32" not in reader
+    assert "Không chứng minh được việc bỏ qua là an toàn" in reader
+    assert "verifiedRedundantCadFaces: zeroEdges.Count" in reader
