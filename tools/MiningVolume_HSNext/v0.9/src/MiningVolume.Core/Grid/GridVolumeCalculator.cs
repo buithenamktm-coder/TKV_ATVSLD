@@ -36,6 +36,8 @@ namespace MiningVolume.Core.Grid
             {
                 if (IsVerticalConflict) return "Nhiều Z - chưa xác nhận";
                 if (Volume == null) return "Chưa tính";
+                if (Volume.HasUnresolvedSmallTriangles)
+                    return "TIN có tam giác rất nhỏ - chưa xác nhận";
                 double tol = Math.Max(1e-7, Volume.CalculationArea * 1e-7);
                 if (Volume.IsComplete) return "Đủ";
                 bool ht = ExistingCoveredArea + tol >= Volume.CalculationArea;
@@ -57,7 +59,10 @@ namespace MiningVolume.Core.Grid
         public double TotalCutVolume => Cells.Sum(x => x.Volume.CutVolume);
         public double TotalFillVolume => Cells.Sum(x => x.Volume.FillVolume);
         public double TotalNoDataArea => Cells.Sum(x => x.Volume.NoDataArea);
-        public bool IsComplete => Cells.All(x => x.Volume.IsComplete) && AmbiguousCells == 0;
+        // No cells does not prove a legitimate zero-volume region.
+        public bool IsComplete => Cells != null && Cells.Count > 0 &&
+            Cells.All(x => x.Volume.IsComplete) && AmbiguousCells == 0;
+        public int SmallTriangleCells => Cells.Count(x => x.Volume.HasUnresolvedSmallTriangles);
         public int AmbiguousCells => Cells.Count(x => x.IsVerticalConflict);
         public double AmbiguousArea => Cells.Where(x => x.IsVerticalConflict).Sum(x => x.Volume.CalculationArea);
         public int MissingExistingCells => Cells.Count(c=>!c.IsVerticalConflict &&
@@ -165,7 +170,9 @@ namespace MiningVolume.Core.Grid
                         var tn = existingIndex.Candidates((int)i, (int)j, cell);
                         var tk = designIndex.Candidates((int)i, (int)j, cell);
                         var volume = ExactGridCellCalculator.CalculatePrepared(tn, tk, cell, clipBoundary, cancellationToken);
-                        if (volume.CalculationArea > 1e-9)
+                        // Keep positive-area slivers visible. The kernel will
+                        // flag any sub-threshold cell as unverified.
+                        if (volume.CalculationArea > 0)
                         {
                             double htArea=volume.ExistingSurfaceArea;
                             double tkArea=volume.DesignSurfaceArea;

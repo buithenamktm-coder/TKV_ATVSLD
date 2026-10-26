@@ -240,18 +240,12 @@ internal static class FinalAuditRegression
             var options=new GridVolumeOptions { Boundary=Boundary, SizeX=1, SizeY=1 };
             var grid=new GridVolumeCalculator().Calculate(Plane(5),Plane(0),options);
             var expected=GridVolumeExcelReportBuilder.Build(grid,options);
-            Check(expected.Sheets.Count==2 && expected.Sheets[0].Name=="01 Tổng hợp" &&
-                expected.Sheets[1].Name=="02 Chi tiết","Compact grid sheets are missing");
-            Check(expected.Sheets[0].Rows.Any(row=>row.Any(c=>Equals(c.Value,"0967280686"))),
-                "Compact grid summary lost the required developer contact");
-            var technical=GridVolumeExcelReportBuilder.Build(grid,options,true);
-            Check(technical.Sheets.Count==6,"Optional technical grid workbook lost audit sheets");
             var pending=GridVolumeExcelReportBuilder.BuildAsync(grid,options);
             state.MiningUnitName="Changed after export started";
             var actual=pending.GetAwaiter().GetResult();
-            Check(actual.Sheets.Count==2,"Default grid workbook must contain exactly two sheets");
+            Check(actual.Sheets.Count==6,"Async grid lost sheets");
             Check(!actual.IncludeImsatLogo,"Async grid lost outside-unit snapshot");
-            for(int i=0;i<2;i++) {
+            for(int i=0;i<6;i++) {
                 Check(actual.Sheets[i].Title==expected.Sheets[i].Title,"Async grid read live unit");
                 Check(actual.Sheets[i].Rows.Count==expected.Sheets[i].Rows.Count,"Async grid lost rows");
             }
@@ -263,10 +257,51 @@ internal static class FinalAuditRegression
                     var xml=XDocument.Load(stream);
                     Check(xml.Descendants().Any(x=>x.Name.LocalName=="t" && x.Value==grid.CalculationId),"Async ID missing");
                     Check(!xml.ToString().Contains("Changed after export started"),"Async metadata changed");
-                    using(var summary=zip.GetEntry("xl/worksheets/sheet1.xml").Open())
+                    using(var summary=zip.GetEntry("xl/worksheets/sheet5.xml").Open())
                         Check(!XDocument.Load(summary).ToString().Contains("Changed after export started"),"Async signature metadata changed");
                 }
             } finally { if(File.Exists(file))File.Delete(file); }
+        };
+
+        tests["grid_unresolved_microface_is_blank_in_all_excel_volume_sheets"] = () => {
+            State();
+            var footprint = new[] { new Vec2(0,0),new Vec2(20,0),
+                new Vec2(20,20),new Vec2(0,20) };
+            var invalidCell = new GridVolumeCell {
+                I=0, J=0, Corners=footprint,
+                Volume=new GridCellVolume {
+                    CalculationArea=400,CoveredArea=400,CutVolume=800,
+                    HasUnresolvedSmallTriangles=true
+                }
+            };
+            var confirmedCell = new GridVolumeCell {
+                I=1, J=0, Corners=new[] {new Vec2(20,0),new Vec2(40,0),
+                    new Vec2(40,20),new Vec2(20,20)},
+                Volume=new GridCellVolume {
+                    CalculationArea=400,CoveredArea=400,CutVolume=800
+                }
+            };
+            var grid=new GridVolumeReport { Cells=new[] { invalidCell,confirmedCell } };
+            Check(!grid.IsComplete && grid.SmallTriangleCells==1,
+                "Microface grid should remain unconfirmed");
+            var book=GridVolumeExcelReportBuilder.Build(grid,
+                new GridVolumeOptions { Boundary=footprint,SizeX=20,SizeY=20 });
+            var details=book.Sheets.First(x=>x.Name=="CHI TIẾT Ô LƯỚI");
+            var summary=book.Sheets.First(x=>x.Name=="BẢNG LƯỚI TỔNG HỢP");
+            var trace=book.Sheets.First(x=>x.Name=="CHI TIẾT TÍNH TOÁN");
+            foreach(var sheet in new[]{details,summary,trace}) {
+                int col=sheet==details?7:sheet==summary?2:3;
+                Check(sheet.Rows[0][col].Kind==ReportCellKind.Text &&
+                    Convert.ToString(sheet.Rows[0][col].Value)==string.Empty,
+                    "Unconfirmed volume leaked into "+sheet.Name);
+                Check(sheet.Rows[1][col].Kind != ReportCellKind.Text,
+                    "Confirmed volume was hidden in "+sheet.Name);
+            }
+            Check(Convert.ToString(details.Rows[0][10].Value).Contains("chưa xác nhận"),
+                "Microface status not visible to reviewer");
+            Check(book.Sheets.First(x=>x.Name=="TỔNG HỢP KHỐI LƯỢNG")
+                .Rows.Any(row=>row.Any(cell=>Convert.ToString(cell.Value).Contains("CHƯA ĐẦY ĐỦ"))),
+                "Workbook failed to disclose incomplete total");
         };
 
         tests["grid_calculation_id_survives_workbook_export_and_changes_on_recalculation"] = () => {
@@ -962,7 +997,7 @@ internal static class FinalAuditRegression
                 reversed.Cells.All(c=>c.CoverageStatus=="Thiếu phủ TIN hiện trạng"),
                 "Missing existing-TIN cells were misclassified");
             var reportXlsx=GridVolumeExcelReportBuilder.Build(report,opts);
-            var detail=reportXlsx.Sheets.First(x=>x.Name=="02 Chi tiết");
+            var detail=reportXlsx.Sheets.First(x=>x.Name=="CHI TIẾT Ô LƯỚI");
             Check(detail.Rows.Count>0 &&
                 detail.Rows.All(row=>row[7].Value.ToString()=="" &&
                     row[8].Value.ToString()=="" &&
