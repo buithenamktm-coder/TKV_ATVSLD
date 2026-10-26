@@ -22,7 +22,8 @@ def test_three_step_navigation_keeps_advanced_commands():
     assert "UpdatePageButtons(groupPages);" in ui
     assert "_subNavigation.Visible = false;" in ui
     assert "_advancedVolumeButton.Visible = false;" in ui
-    assert "AppPage.Project: targetGroup = AppPage.Model" in ui
+    assert "case AppPage.Project:" in ui
+    assert "case AppPage.QuickSection: targetGroup = AppPage.Model" in ui
     assert "AppPage.License: targetGroup = AppPage.Export" in ui
     assert "imsat_logo_64.png" not in ui
 
