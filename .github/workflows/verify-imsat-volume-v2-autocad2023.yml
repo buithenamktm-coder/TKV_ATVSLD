@@ -81,47 +81,55 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
-      # Host workstations may already have Python 3.12 installed outside
-      # RUNNER_TOOL_CACHE. The official setup-python action installs through
-      # the Windows MSI/registry installer and can fail on managed Windows
-      # machines even when a usable Python interpreter is present.
-      - name: Prefer verified local Python 3.12 on self-hosted runner
+      # GitHub setup-python left an incomplete Python 3.12 installation in
+      # toolcache/registry on this managed Windows workstation. Trust only
+      # executables with working standard library, SSL, and pip. Python 3.13
+      # is supported for host regression checks (not a production dependency).
+      - name: Locate usable host Python with pip (3.12 or 3.13)
         id: host-python
         shell: powershell
         run: |
           $candidate = $null
           $paths = @(
             (Join-Path $env:LOCALAPPDATA 'Programs\Python\Python312\python.exe'),
+            (Join-Path $env:LOCALAPPDATA 'Programs\Python\Python313\python.exe'),
             (Join-Path $env:ProgramFiles 'Python312\python.exe'),
-            'C:\Python312\python.exe'
+            (Join-Path $env:ProgramFiles 'Python313\python.exe'),
+            'C:\Python312\python.exe',
+            'C:\Python313\python.exe'
           )
-          $launcher=Get-Command py.exe -ErrorAction SilentlyContinue
+          $launcher = Get-Command py.exe -ErrorAction SilentlyContinue
           if ($launcher) {
-            try {
-              $p=(& $launcher.Source -3.12 -c 'import sys; print(sys.executable)' 2>$null | Select-Object -Last 1)
-              if ($LASTEXITCODE -eq 0 -and $p) { $paths=@($p)+$paths }
-            } catch { }
+            foreach ($minor in @('3.12', '3.13')) {
+              try {
+                $exe = (& $launcher.Source ("-" + $minor) -c 'import sys; print(sys.executable)' 2>$null | Select-Object -Last 1)
+                if ($LASTEXITCODE -eq 0 -and $exe) { $paths = @($exe) + $paths }
+              } catch { }
+            }
           }
-          foreach ($p in $paths) {
-            if (-not $p -or -not (Test-Path $p)) { continue }
+          foreach ($exe in ($paths | Select-Object -Unique)) {
+            if (-not $exe -or -not (Test-Path $exe)) { continue }
             try {
-              $v=(& $p -c 'import sys; print(str(sys.version_info.major)+"."+str(sys.version_info.minor))' 2>$null | Select-Object -Last 1)
-              if ($LASTEXITCODE -ne 0 -or $v -ne '3.12') { continue }
-              & $p -m pip --version *> $null
+              $version = (& $exe -c 'import sys, encodings, ssl; print(str(sys.version_info.major)+"."+str(sys.version_info.minor))' 2>$null | Select-Object -Last 1)
+              if ($LASTEXITCODE -ne 0 -or $version -notin @('3.12', '3.13')) { continue }
+              & $exe -m pip --version *> $null
               if ($LASTEXITCODE -ne 0) { continue }
-              $candidate=$p
+              $candidate = $exe
+              Write-Host "Verified Python $version with stdlib, SSL, pip: $candidate"
               break
             } catch { }
           }
           if ($candidate) {
-            $pythonDir=Split-Path $candidate -Parent
-            $pythonDir | Out-File $env:GITHUB_PATH -Encoding ascii -Append
-            Write-Host "Using existing Python 3.12 with pip: $candidate"
+            (Split-Path $candidate -Parent) | Out-File $env:GITHUB_PATH -Encoding ascii -Append
             "found=true" | Out-File $env:GITHUB_OUTPUT -Encoding ascii -Append
           } else {
-            Write-Host 'No verified Python 3.12 with pip found. Attempt GitHub setup-python.'
+            Write-Host 'No complete host Python found. GitHub setup-python fallback required.'
             "found=false" | Out-File $env:GITHUB_OUTPUT -Encoding ascii -Append
           }
+          # Rejected candidates are expected and must not fail the step just
+          # because the last probed native executable returned a nonzero code.
+          $global:LASTEXITCODE = 0
+          exit 0
 
       - uses: actions/setup-python@v5
         if: steps.host-python.outputs.found != 'true'
@@ -131,10 +139,10 @@ jobs:
       - name: Verify Python is actually runnable
         shell: powershell
         run: |
-          python -c "import sys; assert sys.version_info[:2] == (3,12), sys.version; print(sys.version)"
-          if ($LASTEXITCODE -ne 0) { throw 'BLOCKED: Python 3.12 is not runnable on this host.' }
+          python -c "import sys, encodings, ssl; assert sys.version_info[:2] in ((3,12),(3,13)), sys.version; print(sys.version)"
+          if ($LASTEXITCODE -ne 0) { throw 'BLOCKED: Python 3.12/3.13 standard library is not usable.' }
           python -m pip --version
-          if ($LASTEXITCODE -ne 0) { throw 'BLOCKED: Python 3.12 pip is missing.' }
+          if ($LASTEXITCODE -ne 0) { throw 'BLOCKED: Python pip is missing.' }
 
       - uses: actions/setup-go@v5
         with:
