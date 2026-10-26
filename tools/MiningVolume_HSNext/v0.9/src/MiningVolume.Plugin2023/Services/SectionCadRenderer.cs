@@ -503,8 +503,23 @@ namespace MiningVolume2023.Services
             var tt = (TextStyleTable)tr.GetObject(db.TextStyleTableId, OpenMode.ForRead);
             if (tt.Has(ArialStyle)) return tt[ArialStyle];
             tt.UpgradeOpen();
-            var rec = new TextStyleTableRecord { Name = ArialStyle, FileName = "arial.ttf", TextSize = 0.0 };
-            ObjectId id = tt.Add(rec); tr.AddNewlyCreatedDBObject(rec, true); return id;
+            // TextStyleTableRecord can bind to the ambient WorkingDatabase
+            // at construction time. In a valid side-database test that is
+            // NOT db, adding the record otherwise throws eWrongDatabase.
+            // Restore the host database in finally, even if Add fails.
+            var previous = HostApplicationServices.WorkingDatabase;
+            try
+            {
+                if (previous != db) HostApplicationServices.WorkingDatabase = db;
+                var rec = new TextStyleTableRecord { Name = ArialStyle, FileName = "arial.ttf", TextSize = 0.0 };
+                ObjectId id = tt.Add(rec);
+                tr.AddNewlyCreatedDBObject(rec, true);
+                return id;
+            }
+            finally
+            {
+                if (previous != db) HostApplicationServices.WorkingDatabase = previous;
+            }
         }
 
         private static void AddLine(BlockTableRecord ms, Transaction tr, Point3d a, Point3d b, ObjectId layer)
