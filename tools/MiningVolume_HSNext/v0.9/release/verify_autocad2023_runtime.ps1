@@ -121,6 +121,13 @@ try {
     $packageText = $packageText -replace 'LoadOnAutoCADStartup="True"', 'LoadOnAutoCADStartup="False"'
     Set-Content -Path $runtimePackage -Value $packageText -Encoding UTF8
 
+    # Use a QA-specific V2 command to avoid silently calling MVSELFTEST
+    # registered by another installed plugin in the same AutoCAD session.
+    $selfTestCommand = if ($ProductVersion -eq '2.0') {
+        'NAMVECTA_QA_SELFTEST_V2'
+    } else {
+        'MVSELFTEST'
+    }
     @(
         'FILEDIA'
         '0'
@@ -130,7 +137,7 @@ try {
         '(setvar "SECURELOAD" 0)'
         '_.NETLOAD'
         ('"' + $pluginDll + '"')
-        'MVSELFTEST'
+        $selfTestCommand
         '(setvar "SECURELOAD" mv_secureload_old)'
         '_.QUIT'
     ) | Set-Content -Path $scriptPath -Encoding ASCII
@@ -178,7 +185,7 @@ $startupDetail"
         }
         $result = Get-Content $SelfTestPath -Raw
         $expectedBanner = if ($ProductVersion -eq '2.0') {
-            'IMSAT VOLUME V2.0 runtime self-test'
+            'NAMVECTA VOLUME 2.0 runtime self-test'
         } else {
             'MiningVolume HS-Next v1.0 runtime self-test'
         }
