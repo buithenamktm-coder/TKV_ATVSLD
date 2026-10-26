@@ -17,6 +17,11 @@ def test_grid_labels_retain_identity_and_cell_layer_is_strict():
     regression = load("src/MiningVolume.Plugin2023/Services/SectionCadRegression.cs")
     assert "label.XData = identity;" in renderer
     assert "poly.XData = identity;" in renderer
+    assert "var createdByGrid = new System.Collections.Generic.List<ObjectId>();" in renderer
+    assert "createdByGrid.Add(cellId);" in renderer
+    assert "createdByGrid.Add(labelId);" in renderer
+    assert "RemoveAbortedGridEntities(database, createdByGrid);" in renderer
+    assert '"Refusing to erase non-grid entity while recovering a canceled export."' in renderer
     assert 'string.Equals(entity.Layer, "MV_LUOI_NHAN"' in regression
     assert "labelLayer ? !(entity is DBText) : !(entity is Polyline)" in regression
     assert "oldLabels != first.Cells.Count || newLabels != second.Cells.Count" in regression
