@@ -665,14 +665,33 @@ namespace MiningVolume2023.Services
 
         private static void DrawBatches(Database db, IReadOnlyList<SectionProfile> profiles, Action poll)
         {
-            using (var outer = db.TransactionManager.StartTransaction())
+            // Mirror the production-wide ObjectId journal. A late Esc must
+            // restore old profiles even if earlier nested batches committed.
+            var created = new List<ObjectId>();
+            var erased = new List<ObjectId>();
+            try
             {
-                double nextY = 0;
-                for (int start = 0; start < profiles.Count; start += 20)
-                    nextY = SectionCadRenderer.ReplaceProfilesBatched(db, profiles, Point3d.Origin,
-                        1000, 500, 5, start, Math.Min(20, profiles.Count - start), start == 0, 90, nextY, poll);
-                poll();
-                outer.Commit();
+                using (var outer = db.TransactionManager.StartTransaction())
+                {
+                    double nextY = 0;
+                    for (int start = 0; start < profiles.Count; start += 20)
+                        nextY = SectionCadRenderer.ReplaceProfilesBatched(db, profiles, Point3d.Origin,
+                            1000, 500, 5, start, Math.Min(20, profiles.Count - start),
+                            start == 0, 90, nextY, poll, created.Add, erased.Add);
+                    poll();
+                    outer.Commit();
+                }
+            }
+            catch (Exception original)
+            {
+                try { SectionCadRenderer.RecoverFailedSectionExport(db, created, erased); }
+                catch (Exception cleanup)
+                {
+                    throw new AggregateException(
+                        "Host QA cannot restore all section batches after cancel.",
+                        original, cleanup);
+                }
+                throw;
             }
         }
 
