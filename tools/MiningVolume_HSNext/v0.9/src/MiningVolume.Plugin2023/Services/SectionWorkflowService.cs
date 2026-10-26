@@ -186,6 +186,11 @@ namespace MiningVolume2023.Services
             var clock = Stopwatch.StartNew();
             var batchMs = new List<double>((total + batchSize - 1) / batchSize);
             string outcome = "FAILED";
+            // Keep a journal across every inner batch; aborting the outer
+            // transaction does not reliably undo nested commits in AutoCAD
+            // side-databases.
+            var createdByExport = new List<Autodesk.AutoCAD.DatabaseServices.ObjectId>();
+            var erasedByExport = new List<Autodesk.AutoCAD.DatabaseServices.ObjectId>();
             try
             {
                 using (var meter = new SectionCadProgress(total))
@@ -213,7 +218,9 @@ namespace MiningVolume2023.Services
                             start == 0,
                             layoutGap,
                             nextY,
-                            meter.Poll);
+                            meter.Poll,
+                            createdByExport.Add,
+                            erasedByExport.Add);
                         batchMs.Add((clock.ElapsedTicks - beginTicks) *
                             1000.0 / Stopwatch.Frequency);
                         meter.Report(start + count);
@@ -225,9 +232,29 @@ namespace MiningVolume2023.Services
                 }
                 outcome = "PASS";
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException ex)
             {
                 outcome = "CANCELED";
+                try { SectionCadRenderer.RecoverFailedSectionExport(
+                    doc.Database, createdByExport, erasedByExport); }
+                catch (Exception cleanup)
+                {
+                    throw new AggregateException(
+                        "Hủy xuất mặt cắt nhưng không thể khôi phục bản vẽ đã chấp nhận.",
+                        ex, cleanup);
+                }
+                throw;
+            }
+            catch (Exception ex)
+            {
+                try { SectionCadRenderer.RecoverFailedSectionExport(
+                    doc.Database, createdByExport, erasedByExport); }
+                catch (Exception cleanup)
+                {
+                    throw new AggregateException(
+                        "Xuất mặt cắt lỗi và không thể khôi phục bản vẽ đã chấp nhận.",
+                        ex, cleanup);
+                }
                 throw;
             }
             finally
