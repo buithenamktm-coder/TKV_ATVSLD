@@ -96,6 +96,7 @@ def test_outer_batched_sections_recover_previous_geometry_even_after_child_commi
     assert "createdByExport.Add," in workflow
     assert "erasedByExport.Add);" in workflow
     assert "SectionCadRenderer.RecoverFailedSectionExport(" in workflow
+    assert "using (doc.LockDocument())" in workflow
     assert "created.Add, erased.Add);" in regression
     assert "SectionCadRenderer.RecoverFailedSectionExport(db, created, erased);" in regression
     assert "Canceled section export did not restore original entities." in regression
