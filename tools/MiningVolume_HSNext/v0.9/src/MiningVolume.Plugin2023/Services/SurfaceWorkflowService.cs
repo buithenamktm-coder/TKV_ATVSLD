@@ -837,7 +837,8 @@ namespace MiningVolume2023.Services
             session.TinBuiltFromRegionRevision = state.TinRegionRevision;
             session.LastBuiltUtc = DateTime.UtcNow;
             session.TinCadFaceCount = checked(
-                recovered.Triangles.Count + recovered.VerticalFaces.Count);
+                recovered.Triangles.Count + recovered.VerticalFaces.Count +
+                recovered.VerifiedRedundantCadFaces);
             session.TinCadIsPreview = false;
             session.TinRestoredFromCad = true;
             // The layer is the geometry source of truth on DWG reopening.
@@ -923,6 +924,21 @@ namespace MiningVolume2023.Services
             // that legacy layer must never be accepted as a complete CAD TIN.
             int expectedCadFaces = checked(session.Tin.Triangles.Count +
                 session.Tin.VerticalFaces.Count);
+            // DWG-recovered TIN may have a few independently verified duplicate
+            // 3DFACEs. They remain in the original drawing, unchanged; never
+            // silently rewrite an accepted layer merely to remove them.
+            if (session.TinRestoredFromCad &&
+                session.Tin.VerifiedRedundantCadFaces > 0)
+            {
+                int originalFaces = checked(expectedCadFaces +
+                    session.Tin.VerifiedRedundantCadFaces);
+                if (exists && count == originalFaces && !session.TinCadIsPreview)
+                    return;
+                throw new InvalidOperationException(
+                    "Layer " + session.TinLayer +
+                    " đã thay đổi sau khi kiểm tra mặt suy biến. " +
+                    "Không tự vẽ đè TIN đã lưu; hãy kiểm tra nguồn và tạo lại trên bản sao DWG.");
+            }
             if (exists && count == expectedCadFaces && !session.TinCadIsPreview)
                 return;
 
