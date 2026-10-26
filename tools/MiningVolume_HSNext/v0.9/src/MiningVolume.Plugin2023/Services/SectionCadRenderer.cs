@@ -101,7 +101,9 @@ namespace MiningVolume2023.Services
             bool clearFirst,
             double layoutGap = 90.0,
             double? batchStartY = null,
-            Action pollCancellation = null)
+            Action pollCancellation = null,
+            Action<ObjectId> trackCreatedForBatch = null,
+            Action<ObjectId> trackErasedForBatch = null)
         {
             if (profiles == null || profiles.Count == 0) throw new InvalidOperationException("Chưa có dữ liệu mặt cắt.");
             if (double.IsNaN(horizontalScale) || double.IsInfinity(horizontalScale) ||
@@ -124,6 +126,16 @@ namespace MiningVolume2023.Services
             // drawing on a canceled or failed replacement.
             var createdBySection = new List<ObjectId>();
             var erasedBySection = new List<ObjectId>();
+            Action<ObjectId> recordCreated = id =>
+            {
+                createdBySection.Add(id);
+                trackCreatedForBatch?.Invoke(id);
+            };
+            Action<ObjectId> recordErased = id =>
+            {
+                erasedBySection.Add(id);
+                trackErasedForBatch?.Invoke(id);
+            };
             try
             {
             using (var tr = db.TransactionManager.StartTransaction())
@@ -142,7 +154,7 @@ namespace MiningVolume2023.Services
                 ObjectId styleId = EnsureArialStyle(db, tr);
                 var ms = ModelSpace(db, tr, true);
                 if (clearFirst && oldLayers.Count > 0)
-                    EraseOnLayers(ms, tr, oldLayers, pollCancellation, erasedBySection.Add);
+                    EraseOnLayers(ms, tr, oldLayers, pollCancellation, recordErased);
 
                 double baseX = insertion.X;
                 double currentY = batchStartY ?? insertion.Y;
@@ -171,13 +183,13 @@ namespace MiningVolume2023.Services
                     double x0 = baseX, y0 = currentY;
                     double rightAxisX = x0 + width;
 
-                    AddLine(ms, tr, new Point3d(x0, y0, 0), new Point3d(rightAxisX, y0, 0), axLayer, createdBySection.Add);
-                    AddLine(ms, tr, new Point3d(x0, y0, 0), new Point3d(x0, y0 + height, 0), axLayer, createdBySection.Add);
+                    AddLine(ms, tr, new Point3d(x0, y0, 0), new Point3d(rightAxisX, y0, 0), axLayer, recordCreated);
+                    AddLine(ms, tr, new Point3d(x0, y0, 0), new Point3d(x0, y0 + height, 0), axLayer, recordCreated);
                     // Opposite elevation axis: same origin, height and linear Z transform.
                     AddLine(ms, tr, new Point3d(rightAxisX, y0, 0),
-                        new Point3d(rightAxisX, y0 + height, 0), axLayer, createdBySection.Add);
+                        new Point3d(rightAxisX, y0 + height, 0), axLayer, recordCreated);
                     var sectionTitle = AddText(ms, tr, styleId, txLayer,
-                        new Point3d(x0, y0 + height + 8, 0), p.Line.Name, 3.0, 0, createdBySection.Add);
+                        new Point3d(x0, y0 + height + 8, 0), p.Line.Name, 3.0, 0, recordCreated);
                     // Saved with native CAD text to associate editable seam polygons
                     // with a stable section coordinate frame after DWG reopen.
                     sectionTitle.XData = new ResultBuffer(
@@ -188,7 +200,7 @@ namespace MiningVolume2023.Services
                         new TypedValue((int)DxfCode.ExtendedDataReal, baseZ),
                         new TypedValue((int)DxfCode.ExtendedDataReal, vExag));
                     var areaLabel=AddText(ms, tr, styleId, txLayer, new Point3d(x0, y0 + height + 3.5, 0),
-                        $"F đào = {p.CutArea:0.00} m²   F đắp = {p.FillArea:0.00} m²", 3.0, 0, createdBySection.Add);
+                        $"F đào = {p.CutArea:0.00} m²   F đắp = {p.FillArea:0.00} m²", 3.0, 0, recordCreated);
                     areaLabel.XData=new ResultBuffer(
                         new TypedValue((int)DxfCode.ExtendedDataRegAppName,AreaRegApp),
                         new TypedValue((int)DxfCode.ExtendedDataAsciiString,p.Line.Name),
@@ -198,8 +210,8 @@ namespace MiningVolume2023.Services
                     double xTick = NiceStep(width / 5.0);
                     for (double x = 0; x <= width + 1e-9; x += xTick)
                     {
-                        AddLine(ms, tr, new Point3d(x0 + x, y0 - 1.5, 0), new Point3d(x0 + x, y0 + 1.5, 0), axLayer, createdBySection.Add);
-                        AddText(ms, tr, styleId, txLayer, new Point3d(x0 + x, y0 - 5.0, 0), x.ToString("0.##"), 3.0, 0, createdBySection.Add);
+                        AddLine(ms, tr, new Point3d(x0 + x, y0 - 1.5, 0), new Point3d(x0 + x, y0 + 1.5, 0), axLayer, recordCreated);
+                        AddText(ms, tr, styleId, txLayer, new Point3d(x0 + x, y0 - 5.0, 0), x.ToString("0.##"), 3.0, 0, recordCreated);
                     }
                     foreach (double z in elevationTicks)
                     {
@@ -209,23 +221,23 @@ namespace MiningVolume2023.Services
                         double yy = y0 + (z - baseZ) * vExag;
                         string elevation = z.ToString("0.##");
                         AddLine(ms, tr, new Point3d(x0 - 1.5, yy, 0),
-                            new Point3d(x0 + 1.5, yy, 0), axLayer, createdBySection.Add);
+                            new Point3d(x0 + 1.5, yy, 0), axLayer, recordCreated);
                         AddLine(ms, tr, new Point3d(rightAxisX - 1.5, yy, 0),
-                            new Point3d(rightAxisX + 1.5, yy, 0), axLayer, createdBySection.Add);
+                            new Point3d(rightAxisX + 1.5, yy, 0), axLayer, recordCreated);
                         AddText(ms, tr, styleId, txLayer, new Point3d(x0 - 12.0, yy - 1.5, 0),
-                            elevation, 3.0, 0, createdBySection.Add);
+                            elevation, 3.0, 0, recordCreated);
                         AddText(ms, tr, styleId, txLayer, new Point3d(rightAxisX + 4.0, yy - 1.5, 0),
-                            elevation, 3.0, 0, createdBySection.Add);
+                            elevation, 3.0, 0, recordCreated);
                     }
                     AddText(ms, tr, styleId, txLayer,
-                        new Point3d(x0 + width / 2 - 4, y0 - 12, 0), "X (m)", 3.0, 0, createdBySection.Add);
+                        new Point3d(x0 + width / 2 - 4, y0 - 12, 0), "X (m)", 3.0, 0, recordCreated);
                     AddText(ms, tr, styleId, txLayer, new Point3d(x0 - 2, y0 + height + 3, 0),
-                        "Z (m)", 3.0, Math.PI / 2, createdBySection.Add);
+                        "Z (m)", 3.0, Math.PI / 2, recordCreated);
                     AddText(ms, tr, styleId, txLayer,
                         new Point3d(rightAxisX + 2, y0 + height + 3, 0),
-                        "Z (m)", 3.0, Math.PI / 2, createdBySection.Add);
+                        "Z (m)", 3.0, Math.PI / 2, recordCreated);
                     AddText(ms, tr, styleId, txLayer, new Point3d(x0 + width * 0.55, y0 + height + 8, 0),
-                        $"TL ngang 1/{horizontalScale:0}   TL đứng 1/{verticalScale:0}", 3.0, 0, createdBySection.Add);
+                        $"TL ngang 1/{horizontalScale:0}   TL đứng 1/{verticalScale:0}", 3.0, 0, recordCreated);
 
                     // Do not create two AutoCAD LINE entities for every tiny TIN
                     // segment. On large TINs that can mean hundreds of thousands of
@@ -236,7 +248,7 @@ namespace MiningVolume2023.Services
                     // Do NOT subtract MinT again: mine survey coordinates would
                     // displace the sampled curves millions of units off-frame.
                     AddProfilePolylines(ms, tr, p, x0,
-                        y0, baseZ, vExag, exLayer, deLayer, pollCancellation: pollCancellation, trackCreated: createdBySection.Add);
+                        y0, baseZ, vExag, exLayer, deLayer, pollCancellation: pollCancellation, trackCreated: recordCreated);
 
                     currentY -= height + layoutGap;
                 }
@@ -258,7 +270,7 @@ namespace MiningVolume2023.Services
             }
         }
 
-        private static void RecoverFailedSectionExport(Database db,
+        internal static void RecoverFailedSectionExport(Database db,
             List<ObjectId> created, List<ObjectId> erased)
         {
             if (created.Count == 0 && erased.Count == 0) return;
