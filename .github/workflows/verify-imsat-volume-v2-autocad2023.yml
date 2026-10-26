@@ -81,9 +81,61 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
+      # Host workstations may already have Python 3.12 installed outside
+      # RUNNER_TOOL_CACHE. The official setup-python action installs through
+      # the Windows MSI/registry installer and can fail on managed Windows
+      # machines even when a usable Python interpreter is present.
+      - name: Prefer verified local Python 3.12 on self-hosted runner
+        id: host-python
+        shell: powershell
+        run: |
+          $candidate = $null
+          $paths = @(
+            (Join-Path $env:LOCALAPPDATA 'Programs\Python\Python312\python.exe'),
+            (Join-Path $env:ProgramFiles 'Python312\python.exe'),
+            'C:\Python312\python.exe'
+          )
+          $launcher=Get-Command py.exe -ErrorAction SilentlyContinue
+          if ($launcher) {
+            try {
+              $p=(& $launcher.Source -3.12 -c 'import sys; print(sys.executable)' 2>$null | Select-Object -Last 1)
+              if ($LASTEXITCODE -eq 0 -and $p) { $paths=@($p)+$paths }
+            } catch { }
+          }
+          foreach ($p in $paths) {
+            if (-not $p -or -not (Test-Path $p)) { continue }
+            try {
+              $v=(& $p -c 'import sys; print(str(sys.version_info.major)+"."+str(sys.version_info.minor))' 2>$null | Select-Object -Last 1)
+              if ($LASTEXITCODE -ne 0 -or $v -ne '3.12') { continue }
+              & $p -m pip --version *> $null
+              if ($LASTEXITCODE -ne 0) { continue }
+              $candidate=$p
+              break
+            } catch { }
+          }
+          if ($candidate) {
+            $pythonDir=Split-Path $candidate -Parent
+            $pythonDir | Out-File $env:GITHUB_PATH -Encoding ascii -Append
+            Write-Host "Using existing Python 3.12 with pip: $candidate"
+            "found=true" | Out-File $env:GITHUB_OUTPUT -Encoding ascii -Append
+          } else {
+            Write-Host 'No verified Python 3.12 with pip found. Attempt GitHub setup-python.'
+            "found=false" | Out-File $env:GITHUB_OUTPUT -Encoding ascii -Append
+          }
+
       - uses: actions/setup-python@v5
+        if: steps.host-python.outputs.found != 'true'
         with:
           python-version: '3.12'
+
+      - name: Verify Python is actually runnable
+        shell: powershell
+        run: |
+          python -c "import sys; assert sys.version_info[:2] == (3,12), sys.version; print(sys.version)"
+          if ($LASTEXITCODE -ne 0) { throw 'BLOCKED: Python 3.12 is not runnable on this host.' }
+          python -m pip --version
+          if ($LASTEXITCODE -ne 0) { throw 'BLOCKED: Python 3.12 pip is missing.' }
+
       - uses: actions/setup-go@v5
         with:
           go-version: '1.23.x'
