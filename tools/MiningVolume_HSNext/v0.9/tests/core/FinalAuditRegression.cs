@@ -286,7 +286,7 @@ internal static class FinalAuditRegression
                 "Microface grid should remain unconfirmed");
             var book=GridVolumeExcelReportBuilder.Build(grid,
                 new GridVolumeOptions { Boundary=footprint,SizeX=20,SizeY=20 },true);
-            var details=book.Sheets.First(x=>x.Name=="CHI TIẾT Ô LƯỚI");
+            var details=book.Sheets.First(x=>x.Name=="02 Chi tiết");
             var summary=book.Sheets.First(x=>x.Name=="BẢNG LƯỚI TỔNG HỢP");
             var trace=book.Sheets.First(x=>x.Name=="CHI TIẾT TÍNH TOÁN");
             foreach(var sheet in new[]{details,summary,trace}) {
@@ -299,7 +299,7 @@ internal static class FinalAuditRegression
             }
             Check(Convert.ToString(details.Rows[0][10].Value).Contains("chưa xác nhận"),
                 "Microface status not visible to reviewer");
-            Check(book.Sheets.First(x=>x.Name=="TỔNG HỢP KHỐI LƯỢNG")
+            Check(book.Sheets.First(x=>x.Name=="01 Tổng hợp")
                 .Rows.Any(row=>row.Any(cell=>Convert.ToString(cell.Value).Contains("CHƯA ĐẦY ĐỦ"))),
                 "Workbook failed to disclose incomplete total");
         };
@@ -997,7 +997,7 @@ internal static class FinalAuditRegression
                 reversed.Cells.All(c=>c.CoverageStatus=="Thiếu phủ TIN hiện trạng"),
                 "Missing existing-TIN cells were misclassified");
             var reportXlsx=GridVolumeExcelReportBuilder.Build(report,opts,true);
-            var detail=reportXlsx.Sheets.First(x=>x.Name=="CHI TIẾT Ô LƯỚI");
+            var detail=reportXlsx.Sheets.First(x=>x.Name=="02 Chi tiết");
             Check(detail.Rows.Count>0 &&
                 detail.Rows.All(row=>row[7].Value.ToString()=="" &&
                     row[8].Value.ToString()=="" &&
