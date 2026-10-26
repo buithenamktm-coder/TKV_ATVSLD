@@ -1,0 +1,315 @@
+name: NAMVECTA VOLUME 2.0 AutoCAD 2023 Offline-Pass Host QA (NOT RELEASE)
+
+on:
+  # Narrow authorized PR comment trigger for the fixed QA commit.
+  # Other comments cannot acquire or start the licensed Windows runner.
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: Unused for NAMVECTA five-pass QA; fixed SHA enforced
+        required: true
+        type: string
+        default: '1415468f617b4499efe015b255d6555f89c6020c'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: namvecta-v2-five-offline-pass-autocad2023-runtime
+  cancel-in-progress: false
+
+jobs:
+  host-qa:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'issue_comment' &&
+       github.event.issue.pull_request != null &&
+       github.event.issue.number == 54 &&
+       github.event.comment.user.login == github.repository_owner &&
+       github.event.comment.body == '/namvecta-offline-host-qa-pr54')
+    runs-on: [self-hosted, Windows, X64, autocad2023]
+    timeout-minutes: 60
+    env:
+      MV_ROOT: tools/MiningVolume_HSNext/v0.9
+      # issue_comment workflows execute from main, never from the PR head.
+      # Pin the exact tested SHA to eliminate time-of-check/time-of-use drift.
+      REQUESTED_REF: '1415468f617b4499efe015b255d6555f89c6020c'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.REQUESTED_REF }}
+          fetch-depth: 0
+
+      - name: Verify V2 source and exact commit
+        shell: pwsh
+        run: |
+          $sha=(git rev-parse HEAD).Trim()
+          if ($sha -ne '1415468f617b4499efe015b255d6555f89c6020c') {
+            throw 'BLOCKED: the comment-triggered host QA must use the pinned PR54 SHA.'
+          }
+          # Check only these approved V2 source lines. Reject arbitrary refs.
+          $approved=@(
+            'miningvolume-v2-chatgpt-p0-continuation',
+            'namvecta-volume-v2-grid-accuracy-gate-20261025'
+          )
+          $authorized=$false
+          foreach ($line in $approved) {
+            git fetch origin $line --no-tags
+            if ($LASTEXITCODE -ne 0) { continue }
+            git merge-base --is-ancestor $sha ("origin/" + $line)
+            if ($LASTEXITCODE -eq 0) { $authorized=$true; break }
+          }
+          if (-not $authorized) { throw "BLOCKED: source $sha is not reachable from approved V2 branches." }
+          "SOURCE_SHA=$sha" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Require real licensed AutoCAD 2023 installation
+        shell: pwsh
+        run: |
+          $dir=Join-Path $env:ProgramFiles 'Autodesk/AutoCAD 2023'
+          if (!(Test-Path (Join-Path $dir 'acad.exe')) -or !(Test-Path (Join-Path $dir 'AcMgd.dll'))) {
+            throw 'BLOCKED: no AutoCAD 2023 host installation.'
+          }
+          $ver=(Get-Item (Join-Path $dir 'acad.exe')).VersionInfo.FileVersion
+          if ($ver -notmatch '^R?24\.2') { throw "BLOCKED: AutoCAD host version $ver is not R24.2." }
+          "AUTOCAD2023_DIR=$dir" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      # GitHub setup-python left an incomplete Python 3.12 installation in
+      # toolcache/registry on this managed Windows workstation. Trust only
+      # executables with working standard library, SSL, and pip. Python 3.13
+      # is supported for host regression checks (not a production dependency).
+      - name: Locate usable host Python with pip (3.12 or 3.13)
+        id: host-python
+        shell: powershell
+        run: |
+          $candidate = $null
+          $paths = @(
+            (Join-Path $env:LOCALAPPDATA 'Programs\Python\Python312\python.exe'),
+            (Join-Path $env:LOCALAPPDATA 'Programs\Python\Python313\python.exe'),
+            (Join-Path $env:ProgramFiles 'Python312\python.exe'),
+            (Join-Path $env:ProgramFiles 'Python313\python.exe'),
+            'C:\Python312\python.exe',
+            'C:\Python313\python.exe'
+          )
+          $launcher = Get-Command py.exe -ErrorAction SilentlyContinue
+          if ($launcher) {
+            foreach ($minor in @('3.12', '3.13')) {
+              try {
+                $exe = (& $launcher.Source ("-" + $minor) -c 'import sys; print(sys.executable)' 2>$null | Select-Object -Last 1)
+                if ($LASTEXITCODE -eq 0 -and $exe) { $paths = @($exe) + $paths }
+              } catch { }
+            }
+          }
+          foreach ($exe in ($paths | Select-Object -Unique)) {
+            if (-not $exe -or -not (Test-Path $exe)) { continue }
+            try {
+              # Windows PowerShell 5.1 strips nested double quotes from
+              # native -c arguments; print numeric fields without quotes.
+              $version = (& $exe -c 'import sys, encodings, ssl; print(sys.version_info.major, sys.version_info.minor)' 2>$null | Select-Object -Last 1)
+              if ($LASTEXITCODE -ne 0 -or $version -notin @('3 12', '3 13')) {
+                Write-Host "Reject Python candidate (stdlib/version): $exe; exit=$LASTEXITCODE; version=$version"
+                continue
+              }
+              & $exe -m pip --version *> $null
+              if ($LASTEXITCODE -ne 0) {
+                Write-Host "Reject Python candidate (pip unavailable): $exe; exit=$LASTEXITCODE"
+                continue
+              }
+              $candidate = $exe
+              Write-Host "Verified Python $version with stdlib, SSL, pip: $candidate"
+              break
+            } catch { }
+          }
+          if ($candidate) {
+            (Split-Path $candidate -Parent) | Out-File $env:GITHUB_PATH -Encoding ascii -Append
+            "found=true" | Out-File $env:GITHUB_OUTPUT -Encoding ascii -Append
+          } else {
+            Write-Host 'No complete host Python found. GitHub setup-python fallback required.'
+            "found=false" | Out-File $env:GITHUB_OUTPUT -Encoding ascii -Append
+          }
+          # Rejected candidates are expected and must not fail the step just
+          # because the last probed native executable returned a nonzero code.
+          $global:LASTEXITCODE = 0
+          exit 0
+
+      - uses: actions/setup-python@v5
+        if: steps.host-python.outputs.found != 'true'
+        with:
+          python-version: '3.12'
+
+      - name: Verify Python is actually runnable
+        shell: powershell
+        run: |
+          python -c "import sys, encodings, ssl; assert sys.version_info[:2] in ((3,12),(3,13)), sys.version; print(sys.version)"
+          if ($LASTEXITCODE -ne 0) { throw 'BLOCKED: Python 3.12/3.13 standard library is not usable.' }
+          python -m pip --version
+          if ($LASTEXITCODE -ne 0) { throw 'BLOCKED: Python pip is missing.' }
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.x'
+
+      - name: Independent reference, executable geometry and offline ledger regression
+        shell: pwsh
+        run: |
+          Set-Location $env:MV_ROOT
+          python -m pip install --disable-pip-version-check pytest shapely
+          if ($LASTEXITCODE -ne 0) { throw 'Python QA dependencies not installed.' }
+          python -m pytest -q tests/reference
+          if ($LASTEXITCODE -ne 0) { throw 'Python QA tests failed.' }
+          python tests/core/run_core.py
+          if ($LASTEXITCODE -ne 0) { throw 'Core geometry regression failed.' }
+          python tests/license/run_license.py --dotnet-root "$env:DOTNET_ROOT"
+          if ($LASTEXITCODE -ne 0) { throw 'Five-tier offline ledger regression failed.' }
+
+      - name: Verify five fixed offline passes without RSA or machine binding
+        shell: pwsh
+        run: |
+          Set-Location $env:MV_ROOT
+          $path='src/MiningVolume.Plugin2023/Services/LicenseService.cs'
+          $src=[IO.File]::ReadAllText((Resolve-Path $path).Path)
+          if ($src.Contains('RsaPublicKeyXml') -or $src.Contains('RSACryptoServiceProvider')) {
+            throw 'BLOCKED: this NAMVECTA fixed-pass host QA must not accept an RSA-issuer build.'
+          }
+          if ($src.Contains('public static string MachineId')) {
+            throw 'BLOCKED: machine-bound activation is not approved.'
+          }
+          if (-not $src.Contains('trial.FirstUseUtc.AddDays(15)') -or
+              -not $src.Contains('TierMonths = { 1, 3, 6, 12, 0 }') -or
+              -not $src.Contains('IdentifyPass(pass.Trim())') -or
+              -not $src.Contains('Nhập lại không gia hạn')) {
+            throw 'BLOCKED: missing 15-day trial/five fixed offline-pass contract.'
+          }
+          $list=[regex]::Match($src, 'private static readonly string\[\] PassHashes =\s*\{(?<items>[\s\S]*?)\};')
+          if (-not $list.Success) { throw 'BLOCKED: fixed offline pass hash list not found.' }
+          $hashes=[regex]::Matches($list.Groups['items'].Value, '"[A-F0-9]{64}"')
+          if ($hashes.Count -ne 5) { throw 'BLOCKED: exactly five fixed offline pass hashes are required.' }
+          $unique=@($hashes | ForEach-Object { $_.Value } | Select-Object -Unique)
+          if ($unique.Count -ne 5) { throw 'BLOCKED: duplicate offline pass hashes.' }
+          New-Item -ItemType Directory -Path 'dist' -Force | Out-Null
+          @(
+            'NAMVECTA VOLUME V2.0 OFFLINE PASS HOST QA - NOT RELEASE'
+            ('SourceSHA=' + $env:SOURCE_SHA)
+            'LicensingMode=FIVE_FIXED_OFFLINE_PASSES'
+            'TrialDays=15'
+            'PassTiers=1mo,3mo,6mo,12mo,perpetual'
+            'RSAIssuer=NOT_APPLICABLE'
+            'PrivateSigningKeyIncluded=NO'
+            'MachineBoundActivation=NO'
+            'FullPassActivationInAutoCAD=NOT_TESTED'
+            'ReleaseStatus=BLOCKED'
+          ) | Set-Content 'dist/V2_LICENSE_OFFLINE_PASS_PROOF.txt' -Encoding UTF8
+          Write-Host '[PASS] Offline-pass source contract verified; no pass strings or hashes printed.'
+
+      - name: Compile with installed AutoCAD 2023 assemblies
+        shell: pwsh
+        run: |
+          Set-Location $env:MV_ROOT
+          dotnet restore MiningVolume.HSNext.sln -p:UseAutoCADNuGet=false
+          if ($LASTEXITCODE -ne 0) { throw 'Restore failed.' }
+          dotnet build MiningVolume.HSNext.sln -c Release --no-restore -p:UseAutoCADNuGet=false -p:AutoCAD2023Dir="$env:AUTOCAD2023_DIR" -p:SourceRevisionId="$env:SOURCE_SHA"
+          if ($LASTEXITCODE -ne 0) { throw 'Real host compile failed.' }
+
+      - name: Stage separate NAMVECTA V2 offline-pass bundle (leave V1 untouched)
+        shell: pwsh
+        run: |
+          Set-Location $env:MV_ROOT
+          $proof='dist/V2_LICENSE_OFFLINE_PASS_PROOF.txt'
+          if (!(Test-Path $proof) -or
+              (Get-Content $proof -Raw) -notmatch 'LicensingMode=FIVE_FIXED_OFFLINE_PASSES') {
+            throw 'BLOCKED: offline-pass proof is missing.'
+          }
+          $w='bundle/MiningVolume2023.bundle/Contents/Windows'
+          New-Item -ItemType Directory -Force "$w/Assets" | Out-Null
+          Copy-Item 'src/MiningVolume.Plugin2023/bin/Release/net48/MiningVolume2023.dll' "$w/MiningVolume2023.dll" -Force
+          Copy-Item 'src/MiningVolume.Core/bin/Release/net48/MiningVolume.Core.dll' "$w/MiningVolume.Core.dll" -Force
+          Copy-Item 'src/MiningVolume.Surface/bin/Release/net48/MiningVolume.Surface.dll' "$w/MiningVolume.Surface.dll" -Force
+          Copy-Item 'src/MiningVolume.Cad2023/bin/Release/net48/MiningVolume.Cad2023.dll' "$w/MiningVolume.Cad2023.dll" -Force
+          Copy-Item 'src/MiningVolume.Surface/bin/Release/net48/MiningVolume.Cdt.Native.dll' "$w/MiningVolume.Cdt.Native.dll" -Force
+          Copy-Item 'src/MiningVolume.Surface/Native/LICENSE-CDT.txt' "$w/LICENSE-CDT.txt" -Force
+          Copy-Item 'src/MiningVolume.Surface/Native/NOTICE.txt' "$w/NOTICE.txt" -Force
+          Copy-Item 'src/MiningVolume.Plugin2023/Assets/imsat_logo_64.png' "$w/Assets/imsat_logo_64.png" -Force
+          "SOURCE_SHA=$env:SOURCE_SHA" | Set-Content "$w/BUILD_IDENTITY.txt" -Encoding ascii
+          & './release/verify_release.ps1'
+          if ($LASTEXITCODE -ne 0 -or -not $?) { throw 'Source bundle layout invalid.' }
+          $src='bundle/MiningVolume2023.bundle'
+          $dest='dist/v2-host/MiningVolume2023.bundle'
+          if (Test-Path $dest) { Remove-Item $dest -Recurse -Force }
+          New-Item -ItemType Directory -Force (Split-Path $dest -Parent) | Out-Null
+          Copy-Item -Path $src -Destination $dest -Recurse -Force
+          $pkg=Join-Path $dest 'PackageContents.xml'
+          $xml=[IO.File]::ReadAllText((Resolve-Path $pkg).Path)
+          if (-not $xml.Contains('AppVersion="1.0.0"') -or
+              -not $xml.Contains('Version="1.0.0"')) {
+            throw 'BLOCKED: V1 source bundle not in expected state; V1 must remain untouched.'
+          }
+          $xml=$xml.Replace('AppVersion="1.0.0"','AppVersion="2.0.0"')
+          $xml=$xml.Replace('Version="1.0.0"','Version="2.0.0"')
+          $xml=$xml.Replace('GUI-first V1.0','NAMVECTA V2 Offline Host QA - NOT RELEASE')
+          [IO.File]::WriteAllText($pkg,$xml,(New-Object Text.UTF8Encoding($false)))
+          if (-not $xml.Contains('AppVersion="2.0.0"') -or -not $xml.Contains('Version="2.0.0"')) {
+            throw 'BLOCKED: V2 bundle manifest mismatch.'
+          }
+
+      - name: V2 host smoke on actual AutoCAD 2023 desktop
+        shell: pwsh
+        run: |
+          Set-Location $env:MV_ROOT
+          & './release/verify_autocad2023_runtime.ps1' -ProductVersion '2.0' -BundlePath 'dist/v2-host/MiningVolume2023.bundle' -OutputPath 'dist/V2_RUNTIME_VERIFICATION.txt' -SelfTestPath 'dist/V2_MVSELFTEST_RUNTIME.txt'
+          if ($LASTEXITCODE -ne 0) { throw 'V2 AutoCAD runtime smoke failed.' }
+          $proof=Get-Content 'dist/V2_RUNTIME_VERIFICATION.txt' -Raw
+          if ($proof -notmatch 'ProductVersion=2.0' -or $proof -notmatch 'Status=PASS') {
+            throw 'BLOCKED: V2.0 host smoke proof missing.'
+          }
+
+      - name: Build ONLY V2 offline-pass QA candidate after host smoke
+        shell: pwsh
+        run: |
+          Set-Location $env:MV_ROOT
+          if (!(Test-Path 'dist/V2_RUNTIME_VERIFICATION.txt') -or
+              (Get-Content 'dist/V2_RUNTIME_VERIFICATION.txt' -Raw) -notmatch 'Status=PASS') {
+            throw 'BLOCKED: AutoCAD host runtime is not PASS.'
+          }
+          go install github.com/akavel/rsrc@latest
+          if ($LASTEXITCODE -ne 0) { throw 'Icon tool install failed.' }
+          & './installer/build_v2_qa.ps1'
+          if ($LASTEXITCODE -ne 0 -or -not $?) { throw 'V2 offline QA candidate build failed.' }
+          $exe='dist/IMSAT_MiningVolume_V2_0_QA_CANDIDATE.exe'
+          if (!(Test-Path $exe)) { throw 'QA executable not built.' }
+          $hash=(Get-FileHash $exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          @(
+            'NAMVECTA VOLUME V2.0 OFFLINE PASS - HOST QA ONLY - NOT RELEASE'
+            ('SourceSHA='+$env:SOURCE_SHA)
+            ('SetupSHA256='+$hash)
+            'LicensingMode=FIVE_FIXED_OFFLINE_PASSES'
+            'RSAIssuer=NOT_APPLICABLE'
+            'AutoCAD2023Smoke=PASS'
+            'RealPassActivationInAutoCAD=NOT_TESTED'
+            'T01_T22_EndToEnd=NOT_TESTED'
+            'UpgradeUninstall=NOT_TESTED'
+            'BrandingAcceptance=NOT_TESTED'
+            'ReleaseStatus=BLOCKED'
+          ) | Set-Content 'dist/V2_HOST_QA_NOT_RELEASE.txt' -Encoding UTF8
+
+      - name: Upload NAMVECTA offline-pass V2 QA evidence only
+        uses: actions/upload-artifact@v4
+        with:
+          name: NAMVECTA-VOLUME-V2.0-AutoCAD2023-OFFLINE-HOST-QA-NOT-RELEASE
+          retention-days: 30
+          if-no-files-found: error
+          path: |
+            tools/MiningVolume_HSNext/v0.9/dist/IMSAT_MiningVolume_V2_0_QA_CANDIDATE.exe
+            tools/MiningVolume_HSNext/v0.9/dist/V2_LICENSE_OFFLINE_PASS_PROOF.txt
+            tools/MiningVolume_HSNext/v0.9/dist/V2_RUNTIME_VERIFICATION.txt
+            tools/MiningVolume_HSNext/v0.9/dist/V2_MVSELFTEST_RUNTIME.txt
+            tools/MiningVolume_HSNext/v0.9/dist/V2_HOST_QA_NOT_RELEASE.txt
+
+      - name: Confirm QA remains non-release
+        if: always()
+        shell: pwsh
+        run: |
+          Write-Host 'NAMVECTA offline-pass host QA; release remains blocked until full acceptance.'
