@@ -343,14 +343,14 @@ namespace MiningVolume2023
                     if (SurfaceWorkflowService.TryRestoreTinFromCad(role))
                     {
                         recovered++;
-                        doc.Editor.WriteMessage("\\n[NAMVECTA] Đã nhận diện TIN từ 3DFACE cũ: " +
+                        doc.Editor.WriteMessage("\n[NAMVECTA] Đã nhận diện TIN từ 3DFACE cũ: " +
                             session.TinLayer + " (" + session.Tin.Triangles.Count +
                             " tam giác hợp lệ). DWG không bị thay đổi.");
                     }
                 }
                 catch (System.Exception ex)
                 {
-                    doc.Editor.WriteMessage("\\n[NAMVECTA] Không thể xác nhận " +
+                    doc.Editor.WriteMessage("\n[NAMVECTA] Không thể xác nhận " +
                         session.TinLayer + ": " + ex.Message);
                 }
             }
@@ -358,17 +358,17 @@ namespace MiningVolume2023
             {
                 if (EditableSectionCadService.HasOfficialSectionLayers(doc.Database))
                     doc.Editor.WriteMessage(
-                        "\\n[NAMVECTA] Phát hiện layer mặt cắt cũ. Thiếu Project lưu kèm: " +
+                        "\n[NAMVECTA] Phát hiện layer mặt cắt cũ. Thiếu Project lưu kèm: " +
                         "không tự tái tạo tuyến, chỉnh sửa hoặc tính lại khối lượng.");
             }
             catch (System.Exception ex)
             {
                 doc.Editor.WriteMessage(
-                    "\\n[NAMVECTA] Không kiểm tra được mặt cắt cũ: " + ex.Message);
+                    "\n[NAMVECTA] Không kiểm tra được mặt cắt cũ: " + ex.Message);
             }
             if (recovered > 0)
                 doc.Editor.WriteMessage(
-                    "\\n[NAMVECTA] Đã đọc TIN cũ để kiểm tra; trước khi tính " +
+                    "\n[NAMVECTA] Đã đọc TIN cũ để kiểm tra; trước khi tính " +
                     "cần xác nhận ranh giới, hệ mặt cắt và Project.");
         }
 
