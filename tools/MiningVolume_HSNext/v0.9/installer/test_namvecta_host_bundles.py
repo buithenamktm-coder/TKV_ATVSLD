@@ -103,8 +103,11 @@ class HostBundleTests(unittest.TestCase):
         root = Path(__file__).resolve().parent.parent
         for relative, expected_git_sha in approved.items():
             raw = (root / relative).read_bytes()
+            # Windows actions/checkout may materialize text as CRLF even when
+            # Git stores LF. Compare canonical Git blob bytes, not checkout EOL.
+            canonical = raw.replace(b"\r\n", b"\n")
             actual = hashlib.sha1(
-                b"blob " + str(len(raw)).encode("ascii") + b"\0" + raw
+                b"blob " + str(len(canonical)).encode("ascii") + b"\0" + canonical
             ).hexdigest()
             self.assertEqual(actual, expected_git_sha,
                              "Accepted cc0a6cb7 UI/installer drifted: " + relative)
