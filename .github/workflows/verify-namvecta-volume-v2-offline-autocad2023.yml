@@ -11,7 +11,7 @@ on:
         description: Unused for NAMVECTA five-pass QA; fixed SHA enforced
         required: true
         type: string
-        default: '376b3279e6fe0545e9d4f8ff86cc838903bac5ce'
+        default: 'c34ce5d154ae6eefc5a4ebbd39b9b5c3e9fd9ed3'
 
 permissions:
   contents: read
@@ -35,7 +35,7 @@ jobs:
       MV_ROOT: tools/MiningVolume_HSNext/v0.9
       # issue_comment workflows execute from main, never from the PR head.
       # Pin the exact tested SHA to eliminate time-of-check/time-of-use drift.
-      REQUESTED_REF: '376b3279e6fe0545e9d4f8ff86cc838903bac5ce'
+      REQUESTED_REF: 'c34ce5d154ae6eefc5a4ebbd39b9b5c3e9fd9ed3'
     steps:
       - uses: actions/checkout@v4
         with:
@@ -46,7 +46,7 @@ jobs:
         shell: pwsh
         run: |
           $sha=(git rev-parse HEAD).Trim()
-          if ($sha -ne '376b3279e6fe0545e9d4f8ff86cc838903bac5ce') {
+          if ($sha -ne 'c34ce5d154ae6eefc5a4ebbd39b9b5c3e9fd9ed3') {
             throw 'BLOCKED: the comment-triggered host QA must use the pinned PR54 SHA.'
           }
           # Check only these approved V2 source lines. Reject arbitrary refs.
