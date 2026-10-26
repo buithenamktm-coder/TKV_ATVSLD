@@ -144,8 +144,16 @@ try {
 
     $oldSelfTest = $env:MININGVOLUME_SELFTEST_FILE
     $oldProductVersion = $env:MININGVOLUME_RUNTIME_PRODUCT_VERSION
+    $oldQaAutorun = $env:MININGVOLUME_QA_HOST_AUTORUN
     $env:MININGVOLUME_SELFTEST_FILE = $SelfTestPath
     $env:MININGVOLUME_RUNTIME_PRODUCT_VERSION = $ProductVersion
+    if ($ProductVersion -eq '2.0') {
+        # Host-only explicit authorization; the V2 plugin self-tests on Idle
+        # if the /b command queue is blocked by AutoCAD startup UI.
+        $env:MININGVOLUME_QA_HOST_AUTORUN = '1'
+    } else {
+        Remove-Item Env:MININGVOLUME_QA_HOST_AUTORUN -ErrorAction SilentlyContinue
+    }
     try {
         $proc = Start-Process -FilePath $acad -ArgumentList @('/nologo','/b',"`"$scriptPath`"") -PassThru
         $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
@@ -235,6 +243,11 @@ $startupDetail"
     finally {
         $env:MININGVOLUME_SELFTEST_FILE = $oldSelfTest
         $env:MININGVOLUME_RUNTIME_PRODUCT_VERSION = $oldProductVersion
+        if ($null -eq $oldQaAutorun) {
+            Remove-Item Env:MININGVOLUME_QA_HOST_AUTORUN -ErrorAction SilentlyContinue
+        } else {
+            $env:MININGVOLUME_QA_HOST_AUTORUN = $oldQaAutorun
+        }
     }
 }
 finally {
