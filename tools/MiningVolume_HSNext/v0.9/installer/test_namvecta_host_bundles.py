@@ -114,5 +114,26 @@ class HostBundleTests(unittest.TestCase):
                              "Accepted cc0a6cb7 UI/installer drifted: " + relative)
 
 
+    def test_legacy_dwg_recognition_is_read_only_and_keeps_approved_ui(self):
+        base = Path(__file__).resolve().parent.parent / "src/MiningVolume.Plugin2023"
+        entry = (base / "EntryPoint.cs").read_text(encoding="utf-8")
+        diagnosis = (base / "Services/DwgRecognitionDiagnostic.cs").read_text(encoding="utf-8")
+        runtime = (base / "Services/SectionCadRegression.cs").read_text(encoding="utf-8")
+        self.assertIn('[CommandMethod("MV_DWG_CHECK", CommandFlags.Session)]', entry)
+        self.assertIn("TryRecognizeLegacyCadTin(doc);", entry)
+        self.assertIn("ProjectPersistenceService.HasSavedProject()", entry)
+        self.assertIn('GetXDataForApplication(', diagnosis)
+        self.assertIn('NAMVECTA_MC_HE_TUYEN', diagnosis)
+        self.assertIn('TIN hiện trạng:', diagnosis)
+        self.assertIn('TIN thiết kế:', diagnosis)
+        self.assertIn('KHÔNG tự tạo lại hay ghi đè', diagnosis)
+        self.assertIn("VerifyLegacyDwgRecognitionReadOnly();", runtime)
+        # Detection must never mutate, erase or generate old CAD geometry.
+        self.assertNotIn(".Erase(", diagnosis)
+        self.assertNotIn("AppendEntity(", diagnosis)
+        self.assertNotIn(".Commit(", diagnosis)
+        self.assertNotIn("SurfaceWorkflowService.DrawTin", diagnosis)
+
+
 if __name__ == "__main__":
     unittest.main()
