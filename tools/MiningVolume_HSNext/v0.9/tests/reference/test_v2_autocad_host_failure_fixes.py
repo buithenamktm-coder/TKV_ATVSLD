@@ -46,7 +46,15 @@ def test_v2_qa_command_does_not_reuse_old_mvselftest_registration():
     runtime = src("release/verify_autocad2023_runtime.ps1")
     result = src("src/MiningVolume.Plugin2023/Services/SelfTestService.cs")
     assert '[CommandMethod("NAMVECTA_QA_SELFTEST_V2", CommandFlags.Session)]' in entry
-    assert "public static void QaSelfTestV2() => SelfTest();" in entry
+    # The unique QA command still invokes the genuine self-test, but now
+    # avoids running it a second time after the opt-in AutoCAD Idle hook.
+    assert "public static void QaSelfTestV2()" in entry
+    qa = entry.split("public static void QaSelfTestV2()", 1)[1].split(
+        '[CommandMethod("MVABOUT")', 1
+    )[0]
+    assert "if (hostMode && _hostQaSelfTestTriggered)" in qa
+    assert "if (hostMode) _hostQaSelfTestTriggered = true;" in qa
+    assert "SelfTest();" in qa
     assert '[CommandMethod("MVSELFTEST", CommandFlags.Session)]' in entry
     assert "$selfTestCommand" in runtime
     assert "'NAMVECTA_QA_SELFTEST_V2'" in runtime
