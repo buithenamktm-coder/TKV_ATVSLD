@@ -363,6 +363,10 @@ namespace MiningVolume2023.Services
                     ms.AppendEntity(redundant);
                     tr.AddNewlyCreatedDBObject(redundant, true);
                     redundantHandle = redundant.Handle.ToString();
+                    var otherSupport = new Face(a, b, c, c, true, true, true, false)
+                    { LayerId = badId };
+                    ms.AppendEntity(otherSupport);
+                    tr.AddNewlyCreatedDBObject(otherSupport, true);
                     var orphanA = new Point3d(100, 100, 10);
                     var orphanB = new Point3d(110, 100, 10);
                     var orphan = new Face(orphanA, orphanA, orphanB, orphanB,
@@ -390,7 +394,7 @@ namespace MiningVolume2023.Services
                               ex.Message.Contains("không") &&
                               ex.Message.Contains("Handle");
                 }
-                if (!blocked || TinCadRenderer.CountFaces(db, "QA_TIN_UNSAFE") != 1)
+                if (!blocked || TinCadRenderer.CountFaces(db, "QA_TIN_UNSAFE") != 2)
                     throw new InvalidOperationException(
                         "An unproven degenerate CAD face must reject recovery with its exact Handle.");
             }
