@@ -288,6 +288,29 @@ namespace MiningVolume2023.Services
             }
         }
 
+        /// <summary>
+        /// Delete every generated station line and clear its saved DWG state,
+        /// without touching the survey, TIN surfaces or exported section profiles.
+        /// This preserves the approved cc0a6cb7 palette command.
+        /// </summary>
+        public static void ClearAllStationLines()
+        {
+            var doc = Application.DocumentManager.MdiActiveDocument
+                ?? throw new InvalidOperationException("Không có bản vẽ AutoCAD đang hoạt động.");
+            using (doc.LockDocument())
+                SectionCadRenderer.ClearPreview(doc.Database,
+                    tr => ProjectPersistenceService.MarkStationLinesDeletedInTransaction(
+                        doc.Database, tr));
+            var state = ProjectState.Current;
+            state.SectionSystem = null;
+            state.SectionProfiles.Clear();
+            state.VolumeResult = null;
+            state.VolumeCalculatedUtc = null;
+            state.VolumeCalculationSeconds = null;
+            state.NotifyChanged();
+            doc.Editor.Regen();
+        }
+
         public static void ClearPreview()
         {
             var doc = Application.DocumentManager.MdiActiveDocument;
