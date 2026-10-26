@@ -770,13 +770,21 @@ namespace MiningVolume2023.Services
                 int references = 0, definitions = 0;
                 foreach (ObjectId id in bt)
                 {
+                    // Side databases may retain erased BlockTable ObjectIds in
+                    // enumeration even after a correctly committed cleanup.
+                    // Only live definitions can leak into a user drawing.
+                    if (id.IsErased) continue;
                     var definition = (BlockTableRecord)tr.GetObject(id, OpenMode.ForRead);
-                    if (definition.Name.StartsWith(CadVolumeTableService.BlockPrefix, StringComparison.Ordinal)) definitions++;
+                    if (!definition.IsErased &&
+                        definition.Name.StartsWith(CadVolumeTableService.BlockPrefix, StringComparison.Ordinal))
+                        definitions++;
                 }
                 foreach (ObjectId id in ms)
                 {
+                    if (id.IsErased) continue;
                     var reference = tr.GetObject(id, OpenMode.ForRead) as BlockReference;
                     if (reference == null) throw new InvalidOperationException("Quantity output must be a block reference.");
+                    if (reference.IsErased) continue;
                     references++;
                     output.Append(reference.Handle).Append('|').Append(reference.Layer);
                     Point(output, reference.Position);
@@ -830,7 +838,12 @@ namespace MiningVolume2023.Services
                 var ms = (BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForRead);
                 foreach (ObjectId id in ms)
                 {
+                    // Aborted side-database insertions can leave tombstone ids
+                    // in the ModelSpace iterator. A canceled export is safe
+                    // only if every *live* entity and original handle matches.
+                    if (id.IsErased) continue;
                     var entity = (Entity)tr.GetObject(id, OpenMode.ForRead);
+                    if (entity.IsErased) continue;
                     if (handles) output.Append(entity.Handle.ToString());
                     output.Append(entity.GetType().Name).Append(':').Append(entity.Layer).Append('|');
                     if (entity is Polyline poly)
