@@ -654,8 +654,12 @@ namespace MiningVolume2023.Services
                     int oldCount = 0, newCount = 0;
                     foreach (ObjectId id in model)
                     {
-                        var poly = tr.GetObject(id, OpenMode.ForRead) as Polyline;
-                        if (poly == null) throw new InvalidOperationException("Grid identity added unexpected entities.");
+                        var entity = tr.GetObject(id, OpenMode.ForRead) as Entity;
+                        if (entity == null || !entity.Layer.StartsWith("MV_LUOI_", StringComparison.OrdinalIgnoreCase))
+                            continue; // ModelSpace may contain stock viewports and unrelated objects.
+                        var poly = entity as Polyline;
+                        if (poly == null) throw new InvalidOperationException(
+                            "Grid output layer contains unexpected non-Polyline entities.");
                         using (var data = poly.GetXDataForApplication(GridCadRenderer.CalculationIdApp))
                         {
                             var values = data?.AsArray();
