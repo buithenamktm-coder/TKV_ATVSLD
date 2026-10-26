@@ -299,7 +299,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Icon tool install failed.' }
           & './installer/build_v2_qa.ps1'
           if (-not $?) { throw 'V2 offline QA candidate build failed.' }
-          $exe='dist/IMSAT_MiningVolume_V2_0_QA_CANDIDATE.exe'
+          $exe='dist/NAMVECTA_VOLUME_2_0_QA_NOT_RELEASE.exe'
           if (!(Test-Path $exe)) { throw 'QA executable not built.' }
           $hash=(Get-FileHash $exe -Algorithm SHA256).Hash.ToLowerInvariant()
           @(
@@ -334,7 +334,7 @@ jobs:
           retention-days: 30
           if-no-files-found: error
           path: |
-            tools/MiningVolume_HSNext/v0.9/dist/IMSAT_MiningVolume_V2_0_QA_CANDIDATE.exe
+            tools/MiningVolume_HSNext/v0.9/dist/NAMVECTA_VOLUME_2_0_QA_NOT_RELEASE.exe
             tools/MiningVolume_HSNext/v0.9/dist/V2_LICENSE_OFFLINE_PASS_PROOF.txt
             tools/MiningVolume_HSNext/v0.9/dist/V2_RUNTIME_VERIFICATION.txt
             tools/MiningVolume_HSNext/v0.9/dist/V2_MVSELFTEST_RUNTIME.txt
