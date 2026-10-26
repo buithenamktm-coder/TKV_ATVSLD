@@ -265,6 +265,13 @@ namespace MiningVolume2023.Services
                     "Giãn cách mặt cắt nhanh phải từ 30 đơn vị CAD trở lên.");
             double exaggeration = horizontalScale / verticalScale;
             pollCancellation?.Invoke();
+            // AutoCAD side-databases can expose created entities even after
+            // Abort. Track ONLY this invocation's ObjectIds so cancellation
+            // can erase its own uncommitted lines/text/polylines without ever
+            // removing a previously accepted quick section.
+            var createdByQuick = new List<ObjectId>();
+            try
+            {
             using (var tr = db.TransactionManager.StartTransaction())
             {
                 // A host-verified cancellation must roll back every quick
@@ -294,34 +301,34 @@ namespace MiningVolume2023.Services
                     // Axes are mirrored. Both ends display exactly identical
                     // elevation tick values, independent of the quick route bend.
                     AddLine(ms, tr, new Point3d(x0,y0,0),
-                        new Point3d(right,y0,0),axis);
+                        new Point3d(right,y0,0),axis, createdByQuick.Add);
                     AddLine(ms, tr, new Point3d(x0,y0,0),
-                        new Point3d(x0,y0+height,0),axis);
+                        new Point3d(x0,y0+height,0),axis, createdByQuick.Add);
                     AddLine(ms, tr, new Point3d(right,y0,0),
-                        new Point3d(right,y0+height,0),axis);
+                        new Point3d(right,y0+height,0),axis, createdByQuick.Add);
                     AddText(ms,tr,style,label,new Point3d(x0,y0+height+9,0),
-                        "Mặt cắt nhanh " + profile.Line.Name,3.0,0);
+                        "Mặt cắt nhanh " + profile.Line.Name,3.0,0, createdByQuick.Add);
                     foreach (double z in elevationTicks)
                     {
                         pollCancellation?.Invoke();
                         double yy = y0 + (z-baseZ)*exaggeration;
                         AddLine(ms,tr,new Point3d(x0-1.5,yy,0),
-                            new Point3d(x0+1.5,yy,0),axis);
+                            new Point3d(x0+1.5,yy,0),axis, createdByQuick.Add);
                         AddLine(ms,tr,new Point3d(right-1.5,yy,0),
-                            new Point3d(right+1.5,yy,0),axis);
+                            new Point3d(right+1.5,yy,0),axis, createdByQuick.Add);
                         string elevation = z.ToString("0.##");
                         AddText(ms,tr,style,label,new Point3d(x0-12,yy-1.5,0),
-                            elevation,3.0,0);
+                            elevation,3.0,0, createdByQuick.Add);
                         AddText(ms,tr,style,label,new Point3d(right+4,yy-1.5,0),
-                            elevation,3.0,0);
+                            elevation,3.0,0, createdByQuick.Add);
                     }
                     // QuickSectionProfileBuilder also provides local stations.
                     AddProfilePolylines(ms,tr,profile,x0,y0,baseZ,
-                        exaggeration,ht,tk, tagForEditing: false, pollCancellation: pollCancellation);
+                        exaggeration,ht,tk, tagForEditing: false, pollCancellation: pollCancellation, trackCreated: createdByQuick.Add);
                     AddText(ms,tr,style,label,new Point3d(x0+width/2-4,y0-11,0),
-                        "L (m)",3.0,0);
+                        "L (m)",3.0,0, createdByQuick.Add);
                     AddText(ms,tr,style,label,new Point3d(x0,y0-20,0),
-                        "Chỉ tra TIN; không dùng tính khối lượng",2.5,0);
+                        "Chỉ tra TIN; không dùng tính khối lượng",2.5,0, createdByQuick.Add);
                     currentY -= height + Math.Max(40.0, layoutGap);
                     reportProgress?.Invoke(++completed);
                 }
@@ -333,6 +340,40 @@ namespace MiningVolume2023.Services
                     tr.Abort();
                     throw;
                 }
+            }
+            }
+            catch (Exception original)
+            {
+                try { RemoveAbortedQuickEntities(db, createdByQuick); }
+                catch (Exception cleanup)
+                {
+                    throw new AggregateException(
+                        "Không thể hoàn nguyên các đối tượng mặt cắt nhanh sau khi hủy.",
+                        original, cleanup);
+                }
+                throw;
+            }
+        }
+
+        private static void RemoveAbortedQuickEntities(Database db, List<ObjectId> created)
+        {
+            if (created.Count == 0) return;
+            using (var tr = db.TransactionManager.StartTransaction())
+            {
+                foreach (ObjectId id in created)
+                {
+                    if (id.IsNull || !id.IsValid || id.IsErased) continue;
+                    var entity = tr.GetObject(id, OpenMode.ForWrite, true) as Entity;
+                    if (entity == null || entity.IsErased) continue;
+                    // Never erase any object not owned by the quick-section
+                    // renderer, even when an interrupted run is recovered.
+                    if (!entity.Layer.StartsWith("MV_MC_NHANH_",
+                        StringComparison.OrdinalIgnoreCase))
+                        throw new InvalidOperationException(
+                            "Refusing cleanup of foreign entity after quick-section cancel.");
+                    entity.Erase();
+                }
+                tr.Commit();
             }
         }
 
@@ -440,10 +481,13 @@ namespace MiningVolume2023.Services
             }
         }
 
-        private static void AddLine(BlockTableRecord ms, Transaction tr, Point3d a, Point3d b, ObjectId layer)
+        private static void AddLine(BlockTableRecord ms, Transaction tr, Point3d a, Point3d b,
+            ObjectId layer, Action<ObjectId> trackCreated = null)
         {
             var line = new Line(a, b) { LayerId = layer };
-            ms.AppendEntity(line); tr.AddNewlyCreatedDBObject(line, true);
+            ObjectId id = ms.AppendEntity(line);
+            trackCreated?.Invoke(id);
+            tr.AddNewlyCreatedDBObject(line, true);
         }
 
         private static void AddProfilePolylines(
@@ -456,7 +500,8 @@ namespace MiningVolume2023.Services
             double vExag,
             ObjectId existingLayer,
             ObjectId designLayer,
-            bool tagForEditing = true, Action pollCancellation = null)
+            bool tagForEditing = true, Action pollCancellation = null,
+            Action<ObjectId> trackCreated = null)
         {
             if (profile == null || profile.Segments == null || profile.Segments.Count == 0)
                 return;
@@ -481,7 +526,7 @@ namespace MiningVolume2023.Services
                     {
                         FlushProfilePair(ms, tr, profile.Line.Name, runIndex++,
                             existing, design, existingLayer, designLayer,
-                            x0, y0, baseZ, vExag, tagForEditing, pollCancellation);
+                            x0, y0, baseZ, vExag, tagForEditing, pollCancellation, trackCreated);
                     }
                     existing.Clear();
                     design.Clear();
@@ -506,7 +551,7 @@ namespace MiningVolume2023.Services
             if (existing.Count >= 2)
                 FlushProfilePair(ms, tr, profile.Line.Name, runIndex,
                     existing, design, existingLayer, designLayer,
-                    x0, y0, baseZ, vExag, tagForEditing, pollCancellation);
+                    x0, y0, baseZ, vExag, tagForEditing, pollCancellation, trackCreated);
         }
 
         private static void FlushProfilePair(
@@ -514,10 +559,10 @@ namespace MiningVolume2023.Services
             List<Point2d> existing, List<Point2d> design,
             ObjectId existingLayer, ObjectId designLayer,
             double x0, double y0, double baseZ, double vExag,
-            bool tagForEditing, Action pollCancellation)
+            bool tagForEditing, Action pollCancellation, Action<ObjectId> trackCreated)
         {
-            var a = FlushProfilePolyline(ms, tr, existing, existingLayer, pollCancellation);
-            var c = FlushProfilePolyline(ms, tr, design, designLayer, pollCancellation);
+            var a = FlushProfilePolyline(ms, tr, existing, existingLayer, pollCancellation, trackCreated);
+            var c = FlushProfilePolyline(ms, tr, design, designLayer, pollCancellation, trackCreated);
             if (a == null || c == null)
                 throw new InvalidOperationException("Không tạo được hai đường mặt cắt đối ứng.");
             // Only approved volume sections carry EditRegApp metadata.
@@ -550,13 +595,14 @@ namespace MiningVolume2023.Services
             BlockTableRecord ms,
             Transaction tr,
             List<Point2d> points,
-            ObjectId layer, Action pollCancellation)
+            ObjectId layer, Action pollCancellation, Action<ObjectId> trackCreated)
         {
             if (points == null || points.Count < 2) return null;
             var poly = new Polyline(points.Count) { LayerId = layer };
             // Register before filling: cancellation leaves disposal/rollback
             // with the enclosing transaction instead of leaking a native object.
-            ms.AppendEntity(poly);
+            ObjectId createdId = ms.AppendEntity(poly);
+            trackCreated?.Invoke(createdId);
             tr.AddNewlyCreatedDBObject(poly, true);
             for (int i = 0; i < points.Count; i++)
             {
@@ -566,10 +612,13 @@ namespace MiningVolume2023.Services
             return poly;
         }
 
-        private static DBText AddText(BlockTableRecord ms, Transaction tr, ObjectId style, ObjectId layer, Point3d p, string value, double height, double rotation)
+        private static DBText AddText(BlockTableRecord ms, Transaction tr, ObjectId style, ObjectId layer, Point3d p, string value, double height, double rotation,
+            Action<ObjectId> trackCreated = null)
         {
             var text = new DBText { Position = p, TextString = value, Height = height, Rotation = rotation, TextStyleId = style, LayerId = layer };
-            ms.AppendEntity(text); tr.AddNewlyCreatedDBObject(text, true);
+            ObjectId id = ms.AppendEntity(text);
+            trackCreated?.Invoke(id);
+            tr.AddNewlyCreatedDBObject(text, true);
             return text;
         }
 
