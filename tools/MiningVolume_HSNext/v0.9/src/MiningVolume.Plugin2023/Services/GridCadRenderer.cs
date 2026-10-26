@@ -32,6 +32,9 @@ namespace MiningVolume2023.Services
                     "Hệ lưới vượt 100.000 ô; hãy tăng kích thước ô hoặc chia vùng tính.");
             cancellationToken.ThrowIfCancellationRequested();
             pollCancellation?.Invoke();
+            var createdByGrid = new System.Collections.Generic.List<ObjectId>();
+            try
+            {
             using (var tr = database.TransactionManager.StartTransaction())
             using (var identity = new ResultBuffer(
                 new TypedValue((int)DxfCode.ExtendedDataRegAppName, CalculationIdApp),
@@ -81,7 +84,8 @@ namespace MiningVolume2023.Services
                         poly.AddVertexAt(i,new Point2d(point.X,point.Y),0,0,0);
                         x+=point.X; y+=point.Y;
                     }
-                    model.AppendEntity(poly);
+                    ObjectId cellId = model.AppendEntity(poly);
+                    createdByGrid.Add(cellId);
                     tr.AddNewlyCreatedDBObject(poly,true);
                     // XData follows each editable cell through save/reopen and
                     // multiple exports, without adding visible CAD entities.
@@ -109,7 +113,8 @@ namespace MiningVolume2023.Services
                                 : cell.CellCode + " D" + v.CutVolume.ToString("0.0") +
                                     " / P" + v.FillVolume.ToString("0.0")
                         };
-                        model.AppendEntity(label);
+                        ObjectId labelId = model.AppendEntity(label);
+                        createdByGrid.Add(labelId);
                         tr.AddNewlyCreatedDBObject(label,true);
                         // Labels belong to the same export as their editable
                         // cell. Preserve CalculationId when saving/reopening
@@ -130,6 +135,41 @@ namespace MiningVolume2023.Services
                     tr.Abort();
                     throw;
                 }
+            }
+            }
+            catch (Exception original)
+            {
+                // Side-database aborts have retained visible DBText labels in
+                // real host QA. Clean up ONLY the entities created by this
+                // particular canceled export, never other grid calculations.
+                try { RemoveAbortedGridEntities(database, createdByGrid); }
+                catch (Exception cleanup)
+                {
+                    throw new AggregateException(
+                        "Không thể hoàn nguyên ô lưới và nhãn sau khi hủy.",
+                        original, cleanup);
+                }
+                throw;
+            }
+        }
+
+        private static void RemoveAbortedGridEntities(Database db,
+            System.Collections.Generic.List<ObjectId> created)
+        {
+            if (created.Count == 0) return;
+            using (var tr = db.TransactionManager.StartTransaction())
+            {
+                foreach (ObjectId id in created)
+                {
+                    if (id.IsNull || !id.IsValid || id.IsErased) continue;
+                    var e = tr.GetObject(id, OpenMode.ForWrite, true) as Entity;
+                    if (e == null || e.IsErased) continue;
+                    if (!e.Layer.StartsWith("MV_LUOI_", StringComparison.OrdinalIgnoreCase))
+                        throw new InvalidOperationException(
+                            "Refusing to erase non-grid entity while recovering a canceled export.");
+                    e.Erase();
+                }
+                tr.Commit();
             }
         }
 
