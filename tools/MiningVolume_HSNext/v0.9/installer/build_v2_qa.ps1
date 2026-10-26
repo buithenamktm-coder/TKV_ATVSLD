@@ -54,7 +54,9 @@ try {
     $identityLines | Set-Content -LiteralPath (Join-Path $windows 'BUILD_IDENTITY.txt') -Encoding ascii
 
     # One installer implementation; V1 defaults are preserved. No global source replacements.
-    Copy-Item $main (Join-Path $setupDir "main.go")
+    # Rebrand only the temporary V2 installer source, never the V1 Go source.
+    $v2main = [System.IO.File]::ReadAllText($main).Replace('IMSAT VOLUME', 'NAMVECTA VOLUME')
+    [System.IO.File]::WriteAllText((Join-Path $setupDir 'main.go'), $v2main, (New-Object System.Text.UTF8Encoding $false))
     # Copy the full Windows installer package, not only main.go: otherwise
     # new compatibility planning code and its tests are silently left out.
     foreach ($file in @("main_test.go", "host_install_plan.go", "host_install_plan_test.go")) {
@@ -66,12 +68,41 @@ try {
     Compress-Archive -Path $stage -DestinationPath (Join-Path $setupDir 'payload.zip') -CompressionLevel Optimal
     Push-Location $setupDir
     try {
-        # Reuse the IMSAT icon resource compiler already installed by the V1 CI step.
+        # Use the exact approved PA3 symbol raster; generate a Windows icon
+        # only for this V2 QA staging directory (the V1 ICO stays unchanged).
+        $pa3 = Join-Path $Root 'docs/branding/namvecta-pa3-reference/image2.png'
+        if (!(Test-Path -LiteralPath $pa3 -PathType Leaf)) { throw 'BLOCKED: missing PA3 symbol.' }
+        $pa3Hash = (Get-FileHash -LiteralPath $pa3 -Algorithm SHA256).Hash.ToLowerInvariant()
+        if ($pa3Hash -ne '91aa653548ce361d158fc6be01893c87aea5bad54726a1d6083b9c234ade9161') {
+            throw 'BLOCKED: PA3 approved raster checksum mismatch.'
+        }
+        Add-Type -AssemblyName System.Drawing
+        $sourceImage = [System.Drawing.Image]::FromFile($pa3)
+        $bitmap = New-Object System.Drawing.Bitmap 256, 256
+        try {
+            $g = [System.Drawing.Graphics]::FromImage($bitmap)
+            try {
+                $g.Clear([System.Drawing.Color]::White)
+                $g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+                $ratio = [Math]::Min(240.0 / $sourceImage.Width, 240.0 / $sourceImage.Height)
+                $w = [int][Math]::Round($sourceImage.Width * $ratio)
+                $h = [int][Math]::Round($sourceImage.Height * $ratio)
+                $g.DrawImage($sourceImage, [int]((256 - $w) / 2), [int]((256 - $h) / 2), $w, $h)
+            }
+            finally { $g.Dispose() }
+            $handle = $bitmap.GetHicon()
+            $icon = [System.Drawing.Icon]::FromHandle($handle)
+            $ico = Join-Path $setupDir 'namvecta-pa3.ico'
+            $iconStream = [System.IO.File]::Create($ico)
+            try { $icon.Save($iconStream) }
+            finally { $iconStream.Dispose(); $icon.Dispose() }
+        }
+        finally { $bitmap.Dispose(); $sourceImage.Dispose() }
         $rsrc = Join-Path ((go env GOPATH).Trim()) 'bin/rsrc.exe'
-        if (-not (Test-Path $rsrc)) { throw "Không tìm thấy rsrc.exe; không build Setup V2 thiếu icon IMSAT." }
-        & $rsrc -ico (Join-Path $Root 'installer/imsat.ico') -arch amd64 -o 'rsrc_windows_amd64.syso'
-        if ($LASTEXITCODE -ne 0) { throw "Không nhúng được icon IMSAT trong Setup V2." }
-        go mod init imsat-v2-qa-candidate | Out-Null
+        if (-not (Test-Path $rsrc)) { throw 'Icon resource compiler unavailable.' }
+        & $rsrc -ico $ico -arch amd64 -o 'rsrc_windows_amd64.syso'
+        if ($LASTEXITCODE -ne 0) { throw 'Cannot embed approved PA3 icon in V2 QA Setup.' }
+        go mod init namvecta-v2-qa-candidate | Out-Null
         if ($LASTEXITCODE -ne 0) { throw "go mod init V2 thất bại." }
         # Validate the rewritten V2 XML and the DLL hashes in this exact ZIP.
         # A passing V1 payload test does not validate the V2 packaging transform.
@@ -82,8 +113,8 @@ try {
             if ($LASTEXITCODE -ne 0) { throw "Kiểm thử bộ cài V2 (XML/DLL/checksum/host compatibility/rollback) thất bại; không tạo Setup." }
         }
         finally { $env:IMSAT_TEST_PAYLOAD_VERSION = $previousTestVersion }
-        $exe = Join-Path $dist "IMSAT_MiningVolume_V2_0_QA_CANDIDATE.exe"
-        $flags = '-s -w -H=windowsgui -X main.version=2.0.0 -X main.backupSuffix=.v200qabak -X main.storedSetupName=MiningVolume_Setup_v2.0_QA.exe -X "main.productName=IMSAT VOLUME V2.0 QA Candidate (AutoCAD 2023)"'
+        $exe = Join-Path $dist "NAMVECTA_VOLUME_2_0_QA_NOT_RELEASE.exe"
+        $flags = '-s -w -H=windowsgui -X main.version=2.0.0 -X main.backupSuffix=.v200qabak -X main.storedSetupName=MiningVolume_Setup_v2.0_QA.exe -X "main.productName=NAMVECTA VOLUME 2.0 QA (AutoCAD 2023)"'
         go build -trimpath -ldflags $flags -o $exe .
         if ($LASTEXITCODE -ne 0) { throw "Không build được V2 QA Setup." }
     }
@@ -117,7 +148,7 @@ try {
     }
     $hash = (Get-FileHash -Algorithm SHA256 $exe).Hash
     $lines = @(
-        'IMSAT MININGVOLUME V2.0 QA CANDIDATE — NOT A RELEASE',
+        'NAMVECTA VOLUME 2.0 QA - NOT RELEASE',
         ('Build UTC: ' + [DateTime]::UtcNow.ToString('o')),
         ('Source SHA: ' + $env:SOURCE_SHA),
         ('SHA256 EXE: ' + $hash),
