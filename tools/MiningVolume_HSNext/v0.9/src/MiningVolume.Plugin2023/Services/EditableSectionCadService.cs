@@ -21,6 +21,19 @@ namespace MiningVolume2023.Services
             public EditedSectionPath Path;
         }
 
+        // A previously produced section output leaves dedicated layers
+        // even when the user erases every tagged HT/TK Polyline. This cheap
+        // evidence survives DWG save/reopen and must block TIN-only restore.
+        internal static bool HasOfficialSectionLayers(Database db)
+        {
+            if (db == null) return false;
+            using (var tr = db.TransactionManager.StartOpenCloseTransaction())
+            {
+                var table = (LayerTable)tr.GetObject(db.LayerTableId, OpenMode.ForRead);
+                return table.Has("MV_MC_HIENTRANG") || table.Has("MV_MC_THIETKE");
+            }
+        }
+
         internal static bool HasEditableProfiles(Database db)
         {
             using (var tr = db.TransactionManager.StartOpenCloseTransaction())
@@ -68,8 +81,16 @@ namespace MiningVolume2023.Services
                 Action poll = pollCancellation ?? progress.Poll;
                 poll();
                 var grouped = new Dictionary<string, List<Tagged>>(StringComparer.OrdinalIgnoreCase);
+                // A saved/generated section may have had every tagged
+                // Polyline manually deleted. Empty XData then must NOT be
+                // confused with "never exported". The dedicated output
+                // layer is independent evidence that CAD sections existed.
+                bool outputLayerExists = false;
                 using (var tr = db.TransactionManager.StartOpenCloseTransaction())
                 {
+                    var lt = (LayerTable)tr.GetObject(db.LayerTableId, OpenMode.ForRead);
+                    outputLayerExists = lt.Has("MV_MC_HIENTRANG") ||
+                        lt.Has("MV_MC_THIETKE");
                     var ms = GetModelSpace(db, tr);
                     var polyClass = Autodesk.AutoCAD.Runtime.RXObject.GetClass(typeof(Polyline));
                     int scanned = 0;
@@ -95,10 +116,11 @@ namespace MiningVolume2023.Services
                 // that have never been exported for manual editing.
                 if (grouped.Count == 0 && allowMissingUnedited)
                 {
-                    if (originals.Any(p => p != null && p.IsUserEdited))
+                    if (outputLayerExists ||
+                        originals.Any(p => p != null && p.IsUserEdited))
                         throw new InvalidOperationException(
-                            "Hệ mặt cắt đã hiệu chỉnh không còn tồn tại trên CAD. " +
-                            "Không xuất số liệu cũ; hãy khôi phục đường đã chỉnh.");
+                            "Các layer mặt cắt CAD đã tồn tại nhưng không còn đường mặt cắt có ID hợp lệ. " +
+                            "Không tính lại từ dữ liệu cũ; hãy khôi phục mặt cắt CAD hoặc vẽ lại có xác nhận.");
                     poll();
                     return originals;
                 }
@@ -125,6 +147,12 @@ namespace MiningVolume2023.Services
         {
             var areas = profiles.Where(x => x != null && x.HasData)
                 .ToDictionary(x => x.Line.Name, StringComparer.OrdinalIgnoreCase);
+            // A side-DB Abort does not always rewind edits to existing
+            // DBText values. Save original text for precisely those labels
+            // touched in this invocation; no geometry or foreign labels.
+            var originalText = new Dictionary<ObjectId, string>();
+            try
+            {
             using (var progress = pollCancellation == null
                 ? new SectionCadProgress(areas.Count, "cập nhật nhãn diện tích") : null)
             using (var tr = db.TransactionManager.StartTransaction())
@@ -161,12 +189,59 @@ namespace MiningVolume2023.Services
                 int completed = 0;
                 foreach(var pair in areas) {
                     poll();
-                    var label=labels[pair.Key][0];label.UpgradeOpen();
+                    var label=labels[pair.Key][0];
+                    if (!originalText.ContainsKey(label.ObjectId))
+                        originalText.Add(label.ObjectId, label.TextString);
+                    label.UpgradeOpen();
                     label.TextString="F đào = "+pair.Value.CutArea.ToString("0.00")+
                         " m²   F đắp = "+pair.Value.FillArea.ToString("0.00")+" m²";
                     progress?.Report(++completed);
                 }
                 poll();
+                tr.Commit();
+            }
+            }
+            catch (Exception original)
+            {
+                try { RestoreAbortedAreaLabels(db, originalText); }
+                catch (Exception cleanup)
+                {
+                    throw new AggregateException(
+                        "Không thể hoàn nguyên nhãn diện tích sau khi hủy.",
+                        original, cleanup);
+                }
+                throw;
+            }
+        }
+
+        private static void RestoreAbortedAreaLabels(Database db,
+            Dictionary<ObjectId, string> originalText)
+        {
+            if (originalText.Count == 0) return;
+            using (var tr = db.TransactionManager.StartTransaction())
+            {
+                foreach (var pair in originalText)
+                {
+                    ObjectId id = pair.Key;
+                    if (id.IsNull || !id.IsValid || id.IsErased)
+                        throw new InvalidOperationException(
+                            "Nhãn diện tích đã bị xóa khi hoàn nguyên cập nhật.");
+                    var label = tr.GetObject(id, OpenMode.ForWrite, true) as DBText;
+                    if (label == null || label.IsErased)
+                        throw new InvalidOperationException(
+                            "Đối tượng nhãn diện tích không còn là DBText.");
+                    using (var data = label.GetXDataForApplication(SectionCadRenderer.AreaRegApp))
+                    {
+                        var values = data?.AsArray();
+                        if (values == null || values.Length != 4 ||
+                            Convert.ToString(values[2].Value) != db.FingerprintGuid.ToString() ||
+                            Convert.ToString(values[3].Value) != label.Handle.ToString())
+                            throw new InvalidOperationException(
+                                "Refusing to restore an area label with invalid calculation identity.");
+                    }
+                    if (!string.Equals(label.TextString, pair.Value, StringComparison.Ordinal))
+                        label.TextString = pair.Value;
+                }
                 tr.Commit();
             }
         }
