@@ -41,7 +41,7 @@ def test_section_first_draw_checks_existing_layers_before_creating_any():
     assert draw.index("var oldLayers = clearFirst") < draw.index(
         "EnsureLayer(db, tr, ExistingLayer, 1)"
     )
-    assert "if (clearFirst && oldLayers.Count > 0)\n                    EraseOnLayers(ms, tr, oldLayers, pollCancellation, erasedBySection.Add);" in draw
+    assert "if (clearFirst && oldLayers.Count > 0)\n                    EraseOnLayers(ms, tr, oldLayers, pollCancellation, recordErased);" in draw
     assert draw.index("EraseOnLayers(ms, tr, oldLayers") < draw.index(
         "for (int pi = startIndex;"
     )
