@@ -67,3 +67,19 @@ def test_cancelled_section_area_labels_restore_original_text_and_identity():
     assert "GetXDataForApplication(SectionCadRenderer.AreaRegApp)" in service
     assert '"Refusing to restore an area label with invalid calculation identity."' in service
     assert "throw new AggregateException(" in service
+
+
+
+def test_canceled_final_section_redraw_restores_original_handles():
+    src = load("src/MiningVolume.Plugin2023/Services/SectionCadRenderer.cs")
+    qa = load("src/MiningVolume.Plugin2023/Services/SectionCadRegression.cs")
+    assert "var createdBySection = new List<ObjectId>();" in src
+    assert "var erasedBySection = new List<ObjectId>();" in src
+    assert "EraseOnLayers(ms, tr, oldLayers, pollCancellation, erasedBySection.Add)" in src
+    assert "trackCreated: createdBySection.Add" in src
+    assert "RecoverFailedSectionExport(db, createdBySection, erasedBySection)" in src
+    assert "trackErased?.Invoke(id);" in src
+    assert "if (entity.IsErased) entity.Erase(false);" in src
+    assert '"Refusing to erase foreign entity after section redraw failure."' in src
+    assert '"Refusing to unerase foreign entity after section redraw failure."' in src
+    assert "Final renderer cancellation failed to restore drawing." in qa
