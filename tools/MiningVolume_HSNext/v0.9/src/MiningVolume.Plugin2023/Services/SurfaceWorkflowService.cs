@@ -849,9 +849,9 @@ namespace MiningVolume2023.Services
                 // Visible, auditable notice; no CAD geometry was changed.
                 var warning = recovered.Issues.FirstOrDefault(issue =>
                     issue.Code == "REDUNDANT_ZERO_EDGE_CAD_FACE");
-                doc.Editor.WriteMessage("\\n[NAMVECTA — CẢNH BÁO TIN] " +
+                doc.Editor.WriteMessage("\n[NAMVECTA — CẢNH BÁO TIN] " +
                     (warning == null ? "TIN chứa mặt suy biến đã xác minh." :
-                        warning.Message) + "\\n");
+                        warning.Message) + "\n");
             }
             return true;
         }
