@@ -844,6 +844,15 @@ namespace MiningVolume2023.Services
             // The layer is the geometry source of truth on DWG reopening.
             // Do not assume a newly created app session matches prior settings.
             state.NotifyChanged();
+            if (recovered.VerifiedRedundantCadFaces > 0)
+            {
+                // Visible, auditable notice; no CAD geometry was changed.
+                var warning = recovered.Issues.FirstOrDefault(issue =>
+                    issue.Code == "REDUNDANT_ZERO_EDGE_CAD_FACE");
+                doc.Editor.WriteMessage("\\n[NAMVECTA — CẢNH BÁO TIN] " +
+                    (warning == null ? "TIN chứa mặt suy biến đã xác minh." :
+                        warning.Message) + "\\n");
+            }
             return true;
         }
 
