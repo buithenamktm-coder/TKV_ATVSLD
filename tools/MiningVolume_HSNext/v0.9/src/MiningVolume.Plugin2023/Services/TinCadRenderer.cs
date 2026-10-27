@@ -517,7 +517,7 @@ namespace MiningVolume2023.Services
                     if (unproven.Contains(new ExactStoredEdge(suspect.A, suspect.B)) &&
                         unproven.Contains(new ExactStoredEdge(suspect.AlternateA, suspect.B)))
                         throw InvalidStoredCadFace(layerName, suspect.Handle,
-                            "Không có cạnh 3D còn lại trùng chính xác cạnh TIN hợp lệ " +
+                            "Cạnh 3D còn lại không trùng chính xác cạnh TIN hợp lệ " +
                             "(đã kiểm tra cả hai đầu cạnh cực ngắn). " +
                             "Không chứng minh được việc bỏ qua là an toàn");
             }
