@@ -26,7 +26,9 @@ def test_sections_measure_real_host_cad_work_and_never_claim_canceled_pass():
     assert "allSections.Commit();" in draw
     assert draw.index('outcome = "PASS";') > draw.index("allSections.Commit();")
     assert 'outcome = "CANCELED";' in draw
-    assert "catch (OperationCanceledException)" in draw
+    assert "catch (OperationCanceledException ex)" in draw
+    assert "RecoverFailedSectionExport(" in draw
+    assert "createdByExport.Add" in draw and "erasedByExport.Add" in draw
     assert 'HostPerformanceLog.Record("SECTION_CAD_EXPORT"' in draw
     assert "completed = start + count;" in draw
     assert "clock.Elapsed.TotalMilliseconds" in draw

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Text;
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.Geometry;
@@ -24,6 +25,7 @@ namespace MiningVolume2023.Services
             RunGroup("Boundary selection", () => { VerifyBoundarySelectionSkipsTinAndSupportsCancel(); }, errors, reportPassed);
             RunGroup("TIN clear rollback", () => { VerifyTinClearRollbackOnCancelAndForeignObject(); }, errors, reportPassed);
             RunGroup("TIN pair rollback", () => { VerifyTinPairRollbackAfterSecondSurfaceFailure(); }, errors, reportPassed);
+            RunGroup("Stored CAD TIN degenerate-face safety", VerifyStoredCadTinDegenerateFaceSafety, errors, reportPassed);
             RunGroup("Section erase preserves TIN", () => { VerifySectionEraseSkipsTinFaces(); }, errors, reportPassed);
             RunGroup("Quantity block rollback", () => { VerifyTableRollback(); }, errors, reportPassed);
             RunGroup("Grid calculation identity", () => { VerifyGridIdentity(); }, errors, reportPassed);
@@ -325,6 +327,288 @@ namespace MiningVolume2023.Services
                 if (TinCadRenderer.Clear(db, layer) != 2300 ||
                     TinCadRenderer.CountFaces(db, layer) != 0)
                     throw new InvalidOperationException("TIN delete did not recover after cancellation.");
+            }
+        }
+
+        private static void VerifyStoredCadTinDegenerateFaceSafety()
+        {
+            // Real AutoCAD 3DFACE and side-database fixture. Only a collapsed
+            // face whose surviving exact 3D edge is also a valid TIN edge
+            // may be ignored; do not mutate accepted AutoCAD geometry.
+            using (var db = new Database(true, true))
+            {
+                string redundantHandle;
+                string unsafeHandle;
+                string nearUnsafeHandle;
+                string pointSafeHandle;
+                string pointUnsafeHandle;
+                using (var tr = db.TransactionManager.StartTransaction())
+                {
+                    var layers = (LayerTable)tr.GetObject(db.LayerTableId, OpenMode.ForWrite);
+                    var okLayer = new LayerTableRecord { Name = "QA_TIN_REDUNDANT" };
+                    var okId = layers.Add(okLayer);
+                    tr.AddNewlyCreatedDBObject(okLayer, true);
+                    var badLayer = new LayerTableRecord { Name = "QA_TIN_UNSAFE" };
+                    var badId = layers.Add(badLayer);
+                    tr.AddNewlyCreatedDBObject(badLayer, true);
+                    var nearBadLayer = new LayerTableRecord { Name = "QA_TIN_NEAR_UNSAFE" };
+                    var nearBadId = layers.Add(nearBadLayer);
+                    tr.AddNewlyCreatedDBObject(nearBadLayer, true);
+                    var pointSafeLayer = new LayerTableRecord { Name = "QA_TIN_POINT_SAFE" };
+                    var pointSafeId = layers.Add(pointSafeLayer);
+                    tr.AddNewlyCreatedDBObject(pointSafeLayer, true);
+                    var pointUnsafeLayer = new LayerTableRecord { Name = "QA_TIN_POINT_UNSAFE" };
+                    var pointUnsafeId = layers.Add(pointUnsafeLayer);
+                    tr.AddNewlyCreatedDBObject(pointUnsafeLayer, true);
+                    var thinLayer = new LayerTableRecord { Name = "QA_TIN_TINY_POSITIVE" };
+                    var thinId = layers.Add(thinLayer);
+                    tr.AddNewlyCreatedDBObject(thinLayer, true);
+                    var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
+                    var ms = (BlockTableRecord)tr.GetObject(
+                        bt[BlockTableRecord.ModelSpace], OpenMode.ForWrite);
+                    var a = new Point3d(0, 0, 10);
+                    var b = new Point3d(10, 0, 10);
+                    var c = new Point3d(0, 10, 10);
+                    var real = new Face(a, b, c, c, true, true, true, false)
+                    { LayerId = okId };
+                    ms.AppendEntity(real);
+                    tr.AddNewlyCreatedDBObject(real, true);
+                    var redundant = new Face(a, a, b, b, true, true, true, false)
+                    { LayerId = okId };
+                    ms.AppendEntity(redundant);
+                    tr.AddNewlyCreatedDBObject(redundant, true);
+                    redundantHandle = redundant.Handle.ToString();
+                    // Reproduce BF9BD: a sub-nanometer (nonzero) 3D edge.
+                    // Prove redundancy via either endpoint's exact existing
+                    // support edge, without modifying any CAD vertex.
+                    var almostA = new Point3d(5e-10, 0, 10);
+                    var nearA = new Face(almostA, a, b, b, true, true, true, false)
+                    { LayerId = okId };
+                    ms.AppendEntity(nearA);
+                    tr.AddNewlyCreatedDBObject(nearA, true);
+                    var almostB = new Point3d(10 - 4e-10, 0, 10);
+                    var nearB = new Face(a, b, almostB, almostB, true, true, true, false)
+                    { LayerId = okId };
+                    ms.AppendEntity(nearB);
+                    tr.AddNewlyCreatedDBObject(nearB, true);
+                    for (int i = 0; i < 48; i++)
+                    {
+                        var repeated = new Face(a, a, b, b, true, true, true, false)
+                        { LayerId = okId };
+                        ms.AppendEntity(repeated);
+                        tr.AddNewlyCreatedDBObject(repeated, true);
+                    }
+                    // The long old boundary edge AB can be split into AM and MB.
+                    // A redundant legacy 3DFACE AB must still be recoverable.
+                    var splitLayer = new LayerTableRecord { Name = "QA_TIN_SPLIT_EDGE" };
+                    var splitId = layers.Add(splitLayer);
+                    tr.AddNewlyCreatedDBObject(splitLayer, true);
+                    var mid = new Point3d(5, 0, 10);
+                    var sideA = new Point3d(0, 5, 10);
+                    var sideB = new Point3d(10, 5, 10);
+                    foreach (var face in new[] {
+                        new Face(a, mid, sideA, sideA, true, true, true, false),
+                        new Face(mid, b, sideB, sideB, true, true, true, false),
+                        new Face(a, a, b, b, true, true, true, false) })
+                    {
+                        face.LayerId = splitId;
+                        ms.AppendEntity(face);
+                        tr.AddNewlyCreatedDBObject(face, true);
+                    }
+                    var otherSupport = new Face(a, b, c, c, true, true, true, false)
+                    { LayerId = badId };
+                    ms.AppendEntity(otherSupport);
+                    tr.AddNewlyCreatedDBObject(otherSupport, true);
+                    var orphanA = new Point3d(100, 100, 10);
+                    var orphanB = new Point3d(110, 100, 10);
+                    var orphan = new Face(orphanA, orphanA, orphanB, orphanB,
+                        true, true, true, false) { LayerId = badId };
+                    ms.AppendEntity(orphan);
+                    tr.AddNewlyCreatedDBObject(orphan, true);
+                    unsafeHandle = orphan.Handle.ToString();
+                    var nearSupport = new Face(a, b, c, c, true, true, true, false)
+                    { LayerId = nearBadId };
+                    ms.AppendEntity(nearSupport);
+                    tr.AddNewlyCreatedDBObject(nearSupport, true);
+                    var nearOrphanA = new Point3d(100, 100, 10);
+                    var nearOrphanA2 = new Point3d(100 + 5e-10, 100, 10);
+                    var nearOrphanB = new Point3d(110, 100, 10);
+                    var nearOrphan = new Face(nearOrphanA, nearOrphanA2, nearOrphanB,
+                        nearOrphanB, true, true, true, false)
+                    { LayerId = nearBadId };
+                    ms.AppendEntity(nearOrphan);
+                    tr.AddNewlyCreatedDBObject(nearOrphan, true);
+                    nearUnsafeHandle = nearOrphan.Handle.ToString();
+
+                    // Synthetic local geometry with the same floating-point
+                    // scale as the audited F5EDF. Never commit mine coordinates.
+                    var pointAnchor = new Point3d(350000.8325600168,
+                        2450000.066549417, 98.07097559590788);
+                    var pointB = new Point3d(pointAnchor.X + 20,
+                        pointAnchor.Y + 7, pointAnchor.Z - 0.8);
+                    var pointC = new Point3d(pointAnchor.X + 3,
+                        pointAnchor.Y + 2, pointAnchor.Z + 0.1);
+                    var pointSupport = new Face(pointAnchor, pointB, pointC, pointC,
+                        true, true, true, false) { LayerId = pointSafeId };
+                    ms.AppendEntity(pointSupport);
+                    tr.AddNewlyCreatedDBObject(pointSupport, true);
+                    var pNearA = new Point3d(pointAnchor.X, pointAnchor.Y,
+                        pointAnchor.Z + 5e-11);
+                    var pNearB = new Point3d(pointAnchor.X - 1e-10,
+                        pointAnchor.Y, pointAnchor.Z + 4e-10);
+                    var pNearC = new Point3d(pointAnchor.X + 1e-10,
+                        pointAnchor.Y, pointAnchor.Z - 6e-12);
+                    var pointSafe = new Face(pNearA, pNearB, pNearC, pNearC,
+                        true, true, true, false) { LayerId = pointSafeId };
+                    ms.AppendEntity(pointSafe);
+                    tr.AddNewlyCreatedDBObject(pointSafe, true);
+                    pointSafeHandle = pointSafe.Handle.ToString();
+                    // Same scale, but no support vertex at the isolated site.
+                    var pointBadSupport = new Face(a, b, c, c,
+                        true, true, true, false) { LayerId = pointUnsafeId };
+                    ms.AppendEntity(pointBadSupport);
+                    tr.AddNewlyCreatedDBObject(pointBadSupport, true);
+                    var isolated = new Point3d(100, 100, 40);
+                    var pointBad = new Face(isolated,
+                        new Point3d(100 + 2e-10, 100, 40 + 2e-10),
+                        new Point3d(100, 100, 40 + 4e-10),
+                        new Point3d(100, 100, 40 + 4e-10),
+                        true, true, true, false) { LayerId = pointUnsafeId };
+                    ms.AppendEntity(pointBad);
+                    tr.AddNewlyCreatedDBObject(pointBad, true);
+                    pointUnsafeHandle = pointBad.Handle.ToString();
+                    var thin = new Face(
+                        new Point3d(20, 20, 2),
+                        new Point3d(20 + 1e-6, 20, 2),
+                        new Point3d(20, 20 + 1e-6, 2),
+                        new Point3d(20, 20 + 1e-6, 2),
+                        true, true, true, false) { LayerId = thinId };
+                    ms.AppendEntity(thin);
+                    tr.AddNewlyCreatedDBObject(thin, true);
+                    tr.Commit();
+                }
+                var pointTin = TinCadRenderer.ReadStoredTin(db, "QA_TIN_POINT_SAFE", "QA");
+                if (pointTin == null || pointTin.Triangles.Count != 1 ||
+                    pointTin.VerifiedRedundantCadFaces != 1 ||
+                    !pointTin.Issues.Any(x =>
+                        x.Code == "REDUNDANT_POINT_CAD_FACE" &&
+                        x.Message.Contains(pointSafeHandle)) ||
+                    TinCadRenderer.CountFaces(db, "QA_TIN_POINT_SAFE") != 2)
+                    throw new InvalidOperationException(
+                        "F5EDF-style numerical point must be recognized read-only " +
+                        "ONLY with proven 3D positive-area TIN vertex support.");
+                bool pointBlocked = false;
+                try { TinCadRenderer.ReadStoredTin(db, "QA_TIN_POINT_UNSAFE", "QA"); }
+                catch (InvalidOperationException ex)
+                { pointBlocked = ex.Message.Contains(pointUnsafeHandle); }
+                if (!pointBlocked ||
+                    TinCadRenderer.CountFaces(db, "QA_TIN_POINT_UNSAFE") != 2)
+                    throw new InvalidOperationException(
+                        "Orphan collapsed 3DFACE must remain blocking without XYZ support.");
+                var thinTin = TinCadRenderer.ReadStoredTin(db, "QA_TIN_TINY_POSITIVE", "QA");
+                if (thinTin == null || thinTin.Triangles.Count != 1 ||
+                    thinTin.VerticalFaces.Count != 0 ||
+                    !thinTin.Issues.Any(x => x.Code == "THIN_POSITIVE_XY_CAD_FACE") ||
+                    TinCadRenderer.CountFaces(db, "QA_TIN_TINY_POSITIVE") != 1)
+                    throw new InvalidOperationException(
+                        "CAD reopen must retain positive-area XY triangles below 1e-12 m2.");
+
+                var tin = TinCadRenderer.ReadStoredTin(db, "QA_TIN_REDUNDANT", "QA");
+                if (tin == null || tin.Triangles.Count != 1 ||
+                    tin.VerticalFaces.Count != 0 ||
+                    tin.VerifiedRedundantCadFaces != 51 ||
+                    !tin.Issues.Any(issue =>
+                        issue.Code == "REDUNDANT_ZERO_EDGE_CAD_FACE" &&
+                        issue.Message.Contains(redundantHandle)) ||
+                    TinCadRenderer.CountFaces(db, "QA_TIN_REDUNDANT") != 52)
+                    throw new InvalidOperationException(
+                        "A redundant collapsed CAD face was not proven or the drawing changed.");
+                var splitTin = TinCadRenderer.ReadStoredTin(db, "QA_TIN_SPLIT_EDGE", "QA");
+                if (splitTin == null || splitTin.Triangles.Count != 2 ||
+                    splitTin.VerifiedRedundantCadFaces != 1 ||
+                    TinCadRenderer.CountFaces(db, "QA_TIN_SPLIT_EDGE") != 3)
+                    throw new InvalidOperationException(
+                        "A legacy collapsed face spanning two valid split 3D TIN edges must be recognized read-only.");
+                bool blocked = false;
+                try { TinCadRenderer.ReadStoredTin(db, "QA_TIN_UNSAFE", "QA"); }
+                catch (InvalidOperationException ex)
+                {
+                    blocked = ex.Message.Contains(unsafeHandle) &&
+                              ex.Message.Contains("không") &&
+                              ex.Message.Contains("Handle");
+                }
+                if (!blocked || TinCadRenderer.CountFaces(db, "QA_TIN_UNSAFE") != 2)
+                    throw new InvalidOperationException(
+                        "An unproven degenerate CAD face must reject recovery with its exact Handle.");
+                bool nearBlocked = false;
+                try { TinCadRenderer.ReadStoredTin(db, "QA_TIN_NEAR_UNSAFE", "QA"); }
+                catch (InvalidOperationException ex)
+                {
+                    nearBlocked = ex.Message.Contains(nearUnsafeHandle) &&
+                                  ex.Message.Contains("không");
+                }
+                if (!nearBlocked || TinCadRenderer.CountFaces(db, "QA_TIN_NEAR_UNSAFE") != 2)
+                    throw new InvalidOperationException(
+                        "Unproven near-zero 3D edge must reject recovery and preserve all 3DFACEs.");
+                // Read-only forensic evidence must expose all four XYZ
+                // vertices and retain exact sub-nanometer diagnostics.
+                var diagnosis = TinFaceDiagnostic.Inspect(db, nearUnsafeHandle);
+                if (!diagnosis.Contains("Handle: " + nearUnsafeHandle) ||
+                    !diagnosis.Contains("P4: X=") ||
+                    !diagnosis.Contains("Diện tích chiếu XY:") ||
+                    !diagnosis.Contains("TIN KHÔNG ĐỦ ĐIỀU KIỆN") ||
+                    TinCadRenderer.CountFaces(db, "QA_TIN_NEAR_UNSAFE") != 2)
+                    throw new InvalidOperationException(
+                        "3DFACE forensic report must identify the failing Handle without modifying the DWG.");
+                var proven = TinFaceDiagnostic.Inspect(db, redundantHandle);
+                if (!proven.Contains("Kiểm tra TIN cả layer:") ||
+                    TinCadRenderer.CountFaces(db, "QA_TIN_REDUNDANT") != 52)
+                    throw new InvalidOperationException(
+                        "Read-only 3DFACE diagnosis must distinguish supported and unsupported collapsed edges.");
+            }
+            VerifyLegacyDwgRecognitionReadOnly();
+        }
+
+        private static void VerifyLegacyDwgRecognitionReadOnly()
+        {
+            using (var db = new Database(true, true))
+            {
+                using (var tr = db.TransactionManager.StartTransaction())
+                {
+                    var layers = (LayerTable)tr.GetObject(db.LayerTableId, OpenMode.ForWrite);
+                    var tk = new LayerTableRecord { Name = "MV_TIN_THIETKE" };
+                    ObjectId tkId = layers.Add(tk);
+                    tr.AddNewlyCreatedDBObject(tk, true);
+                    var mc = new LayerTableRecord { Name = "MV_MC_HIENTRANG" };
+                    ObjectId mcId = layers.Add(mc);
+                    tr.AddNewlyCreatedDBObject(mc, true);
+                    var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
+                    var model = (BlockTableRecord)tr.GetObject(
+                        bt[BlockTableRecord.ModelSpace], OpenMode.ForWrite);
+                    var a = new Point3d(0, 0, 0);
+                    var b = new Point3d(5, 0, 0);
+                    var c = new Point3d(0, 5, 0);
+                    var face = new Face(a, b, c, c, true, true, true, false)
+                    { LayerId = tkId };
+                    model.AppendEntity(face);
+                    tr.AddNewlyCreatedDBObject(face, true);
+                    var section = new Polyline { LayerId = mcId };
+                    section.AddVertexAt(0, new Point2d(0, 0), 0, 0, 0);
+                    section.AddVertexAt(1, new Point2d(5, 5), 0, 0, 0);
+                    model.AppendEntity(section);
+                    tr.AddNewlyCreatedDBObject(section, true);
+                    tr.Commit();
+                }
+                string before = DwgRecognitionDiagnostic.Inspect(db, false);
+                string after = DwgRecognitionDiagnostic.Inspect(db, true);
+                if (!before.Contains("TIN thiết kế: 1 mặt 3DFACE") ||
+                    !before.Contains("Đường mặt cắt CAD: HT 1, TK 0") ||
+                    !before.Contains("KHÔNG CÓ / CHƯA TÌM THẤY") ||
+                    !before.Contains("KHÔNG tự tạo lại hay ghi đè") ||
+                    !after.Contains("Project Xrecord: CÓ") ||
+                    TinCadRenderer.CountFaces(db, "MV_TIN_THIETKE") != 1)
+                    throw new InvalidOperationException(
+                        "Legacy DWG diagnostic did not recognize existing CAD evidence safely.");
             }
         }
 
@@ -665,14 +949,33 @@ namespace MiningVolume2023.Services
 
         private static void DrawBatches(Database db, IReadOnlyList<SectionProfile> profiles, Action poll)
         {
-            using (var outer = db.TransactionManager.StartTransaction())
+            // Mirror the production-wide ObjectId journal. A late Esc must
+            // restore old profiles even if earlier nested batches committed.
+            var created = new List<ObjectId>();
+            var erased = new List<ObjectId>();
+            try
             {
-                double nextY = 0;
-                for (int start = 0; start < profiles.Count; start += 20)
-                    nextY = SectionCadRenderer.ReplaceProfilesBatched(db, profiles, Point3d.Origin,
-                        1000, 500, 5, start, Math.Min(20, profiles.Count - start), start == 0, 90, nextY, poll);
-                poll();
-                outer.Commit();
+                using (var outer = db.TransactionManager.StartTransaction())
+                {
+                    double nextY = 0;
+                    for (int start = 0; start < profiles.Count; start += 20)
+                        nextY = SectionCadRenderer.ReplaceProfilesBatched(db, profiles, Point3d.Origin,
+                            1000, 500, 5, start, Math.Min(20, profiles.Count - start),
+                            start == 0, 90, nextY, poll, created.Add, erased.Add);
+                    poll();
+                    outer.Commit();
+                }
+            }
+            catch (Exception original)
+            {
+                try { SectionCadRenderer.RecoverFailedSectionExport(db, created, erased); }
+                catch (Exception cleanup)
+                {
+                    throw new AggregateException(
+                        "Host QA cannot restore all section batches after cancel.",
+                        original, cleanup);
+                }
+                throw;
             }
         }
 

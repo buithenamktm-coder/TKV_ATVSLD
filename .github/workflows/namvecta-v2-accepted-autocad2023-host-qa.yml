@@ -1,0 +1,220 @@
+name: NAMVECTA V2 Accepted Baseline - AutoCAD 2023 Host Runtime QA
+
+on:
+  push:
+    branches:
+      - namvecta-v2-accepted-cc0a6cb7-baseline-20261026
+    paths:
+      - '.github/workflows/namvecta-v2-accepted-autocad2023-host-qa.yml'
+      - 'tools/MiningVolume_HSNext/v0.9/src/**'
+      - 'tools/MiningVolume_HSNext/v0.9/release/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: namvecta-v2-accepted-host-2023
+  cancel-in-progress: false
+
+jobs:
+  host-runtime:
+    if: github.repository == 'buithenamktm-coder/TKV_ATVSLD' && github.ref == 'refs/heads/namvecta-v2-accepted-cc0a6cb7-baseline-20261026'
+    runs-on: [self-hosted, Windows, X64, autocad2023]
+    timeout-minutes: 60
+    env:
+      MV_ROOT: tools/MiningVolume_HSNext/v0.9
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify accepted source ancestry and original UI bytes
+        shell: pwsh
+        run: |
+          $sha=(git rev-parse HEAD).Trim()
+          if ($sha -ne $env:GITHUB_SHA) { throw 'BLOCKED: wrong source checkout.' }
+          git merge-base --is-ancestor cc0a6cb7cddcecee6c5d27074fb0ea6647297aac $sha
+          if ($LASTEXITCODE -ne 0) { throw 'BLOCKED: not descended from approved cc0a6cb7.' }
+          $expected=@{
+            'src/MiningVolume.Plugin2023/UI/MainPaletteControl.cs'='799409885e8749dfa10e688005f2cf5ef1f2cc97'
+            'src/MiningVolume.Plugin2023/UI/ModelWorkflowPage.cs'='e0841c0b0b65238561e42607779804dad8295605'
+            'src/MiningVolume.Plugin2023/UI/SectionPage.cs'='6a6b6e7d139b2a8ef56325c942fd0250fb549e67'
+            'src/MiningVolume.Plugin2023/UI/GridPage.cs'='d38017af3927f5b651a291fb79cc19ad121a0e56'
+            'src/MiningVolume.Plugin2023/UI/ExportPage.cs'='2dbdb79a89d50c0b8f16b95926d8520b6b80a5d8'
+            'installer/NAMVECTA_Volume_V2.iss'='a21f67ad6ff917c7aeed7a93f153ea0c543c9397'
+          }
+          foreach($item in $expected.GetEnumerator()) {
+            $path="$env:MV_ROOT/$($item.Key)"
+            $actual=(git rev-parse ("HEAD:" + $path)).Trim()
+            if($LASTEXITCODE -ne 0 -or $actual -ne $item.Value) {
+              throw "BLOCKED: accepted UI or installer changed: $path"
+            }
+          }
+          "SOURCE_SHA=$sha" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host '[PASS] Exact approved cc0a6cb7 UI and installer retained.'
+
+      - name: Require actual AutoCAD 2023 workstation
+        shell: pwsh
+        run: |
+          $dir=Join-Path $env:ProgramFiles 'Autodesk/AutoCAD 2023'
+          if (!(Test-Path (Join-Path $dir 'acad.exe')) -or !(Test-Path (Join-Path $dir 'AcMgd.dll'))) {
+            throw 'BLOCKED: real AutoCAD 2023 not found.'
+          }
+          $ver=(Get-Item (Join-Path $dir 'acad.exe')).VersionInfo.FileVersion
+          if ($ver -notmatch '^R?24\.2') { throw "BLOCKED: wrong AutoCAD host version $ver" }
+          if (Get-Process acad -ErrorAction SilentlyContinue) {
+            throw 'BLOCKED: close AutoCAD before host runtime verification.'
+          }
+          "AUTOCAD2023_DIR=$dir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Locate usable host Python with pip (3.12 or 3.13)
+        id: host-python
+        shell: powershell
+        run: |
+          $candidate = $null
+          $paths = @(
+            (Join-Path $env:LOCALAPPDATA 'Programs\Python\Python312\python.exe'),
+            (Join-Path $env:LOCALAPPDATA 'Programs\Python\Python313\python.exe'),
+            (Join-Path $env:ProgramFiles 'Python312\python.exe'),
+            (Join-Path $env:ProgramFiles 'Python313\python.exe'),
+            'C:\Python312\python.exe',
+            'C:\Python313\python.exe'
+          )
+          $launcher = Get-Command py.exe -ErrorAction SilentlyContinue
+          if ($launcher) {
+            foreach ($minor in @('3.12', '3.13')) {
+              try {
+                $exe = (& $launcher.Source ("-" + $minor) -c 'import sys; print(sys.executable)' 2>$null | Select-Object -Last 1)
+                if ($LASTEXITCODE -eq 0 -and $exe) { $paths = @($exe) + $paths }
+              } catch { }
+            }
+          }
+          foreach ($exe in ($paths | Select-Object -Unique)) {
+            if (-not $exe -or -not (Test-Path $exe)) { continue }
+            try {
+              # Windows PowerShell 5.1 strips nested double quotes from
+              # native -c arguments; print numeric fields without quotes.
+              $version = (& $exe -c 'import sys, encodings, ssl; print(sys.version_info.major, sys.version_info.minor)' 2>$null | Select-Object -Last 1)
+              if ($LASTEXITCODE -ne 0 -or $version -notin @('3 12', '3 13')) {
+                Write-Host "Reject Python candidate (stdlib/version): $exe; exit=$LASTEXITCODE; version=$version"
+                continue
+              }
+              & $exe -m pip --version *> $null
+              if ($LASTEXITCODE -ne 0) {
+                Write-Host "Reject Python candidate (pip unavailable): $exe; exit=$LASTEXITCODE"
+                continue
+              }
+              $candidate = $exe
+              Write-Host "Verified Python $version with stdlib, SSL, pip: $candidate"
+              break
+            } catch { }
+          }
+          if ($candidate) {
+            (Split-Path $candidate -Parent) | Out-File $env:GITHUB_PATH -Encoding ascii -Append
+            "found=true" | Out-File $env:GITHUB_OUTPUT -Encoding ascii -Append
+          } else {
+            Write-Host 'No complete host Python found. GitHub setup-python fallback required.'
+            "found=false" | Out-File $env:GITHUB_OUTPUT -Encoding ascii -Append
+          }
+          # Rejected candidates are expected and must not fail the step just
+          # because the last probed native executable returned a nonzero code.
+          $global:LASTEXITCODE = 0
+          exit 0
+
+      - uses: actions/setup-python@v5
+        if: steps.host-python.outputs.found != 'true'
+        with:
+          python-version: '3.12'
+
+      - name: Verify Python is actually runnable
+        shell: powershell
+        run: |
+          python -c "import sys, encodings, ssl; assert sys.version_info[:2] in ((3,12),(3,13)), sys.version; print(sys.version)"
+          if ($LASTEXITCODE -ne 0) { throw 'BLOCKED: Python 3.12/3.13 standard library is not usable.' }
+          python -m pip --version
+          if ($LASTEXITCODE -ne 0) { throw 'BLOCKED: Python pip is missing.' }
+
+      - name: Compile approved baseline against installed AutoCAD assemblies
+        shell: pwsh
+        run: |
+          Set-Location $env:MV_ROOT
+          dotnet restore MiningVolume.HSNext.sln -p:UseAutoCADNuGet=false
+          if ($LASTEXITCODE -ne 0) { throw 'Source restore failed.' }
+          dotnet build MiningVolume.HSNext.sln -c Release --no-restore -p:UseAutoCADNuGet=false -p:AutoCAD2023Dir="$env:AUTOCAD2023_DIR" -p:SourceRevisionId="$env:SOURCE_SHA"
+          if ($LASTEXITCODE -ne 0) { throw 'Real AutoCAD 2023 compile failed.' }
+
+      - name: Stage independent temporary runtime bundle - do not alter approved Setup
+        shell: pwsh
+        run: |
+          Set-Location $env:MV_ROOT
+          $source='bundle/MiningVolume2023.bundle'
+          $dest='dist/accepted-host-qa/MiningVolume2023.bundle'
+          if (!(Test-Path $source)) { throw 'Source bundle missing.' }
+          if (Test-Path $dest) { Remove-Item $dest -Recurse -Force }
+          New-Item -ItemType Directory -Force (Split-Path $dest -Parent) | Out-Null
+          Copy-Item $source $dest -Recurse -Force
+          $w=Join-Path $dest 'Contents/Windows'
+          # The accepted repository bundle deliberately tracks PackageContents.xml
+          # only; all runtime DLLs are generated during this host job.
+          New-Item -ItemType Directory -Path $w -Force | Out-Null
+          $files=@{
+            'MiningVolume2023.dll'='src/MiningVolume.Plugin2023/bin/Release/net48/MiningVolume2023.dll'
+            'MiningVolume.Core.dll'='src/MiningVolume.Core/bin/Release/net48/MiningVolume.Core.dll'
+            'MiningVolume.Surface.dll'='src/MiningVolume.Surface/bin/Release/net48/MiningVolume.Surface.dll'
+            'MiningVolume.Cad2023.dll'='src/MiningVolume.Cad2023/bin/Release/net48/MiningVolume.Cad2023.dll'
+            'MiningVolume.Cdt.Native.dll'='src/MiningVolume.Surface/bin/Release/net48/MiningVolume.Cdt.Native.dll'
+            'LICENSE-CDT.txt'='src/MiningVolume.Surface/Native/LICENSE-CDT.txt'
+            'NOTICE.txt'='src/MiningVolume.Surface/Native/NOTICE.txt'
+          }
+          foreach ($kv in $files.GetEnumerator()) {
+            if (!(Test-Path $kv.Value)) { throw "Missing compiled component $($kv.Value)" }
+            Copy-Item -LiteralPath $kv.Value -Destination (Join-Path $w $kv.Key) -Force
+          }
+          $pkg=Join-Path $dest 'PackageContents.xml'
+          $xml=[IO.File]::ReadAllText((Resolve-Path $pkg).Path)
+          if (!$xml.Contains('AppVersion="1.0.0"') -or !$xml.Contains('Version="1.0.0"')) {
+            throw 'BLOCKED: accepted source bundle manifest not expected V1 staging form.'
+          }
+          $xml=$xml.Replace('AppVersion="1.0.0"','AppVersion="2.0.0"')
+          $xml=$xml.Replace('Version="1.0.0"','Version="2.0.0"')
+          [IO.File]::WriteAllText((Resolve-Path $pkg).Path,$xml,(New-Object Text.UTF8Encoding($false)))
+          "SOURCE_SHA=$env:SOURCE_SHA" | Set-Content -Encoding ascii (Join-Path $w 'BUILD_IDENTITY.txt')
+
+      - name: Run MVSELFTEST inside actual AutoCAD 2023 with automatic bundle restoration
+        shell: pwsh
+        run: |
+          Set-Location $env:MV_ROOT
+          $root=(Get-Location).Path
+          $dist=Join-Path $root 'dist/accepted-host-qa'
+          & './release/verify_autocad2023_runtime.ps1' -ProductVersion '2.0' -BundlePath (Join-Path $dist 'MiningVolume2023.bundle') -OutputPath (Join-Path $dist 'V2_RUNTIME_VERIFICATION.txt') -SelfTestPath (Join-Path $dist 'V2_MVSELFTEST_RUNTIME.txt')
+          if (-not $?) { throw 'AutoCAD MVSELFTEST verifier failed.' }
+          $proof=Get-Content (Join-Path $dist 'V2_RUNTIME_VERIFICATION.txt') -Raw
+          if ($proof -notmatch 'Status=PASS' -or $proof -notmatch 'ProductVersion=2.0') {
+            throw 'BLOCKED: exact accepted source lacks PASS evidence.'
+          }
+          @(
+            'NAMVECTA VOLUME 2.0 - ACCEPTED cc0a6cb7 UI + CORE FIXES'
+            ('SourceSHA=' + $env:SOURCE_SHA)
+            'Host=Real AutoCAD 2023 R24.2'
+            'MVSELFTEST=PASS'
+            'Installer2020-2024=SEPARATE_QA_WORKFLOW'
+            'LiveUserWorkflowAcceptance=NOT_TESTED'
+            'ReleaseStatus=NOT_RELEASE'
+          ) | Set-Content -Encoding UTF8 (Join-Path $dist 'HOST_QA_NOT_RELEASE.txt')
+
+      - name: Upload host runtime evidence only (never release)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: NAMVECTA-V2-ACCEPTED-2023-HOST-EVIDENCE-NOT-RELEASE
+          retention-days: 14
+          if-no-files-found: warn
+          path: |
+            tools/MiningVolume_HSNext/v0.9/dist/accepted-host-qa/V2_RUNTIME_VERIFICATION.txt
+            tools/MiningVolume_HSNext/v0.9/dist/accepted-host-qa/V2_MVSELFTEST_RUNTIME.txt
+            tools/MiningVolume_HSNext/v0.9/dist/accepted-host-qa/HOST_QA_NOT_RELEASE.txt

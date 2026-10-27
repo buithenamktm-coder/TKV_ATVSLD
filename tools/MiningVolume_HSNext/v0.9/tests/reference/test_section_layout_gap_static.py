@@ -25,7 +25,7 @@ def test_renderer_uses_same_gap_for_prior_batched_and_current_profiles():
     assert 'currentY -= height + layoutGap;' in renderer
     assert 'currentY -= height + 45.0;' not in renderer
     assert 'double layoutGap = 90.0' in renderer
-    assert re.search(r"start\s*==\s*0\s*,\s*layoutGap\s*,\s*nextY\s*,\s*meter\.Poll\s*\)", workflow)
+    assert re.search(r"start\s*==\s*0\s*,\s*layoutGap\s*,\s*nextY\s*,\s*meter\.Poll\s*,\s*createdByExport\.Add\s*,\s*erasedByExport\.Add\s*\)", workflow)
     assert 'nextY = SectionCadRenderer.ReplaceProfilesBatched(' in workflow
     assert '!batchStartY.HasValue && k < startIndex' in renderer
     # The newly drawn profiles are passed explicitly so an insertion cancel

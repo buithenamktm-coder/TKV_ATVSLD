@@ -196,8 +196,12 @@ def test_multi_z_volume_and_grid_are_localized_and_never_certify_missing_cells()
     assert "var tk = designIndex.Candidates(" in grid
     assert "IsVerticalConflict = false" in grid
     assert "AmbiguousCells" in grid and "AmbiguousArea" in grid
-    assert 'c.IsVerticalConflict || c.Volume.CoveredArea<=1e-9' in excel
-    assert 'c.v.IsVerticalConflict || c.v.Volume.CoveredArea<=1e-9' in excel
+    assert 'c.IsVerticalConflict || c.Volume.HasUnresolvedSmallTriangles || c.Volume.CoveredArea<=1e-9' in excel
+    assert 'c.v.IsVerticalConflict || c.v.Volume.HasUnresolvedSmallTriangles || c.v.Volume.CoveredArea<=1e-9' in excel
+    # All three volume columns in the regular and linked forensic grid sheets
+    # must be blank when topology is unresolved, never a fabricated 0 m³.
+    assert excel.count('c.IsVerticalConflict || c.Volume.HasUnresolvedSmallTriangles || c.Volume.CoveredArea<=1e-9') == 5
+    assert excel.count('c.v.IsVerticalConflict || c.v.Volume.HasUnresolvedSmallTriangles || c.v.Volume.CoveredArea<=1e-9') == 3
     assert '"Số ô thiếu phủ hiện trạng"' in excel
     assert '"Số ô thiếu phủ thiết kế"' in excel
     assert "NHIỀU Z - CHƯA XÁC NHẬN" in excel

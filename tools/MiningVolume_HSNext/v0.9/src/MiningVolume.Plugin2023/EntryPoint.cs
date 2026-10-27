@@ -190,6 +190,46 @@ namespace MiningVolume2023
             MainControl.ShowPage(page);
         }
 
+        [CommandMethod("MV_DWG_CHECK", CommandFlags.Session)]
+        public static void CheckOldDrawingCadEvidence()
+        {
+            var doc = AcApp.DocumentManager.MdiActiveDocument;
+            if (doc == null) return;
+            // Inspect existing native entities WITHOUT auto-importing, erasing,
+            // regenerating, or approving a saved mine volume calculation.
+            string report = Services.DwgRecognitionDiagnostic.Inspect(doc.Database,
+                Services.ProjectPersistenceService.HasSavedProject());
+            doc.Editor.WriteMessage("\n" + report);
+            System.Windows.Forms.MessageBox.Show(report,
+                "NAMVECTA — Nhận dạng TIN / mặt cắt DWG cũ",
+                System.Windows.Forms.MessageBoxButtons.OK,
+                System.Windows.Forms.MessageBoxIcon.Information);
+        }
+
+        [CommandMethod("MV_FACE_CHECK", CommandFlags.Session)]
+        public static void CheckTinFaceByHandle()
+        {
+            var doc = AcApp.DocumentManager.MdiActiveDocument;
+            if (doc == null) return;
+            var options = new Autodesk.AutoCAD.EditorInput.PromptStringOptions(
+                "\nNhập Handle 3DFACE cần kiểm tra (ví dụ BF9BD): ")
+            { AllowSpaces = false };
+            var result = doc.Editor.GetString(options);
+            if (result.Status != Autodesk.AutoCAD.EditorInput.PromptStatus.OK)
+                return;
+            try
+            {
+                var report = Services.TinFaceDiagnostic.Inspect(
+                    doc.Database, result.StringResult);
+                doc.Editor.WriteMessage("\n" + report);
+            }
+            catch (System.Exception e)
+            {
+                doc.Editor.WriteMessage("\n[NAMVECTA] Chẩn đoán thất bại: " +
+                    e.Message);
+            }
+        }
+
         [CommandMethod("MVBUILDINFO", CommandFlags.Session)]
         public static void BuildInfo()
         {
@@ -269,6 +309,14 @@ namespace MiningVolume2023
                 // No saved Xrecord means a BLANK project. A previous drawing's
                 // singleton TIN/source state must never remain accepted here.
                 ProjectState.Current.Reset();
+                // Explicit reload of a legacy DWG must preserve the same
+                // read-only TIN discovery as the automatic reopen path.
+                // Missing Xrecord is not permission to rebuild or erase CAD.
+                if (!Services.ProjectPersistenceService.HasSavedProject())
+                {
+                    var activeDoc = AcApp.DocumentManager.MdiActiveDocument;
+                    if (activeDoc != null) TryRecognizeLegacyCadTin(activeDoc);
+                }
             }
             AcApp.DocumentManager.MdiActiveDocument?.Editor.WriteMessage("\nNAMVECTA VOLUME: " + r.Message);
             _loadedDocument = AcApp.DocumentManager.MdiActiveDocument;
@@ -296,6 +344,14 @@ namespace MiningVolume2023
                     if (r.Warnings.Count > 0)
                         doc.Editor.WriteMessage("\nNAMVECTA VOLUME: Project đã nạp với " + r.Warnings.Count + " cảnh báo. Mở trang Dự án để xem/kiểm soát.");
                 }
+                else
+                {
+                    // A legacy DWG can contain NAMVECTA-owned 3DFACE TIN layers
+                    // but no Project Xrecord. Recover both meshes read-only;
+                    // do not infer deleted routes, edited section geometry or
+                    // historical earthwork volumes from missing metadata.
+                    TryRecognizeLegacyCadTin(doc);
+                }
             }
             catch (System.Exception ex)
             {
@@ -305,6 +361,47 @@ namespace MiningVolume2023
             _loadedDrawingFingerprint = fingerprint;
             if (MainControl != null && !MainControl.IsDisposed)
                 MainControl.RefreshForNewDrawing();
+        }
+
+        private static void TryRecognizeLegacyCadTin(
+            Autodesk.AutoCAD.ApplicationServices.Document doc)
+        {
+            int recovered = 0;
+            foreach (ModelRole role in new[] { ModelRole.Existing, ModelRole.Design })
+            {
+                var session = ProjectState.Current.Get(role);
+                try
+                {
+                    if (SurfaceWorkflowService.TryRestoreTinFromCad(role))
+                    {
+                        recovered++;
+                        doc.Editor.WriteMessage("\n[NAMVECTA] Đã nhận diện TIN từ 3DFACE cũ: " +
+                            session.TinLayer + " (" + session.Tin.Triangles.Count +
+                            " tam giác hợp lệ). DWG không bị thay đổi.");
+                    }
+                }
+                catch (System.Exception ex)
+                {
+                    doc.Editor.WriteMessage("\n[NAMVECTA] Không thể xác nhận " +
+                        session.TinLayer + ": " + ex.Message);
+                }
+            }
+            try
+            {
+                if (EditableSectionCadService.HasOfficialSectionLayers(doc.Database))
+                    doc.Editor.WriteMessage(
+                        "\n[NAMVECTA] Phát hiện layer mặt cắt cũ. Thiếu Project lưu kèm: " +
+                        "không tự tái tạo tuyến, chỉnh sửa hoặc tính lại khối lượng.");
+            }
+            catch (System.Exception ex)
+            {
+                doc.Editor.WriteMessage(
+                    "\n[NAMVECTA] Không kiểm tra được mặt cắt cũ: " + ex.Message);
+            }
+            if (recovered > 0)
+                doc.Editor.WriteMessage(
+                    "\n[NAMVECTA] Đã đọc TIN cũ để kiểm tra; trước khi tính " +
+                    "cần xác nhận ranh giới, hệ mặt cắt và Project.");
         }
 
         private static string CurrentFingerprint()

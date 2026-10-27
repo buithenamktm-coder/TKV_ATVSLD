@@ -399,6 +399,10 @@ namespace MiningVolume2023.Services
 
             var support = new List<MiningVolume.Core.Geometry.Triangle3>();
             var vertical = new List<MiningVolume.Core.Geometry.Triangle3>();
+            var zeroEdges = new List<RedundantCadFaceCandidate>();
+            var pointFaces = new List<CollapsedPointCadFace>();
+            int thinPositiveXy = 0;
+            string firstThinHandle = null;
             using (var progress = new SectionCadProgress(1, "đọc TIN đã lưu trong DWG"))
             using (var tr = db.TransactionManager.StartOpenCloseTransaction())
             {
@@ -434,32 +438,280 @@ namespace MiningVolume2023.Services
                         new MiningVolume.Core.Geometry.Vec3(p0.X,p0.Y,p0.Z),
                         new MiningVolume.Core.Geometry.Vec3(p1.X,p1.Y,p1.Z),
                         new MiningVolume.Core.Geometry.Vec3(p2.X,p2.Y,p2.Z));
-                    if (triangle.Area2D <= 1e-12)
+                    // Forensic DWG audit: point fragments must be checked
+                    // against retained XYZ support, not erased or accepted
+                    // solely because their projected area is near zero.
+                    double d01 = p0.DistanceTo(p1), d12 = p1.DistanceTo(p2),
+                        d20 = p2.DistanceTo(p0);
+                    const double collapsedEdgeTolerance = 1e-9;
+                    if (Math.Max(d01, Math.Max(d12, d20)) <= collapsedEdgeTolerance)
                     {
-                        // Vertical faces are retained as geometry evidence, but
-                        // must never enter the single-Z grid support sampler.
-                        double d01 = p0.DistanceTo(p1), d12 = p1.DistanceTo(p2),
-                            d20 = p2.DistanceTo(p0);
-                        if (d01 <= 1e-9 || d12 <= 1e-9 || d20 <= 1e-9)
-                            throw new InvalidOperationException(
-                                "Layer " + layerName + " có tam giác suy biến (cạnh bằng 0).");
+                        pointFaces.Add(new CollapsedPointCadFace(
+                            p0, p1, p2, face.Handle.ToString()));
+                        continue;
+                    }
+                    if (triangle.Area2D == 0)
+                    {
+                        // Exactly vertical projected faces are evidence but
+                        // not single-Z grid support. A strictly positive XY
+                        // area, however small, must NOT be discarded.
+                        // Full-3D short-edge face detection remains below.
+                        if (d01 <= collapsedEdgeTolerance ||
+                            d12 <= collapsedEdgeTolerance ||
+                            d20 <= collapsedEdgeTolerance)
+                        {
+                            Point3d collapsedA, collapsedB, other;
+                            if (d01 <= collapsedEdgeTolerance)
+                            { collapsedA = p0; collapsedB = p1; other = p2; }
+                            else if (d12 <= collapsedEdgeTolerance)
+                            { collapsedA = p1; collapsedB = p2; other = p0; }
+                            else
+                            { collapsedA = p2; collapsedB = p0; other = p1; }
+                            // Reject a fully collapsed three-point entity,
+                            // even if some other valid TIN triangle happens
+                            // to pass through its location.
+                            if (collapsedA.DistanceTo(other) <= collapsedEdgeTolerance ||
+                                collapsedB.DistanceTo(other) <= collapsedEdgeTolerance)
+                                throw InvalidStoredCadFace(layerName, face.Handle.ToString(),
+                                    "Cả ba đỉnh gần trùng, không còn cạnh để kiểm chứng");
+                            // Both nearly coincident endpoints are retained as
+                            // possible edge origins. At least ONE candidate
+                            // edge must exactly equal a complete 3D support
+                            // edge, including Z. This never moves a point.
+                            zeroEdges.Add(new RedundantCadFaceCandidate(
+                                collapsedA, collapsedB, other,
+                                face.Handle.ToString()));
+                            continue;
+                        }
                         vertical.Add(triangle);
                     }
                     else
+                    {
+                        if (triangle.Area2D <= 1e-12)
+                        {
+                            thinPositiveXy++;
+                            if (firstThinHandle == null)
+                                firstThinHandle = face.Handle.ToString();
+                        }
                         support.Add(triangle);
+                    }
                 }
                 progress.Poll();
             }
             if (support.Count == 0)
             {
-                if (vertical.Count == 0) return null;
+                if (vertical.Count == 0 && zeroEdges.Count == 0 && pointFaces.Count == 0) return null;
                 throw new InvalidOperationException(
-                    "Layer " + layerName + " chỉ có mặt đứng, không có tam giác TIN phủ XY.");
+                    "Layer " + layerName + " không có tam giác TIN hợp lệ phủ XY; " +
+                    "không tự loại mặt lỗi để tạo kết quả tính khối lượng.");
             }
-            return new TinSurface(modelName, support,
-                MiningVolume.Core.Compatibility.EmptyArray<MiningVolume.Core.Surface.ValidationIssue>.Value,
-                vertical);
+            // Check each distinct suspect edge against valid support edges in
+            // a SINGLE pass. Prior code rescanned every TIN triangle for every
+            // collapsed face (O(suspects * triangles)) and rejected at 32.
+            // Never accept an unproven edge; never modify the saved 3DFACEs.
+            var unproven = new HashSet<ExactStoredEdge>();
+            foreach (var suspect in zeroEdges)
+            {
+                unproven.Add(new ExactStoredEdge(suspect.A, suspect.B));
+                unproven.Add(new ExactStoredEdge(suspect.AlternateA, suspect.B));
+            }
+            if (unproven.Count > 0)
+            {
+                foreach (var t in support)
+                {
+                    unproven.Remove(new ExactStoredEdge(
+                        new Point3d(t.A.X, t.A.Y, t.A.Z),
+                        new Point3d(t.B.X, t.B.Y, t.B.Z)));
+                    unproven.Remove(new ExactStoredEdge(
+                        new Point3d(t.B.X, t.B.Y, t.B.Z),
+                        new Point3d(t.C.X, t.C.Y, t.C.Z)));
+                    unproven.Remove(new ExactStoredEdge(
+                        new Point3d(t.C.X, t.C.Y, t.C.Z),
+                        new Point3d(t.A.X, t.A.Y, t.A.Z)));
+                    if (unproven.Count == 0) break;
+                }
+                foreach (var suspect in zeroEdges)
+                    if (unproven.Contains(new ExactStoredEdge(suspect.A, suspect.B)) &&
+                        unproven.Contains(new ExactStoredEdge(suspect.AlternateA, suspect.B)) &&
+                        !EdgeCoveredBySupportEdges(support, suspect.A, suspect.B) &&
+                        !EdgeCoveredBySupportEdges(support, suspect.AlternateA, suspect.B))
+                        throw InvalidStoredCadFace(layerName, suspect.Handle,
+                            "Cạnh 3D còn lại không được phủ liên tục bởi các cạnh TIN hợp lệ " +
+                            "(kể cả cạnh được chia nhỏ). Không chứng minh được việc bỏ qua là an toàn");
+            }
+            // A point-like face is geometrically redundant only when all
+            // of its three vertices match ONE retained, positive-XY TIN
+            // vertex within the extremely narrow full-XYZ numerical tolerance.
+            // No XY-only or guessed-Z match is acceptable.
+            foreach (var point in pointFaces)
+                if (!SupportedPointFragment(point, support, 1e-9))
+                    throw InvalidStoredCadFace(layerName, point.Handle,
+                        "Ba đỉnh co về điểm nhưng không có đỉnh tam giác " +
+                        "phủ XY trùng đủ XYZ trong 1e-9 m; chưa chứng minh " +
+                        "được việc bỏ qua là an toàn");
+            var issues = new List<ValidationIssue>();
+            if (pointFaces.Count > 0)
+                issues.Add(new ValidationIssue(ValidationSeverity.Warning,
+                    "REDUNDANT_POINT_CAD_FACE",
+                    layerName + ": " + pointFaces.Count +
+                    " mặt 3DFACE co về điểm được đối chiếu với đỉnh tam giác " +
+                    "phủ XY khớp đủ XYZ; không xóa DWG. Handle đầu tiên: " +
+                    pointFaces[0].Handle, pointFaces[0].Handle));
+            if (thinPositiveXy > 0)
+                issues.Add(new ValidationIssue(ValidationSeverity.Warning,
+                    "THIN_POSITIVE_XY_CAD_FACE",
+                    layerName + ": giữ " + thinPositiveXy +
+                    " tam giác có diện tích XY dương nhưng <=1e-12 m2; " +
+                    "chưa chứng minh độ phủ/tính duy nhất của Z. Handle đầu tiên: " +
+                    firstThinHandle, firstThinHandle));
+            if (zeroEdges.Count > 0)
+                issues.Add(new ValidationIssue(ValidationSeverity.Warning,
+                    "REDUNDANT_ZERO_EDGE_CAD_FACE",
+                    layerName + ": xác minh " + zeroEdges.Count +
+                    " mặt 3DFACE suy biến đã đối chiếu cạnh 3D với TIN hợp lệ; " +
+                    "không sửa/xóa DWG. Handle đầu tiên: " +
+                    zeroEdges[0].Handle, zeroEdges[0].Handle));
+            return new TinSurface(modelName, support, issues, vertical,
+                verifiedRedundantCadFaces: zeroEdges.Count + pointFaces.Count);
         }
+
+        private sealed class CollapsedPointCadFace
+        {
+            internal readonly Point3d A, B, C;
+            internal readonly string Handle;
+            internal CollapsedPointCadFace(Point3d a, Point3d b, Point3d c, string handle)
+            { A = a; B = b; C = c; Handle = handle; }
+        }
+
+        private static bool SupportedPointFragment(CollapsedPointCadFace point,
+            List<MiningVolume.Core.Geometry.Triangle3> support, double tolerance)
+        {
+            double t2 = tolerance * tolerance;
+            foreach (var t in support)
+                if (PointVertexMatches(t.A, point, t2) ||
+                    PointVertexMatches(t.B, point, t2) ||
+                    PointVertexMatches(t.C, point, t2))
+                    return true;
+            return false;
+        }
+
+        private static bool PointVertexMatches(
+            MiningVolume.Core.Geometry.Vec3 vertex,
+            CollapsedPointCadFace point, double toleranceSquared)
+            => Near3D(vertex, point.A, toleranceSquared) &&
+               Near3D(vertex, point.B, toleranceSquared) &&
+               Near3D(vertex, point.C, toleranceSquared);
+
+        private static bool Near3D(MiningVolume.Core.Geometry.Vec3 vertex,
+            Point3d p, double toleranceSquared)
+        {
+            double dx = vertex.X - p.X, dy = vertex.Y - p.Y, dz = vertex.Z - p.Z;
+            return dx * dx + dy * dy + dz * dz <= toleranceSquared;
+        }
+
+        // A legacy CAD mesh can split a long boundary edge into several
+        // smaller 3D TIN edges. Accept a collapsed 3DFACE as redundant ONLY
+        // when those real edges cover the entire surviving segment, with
+        // matching XYZ throughout. Mere XY overlap is insufficient.
+        private static bool EdgeCoveredBySupportEdges(
+            List<MiningVolume.Core.Geometry.Triangle3> support, Point3d a, Point3d b)
+        {
+            var direction = b - a;
+            double length2 = direction.DotProduct(direction);
+            if (length2 <= 1e-18) return false;
+            const double distanceTolerance = 1e-9;
+            double fractionTolerance = distanceTolerance / Math.Sqrt(length2);
+            var intervals = new List<Tuple<double, double>>();
+            foreach (var triangle in support)
+            {
+                var ta = new Point3d(triangle.A.X, triangle.A.Y, triangle.A.Z);
+                var tb = new Point3d(triangle.B.X, triangle.B.Y, triangle.B.Z);
+                var tc = new Point3d(triangle.C.X, triangle.C.Y, triangle.C.Z);
+                AddCoveredInterval(a, direction, length2, ta, tb, intervals, distanceTolerance);
+                AddCoveredInterval(a, direction, length2, tb, tc, intervals, distanceTolerance);
+                AddCoveredInterval(a, direction, length2, tc, ta, intervals, distanceTolerance);
+            }
+            intervals.Sort((x, y) => x.Item1.CompareTo(y.Item1));
+            double covered = 0;
+            foreach (var interval in intervals)
+            {
+                if (interval.Item1 > covered + fractionTolerance) return false;
+                if (interval.Item2 > covered) covered = interval.Item2;
+                if (covered >= 1 - fractionTolerance) return true;
+            }
+            return false;
+        }
+
+        private static void AddCoveredInterval(Point3d origin, Vector3d axis,
+            double length2, Point3d first, Point3d second,
+            List<Tuple<double, double>> ranges, double tolerance)
+        {
+            double t0 = (first - origin).DotProduct(axis) / length2;
+            double t1 = (second - origin).DotProduct(axis) / length2;
+            var closest0 = origin + axis * t0;
+            var closest1 = origin + axis * t1;
+            if (first.DistanceTo(closest0) > tolerance ||
+                second.DistanceTo(closest1) > tolerance) return;
+            double left = Math.Max(0, Math.Min(t0, t1));
+            double right = Math.Min(1, Math.Max(t0, t1));
+            if (right > left) ranges.Add(Tuple.Create(left, right));
+        }
+
+        private sealed class RedundantCadFaceCandidate
+        {
+            public RedundantCadFaceCandidate(Point3d a, Point3d alternativeA,
+                Point3d b, string handle)
+            { A = a; AlternateA = alternativeA; B = b; Handle = handle; }
+            public Point3d A { get; }
+            public Point3d AlternateA { get; }
+            public Point3d B { get; }
+            public string Handle { get; }
+        }
+
+        private struct ExactStoredEdge : IEquatable<ExactStoredEdge>
+        {
+            internal readonly Point3d A, B;
+            internal ExactStoredEdge(Point3d a, Point3d b) { A = a; B = b; }
+            public bool Equals(ExactStoredEdge e)
+                => (Same3D(A, e.A) && Same3D(B, e.B)) ||
+                   (Same3D(A, e.B) && Same3D(B, e.A));
+            public override bool Equals(object value)
+                => value is ExactStoredEdge && Equals((ExactStoredEdge)value);
+            public override int GetHashCode()
+            {
+                // Symmetric hash for the same undirected 3D edge. Normalize -0.
+                unchecked { return PointHash(A) ^ PointHash(B); }
+            }
+            private static int PointHash(Point3d p)
+            {
+                unchecked
+                {
+                    int h = 17;
+                    h = h * 31 + NormalizedBitsHash(p.X);
+                    h = h * 31 + NormalizedBitsHash(p.Y);
+                    return h * 31 + NormalizedBitsHash(p.Z);
+                }
+            }
+            private static int NormalizedBitsHash(double value)
+            {
+                long bits = BitConverter.DoubleToInt64Bits(value == 0.0 ? 0.0 : value);
+                return unchecked((int)bits ^ (int)(bits >> 32));
+            }
+        }
+
+        private static bool Same3D(Point3d a, Point3d b)
+            => a.X == b.X && a.Y == b.Y && a.Z == b.Z;
+
+        private static bool Same3D(MiningVolume.Core.Geometry.Vec3 a, Point3d b)
+            => a.X == b.X && a.Y == b.Y && a.Z == b.Z;
+
+        private static InvalidOperationException InvalidStoredCadFace(
+            string layer, string handle, string reason)
+            => new InvalidOperationException(
+                "Layer " + layer + " có 3DFACE suy biến, Handle " + handle +
+                ". " + reason +
+                ". Giữ nguyên DWG; kiểm tra đối tượng theo Handle hoặc dựng lại " +
+                "TIN từ nguồn trên bản sao DWG trước khi tính khối lượng.");
 
         private static bool Finite(Point3d point)
             => !double.IsNaN(point.X) && !double.IsNaN(point.Y) &&

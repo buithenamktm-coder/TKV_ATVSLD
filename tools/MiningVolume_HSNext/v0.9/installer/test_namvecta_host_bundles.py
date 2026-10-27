@@ -84,5 +84,56 @@ class HostBundleTests(unittest.TestCase):
         self.assertNotIn(2025, core.VERSIONS)
 
 
+    def test_accepted_cc0a6cb7_ui_and_inno_setup_are_byte_identical(self):
+        """Protect the user's approved UI and installer from accidental branch merges.
+
+        Git's blob hash is SHA1("blob <byte length>\\0" + raw bytes).
+        These eight expected blobs were read from commit cc0a6cb7.
+        """
+        approved = {
+            "src/MiningVolume.Plugin2023/UI/MainPaletteControl.cs": "799409885e8749dfa10e688005f2cf5ef1f2cc97",
+            "src/MiningVolume.Plugin2023/UI/ModelWorkflowPage.cs": "e0841c0b0b65238561e42607779804dad8295605",
+            "src/MiningVolume.Plugin2023/UI/SectionPage.cs": "6a6b6e7d139b2a8ef56325c942fd0250fb549e67",
+            "src/MiningVolume.Plugin2023/UI/GridPage.cs": "d38017af3927f5b651a291fb79cc19ad121a0e56",
+            "src/MiningVolume.Plugin2023/UI/ExportPage.cs": "2dbdb79a89d50c0b8f16b95926d8520b6b80a5d8",
+            "installer/NAMVECTA_Volume_V2.iss": "a21f67ad6ff917c7aeed7a93f153ea0c543c9397",
+            "installer/prepare_namvecta_branding.py": "0f4d9ba65670db33053d4944b6f948ef9571e18e",
+            "installer/namvecta_host_bundles.py": "e9e56e75cfe91a9cb2c2134a36d4a34da1072a35",
+        }
+        # Compare committed Git blobs, not Windows worktree files: checkout
+        # may convert LF to CRLF without changing the actual source revision.
+        import subprocess
+        repository = Path(__file__).resolve().parents[4]
+        prefix = "tools/MiningVolume_HSNext/v0.9/"
+        for relative, expected_git_sha in approved.items():
+            actual = subprocess.check_output(
+                ["git", "rev-parse", "HEAD:" + prefix + relative],
+                cwd=str(repository), text=True
+            ).strip()
+            self.assertEqual(actual, expected_git_sha,
+                             "Accepted cc0a6cb7 UI/installer drifted: " + relative)
+
+
+    def test_legacy_dwg_recognition_is_read_only_and_keeps_approved_ui(self):
+        base = Path(__file__).resolve().parent.parent / "src/MiningVolume.Plugin2023"
+        entry = (base / "EntryPoint.cs").read_text(encoding="utf-8")
+        diagnosis = (base / "Services/DwgRecognitionDiagnostic.cs").read_text(encoding="utf-8")
+        runtime = (base / "Services/SectionCadRegression.cs").read_text(encoding="utf-8")
+        self.assertIn('[CommandMethod("MV_DWG_CHECK", CommandFlags.Session)]', entry)
+        self.assertIn("TryRecognizeLegacyCadTin(doc);", entry)
+        self.assertIn("ProjectPersistenceService.HasSavedProject()", entry)
+        self.assertIn('GetXDataForApplication(', diagnosis)
+        self.assertIn('NAMVECTA_MC_HE_TUYEN', diagnosis)
+        self.assertIn('TIN hiện trạng:', diagnosis)
+        self.assertIn('TIN thiết kế:', diagnosis)
+        self.assertIn('KHÔNG tự tạo lại hay ghi đè', diagnosis)
+        self.assertIn("VerifyLegacyDwgRecognitionReadOnly();", runtime)
+        # Detection must never mutate, erase or generate old CAD geometry.
+        self.assertNotIn(".Erase(", diagnosis)
+        self.assertNotIn("AppendEntity(", diagnosis)
+        self.assertNotIn(".Commit(", diagnosis)
+        self.assertNotIn("SurfaceWorkflowService.DrawTin", diagnosis)
+
+
 if __name__ == "__main__":
     unittest.main()
