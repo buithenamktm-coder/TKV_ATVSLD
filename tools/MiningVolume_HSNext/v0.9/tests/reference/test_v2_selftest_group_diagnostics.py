@@ -41,6 +41,6 @@ def test_near_coincident_stored_faces_require_proven_exact_support_edge():
     assert "suspect.AlternateA" in reader
     assert "unproven.Contains(new ExactStoredEdge(suspect.A, suspect.B)) &&" in reader
     assert "unproven.Contains(new ExactStoredEdge(suspect.AlternateA, suspect.B))" in reader
-    assert "new Point3d(0, 5e-10, 10)" in host
+    assert "new Point3d(5e-10, 0, 10)" in host
     assert "QA_TIN_NEAR_UNSAFE" in host
     assert "nearBlocked" in host and "CountFaces(db, \"QA_TIN_NEAR_UNSAFE\") != 2" in host
