@@ -467,6 +467,21 @@ namespace MiningVolume2023.Services
                 if (!nearBlocked || TinCadRenderer.CountFaces(db, "QA_TIN_NEAR_UNSAFE") != 2)
                     throw new InvalidOperationException(
                         "Unproven near-zero 3D edge must reject recovery and preserve all 3DFACEs.");
+                // Read-only forensic evidence must expose all four XYZ
+                // vertices and retain exact sub-nanometer diagnostics.
+                var diagnosis = TinFaceDiagnostic.Inspect(db, nearUnsafeHandle);
+                if (!diagnosis.Contains("Handle: " + nearUnsafeHandle) ||
+                    !diagnosis.Contains("P4: X=") ||
+                    !diagnosis.Contains("Diện tích chiếu XY:") ||
+                    !diagnosis.Contains("TIN KHÔNG ĐỦ ĐIỀU KIỆN") ||
+                    TinCadRenderer.CountFaces(db, "QA_TIN_NEAR_UNSAFE") != 2)
+                    throw new InvalidOperationException(
+                        "3DFACE forensic report must identify the failing Handle without modifying the DWG.");
+                var proven = TinFaceDiagnostic.Inspect(db, redundantHandle);
+                if (!proven.Contains("Kiểm tra TIN cả layer:") ||
+                    TinCadRenderer.CountFaces(db, "QA_TIN_REDUNDANT") != 52)
+                    throw new InvalidOperationException(
+                        "Read-only 3DFACE diagnosis must distinguish supported and unsupported collapsed edges.");
             }
             VerifyLegacyDwgRecognitionReadOnly();
         }

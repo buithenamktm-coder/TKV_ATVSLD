@@ -206,6 +206,30 @@ namespace MiningVolume2023
                 System.Windows.Forms.MessageBoxIcon.Information);
         }
 
+        [CommandMethod("MV_FACE_CHECK", CommandFlags.Session)]
+        public static void CheckTinFaceByHandle()
+        {
+            var doc = AcApp.DocumentManager.MdiActiveDocument;
+            if (doc == null) return;
+            var options = new Autodesk.AutoCAD.EditorInput.PromptStringOptions(
+                "\\nNhập Handle 3DFACE cần kiểm tra (ví dụ BF9BD): ")
+            { AllowSpaces = false };
+            var result = doc.Editor.GetString(options);
+            if (result.Status != Autodesk.AutoCAD.EditorInput.PromptStatus.OK)
+                return;
+            try
+            {
+                var report = Services.TinFaceDiagnostic.Inspect(
+                    doc.Database, result.StringResult);
+                doc.Editor.WriteMessage("\\n" + report);
+            }
+            catch (System.Exception e)
+            {
+                doc.Editor.WriteMessage("\\n[NAMVECTA] Chẩn đoán thất bại: " +
+                    e.Message);
+            }
+        }
+
         [CommandMethod("MVBUILDINFO", CommandFlags.Session)]
         public static void BuildInfo()
         {
@@ -285,6 +309,14 @@ namespace MiningVolume2023
                 // No saved Xrecord means a BLANK project. A previous drawing's
                 // singleton TIN/source state must never remain accepted here.
                 ProjectState.Current.Reset();
+                // Explicit reload of a legacy DWG must preserve the same
+                // read-only TIN discovery as the automatic reopen path.
+                // Missing Xrecord is not permission to rebuild or erase CAD.
+                if (!Services.ProjectPersistenceService.HasSavedProject())
+                {
+                    var activeDoc = AcApp.DocumentManager.MdiActiveDocument;
+                    if (activeDoc != null) TryRecognizeLegacyCadTin(activeDoc);
+                }
             }
             AcApp.DocumentManager.MdiActiveDocument?.Editor.WriteMessage("\nNAMVECTA VOLUME: " + r.Message);
             _loadedDocument = AcApp.DocumentManager.MdiActiveDocument;
