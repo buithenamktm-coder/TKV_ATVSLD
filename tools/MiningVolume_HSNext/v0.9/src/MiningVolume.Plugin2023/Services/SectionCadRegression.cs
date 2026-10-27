@@ -340,6 +340,8 @@ namespace MiningVolume2023.Services
                 string redundantHandle;
                 string unsafeHandle;
                 string nearUnsafeHandle;
+                string pointSafeHandle;
+                string pointUnsafeHandle;
                 using (var tr = db.TransactionManager.StartTransaction())
                 {
                     var layers = (LayerTable)tr.GetObject(db.LayerTableId, OpenMode.ForWrite);
@@ -352,6 +354,15 @@ namespace MiningVolume2023.Services
                     var nearBadLayer = new LayerTableRecord { Name = "QA_TIN_NEAR_UNSAFE" };
                     var nearBadId = layers.Add(nearBadLayer);
                     tr.AddNewlyCreatedDBObject(nearBadLayer, true);
+                    var pointSafeLayer = new LayerTableRecord { Name = "QA_TIN_POINT_SAFE" };
+                    var pointSafeId = layers.Add(pointSafeLayer);
+                    tr.AddNewlyCreatedDBObject(pointSafeLayer, true);
+                    var pointUnsafeLayer = new LayerTableRecord { Name = "QA_TIN_POINT_UNSAFE" };
+                    var pointUnsafeId = layers.Add(pointUnsafeLayer);
+                    tr.AddNewlyCreatedDBObject(pointUnsafeLayer, true);
+                    var thinLayer = new LayerTableRecord { Name = "QA_TIN_TINY_POSITIVE" };
+                    var thinId = layers.Add(thinLayer);
+                    tr.AddNewlyCreatedDBObject(thinLayer, true);
                     var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
                     var ms = (BlockTableRecord)tr.GetObject(
                         bt[BlockTableRecord.ModelSpace], OpenMode.ForWrite);
@@ -428,8 +439,80 @@ namespace MiningVolume2023.Services
                     ms.AppendEntity(nearOrphan);
                     tr.AddNewlyCreatedDBObject(nearOrphan, true);
                     nearUnsafeHandle = nearOrphan.Handle.ToString();
+
+                    // Synthetic local geometry with the same floating-point
+                    // scale as the audited F5EDF. Never commit mine coordinates.
+                    var pointAnchor = new Point3d(350000.8325600168,
+                        2450000.066549417, 98.07097559590788);
+                    var pointB = new Point3d(pointAnchor.X + 20,
+                        pointAnchor.Y + 7, pointAnchor.Z - 0.8);
+                    var pointC = new Point3d(pointAnchor.X + 3,
+                        pointAnchor.Y + 2, pointAnchor.Z + 0.1);
+                    var pointSupport = new Face(pointAnchor, pointB, pointC, pointC,
+                        true, true, true, false) { LayerId = pointSafeId };
+                    ms.AppendEntity(pointSupport);
+                    tr.AddNewlyCreatedDBObject(pointSupport, true);
+                    var pNearA = new Point3d(pointAnchor.X, pointAnchor.Y,
+                        pointAnchor.Z + 5e-11);
+                    var pNearB = new Point3d(pointAnchor.X - 1e-10,
+                        pointAnchor.Y, pointAnchor.Z + 4e-10);
+                    var pNearC = new Point3d(pointAnchor.X + 1e-10,
+                        pointAnchor.Y, pointAnchor.Z - 6e-12);
+                    var pointSafe = new Face(pNearA, pNearB, pNearC, pNearC,
+                        true, true, true, false) { LayerId = pointSafeId };
+                    ms.AppendEntity(pointSafe);
+                    tr.AddNewlyCreatedDBObject(pointSafe, true);
+                    pointSafeHandle = pointSafe.Handle.ToString();
+                    // Same scale, but no support vertex at the isolated site.
+                    var pointBadSupport = new Face(a, b, c, c,
+                        true, true, true, false) { LayerId = pointUnsafeId };
+                    ms.AppendEntity(pointBadSupport);
+                    tr.AddNewlyCreatedDBObject(pointBadSupport, true);
+                    var isolated = new Point3d(100, 100, 40);
+                    var pointBad = new Face(isolated,
+                        new Point3d(100 + 2e-10, 100, 40 + 2e-10),
+                        new Point3d(100, 100, 40 + 4e-10),
+                        new Point3d(100, 100, 40 + 4e-10),
+                        true, true, true, false) { LayerId = pointUnsafeId };
+                    ms.AppendEntity(pointBad);
+                    tr.AddNewlyCreatedDBObject(pointBad, true);
+                    pointUnsafeHandle = pointBad.Handle.ToString();
+                    var thin = new Face(
+                        new Point3d(20, 20, 2),
+                        new Point3d(20 + 1e-6, 20, 2),
+                        new Point3d(20, 20 + 1e-6, 2),
+                        new Point3d(20, 20 + 1e-6, 2),
+                        true, true, true, false) { LayerId = thinId };
+                    ms.AppendEntity(thin);
+                    tr.AddNewlyCreatedDBObject(thin, true);
                     tr.Commit();
                 }
+                var pointTin = TinCadRenderer.ReadStoredTin(db, "QA_TIN_POINT_SAFE", "QA");
+                if (pointTin == null || pointTin.Triangles.Count != 1 ||
+                    pointTin.VerifiedRedundantCadFaces != 1 ||
+                    !pointTin.Issues.Any(x =>
+                        x.Code == "REDUNDANT_POINT_CAD_FACE" &&
+                        x.Message.Contains(pointSafeHandle)) ||
+                    TinCadRenderer.CountFaces(db, "QA_TIN_POINT_SAFE") != 2)
+                    throw new InvalidOperationException(
+                        "F5EDF-style numerical point must be recognized read-only " +
+                        "ONLY with proven 3D positive-area TIN vertex support.");
+                bool pointBlocked = false;
+                try { TinCadRenderer.ReadStoredTin(db, "QA_TIN_POINT_UNSAFE", "QA"); }
+                catch (InvalidOperationException ex)
+                { pointBlocked = ex.Message.Contains(pointUnsafeHandle); }
+                if (!pointBlocked ||
+                    TinCadRenderer.CountFaces(db, "QA_TIN_POINT_UNSAFE") != 2)
+                    throw new InvalidOperationException(
+                        "Orphan collapsed 3DFACE must remain blocking without XYZ support.");
+                var thinTin = TinCadRenderer.ReadStoredTin(db, "QA_TIN_TINY_POSITIVE", "QA");
+                if (thinTin == null || thinTin.Triangles.Count != 1 ||
+                    thinTin.VerticalFaces.Count != 0 ||
+                    !thinTin.Issues.Any(x => x.Code == "THIN_POSITIVE_XY_CAD_FACE") ||
+                    TinCadRenderer.CountFaces(db, "QA_TIN_TINY_POSITIVE") != 1)
+                    throw new InvalidOperationException(
+                        "CAD reopen must retain positive-area XY triangles below 1e-12 m2.");
+
                 var tin = TinCadRenderer.ReadStoredTin(db, "QA_TIN_REDUNDANT", "QA");
                 if (tin == null || tin.Triangles.Count != 1 ||
                     tin.VerticalFaces.Count != 0 ||

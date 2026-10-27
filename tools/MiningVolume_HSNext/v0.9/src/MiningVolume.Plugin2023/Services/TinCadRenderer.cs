@@ -400,6 +400,9 @@ namespace MiningVolume2023.Services
             var support = new List<MiningVolume.Core.Geometry.Triangle3>();
             var vertical = new List<MiningVolume.Core.Geometry.Triangle3>();
             var zeroEdges = new List<RedundantCadFaceCandidate>();
+            var pointFaces = new List<CollapsedPointCadFace>();
+            int thinPositiveXy = 0;
+            string firstThinHandle = null;
             using (var progress = new SectionCadProgress(1, "đọc TIN đã lưu trong DWG"))
             using (var tr = db.TransactionManager.StartOpenCloseTransaction())
             {
@@ -435,18 +438,24 @@ namespace MiningVolume2023.Services
                         new MiningVolume.Core.Geometry.Vec3(p0.X,p0.Y,p0.Z),
                         new MiningVolume.Core.Geometry.Vec3(p1.X,p1.Y,p1.Z),
                         new MiningVolume.Core.Geometry.Vec3(p2.X,p2.Y,p2.Z));
-                    if (triangle.Area2D <= 1e-12)
+                    // Forensic DWG audit: point fragments must be checked
+                    // against retained XYZ support, not erased or accepted
+                    // solely because their projected area is near zero.
+                    double d01 = p0.DistanceTo(p1), d12 = p1.DistanceTo(p2),
+                        d20 = p2.DistanceTo(p0);
+                    const double collapsedEdgeTolerance = 1e-9;
+                    if (Math.Max(d01, Math.Max(d12, d20)) <= collapsedEdgeTolerance)
                     {
-                        // Vertical faces are retained as geometry evidence, but
-                        // must never enter the single-Z grid support sampler.
-                        double d01 = p0.DistanceTo(p1), d12 = p1.DistanceTo(p2),
-                            d20 = p2.DistanceTo(p0);
-                        // A saved 3DFACE may carry an endpoint separated by
-                        // a few floating point ULPs instead of exactly 0 m.
-                        // Consider that edge collapsed only below 1 nanometer
-                        // in full 3D. This is not permission to ignore any
-                        // nearby surveyed vertex or missing TIN coverage.
-                        const double collapsedEdgeTolerance = 1e-9;
+                        pointFaces.Add(new CollapsedPointCadFace(
+                            p0, p1, p2, face.Handle.ToString()));
+                        continue;
+                    }
+                    if (triangle.Area2D == 0)
+                    {
+                        // Exactly vertical projected faces are evidence but
+                        // not single-Z grid support. A strictly positive XY
+                        // area, however small, must NOT be discarded.
+                        // Full-3D short-edge face detection remains below.
                         if (d01 <= collapsedEdgeTolerance ||
                             d12 <= collapsedEdgeTolerance ||
                             d20 <= collapsedEdgeTolerance)
@@ -477,13 +486,21 @@ namespace MiningVolume2023.Services
                         vertical.Add(triangle);
                     }
                     else
+                    {
+                        if (triangle.Area2D <= 1e-12)
+                        {
+                            thinPositiveXy++;
+                            if (firstThinHandle == null)
+                                firstThinHandle = face.Handle.ToString();
+                        }
                         support.Add(triangle);
+                    }
                 }
                 progress.Poll();
             }
             if (support.Count == 0)
             {
-                if (vertical.Count == 0 && zeroEdges.Count == 0) return null;
+                if (vertical.Count == 0 && zeroEdges.Count == 0 && pointFaces.Count == 0) return null;
                 throw new InvalidOperationException(
                     "Layer " + layerName + " không có tam giác TIN hợp lệ phủ XY; " +
                     "không tự loại mặt lỗi để tạo kết quả tính khối lượng.");
@@ -522,7 +539,31 @@ namespace MiningVolume2023.Services
                             "Cạnh 3D còn lại không được phủ liên tục bởi các cạnh TIN hợp lệ " +
                             "(kể cả cạnh được chia nhỏ). Không chứng minh được việc bỏ qua là an toàn");
             }
+            // A point-like face is geometrically redundant only when all
+            // of its three vertices match ONE retained, positive-XY TIN
+            // vertex within the extremely narrow full-XYZ numerical tolerance.
+            // No XY-only or guessed-Z match is acceptable.
+            foreach (var point in pointFaces)
+                if (!SupportedPointFragment(point, support, 1e-9))
+                    throw InvalidStoredCadFace(layerName, point.Handle,
+                        "Ba đỉnh co về điểm nhưng không có đỉnh tam giác " +
+                        "phủ XY trùng đủ XYZ trong 1e-9 m; chưa chứng minh " +
+                        "được việc bỏ qua là an toàn");
             var issues = new List<ValidationIssue>();
+            if (pointFaces.Count > 0)
+                issues.Add(new ValidationIssue(ValidationSeverity.Warning,
+                    "REDUNDANT_POINT_CAD_FACE",
+                    layerName + ": " + pointFaces.Count +
+                    " mặt 3DFACE co về điểm được đối chiếu với đỉnh tam giác " +
+                    "phủ XY khớp đủ XYZ; không xóa DWG. Handle đầu tiên: " +
+                    pointFaces[0].Handle, pointFaces[0].Handle));
+            if (thinPositiveXy > 0)
+                issues.Add(new ValidationIssue(ValidationSeverity.Warning,
+                    "THIN_POSITIVE_XY_CAD_FACE",
+                    layerName + ": giữ " + thinPositiveXy +
+                    " tam giác có diện tích XY dương nhưng <=1e-12 m2; " +
+                    "chưa chứng minh độ phủ/tính duy nhất của Z. Handle đầu tiên: " +
+                    firstThinHandle, firstThinHandle));
             if (zeroEdges.Count > 0)
                 issues.Add(new ValidationIssue(ValidationSeverity.Warning,
                     "REDUNDANT_ZERO_EDGE_CAD_FACE",
@@ -531,7 +572,41 @@ namespace MiningVolume2023.Services
                     "không sửa/xóa DWG. Handle đầu tiên: " +
                     zeroEdges[0].Handle, zeroEdges[0].Handle));
             return new TinSurface(modelName, support, issues, vertical,
-                verifiedRedundantCadFaces: zeroEdges.Count);
+                verifiedRedundantCadFaces: zeroEdges.Count + pointFaces.Count);
+        }
+
+        private sealed class CollapsedPointCadFace
+        {
+            internal readonly Point3d A, B, C;
+            internal readonly string Handle;
+            internal CollapsedPointCadFace(Point3d a, Point3d b, Point3d c, string handle)
+            { A = a; B = b; C = c; Handle = handle; }
+        }
+
+        private static bool SupportedPointFragment(CollapsedPointCadFace point,
+            List<MiningVolume.Core.Geometry.Triangle3> support, double tolerance)
+        {
+            double t2 = tolerance * tolerance;
+            foreach (var t in support)
+                if (PointVertexMatches(t.A, point, t2) ||
+                    PointVertexMatches(t.B, point, t2) ||
+                    PointVertexMatches(t.C, point, t2))
+                    return true;
+            return false;
+        }
+
+        private static bool PointVertexMatches(
+            MiningVolume.Core.Geometry.Vec3 vertex,
+            CollapsedPointCadFace point, double toleranceSquared)
+            => Near3D(vertex, point.A, toleranceSquared) &&
+               Near3D(vertex, point.B, toleranceSquared) &&
+               Near3D(vertex, point.C, toleranceSquared);
+
+        private static bool Near3D(MiningVolume.Core.Geometry.Vec3 vertex,
+            Point3d p, double toleranceSquared)
+        {
+            double dx = vertex.X - p.X, dy = vertex.Y - p.Y, dz = vertex.Z - p.Z;
+            return dx * dx + dy * dy + dz * dz <= toleranceSquared;
         }
 
         // A legacy CAD mesh can split a long boundary edge into several
