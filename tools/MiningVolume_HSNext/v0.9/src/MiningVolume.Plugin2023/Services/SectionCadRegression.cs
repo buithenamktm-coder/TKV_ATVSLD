@@ -387,6 +387,23 @@ namespace MiningVolume2023.Services
                         ms.AppendEntity(repeated);
                         tr.AddNewlyCreatedDBObject(repeated, true);
                     }
+                    // The long old boundary edge AB can be split into AM and MB.
+                    // A redundant legacy 3DFACE AB must still be recoverable.
+                    var splitLayer = new LayerTableRecord { Name = "QA_TIN_SPLIT_EDGE" };
+                    var splitId = layers.Add(splitLayer);
+                    tr.AddNewlyCreatedDBObject(splitLayer, true);
+                    var mid = new Point3d(5, 0, 10);
+                    var sideA = new Point3d(0, 5, 10);
+                    var sideB = new Point3d(10, 5, 10);
+                    foreach (var face in new[] {
+                        new Face(a, mid, sideA, sideA, true, true, true, false),
+                        new Face(mid, b, sideB, sideB, true, true, true, false),
+                        new Face(a, a, b, b, true, true, true, false) })
+                    {
+                        face.LayerId = splitId;
+                        ms.AppendEntity(face);
+                        tr.AddNewlyCreatedDBObject(face, true);
+                    }
                     var otherSupport = new Face(a, b, c, c, true, true, true, false)
                     { LayerId = badId };
                     ms.AppendEntity(otherSupport);
@@ -423,6 +440,12 @@ namespace MiningVolume2023.Services
                     TinCadRenderer.CountFaces(db, "QA_TIN_REDUNDANT") != 52)
                     throw new InvalidOperationException(
                         "A redundant collapsed CAD face was not proven or the drawing changed.");
+                var splitTin = TinCadRenderer.ReadStoredTin(db, "QA_TIN_SPLIT_EDGE", "QA");
+                if (splitTin == null || splitTin.Triangles.Count != 2 ||
+                    splitTin.VerifiedRedundantCadFaces != 1 ||
+                    TinCadRenderer.CountFaces(db, "QA_TIN_SPLIT_EDGE") != 3)
+                    throw new InvalidOperationException(
+                        "A legacy collapsed face spanning two valid split 3D TIN edges must be recognized read-only.");
                 bool blocked = false;
                 try { TinCadRenderer.ReadStoredTin(db, "QA_TIN_UNSAFE", "QA"); }
                 catch (InvalidOperationException ex)
