@@ -515,11 +515,12 @@ namespace MiningVolume2023.Services
                 }
                 foreach (var suspect in zeroEdges)
                     if (unproven.Contains(new ExactStoredEdge(suspect.A, suspect.B)) &&
-                        unproven.Contains(new ExactStoredEdge(suspect.AlternateA, suspect.B)))
+                        unproven.Contains(new ExactStoredEdge(suspect.AlternateA, suspect.B)) &&
+                        !EdgeCoveredBySupportEdges(support, suspect.A, suspect.B) &&
+                        !EdgeCoveredBySupportEdges(support, suspect.AlternateA, suspect.B))
                         throw InvalidStoredCadFace(layerName, suspect.Handle,
-                            "Cạnh 3D còn lại không trùng chính xác cạnh TIN hợp lệ " +
-                            "(đã kiểm tra cả hai đầu cạnh cực ngắn). " +
-                            "Không chứng minh được việc bỏ qua là an toàn");
+                            "Cạnh 3D còn lại không được phủ liên tục bởi các cạnh TIN hợp lệ " +
+                            "(kể cả cạnh được chia nhỏ). Không chứng minh được việc bỏ qua là an toàn");
             }
             var issues = new List<ValidationIssue>();
             if (zeroEdges.Count > 0)
@@ -531,6 +532,54 @@ namespace MiningVolume2023.Services
                     zeroEdges[0].Handle, zeroEdges[0].Handle));
             return new TinSurface(modelName, support, issues, vertical,
                 verifiedRedundantCadFaces: zeroEdges.Count);
+        }
+
+        // A legacy CAD mesh can split a long boundary edge into several
+        // smaller 3D TIN edges. Accept a collapsed 3DFACE as redundant ONLY
+        // when those real edges cover the entire surviving segment, with
+        // matching XYZ throughout. Mere XY overlap is insufficient.
+        private static bool EdgeCoveredBySupportEdges(
+            List<MiningVolume.Core.Geometry.Triangle3> support, Point3d a, Point3d b)
+        {
+            var direction = b - a;
+            double length2 = direction.DotProduct(direction);
+            if (length2 <= 1e-18) return false;
+            const double distanceTolerance = 1e-9;
+            double fractionTolerance = distanceTolerance / Math.Sqrt(length2);
+            var intervals = new List<Tuple<double, double>>();
+            foreach (var triangle in support)
+            {
+                var ta = new Point3d(triangle.A.X, triangle.A.Y, triangle.A.Z);
+                var tb = new Point3d(triangle.B.X, triangle.B.Y, triangle.B.Z);
+                var tc = new Point3d(triangle.C.X, triangle.C.Y, triangle.C.Z);
+                AddCoveredInterval(a, direction, length2, ta, tb, intervals, distanceTolerance);
+                AddCoveredInterval(a, direction, length2, tb, tc, intervals, distanceTolerance);
+                AddCoveredInterval(a, direction, length2, tc, ta, intervals, distanceTolerance);
+            }
+            intervals.Sort((x, y) => x.Item1.CompareTo(y.Item1));
+            double covered = 0;
+            foreach (var interval in intervals)
+            {
+                if (interval.Item1 > covered + fractionTolerance) return false;
+                if (interval.Item2 > covered) covered = interval.Item2;
+                if (covered >= 1 - fractionTolerance) return true;
+            }
+            return false;
+        }
+
+        private static void AddCoveredInterval(Point3d origin, Vector3d axis,
+            double length2, Point3d first, Point3d second,
+            List<Tuple<double, double>> ranges, double tolerance)
+        {
+            double t0 = (first - origin).DotProduct(axis) / length2;
+            double t1 = (second - origin).DotProduct(axis) / length2;
+            var closest0 = origin + axis * t0;
+            var closest1 = origin + axis * t1;
+            if (first.DistanceTo(closest0) > tolerance ||
+                second.DistanceTo(closest1) > tolerance) return;
+            double left = Math.Max(0, Math.Min(t0, t1));
+            double right = Math.Min(1, Math.Max(t0, t1));
+            if (right > left) ranges.Add(Tuple.Create(left, right));
         }
 
         private sealed class RedundantCadFaceCandidate
