@@ -66,7 +66,7 @@ namespace MiningVolume2023.Services
                 sb.AppendLine(minEdge <= 1e-9
                     ? "Cảnh báo: có hai đỉnh gần trùng 3D ở ngưỡng kiểm tra 1e-9 m."
                     : "Không có cạnh 3D <= 1e-9 m.");
-                if (area <= 0.5e-12)
+                if (area <= 1e-12)
                     sb.AppendLine("Cảnh báo: hình chiếu XY suy biến hoặc gần đứng. " +
                         "Không được coi đây là mặt phủ XY.");
                 if (p2.DistanceTo(p3) > 1e-7)

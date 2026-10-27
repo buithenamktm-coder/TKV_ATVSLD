@@ -212,7 +212,7 @@ namespace MiningVolume2023
             var doc = AcApp.DocumentManager.MdiActiveDocument;
             if (doc == null) return;
             var options = new Autodesk.AutoCAD.EditorInput.PromptStringOptions(
-                "\\nNhập Handle 3DFACE cần kiểm tra (ví dụ BF9BD): ")
+                "\nNhập Handle 3DFACE cần kiểm tra (ví dụ BF9BD): ")
             { AllowSpaces = false };
             var result = doc.Editor.GetString(options);
             if (result.Status != Autodesk.AutoCAD.EditorInput.PromptStatus.OK)
@@ -221,11 +221,11 @@ namespace MiningVolume2023
             {
                 var report = Services.TinFaceDiagnostic.Inspect(
                     doc.Database, result.StringResult);
-                doc.Editor.WriteMessage("\\n" + report);
+                doc.Editor.WriteMessage("\n" + report);
             }
             catch (System.Exception e)
             {
-                doc.Editor.WriteMessage("\\n[NAMVECTA] Chẩn đoán thất bại: " +
+                doc.Editor.WriteMessage("\n[NAMVECTA] Chẩn đoán thất bại: " +
                     e.Message);
             }
         }
