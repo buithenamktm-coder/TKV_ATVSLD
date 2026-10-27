@@ -441,20 +441,36 @@ namespace MiningVolume2023.Services
                         // must never enter the single-Z grid support sampler.
                         double d01 = p0.DistanceTo(p1), d12 = p1.DistanceTo(p2),
                             d20 = p2.DistanceTo(p0);
-                        if (d01 <= 1e-9 || d12 <= 1e-9 || d20 <= 1e-9)
+                        // A saved 3DFACE may carry an endpoint separated by
+                        // a few floating point ULPs instead of exactly 0 m.
+                        // Consider that edge collapsed only below 1 nanometer
+                        // in full 3D. This is not permission to ignore any
+                        // nearby surveyed vertex or missing TIN coverage.
+                        const double collapsedEdgeTolerance = 1e-9;
+                        if (d01 <= collapsedEdgeTolerance ||
+                            d12 <= collapsedEdgeTolerance ||
+                            d20 <= collapsedEdgeTolerance)
                         {
-                            // Never round a very short, meaningful edge to zero.
-                            // Only exactly coincident 3D points qualify for proof.
-                            Point3d e0, e1;
-                            if (Same3D(p0, p1)) { e0 = p0; e1 = p2; }
-                            else if (Same3D(p1, p2)) { e0 = p1; e1 = p0; }
-                            else if (Same3D(p2, p0)) { e0 = p2; e1 = p1; }
-                            else throw InvalidStoredCadFace(layerName, face.Handle.ToString(),
-                                "Cạnh 3D rất ngắn nhưng hai đỉnh không trùng chính xác");
-                            if (Same3D(e0, e1))
+                            Point3d collapsedA, collapsedB, other;
+                            if (d01 <= collapsedEdgeTolerance)
+                            { collapsedA = p0; collapsedB = p1; other = p2; }
+                            else if (d12 <= collapsedEdgeTolerance)
+                            { collapsedA = p1; collapsedB = p2; other = p0; }
+                            else
+                            { collapsedA = p2; collapsedB = p0; other = p1; }
+                            // Reject a fully collapsed three-point entity,
+                            // even if some other valid TIN triangle happens
+                            // to pass through its location.
+                            if (collapsedA.DistanceTo(other) <= collapsedEdgeTolerance ||
+                                collapsedB.DistanceTo(other) <= collapsedEdgeTolerance)
                                 throw InvalidStoredCadFace(layerName, face.Handle.ToString(),
-                                    "Cả ba đỉnh trùng nhau, không có cạnh để đối chiếu");
-                            zeroEdges.Add(new RedundantCadFaceCandidate(e0, e1,
+                                    "Cả ba đỉnh gần trùng, không còn cạnh để kiểm chứng");
+                            // Both nearly coincident endpoints are retained as
+                            // possible edge origins. At least ONE candidate
+                            // edge must exactly equal a complete 3D support
+                            // edge, including Z. This never moves a point.
+                            zeroEdges.Add(new RedundantCadFaceCandidate(
+                                collapsedA, collapsedB, other,
                                 face.Handle.ToString()));
                             continue;
                         }
@@ -478,7 +494,10 @@ namespace MiningVolume2023.Services
             // Never accept an unproven edge; never modify the saved 3DFACEs.
             var unproven = new HashSet<ExactStoredEdge>();
             foreach (var suspect in zeroEdges)
+            {
                 unproven.Add(new ExactStoredEdge(suspect.A, suspect.B));
+                unproven.Add(new ExactStoredEdge(suspect.AlternateA, suspect.B));
+            }
             if (unproven.Count > 0)
             {
                 foreach (var t in support)
@@ -495,9 +514,11 @@ namespace MiningVolume2023.Services
                     if (unproven.Count == 0) break;
                 }
                 foreach (var suspect in zeroEdges)
-                    if (unproven.Contains(new ExactStoredEdge(suspect.A, suspect.B)))
+                    if (unproven.Contains(new ExactStoredEdge(suspect.A, suspect.B)) &&
+                        unproven.Contains(new ExactStoredEdge(suspect.AlternateA, suspect.B)))
                         throw InvalidStoredCadFace(layerName, suspect.Handle,
-                            "Cạnh còn lại không thuộc tam giác TIN hợp lệ. " +
+                            "Không có cạnh 3D còn lại trùng chính xác cạnh TIN hợp lệ " +
+                            "(đã kiểm tra cả hai đầu cạnh cực ngắn). " +
                             "Không chứng minh được việc bỏ qua là an toàn");
             }
             var issues = new List<ValidationIssue>();
@@ -505,7 +526,7 @@ namespace MiningVolume2023.Services
                 issues.Add(new ValidationIssue(ValidationSeverity.Warning,
                     "REDUNDANT_ZERO_EDGE_CAD_FACE",
                     layerName + ": xác minh " + zeroEdges.Count +
-                    " mặt 3DFACE suy biến có cạnh còn lại trùng chính xác cạnh TIN hợp lệ; " +
+                    " mặt 3DFACE suy biến đã đối chiếu cạnh 3D với TIN hợp lệ; " +
                     "không sửa/xóa DWG. Handle đầu tiên: " +
                     zeroEdges[0].Handle, zeroEdges[0].Handle));
             return new TinSurface(modelName, support, issues, vertical,
@@ -514,9 +535,11 @@ namespace MiningVolume2023.Services
 
         private sealed class RedundantCadFaceCandidate
         {
-            public RedundantCadFaceCandidate(Point3d a, Point3d b, string handle)
-            { A = a; B = b; Handle = handle; }
+            public RedundantCadFaceCandidate(Point3d a, Point3d alternativeA,
+                Point3d b, string handle)
+            { A = a; AlternateA = alternativeA; B = b; Handle = handle; }
             public Point3d A { get; }
+            public Point3d AlternateA { get; }
             public Point3d B { get; }
             public string Handle { get; }
         }

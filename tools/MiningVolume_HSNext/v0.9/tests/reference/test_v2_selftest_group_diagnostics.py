@@ -32,3 +32,15 @@ def test_legacy_dwg_restores_only_own_tin_without_reconstructing_unsaved_section
     assert "zeroEdges.Count > 32" not in reader
     assert "Không chứng minh được việc bỏ qua là an toàn" in reader
     assert "verifiedRedundantCadFaces: zeroEdges.Count" in reader
+
+def test_near_coincident_stored_faces_require_proven_exact_support_edge():
+    reader = (ROOT / "src/MiningVolume.Plugin2023/Services/TinCadRenderer.cs").read_text(encoding="utf-8")
+    host = (ROOT / "src/MiningVolume.Plugin2023/Services/SectionCadRegression.cs").read_text(encoding="utf-8")
+    assert "const double collapsedEdgeTolerance = 1e-9;" in reader
+    assert "collapsedA.DistanceTo(other) <= collapsedEdgeTolerance" in reader
+    assert "suspect.AlternateA" in reader
+    assert "unproven.Contains(new ExactStoredEdge(suspect.A, suspect.B)) &&" in reader
+    assert "unproven.Contains(new ExactStoredEdge(suspect.AlternateA, suspect.B))" in reader
+    assert "new Point3d(0, 5e-10, 10)" in host
+    assert "QA_TIN_NEAR_UNSAFE" in host
+    assert "nearBlocked" in host and "CountFaces(db, \"QA_TIN_NEAR_UNSAFE\") != 2" in host

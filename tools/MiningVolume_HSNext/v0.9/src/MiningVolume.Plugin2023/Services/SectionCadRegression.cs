@@ -339,6 +339,7 @@ namespace MiningVolume2023.Services
             {
                 string redundantHandle;
                 string unsafeHandle;
+                string nearUnsafeHandle;
                 using (var tr = db.TransactionManager.StartTransaction())
                 {
                     var layers = (LayerTable)tr.GetObject(db.LayerTableId, OpenMode.ForWrite);
@@ -348,6 +349,9 @@ namespace MiningVolume2023.Services
                     var badLayer = new LayerTableRecord { Name = "QA_TIN_UNSAFE" };
                     var badId = layers.Add(badLayer);
                     tr.AddNewlyCreatedDBObject(badLayer, true);
+                    var nearBadLayer = new LayerTableRecord { Name = "QA_TIN_NEAR_UNSAFE" };
+                    var nearBadId = layers.Add(nearBadLayer);
+                    tr.AddNewlyCreatedDBObject(nearBadLayer, true);
                     var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
                     var ms = (BlockTableRecord)tr.GetObject(
                         bt[BlockTableRecord.ModelSpace], OpenMode.ForWrite);
@@ -363,6 +367,19 @@ namespace MiningVolume2023.Services
                     ms.AppendEntity(redundant);
                     tr.AddNewlyCreatedDBObject(redundant, true);
                     redundantHandle = redundant.Handle.ToString();
+                    // Reproduce BF9BD: a sub-nanometer (nonzero) 3D edge.
+                    // Prove redundancy via either endpoint's exact existing
+                    // support edge, without modifying any CAD vertex.
+                    var almostA = new Point3d(0, 5e-10, 10);
+                    var nearA = new Face(almostA, a, b, b, true, true, true, false)
+                    { LayerId = okId };
+                    ms.AppendEntity(nearA);
+                    tr.AddNewlyCreatedDBObject(nearA, true);
+                    var almostB = new Point3d(10, 4e-10, 10);
+                    var nearB = new Face(a, b, almostB, almostB, true, true, true, false)
+                    { LayerId = okId };
+                    ms.AppendEntity(nearB);
+                    tr.AddNewlyCreatedDBObject(nearB, true);
                     for (int i = 0; i < 48; i++)
                     {
                         var repeated = new Face(a, a, b, b, true, true, true, false)
@@ -381,16 +398,29 @@ namespace MiningVolume2023.Services
                     ms.AppendEntity(orphan);
                     tr.AddNewlyCreatedDBObject(orphan, true);
                     unsafeHandle = orphan.Handle.ToString();
+                    var nearSupport = new Face(a, b, c, c, true, true, true, false)
+                    { LayerId = nearBadId };
+                    ms.AppendEntity(nearSupport);
+                    tr.AddNewlyCreatedDBObject(nearSupport, true);
+                    var nearOrphanA = new Point3d(100, 100, 10);
+                    var nearOrphanA2 = new Point3d(100, 100 + 5e-10, 10);
+                    var nearOrphanB = new Point3d(110, 100, 10);
+                    var nearOrphan = new Face(nearOrphanA, nearOrphanA2, nearOrphanB,
+                        nearOrphanB, true, true, true, false)
+                    { LayerId = nearBadId };
+                    ms.AppendEntity(nearOrphan);
+                    tr.AddNewlyCreatedDBObject(nearOrphan, true);
+                    nearUnsafeHandle = nearOrphan.Handle.ToString();
                     tr.Commit();
                 }
                 var tin = TinCadRenderer.ReadStoredTin(db, "QA_TIN_REDUNDANT", "QA");
                 if (tin == null || tin.Triangles.Count != 1 ||
                     tin.VerticalFaces.Count != 0 ||
-                    tin.VerifiedRedundantCadFaces != 49 ||
+                    tin.VerifiedRedundantCadFaces != 51 ||
                     !tin.Issues.Any(issue =>
                         issue.Code == "REDUNDANT_ZERO_EDGE_CAD_FACE" &&
                         issue.Message.Contains(redundantHandle)) ||
-                    TinCadRenderer.CountFaces(db, "QA_TIN_REDUNDANT") != 50)
+                    TinCadRenderer.CountFaces(db, "QA_TIN_REDUNDANT") != 52)
                     throw new InvalidOperationException(
                         "A redundant collapsed CAD face was not proven or the drawing changed.");
                 bool blocked = false;
@@ -404,6 +434,16 @@ namespace MiningVolume2023.Services
                 if (!blocked || TinCadRenderer.CountFaces(db, "QA_TIN_UNSAFE") != 2)
                     throw new InvalidOperationException(
                         "An unproven degenerate CAD face must reject recovery with its exact Handle.");
+                bool nearBlocked = false;
+                try { TinCadRenderer.ReadStoredTin(db, "QA_TIN_NEAR_UNSAFE", "QA"); }
+                catch (InvalidOperationException ex)
+                {
+                    nearBlocked = ex.Message.Contains(nearUnsafeHandle) &&
+                                  ex.Message.Contains("không");
+                }
+                if (!nearBlocked || TinCadRenderer.CountFaces(db, "QA_TIN_NEAR_UNSAFE") != 2)
+                    throw new InvalidOperationException(
+                        "Unproven near-zero 3D edge must reject recovery and preserve all 3DFACEs.");
             }
             VerifyLegacyDwgRecognitionReadOnly();
         }
