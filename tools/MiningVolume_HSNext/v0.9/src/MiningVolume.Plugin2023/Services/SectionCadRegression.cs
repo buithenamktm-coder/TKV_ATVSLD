@@ -370,12 +370,12 @@ namespace MiningVolume2023.Services
                     // Reproduce BF9BD: a sub-nanometer (nonzero) 3D edge.
                     // Prove redundancy via either endpoint's exact existing
                     // support edge, without modifying any CAD vertex.
-                    var almostA = new Point3d(0, 5e-10, 10);
+                    var almostA = new Point3d(5e-10, 0, 10);
                     var nearA = new Face(almostA, a, b, b, true, true, true, false)
                     { LayerId = okId };
                     ms.AppendEntity(nearA);
                     tr.AddNewlyCreatedDBObject(nearA, true);
-                    var almostB = new Point3d(10, 4e-10, 10);
+                    var almostB = new Point3d(10 - 4e-10, 0, 10);
                     var nearB = new Face(a, b, almostB, almostB, true, true, true, false)
                     { LayerId = okId };
                     ms.AppendEntity(nearB);
@@ -403,7 +403,7 @@ namespace MiningVolume2023.Services
                     ms.AppendEntity(nearSupport);
                     tr.AddNewlyCreatedDBObject(nearSupport, true);
                     var nearOrphanA = new Point3d(100, 100, 10);
-                    var nearOrphanA2 = new Point3d(100, 100 + 5e-10, 10);
+                    var nearOrphanA2 = new Point3d(100 + 5e-10, 100, 10);
                     var nearOrphanB = new Point3d(110, 100, 10);
                     var nearOrphan = new Face(nearOrphanA, nearOrphanA2, nearOrphanB,
                         nearOrphanB, true, true, true, false)
