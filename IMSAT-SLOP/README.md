@@ -1,9 +1,5 @@
-# IMSAT-SLOP
+# IMSAT SLOP
 
-Phần mềm kiểm toán ổn định bờ mỏ.
+**Mã nguồn:** [source](./source) — nhập từ nhánh `imsat-slop-v1.0-work`, commit `630cf97d6c16e94b87c762b56b2f36172ed7e044`.
 
-Lưu ý: chỉ khởi tạo thư mục quản lý; chưa đưa mã nguồn hoặc bộ cài vào đây.
-
-Mục đích: tách riêng nội dung dự án, tài liệu kỹ thuật, mã nguồn và cấu hình build khi được chuyển vào một cách có kiểm soát.
-
-Trạng thái: khởi tạo cấu trúc thư mục; **chưa đồng bộ mã nguồn từ máy tính**.
+Các bản cũ, tài liệu kiểm thử và thuật toán được giữ ở thư mục `source`. Việc chuyển mã nguồn không có nghĩa phần mềm đã được nghiệm thu kỹ thuật hoặc kiểm chứng độ chính xác tính ổn định bờ mỏ.

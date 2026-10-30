@@ -1,0 +1,57 @@
+name: IMSAT VOLUME - AutoCAD 2020-2026 compatibility compile (NOT RELEASE)
+
+on:
+  workflow_dispatch:
+  workflow_call:
+
+jobs:
+  compatibility:
+    runs-on: windows-2022
+    strategy:
+      fail-fast: false
+      matrix:
+        flavor:
+          - ACAD2020_NET47
+          - ACAD2021_NET48
+          - ACAD2022_NET48
+          - ACAD2024_NET48
+          - ACAD2025_NET8
+          - ACAD2025_NET10
+          - ACAD2026_NET8
+          - ACAD2026_NET10
+    defaults:
+      run:
+        working-directory: IMSAT-VOLUME/source/v0.9
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+      - name: Verify compatibility build manifest before compiling
+        shell: pwsh
+        run: |
+          python -m unittest discover -s compat -p 'test_*.py'
+      - name: Cross-compile candidate against version-matched Autodesk API
+        shell: pwsh
+        run: |
+          ./compat/build_compat.ps1 -Flavor '${{ matrix.flavor }}' -NuGetReferences
+      - name: Package flavor-scoped QA bundle (NOT INSTALLATION APPROVED)
+        shell: pwsh
+        run: |
+          ./compat/package_qa_bundle.ps1 -Flavor '${{ matrix.flavor }}' -CompiledDirectory "dist/compat/${{ matrix.flavor }}" -OutputDirectory 'dist/qa-bundles'
+      - name: Upload QA bundle for compatibility review
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: IMSAT-${{ matrix.flavor }}-QA-BUNDLE-NOT-RELEASE
+          path: IMSAT-VOLUME/source/v0.9/dist/qa-bundles/**
+          retention-days: 7
+      - name: Upload compile-only diagnostics (never a signed installer)
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: IMSAT-COMPAT-${{ matrix.flavor }}-COMPILE-ONLY
+          path: IMSAT-VOLUME/source/v0.9/dist/compat/${{ matrix.flavor }}/**
+          retention-days: 7

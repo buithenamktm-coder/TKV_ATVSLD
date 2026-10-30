@@ -1,0 +1,498 @@
+{
+  "product": "IMSAT SLOP",
+  "branch": "imsat-slop-v1.0-work",
+  "source": "IMSAT_Slope_Stability_V6_2_CAD_Computation_Fixed_CMD_Builder.zip",
+  "file_count": 98,
+  "files": [
+    {
+      "path": ".pytest_cache/.gitignore",
+      "size_bytes": 37,
+      "sha256": "3ed731b65d06150c138e2dadb0be0697550888a6b47eb8c45ecc9adba8b8e9bd"
+    },
+    {
+      "path": ".pytest_cache/CACHEDIR.TAG",
+      "size_bytes": 191,
+      "sha256": "37dc88ef9a0abeddbe81053a6dd8fdfb13afb613045ea1eb4a5c815a74a3bde4"
+    },
+    {
+      "path": ".pytest_cache/README.md",
+      "size_bytes": 302,
+      "sha256": "73fd6fccdd802c419a6b2d983d6c3173b7da97558ac4b589edec2dfe443db9ad"
+    },
+    {
+      "path": ".pytest_cache/v/cache/nodeids",
+      "size_bytes": 2,
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "path": "00_BUILD_EXE_BANG_CMD.bat",
+      "size_bytes": 8788,
+      "sha256": "2aafa8da6e71c71ff296a23da558dc96aae5043bda4459ff3e6fb6c0ad0cbb08"
+    },
+    {
+      "path": "01_CHAY_EXE_DA_BUILD.bat",
+      "size_bytes": 207,
+      "sha256": "2309fadd3774ff9394244a652d9ee41c3b34449f2acba30952941b89ebb00e8d"
+    },
+    {
+      "path": "01_CHAY_PHAN_MEM_EXE.bat",
+      "size_bytes": 310,
+      "sha256": "e9e4a449f4dde264a2edabb0d314d4d29fda862108d83a4bf0ebe90444164db2"
+    },
+    {
+      "path": "02_MO_THU_MUC_EXE.bat",
+      "size_bytes": 264,
+      "sha256": "3e08a616b6ad38782b0077f4f8571431d96aae2fea3db40a9086d190d1d58d05"
+    },
+    {
+      "path": "BENCHMARK_ACCEPTANCE_CRITERIA.md",
+      "size_bytes": 858,
+      "sha256": "ae286bccd3ebdc0b7c6c2f2702b5956f8f96dc56719fb446f46b4ca1ac4a37d2"
+    },
+    {
+      "path": "CMD_BUILDER_VERSION.txt",
+      "size_bytes": 79,
+      "sha256": "e57147bbfb850a3abb1d2b36d8b4fade7b836b11a1f424661e88707a5407f441"
+    },
+    {
+      "path": "IMSAT_Slope_Stability_V6_2_Professional_ONEFILE.spec",
+      "size_bytes": 953,
+      "sha256": "4d1e4532d334087cb6270e2460e0be96317bd63b294b05cf47292db8c2a4b645"
+    },
+    {
+      "path": "KNOWN_LIMITATIONS_V6_2.md",
+      "size_bytes": 674,
+      "sha256": "f585372660ed8344080d14d49089ab7440a10979e0ede041883cf45b6875c8cf"
+    },
+    {
+      "path": "PACKAGE_MANIFEST_V6_2.json",
+      "size_bytes": 11460,
+      "sha256": "6f9126e1122c563b0fe21b93a70f40d78922fb011d71efa48e16d97dc6c611a6"
+    },
+    {
+      "path": "README.md",
+      "size_bytes": 4046,
+      "sha256": "aaf7dafdea9901a36d9b47413fd547b8a9bf067276167ee1926cb9e15910cf92"
+    },
+    {
+      "path": "README_V6_2.txt",
+      "size_bytes": 522,
+      "sha256": "5486e4ea9dc177d079b70af010e9a22ecf1033a4fb299e92c84d00bc734fe3fb"
+    },
+    {
+      "path": "RELEASE_NOTES_V6_2.md",
+      "size_bytes": 1559,
+      "sha256": "27bbe0595b7ea28e5fc0ca6b1c27ec0dca28dfd9893610f1e4a1d5e98fe8eefd"
+    },
+    {
+      "path": "THIRD_PARTY_NOTICES.md",
+      "size_bytes": 562,
+      "sha256": "2f5a34daa681af533c63c1ee094fc690e93155d292c69faf4ac3f70fc8000f9a"
+    },
+    {
+      "path": "app/__init__.py",
+      "size_bytes": 78,
+      "sha256": "a59228603fc91df8561f0847468762049aeddf9e40f0bbf045fb96b115829aa7"
+    },
+    {
+      "path": "app/__pycache__/__init__.cpython-313.pyc",
+      "size_bytes": 238,
+      "sha256": "fcb625778fbc05eb470b2110a7d7831ef0107477aecba324e7fd09bfbe2e335e"
+    },
+    {
+      "path": "app/algorithms/__init__.py",
+      "size_bytes": 380,
+      "sha256": "9a9de5ef84d2b3d871bfc8cda9f21ae1026fc9bf32724f5fbcb1c139fd2b2304"
+    },
+    {
+      "path": "app/algorithms/__pycache__/__init__.cpython-313.pyc",
+      "size_bytes": 489,
+      "sha256": "8e6ddfc9dab18423d7266732b37e1ace2ef494926760625f11ce593f35643e21"
+    },
+    {
+      "path": "app/algorithms/__pycache__/morgenstern_price.cpython-313.pyc",
+      "size_bytes": 19505,
+      "sha256": "8eee7f829e16cccf22d2ba6a0ab136aff37b7822ee067d3a4afd46c2ba3d5262"
+    },
+    {
+      "path": "app/algorithms/__pycache__/solver.cpython-313.pyc",
+      "size_bytes": 55273,
+      "sha256": "22ecc6353ba8140a02f8697945f024060f949c0ee4495f33fa95c292f0856393"
+    },
+    {
+      "path": "app/algorithms/morgenstern_price.py",
+      "size_bytes": 10537,
+      "sha256": "53eef0097dc403ee7471a36a77e267875d48dcc83d8bd05475ae537b19ae8fcc"
+    },
+    {
+      "path": "app/algorithms/solver.py",
+      "size_bytes": 40358,
+      "sha256": "3b347c1aa3a30c9f53a04cb0ba0a46ba4c091b808b8bad3b6b6f8eebf0bcc425"
+    },
+    {
+      "path": "app/core/__init__.py",
+      "size_bytes": 22,
+      "sha256": "84c159b9388b9c89f0c4c6cfbdee2e438f4121ac0bb306b2a74f1c80eae0f973"
+    },
+    {
+      "path": "app/core/__pycache__/__init__.cpython-313.pyc",
+      "size_bytes": 181,
+      "sha256": "4010eef4ed8d9b64faa7eb0267c16643e3425cb9a0e99e0e90c29bb3344c78ad"
+    },
+    {
+      "path": "app/core/__pycache__/geometry.cpython-313.pyc",
+      "size_bytes": 9884,
+      "sha256": "2fd8b08a1a4449189a412bd2a7c941f92937ebbb639c0a6dfd3b699b67e0d890"
+    },
+    {
+      "path": "app/core/__pycache__/models.cpython-313.pyc",
+      "size_bytes": 19240,
+      "sha256": "537aaf417c1f6f3979ee5581c1b3e0bd9e534fa41bfbc5331a2c1da172112a61"
+    },
+    {
+      "path": "app/core/__pycache__/solver_job.cpython-313.pyc",
+      "size_bytes": 6819,
+      "sha256": "a8cf4b7596a1bcd4295ba69dc4a30e2c00809cf9180a1d9ad3d3039d3cacf8eb"
+    },
+    {
+      "path": "app/core/crash_handler.py",
+      "size_bytes": 1373,
+      "sha256": "0f339c86812b1b32513ff5dde1c28c28d6074f10b14635eea473582849bd5dfe"
+    },
+    {
+      "path": "app/core/geometry.py",
+      "size_bytes": 5824,
+      "sha256": "504f217037265f9b576c85addde9c0838b055fc0d00bb13ea68a3440507f58f9"
+    },
+    {
+      "path": "app/core/models.py",
+      "size_bytes": 10039,
+      "sha256": "549c126c9e3fe779f4d943f8af0d889b326294b973d4d3dc3617474d57eb59ff"
+    },
+    {
+      "path": "app/core/solver_job.py",
+      "size_bytes": 4687,
+      "sha256": "63dc98efeaf7f60e9776a3e41da9a89dea44fac780f1ccc4bb811c1b95eaa1fd"
+    },
+    {
+      "path": "app/io/__init__.py",
+      "size_bytes": 336,
+      "sha256": "491681fe37f403bd23d2b971888586b4dd782bf416dcca88c12908a495babd74"
+    },
+    {
+      "path": "app/io/__pycache__/__init__.cpython-313.pyc",
+      "size_bytes": 490,
+      "sha256": "f5889c5f98dc628c4c116e5a593e034fbdf14ce775f4c78d5f22182aefd4f6c8"
+    },
+    {
+      "path": "app/io/__pycache__/cad_model_import.cpython-313.pyc",
+      "size_bytes": 12545,
+      "sha256": "ffebd1c97947e45c119f2e37337d02610332e498ebe708869bfa4e80c00de21f"
+    },
+    {
+      "path": "app/io/__pycache__/cad_reader.cpython-313.pyc",
+      "size_bytes": 23782,
+      "sha256": "d57eba672447984d7d521af24f2c1311a8fe4e925ec3f49c236baae63e5ec17d"
+    },
+    {
+      "path": "app/io/__pycache__/gsz_reader.cpython-313.pyc",
+      "size_bytes": 24680,
+      "sha256": "a5b0a7ed13430a73e8b968c4f9fcbb0142156c11d622091a1a18307f18a0d54f"
+    },
+    {
+      "path": "app/io/__pycache__/project_io.cpython-313.pyc",
+      "size_bytes": 977,
+      "sha256": "d73a74036bcb064b0e723712b22a789dced8660525f889d47f644a27ae541394"
+    },
+    {
+      "path": "app/io/cad_model_import.py",
+      "size_bytes": 9032,
+      "sha256": "06c0ccac18267fd31f072c690496467d5d319bd7cbcc81fa2886863cfad32359"
+    },
+    {
+      "path": "app/io/cad_reader.py",
+      "size_bytes": 14079,
+      "sha256": "ecfb7076dd983e6aec378168b9dd0a058418d0520c7a740da59d5b54869b356b"
+    },
+    {
+      "path": "app/io/gsz_reader.py",
+      "size_bytes": 12633,
+      "sha256": "9ca04678166ca2349e97767d4fd80c153009c87b35200406321626827bf8ff0c"
+    },
+    {
+      "path": "app/io/project_io.py",
+      "size_bytes": 465,
+      "sha256": "d1e094992a89e23dffd69c456aab9412aadc3328cf0e9729148a08b59595e229"
+    },
+    {
+      "path": "app/reports/__init__.py",
+      "size_bytes": 157,
+      "sha256": "bab470fe3dc41f4fd76c855da3176ab32d62ce64af831e845b9abf6028ee738b"
+    },
+    {
+      "path": "app/reports/__pycache__/__init__.cpython-313.pyc",
+      "size_bytes": 292,
+      "sha256": "d07b01f176f1c4d9d37a320c0cdda9a4a4ca70fbd16f7eac8778f3d6bdd494b5"
+    },
+    {
+      "path": "app/reports/__pycache__/exporter.cpython-313.pyc",
+      "size_bytes": 8992,
+      "sha256": "2057be64f9bb3365f7cd5b99f966543905c79e1d505165fc4bae5540d231f482"
+    },
+    {
+      "path": "app/reports/exporter.py",
+      "size_bytes": 4513,
+      "sha256": "654510af2cc2a5a5bcbd09c144c0dd8f45c1752253f1bd8c5eaca90df6725d63"
+    },
+    {
+      "path": "app/ui/__init__.py",
+      "size_bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "app/ui/cad_import_dialog.py",
+      "size_bytes": 3431,
+      "sha256": "a316556045496c3c92e4c0efefb9a0fa6de38f48a7c38f97acf182d6bd56b1d2"
+    },
+    {
+      "path": "app/ui/engineering_canvas.py",
+      "size_bytes": 19248,
+      "sha256": "a6d7fedc8cef156ae0fd9451504d100e6a66dcf2d019794852d68ef062ee1fa8"
+    },
+    {
+      "path": "app/ui/main_window.py",
+      "size_bytes": 38488,
+      "sha256": "9d833e5ecdbb54cc6c793a475fe2ae365be5237581e74ea28a22e30aee795baa"
+    },
+    {
+      "path": "app/ui/materials_dialog.py",
+      "size_bytes": 4358,
+      "sha256": "a4b389d846321b5f94f26afc712ae29558b6c04a3cf3cc599479800c070d2e07"
+    },
+    {
+      "path": "app/ui/region_dialogs.py",
+      "size_bytes": 2454,
+      "sha256": "985e0efa27e1a7a06d0e13e5a09325af279a056440c2b4167ac26e05c8f335fb"
+    },
+    {
+      "path": "app/ui/settings_dialogs.py",
+      "size_bytes": 12397,
+      "sha256": "c3286b6852dca547249df8add4e9035006ee48f8b943b19f9e7300a6d4cb96af"
+    },
+    {
+      "path": "app/ui/styles.py",
+      "size_bytes": 1484,
+      "sha256": "cfbe0f31e340b75db7c6a18b52101c3cca52f73d95aafbb3c6a398e828a75d73"
+    },
+    {
+      "path": "assets/logo_imsat.ico",
+      "size_bytes": 34721,
+      "sha256": "63cd3328859a6db4a548504c38afa02b70322560361ed25e50b66251979ba469"
+    },
+    {
+      "path": "assets/logo_imsat.png",
+      "size_bytes": 32950,
+      "sha256": "5fbbd5ee0a0dff8a7512f6141a0f61f72ace526541a675820f52f89ec3d6ac58"
+    },
+    {
+      "path": "examples/MC 20-20.gsz",
+      "size_bytes": 120234,
+      "sha256": "bcd4aadb4d643d880b308e1f50ab7a3a8a7887ac69d79bf060684df23a17303f"
+    },
+    {
+      "path": "examples/MC B1-B2.gsz",
+      "size_bytes": 340148,
+      "sha256": "0e4130af191955754100b535cde0b93dc371fba05267d4093b5a379001d2e281"
+    },
+    {
+      "path": "examples/MC C1-C2.gsz",
+      "size_bytes": 89034,
+      "sha256": "2f457f219f0c77c786d8ab3e64deb3f850c0d5ffb92922e5d64ca532edae260d"
+    },
+    {
+      "path": "examples/MC D1-D2.gsz",
+      "size_bytes": 89178,
+      "sha256": "6b864506d840b52391d2c0a07a126ee6f3d1e790fa63437c216513348d38bec2"
+    },
+    {
+      "path": "examples/MC E1-E2.gsz",
+      "size_bytes": 180706,
+      "sha256": "78de4936966afc46d2c80c7152335f55370f68356dc70e10a264114b7c96df1b"
+    },
+    {
+      "path": "examples/MC F1-F2.gsz",
+      "size_bytes": 91198,
+      "sha256": "82dace7cae02230dde859e2077e3992ccc816ef5b75e27155aaa977bbab4e392"
+    },
+    {
+      "path": "examples/MC TIII.gsz",
+      "size_bytes": 479954,
+      "sha256": "79366f8dd753537a6e1e246b4d4fc1a9c6e2ad4e700fd5cfad1bf6a62843b389"
+    },
+    {
+      "path": "examples/MC TV.gsz",
+      "size_bytes": 220697,
+      "sha256": "c9e2486e2371cd6eeacbbf91c58b68bfdefa803debbdd077c81d37d691f9a918"
+    },
+    {
+      "path": "main.py",
+      "size_bytes": 961,
+      "sha256": "0d0ad2836f6f91f358214f9e474ce8782ac5afa70c038286add2d651407d3b8f"
+    },
+    {
+      "path": "requirements-build.txt",
+      "size_bytes": 53,
+      "sha256": "2b9239fcf9f96f9cba221312a57e56bb471900573e028c32599e903dfefec192"
+    },
+    {
+      "path": "requirements-windows-test.txt",
+      "size_bytes": 57,
+      "sha256": "8723f1f235c5be589fe755e6fabb75cacee847a27b350965c2de79456ec60deb"
+    },
+    {
+      "path": "requirements.txt",
+      "size_bytes": 60,
+      "sha256": "e507eb29cb283116248111b97e18f9a0d94ec5e024eb4e404be31e49750ff6b0"
+    },
+    {
+      "path": "tests/V6_2_CAD_CLOSED_SECTION_VALIDATION.json",
+      "size_bytes": 4650,
+      "sha256": "f4e7f30107ad303c39566035a5de4935751de0ce01285c8499db104512083bb6"
+    },
+    {
+      "path": "tests/V6_2_LARGE_OPEN_PIT_VALIDATION.json",
+      "size_bytes": 1227,
+      "sha256": "2937ff0639e307e8051cf41ce56b7f50d26a631abc86ad69e9525965545aabf6"
+    },
+    {
+      "path": "tests/V6_2_LOCAL_CORE_ACCEPTANCE.json",
+      "size_bytes": 5420,
+      "sha256": "33abb8d7d53195c99bb5fbad8fe8b28f207741e26f637d84c03dbf6d3af4d94b"
+    },
+    {
+      "path": "tests/V6_GEOMETRY_REFERENCE.png",
+      "size_bytes": 449564,
+      "sha256": "31867ab7c5df8160a85d0e2357124260da75f69d57e4cc9a13ea16d5b0603cd9"
+    },
+    {
+      "path": "tests/V6_GEOMETRY_VALIDATION.json",
+      "size_bytes": 1614,
+      "sha256": "9e00d2b056fef15613ee526ad4849a52750fdf3b31a751230558affe686e4519"
+    },
+    {
+      "path": "tests/V6_MP_BENCHMARK.json",
+      "size_bytes": 2352,
+      "sha256": "cc2618583a63e3b32aeb7ece490dba1bc33215da54285edc7b4c1e15d8c07ab3"
+    },
+    {
+      "path": "tests/V6_PROJECT_REPORT_VALIDATION.json",
+      "size_bytes": 175,
+      "sha256": "f3eb053e48065f7ae45e8477128f3592190f3e073c77877c0d319e2dbd04a6ca"
+    },
+    {
+      "path": "tests/V6_RESULTS_REFERENCE.png",
+      "size_bytes": 116105,
+      "sha256": "9e13ca2b940b2a799fa4d9a68ee7fbb2ccffe517256b7657f88099027c1a2488"
+    },
+    {
+      "path": "tests/V6_SOLVER_VALIDATION.json",
+      "size_bytes": 890,
+      "sha256": "85a132640bc9ef3354e664aca48ab4d0d373881a179d14869b738f074f8a51df"
+    },
+    {
+      "path": "tests/__pycache__/test_cad_closed_section_workflow.cpython-313-pytest-9.0.2.pyc",
+      "size_bytes": 13931,
+      "sha256": "130085dba9d72ececfdd061cb8b2713768e23d58fca2f8d9b24bcbca8c98ed47"
+    },
+    {
+      "path": "tests/__pycache__/test_geometry_core.cpython-313-pytest-9.0.2.pyc",
+      "size_bytes": 10352,
+      "sha256": "b0252ada2eed0c71e95dfad12f84a8e4ccfeb6a44c6e07b1981598e6a18a432c"
+    },
+    {
+      "path": "tests/__pycache__/test_large_open_pit_workflow.cpython-313-pytest-9.0.2.pyc",
+      "size_bytes": 19940,
+      "sha256": "62b391e5bb813ac070c72f5a34fe2472c4f675a2343cc5e25012023183e03c5d"
+    },
+    {
+      "path": "tests/__pycache__/test_morgenstern_price_benchmark.cpython-313-pytest-9.0.2.pyc",
+      "size_bytes": 4831,
+      "sha256": "7cde5985e0f38f3dba6a5ab9cba41b8ad71525ca3ffa081da2aeee6325597d16"
+    },
+    {
+      "path": "tests/__pycache__/test_project_reports.cpython-313-pytest-9.0.2.pyc",
+      "size_bytes": 18314,
+      "sha256": "ec1274c11b5e057419d5be5b0e78587aa862ec8fada791e4e118aa5071f7fc8f"
+    },
+    {
+      "path": "tests/__pycache__/test_solver_core.cpython-313-pytest-9.0.2.pyc",
+      "size_bytes": 8553,
+      "sha256": "f1d914728af995fc9425d3221005112d4f0988530dc117f0739af7a4a323d50d"
+    },
+    {
+      "path": "tests/__pycache__/test_v6_contract.cpython-313-pytest-9.0.2.pyc",
+      "size_bytes": 12990,
+      "sha256": "16ba4109268d8b20d4d4529b716985fa4f76bfe5e901150cd876de1323e6df79"
+    },
+    {
+      "path": "tests/test_cad_closed_section_workflow.py",
+      "size_bytes": 3743,
+      "sha256": "ec34d42d414521e8b8b9b23d4ecbf6791ece9d7a476299dd03c4303b40f0f88b"
+    },
+    {
+      "path": "tests/test_geometry_core.py",
+      "size_bytes": 1607,
+      "sha256": "66d9603ec4ab4256497681b74e8cacd452f75b560efb19e72ed0e54d3aed154d"
+    },
+    {
+      "path": "tests/test_large_open_pit_workflow.py",
+      "size_bytes": 6137,
+      "sha256": "73a6ef1aadbda8409a438511ff7e88e70568201a65b7c28d55bd210ac21076e1"
+    },
+    {
+      "path": "tests/test_morgenstern_price_benchmark.py",
+      "size_bytes": 2084,
+      "sha256": "27f7f934c05255b0ab984d478e58b40b520e157afaed3014e323471655b27f1f"
+    },
+    {
+      "path": "tests/test_project_reports.py",
+      "size_bytes": 3150,
+      "sha256": "baf436448f124531d7b851fffa6d230b19eb2e9c8e31c98339428144b186e725"
+    },
+    {
+      "path": "tests/test_solver_core.py",
+      "size_bytes": 2202,
+      "sha256": "2c4255550838bd003c93b9b362c00fe2627a43505e9ca4c07532a57ebc992025"
+    },
+    {
+      "path": "tests/test_v6_contract.py",
+      "size_bytes": 1909,
+      "sha256": "81f2cd7ffe910119516f8f23acc1d957f02de391d40944bef1497089e84cf399"
+    },
+    {
+      "path": "tools/create_solver_smoke_input.py",
+      "size_bytes": 1798,
+      "sha256": "e5cd0be8da1f91a8a5af22b986f1309e254cc3d6b1dde57237c1275717d4f730"
+    },
+    {
+      "path": "tools/generate_v6_2_audit.py",
+      "size_bytes": 2812,
+      "sha256": "bddbf6c9e01689f929b2e3f598d95a48040d33c72228728820e906ac693d693e"
+    },
+    {
+      "path": "tools/release_acceptance.py",
+      "size_bytes": 1519,
+      "sha256": "44d0f173378aba99e40e8e5a75fd507a458c22df9bca9c4b052eb733b45c7724"
+    },
+    {
+      "path": "tools/verify_solver_smoke_output.py",
+      "size_bytes": 1027,
+      "sha256": "670b1bdb0ed1b4b4b33bd91359041811f9e1493e5ddf290bf6d2e34d2b1d49e9"
+    },
+    {
+      "path": "tools/windows_ui_smoke.py",
+      "size_bytes": 3692,
+      "sha256": "791993afe7d324fb39ee413927f213af493412b39e3745b5597eef98aa8cb2b3"
+    }
+  ]
+}

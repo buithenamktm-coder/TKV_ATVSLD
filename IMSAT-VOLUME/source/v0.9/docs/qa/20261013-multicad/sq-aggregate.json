@@ -1,0 +1,66 @@
+[
+  {
+    "phase": "loaded",
+    "entities": 24692,
+    "vertices": 952593,
+    "ms": 421,
+    "role": "ht"
+  },
+  {
+    "phase": "cad_validation",
+    "oldCadRejected": 14,
+    "smallestArea": 1.2126530248707246e-15,
+    "coverage": 3622143.63579706,
+    "role": "ht"
+  },
+  {
+    "phase": "complete",
+    "verticalFaces": 7568,
+    "triangles": 1681755,
+    "ms": 115557,
+    "managedBytes": 641989336,
+    "role": "ht",
+    "issue_counts": {
+      "VERTICAL_XY_SOURCE_REVIEW": 1,
+      "ZERO_LENGTH_BREAKLINE": 1132,
+      "RELAXED_CONFLICTING_CONTOUR_CONSTRAINTS": 1,
+      "AUTO_NODE_BREAKLINE_CROSSINGS": 1,
+      "AUTO_NORMALIZE_BREAKLINE_OVERLAPS": 1,
+      "AUTO_REMOVE_DUPLICATE_BREAKLINES": 1,
+      "LOCALLY_RELAXED_UNRESOLVED_TOPOLOGY": 1,
+      "RETAIN_SMALL_TRIANGLES": 1
+    }
+  },
+  {
+    "phase": "loaded",
+    "entities": 24412,
+    "vertices": 945685,
+    "ms": 398,
+    "role": "tk"
+  },
+  {
+    "phase": "cad_validation",
+    "oldCadRejected": 14,
+    "smallestArea": 1.2126530248707246e-15,
+    "coverage": 3600883.873284869,
+    "role": "tk"
+  },
+  {
+    "phase": "complete",
+    "verticalFaces": 7412,
+    "triangles": 1672875,
+    "ms": 111287,
+    "managedBytes": 634374208,
+    "role": "tk",
+    "issue_counts": {
+      "VERTICAL_XY_SOURCE_REVIEW": 1,
+      "ZERO_LENGTH_BREAKLINE": 1092,
+      "RELAXED_CONFLICTING_CONTOUR_CONSTRAINTS": 1,
+      "AUTO_NODE_BREAKLINE_CROSSINGS": 1,
+      "AUTO_NORMALIZE_BREAKLINE_OVERLAPS": 1,
+      "AUTO_REMOVE_DUPLICATE_BREAKLINES": 1,
+      "LOCALLY_RELAXED_UNRESOLVED_TOPOLOGY": 1,
+      "RETAIN_SMALL_TRIANGLES": 1
+    }
+  }
+]

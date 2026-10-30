@@ -1,0 +1,86 @@
+{
+  "status": "PASS",
+  "acceptance_difference_percent": 0.02,
+  "models": [
+    {
+      "file": "MC 20-20.gsz",
+      "critical_surface": 302,
+      "table_type": "slice",
+      "reference_fs": 1.4235603,
+      "imsat_fs": 1.4235399405476306,
+      "difference_percent": 0.001430178431449658,
+      "iterations": 5,
+      "lambda": 0.46092444774225827
+    },
+    {
+      "file": "MC B1-B2.gsz",
+      "critical_surface": 322,
+      "table_type": "column",
+      "reference_fs": 1.89615675157299,
+      "imsat_fs": 1.8961487388203062,
+      "difference_percent": 0.00042257860154437665,
+      "iterations": 4,
+      "lambda": -0.40963730911543805
+    },
+    {
+      "file": "MC C1-C2.gsz",
+      "critical_surface": 566,
+      "table_type": "slice",
+      "reference_fs": 1.8522714,
+      "imsat_fs": 1.8521930873066328,
+      "difference_percent": 0.004227927579469881,
+      "iterations": 5,
+      "lambda": 0.40534489898558523
+    },
+    {
+      "file": "MC D1-D2.gsz",
+      "critical_surface": 822,
+      "table_type": "slice",
+      "reference_fs": 2.1647582,
+      "imsat_fs": 2.1647307257359336,
+      "difference_percent": 0.0012691608728632175,
+      "iterations": 7,
+      "lambda": 0.4040976226198283
+    },
+    {
+      "file": "MC E1-E2.gsz",
+      "critical_surface": 494,
+      "table_type": "slice",
+      "reference_fs": 1.6153324,
+      "imsat_fs": 1.6153254609477108,
+      "difference_percent": 0.0004295742652815626,
+      "iterations": 5,
+      "lambda": 0.40506461814668
+    },
+    {
+      "file": "MC F1-F2.gsz",
+      "critical_surface": 839,
+      "table_type": "slice",
+      "reference_fs": 1.6680645,
+      "imsat_fs": 1.6680491952493053,
+      "difference_percent": 0.0009175155214147246,
+      "iterations": 5,
+      "lambda": -0.43923849279369187
+    },
+    {
+      "file": "MC TIII.gsz",
+      "critical_surface": 325,
+      "table_type": "slice",
+      "reference_fs": 1.5279493,
+      "imsat_fs": 1.5279367108989432,
+      "difference_percent": 0.0008239213864391637,
+      "iterations": 6,
+      "lambda": 0.43319093565641853
+    },
+    {
+      "file": "MC TV.gsz",
+      "critical_surface": 556,
+      "table_type": "slice",
+      "reference_fs": 1.5257912,
+      "imsat_fs": 1.5257676824861424,
+      "difference_percent": 0.001541332382681837,
+      "iterations": 7,
+      "lambda": 0.4463669973288389
+    }
+  ]
+}
